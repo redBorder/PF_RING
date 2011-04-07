@@ -608,7 +608,7 @@ typedef struct {
   struct list_head list;
 } dna_device_list;
 
-#define MAX_NUM_IFIDX  1024
+#define MAX_NUM_IFIDX                       1024
 
 /*
  * Linked-list of virtual filtering devices

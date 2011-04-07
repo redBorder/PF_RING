@@ -500,6 +500,8 @@ void* packet_consumer_thread(void* _id) {
       buffer[2] = 0x97;
       pfring_send(pd, buffer, hdr.caplen);
 #endif
+    } else {
+      /* usleep(100); */
     }
 
     if(0) {
@@ -637,7 +639,8 @@ int main(int argc, char* argv[]) {
 #endif
 
   if(pd == NULL) {
-    printf("pfring_open error\n");
+    printf("pfring_open error (perhaps you use quick mode and have already a socket bound to %s ?)\n",
+	   device);
     return(-1);
   } else {
     u_int32_t version;

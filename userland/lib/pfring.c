@@ -288,11 +288,12 @@ int pfring_bind(pfring *ring, char *device_name) {
 
   if(rc == 0) {
     if(channel_id != -1) {
-      int rc = pfring_set_channel_id(ring, channel_id);
+      rc = pfring_set_channel_id(ring, channel_id);
+    } else
+      rc = pfring_set_channel_id(ring, RING_ANY_CHANNEL /* channel_id */);
 
-      if(rc != 0)
-	printf("pfring_set_channel_id() failed: %d\n", rc);
-    }
+    if(rc != 0)
+      printf("pfring_set_channel_id() failed: %d\n", rc);    
   }
 
   return(rc);
@@ -437,14 +438,10 @@ pfring* pfring_open_consumer(char *device_name, u_int8_t promisc,
 
 #ifdef RING_DEBUG
       printf("RING (%s): tot_mem=%u/min_tot_slots=%u/max_slot_len=%u/"
-	     "insert_off=%u/remove_off=%u/dropped=%llu\n",
-	     device_name,
-	     ring->slots_info->tot_mem,
-	     ring->slots_info->tot_slots,
-	     ring->slots_info->slot_len,
-	     ring->slots_info->insert_off,
-	     ring->slots_info->remove_off,
-	     ring->slots_info->tot_lost);
+	     "insert_off=%u/remove_off=%u/dropped=%llu\n", device_name,
+	     ring->slots_info->tot_mem,    ring->slots_info->tot_slots,
+	     ring->slots_info->slot_len,   ring->slots_info->insert_off,
+	     ring->slots_info->remove_off, ring->slots_info->tot_lost);
 #endif
 
       if(promisc) {

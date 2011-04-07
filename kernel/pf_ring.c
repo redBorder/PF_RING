@@ -64,7 +64,6 @@
 #error **********************************************************************
 #endif
 
-
 #if(LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,18))
 #if(LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33))
 #include <generated/autoconf.h>
@@ -165,6 +164,7 @@ static struct list_head ring_aware_device_list; /* List of ring_device_element *
 
 /* Keep track of number of rings per device (plus any) */
 static u_int8_t num_rings_per_device[MAX_NUM_IFIDX] = { 0 };
+static struct pf_ring_socket* device_rings[MAX_NUM_IFIDX][MAX_NUM_RX_CHANNELS] = { { NULL } };
 static u_int8_t num_any_rings = 0;
 
 /* List of all dna (direct nic access) devices */
@@ -297,10 +297,10 @@ ip_defrag(struct sk_buff *skb, u32 user);
 static unsigned int min_num_slots = 4096;
 static unsigned int enable_tx_capture = 1;
 static unsigned int enable_ip_defrag = 0;
+static unsigned int quick_mode = 0;
 static unsigned int enable_debug = 0;
 static unsigned int transparent_mode = standard_linux_path;
 static u_int32_t ring_id_serial = 0;
-
 
 #if defined(RHEL_RELEASE_CODE)
 #if(RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(4,8))
@@ -314,12 +314,14 @@ module_param(transparent_mode, uint, 0644);
 module_param(enable_debug, uint, 0644);
 module_param(enable_tx_capture, uint, 0644);
 module_param(enable_ip_defrag, uint, 0644);
+module_param(quick_mode, uint, 0644);
 #else
 MODULE_PARM(min_num_slots, "i");
 MODULE_PARM(transparent_mode, "i");
 MODULE_PARM(enable_debug, "i");
 MODULE_PARM(enable_tx_capture, "i");
 MODULE_PARM(enable_ip_defrag, "i");
+MODULE_PARM(quick_mode, "i");
 #endif
 
 MODULE_PARM_DESC(min_num_slots, "Min number of ring slots");
@@ -331,6 +333,9 @@ MODULE_PARM_DESC(enable_tx_capture, "Set to 1 to capture outgoing packets");
 MODULE_PARM_DESC(enable_ip_defrag,
 		 "Set to 1 to enable IP defragmentation"
 		 "(only rx traffic is defragmentead)");
+MODULE_PARM_DESC(quick_mode,
+		 "Set to 1 to run at full speed but with up"
+		 "to one socket per interface");
 
 /* ********************************** */
 
@@ -850,6 +855,7 @@ static int ring_proc_get_info(char *buf, char **start, off_t offset,
     rlen += sprintf(buf + rlen, "Slot version        : %d\n", RING_FLOWSLOT_VERSION);
     rlen += sprintf(buf + rlen, "Capture TX          : %s\n", enable_tx_capture ? "Yes [RX+TX]" : "No [RX only]");
     rlen += sprintf(buf + rlen, "IP Defragment       : %s\n", enable_ip_defrag ? "Yes" : "No");
+    rlen += sprintf(buf + rlen, "Socket Mode         : %s\n", quick_mode ? "Quick" : "Standard");
     rlen += sprintf(buf + rlen, "Transparent mode    : %s\n",
 		    (transparent_mode == standard_linux_path ? "Yes (mode 0)" :
 		     (transparent_mode == driver2pf_ring_transparent ? "Yes (mode 1)" : "No (mode 2)")));
@@ -1706,8 +1712,8 @@ static int match_filtering_rule(struct pf_ring_socket *pfr,
 /*
   Generic function for copying either a skb or a raw
   memory block to the ring buffer
-  
-  Return: 
+
+  Return:
   - 0 = packet was not copied (e.g. slot was full)
   - 1 = the packet was copied (i.e. there was room for it)
 */
@@ -1721,7 +1727,7 @@ inline int copy_data_to_ring(struct sk_buff *skb,
 
   if(pfr->ring_slots == NULL) return(0);
 
-  write_lock_bh(&pfr->ring_index_lock);
+  if(!quick_mode) write_lock_bh(&pfr->ring_index_lock);
   // smp_rmb();
 
   off = pfr->slots_info->insert_off;
@@ -1735,7 +1741,7 @@ inline int copy_data_to_ring(struct sk_buff *skb,
       printk("[PF_RING] ==> slot(off=%d) is full [insert_off=%u][remove_off=%u][slot_len=%u][num_queued_pkts=%u]\n",
 	     off, pfr->slots_info->insert_off, pfr->slots_info->remove_off, pfr->slots_info->slot_len, num_queued_pkts(pfr));
 
-    write_unlock_bh(&pfr->ring_index_lock);
+    if(!quick_mode) write_unlock_bh(&pfr->ring_index_lock);
     return(0);
   }
 
@@ -1788,7 +1794,7 @@ inline int copy_data_to_ring(struct sk_buff *skb,
   smp_wmb();
   pfr->slots_info->tot_insert++;
 
-  write_unlock_bh(&pfr->ring_index_lock);
+  if(!quick_mode) write_unlock_bh(&pfr->ring_index_lock);
 
   if(waitqueue_active(&pfr->ring_slots_waitqueue)
      && (num_queued_pkts(pfr) >= pfr->poll_num_pkts_watermark))
@@ -2550,8 +2556,43 @@ static struct sk_buff* defrag_skb(struct sk_buff *skb,
 
 /* ********************************** */
 
+static inline void set_skb_time(struct sk_buff *skb, struct pfring_pkthdr *hdr) {
+  /* BD - API changed for time keeping */
+#if(LINUX_VERSION_CODE < KERNEL_VERSION(2,6,14))
+  if(skb->stamp.tv_sec == 0)
+    do_gettimeofday(&skb->stamp);  /* If timestamp is missing add it */
+  hdr->ts.tv_sec = skb->stamp.tv_sec, hdr->ts.tv_usec = skb->stamp.tv_usec;
+  hdr->extended_hdr->timestamp_ns = 0; /* No nsec for old kernels */
+#elif(LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22))
+  if(skb->tstamp.off_sec == 0)
+    __net_timestamp(skb); /* If timestamp is missing add it */
+  hdr->ts.tv_sec = skb->tstamp.off_sec, hdr->ts.tv_usec = skb->tstamp.off_usec;
+  hdr->extended_hdr->timestamp_ns = 0; /* No nsec for old kernels */
+#else /* 2.6.22 and above */
+  if(skb->tstamp.tv64 == 0)
+    __net_timestamp(skb); /* If timestamp is missing add it */
+  hdr->ts = ktime_to_timeval(skb->tstamp);
+
+#if(LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,30))
+  {
+    /* Use hardware timestamps when present. If not, just use software timestamps */
+    hdr->extended_hdr.timestamp_ns = ktime_to_ns(skb_hwtstamps(skb)->hwtstamp);
+
+    if(enable_debug)
+      printk("[PF_RING] hwts=%llu/dev=%s\n",
+	     hdr->extended_hdr.timestamp_ns,
+	     skb->dev ? skb->dev->name : "???");
+  }
+#endif
+  if(hdr->extended_hdr.timestamp_ns == 0)
+    hdr->extended_hdr.timestamp_ns = ktime_to_ns(skb->tstamp);
+#endif
+}
+
+/* ********************************** */
+
 /*
-  PF_RING main entry point 
+  PF_RING main entry point
 
   Return code
   0 - Packet not handled
@@ -2577,8 +2618,17 @@ static int skb_ring_handler(struct sk_buff *skb,
   /* Check if there's at least one PF_RING ring defined that
      could receive the packet: if none just stop here */
 
-  if(ring_table_size == 0) 
+  if(ring_table_size == 0)
     return(rc);
+
+  if(recv_packet) {
+    /* Hack for identifying a packet received by the e1000 */
+    if(real_skb)
+      displ = SKB_DISPLACEMENT;
+    else
+      displ = 0;	/* Received by the e1000 wrapper */
+  } else
+    displ = 0;
 
   if(enable_debug) {
     if(skb->dev && (skb->dev->ifindex < MAX_NUM_IFIDX))
@@ -2625,15 +2675,6 @@ static int skb_ring_handler(struct sk_buff *skb,
   rdt1 = _rdtsc();
 #endif
 
-  if(recv_packet) {
-    /* Hack for identifying a packet received by the e1000 */
-    if(real_skb)
-      displ = SKB_DISPLACEMENT;
-    else
-      displ = 0;	/* Received by the e1000 wrapper */
-  } else
-    displ = 0;
-
   is_ip_pkt = parse_pkt(skb, displ, &hdr, 1);
 
   if(enable_ip_defrag) {
@@ -2648,37 +2689,7 @@ static int skb_ring_handler(struct sk_buff *skb,
     }
   }
 
-  /* BD - API changed for time keeping */
-#if(LINUX_VERSION_CODE < KERNEL_VERSION(2,6,14))
-  if(skb->stamp.tv_sec == 0)
-    do_gettimeofday(&skb->stamp);  /* If timestamp is missing add it */
-  hdr.ts.tv_sec = skb->stamp.tv_sec, hdr.ts.tv_usec = skb->stamp.tv_usec;
-  hdr.extended_hdr.timestamp_ns = 0; /* No nsec for old kernels */
-#elif(LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22))
-  if(skb->tstamp.off_sec == 0)
-    __net_timestamp(skb); /* If timestamp is missing add it */
-  hdr.ts.tv_sec = skb->tstamp.off_sec, hdr.ts.tv_usec = skb->tstamp.off_usec;
-  hdr.extended_hdr.timestamp_ns = 0; /* No nsec for old kernels */
-#else /* 2.6.22 and above */
-  if(skb->tstamp.tv64 == 0)
-    __net_timestamp(skb); /* If timestamp is missing add it */
-  hdr.ts = ktime_to_timeval(skb->tstamp);
-
-#if(LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,30))
-  {
-    /* Use hardware timestamps when present. If not, just use software timestamps */
-    hdr.extended_hdr.timestamp_ns = ktime_to_ns(skb_hwtstamps(skb)->hwtstamp);
-
-    if(enable_debug)
-      printk("[PF_RING] hwts=%llu/dev=%s\n",
-	     hdr.extended_hdr.timestamp_ns,
-	     skb->dev ? skb->dev->name : "???");
-  }
-#endif
-  if(hdr.extended_hdr.timestamp_ns == 0)
-    hdr.extended_hdr.timestamp_ns = ktime_to_ns(skb->tstamp);
-#endif
-
+  set_skb_time(skb, &hdr);
   hdr.len = hdr.caplen = skb->len + displ;
 
   if(skb->dev)
@@ -2686,106 +2697,117 @@ static int skb_ring_handler(struct sk_buff *skb,
   else
     hdr.extended_hdr.if_index = -1;
 
-  /* Avoid the ring to be manipulated while playing with it */
-  ring_read_lock();
+  if(quick_mode) {
+    struct pf_ring_socket *pfr = device_rings[skb->dev->ifindex][channel_id];
 
-  /* [1] Check unclustered sockets */
-  list_for_each(ptr, &ring_table) {
-    struct pf_ring_socket *pfr;
-    struct ring_element *entry;
+    if(pfr != NULL) {
+      /* printk("==>>> [%d][%d]\n", skb->dev->ifindex, channel_id); */
 
-    entry = list_entry(ptr, struct ring_element, list);
-
-    skElement = entry->sk;
-    pfr = ring_sk(skElement);
-
-    if((pfr != NULL)
-       && ((pfr->ring_netdev->dev == skb->dev)
-	   || (pfr->ring_netdev == &any_device_element) /* Socket bound to 'any' */
-	   || ((skb->dev->flags & IFF_SLAVE) && (pfr->ring_netdev->dev == skb->dev->master)))
-       && (pfr->ring_netdev != &none_device_element) /* Not a dummy socket bound to "none" */
-       && (pfr->cluster_id == 0 /* No cluster */ )
-       && (pfr->ring_slots != NULL)
-       && is_valid_skb_direction(pfr->direction, recv_packet)
-       ) {
-      /* We've found the ring where the packet can be stored */
-      int old_caplen = hdr.caplen;  /* Keep old lenght */
-      hdr.caplen = min(hdr.caplen, pfr->bucket_len);
-      room_available |= add_skb_to_ring(skb, pfr, &hdr, is_ip_pkt, 
-					displ, channel_id, num_rx_channels);
-      hdr.caplen = old_caplen;
-      rc = 1;	/* Ring found: we've done our job */
+      rc = 1, hdr.len = skb->len, hdr.caplen = min(hdr.caplen, pfr->bucket_len);
+      room_available |= copy_data_to_ring(skb, pfr, &hdr, displ, 0, NULL, NULL, 0);
     }
-  }
+  } else {
+    /* Avoid the ring to be manipulated while playing with it */
+    ring_read_lock();
 
-  /* [2] Check socket clusters */
-  list_for_each(ptr, &ring_cluster_list) {
-    ring_cluster_element *cluster_ptr;
-    struct pf_ring_socket *pfr;
+    /* [1] Check unclustered sockets */
+    list_for_each(ptr, &ring_table) {
+      struct pf_ring_socket *pfr;
+      struct ring_element *entry;
 
-    cluster_ptr = list_entry(ptr, ring_cluster_element, list);
+      entry = list_entry(ptr, struct ring_element, list);
 
-    if(cluster_ptr->cluster.num_cluster_elements > 0) {
-      u_int skb_hash = hash_pkt_cluster(cluster_ptr, &hdr);
-      u_short num_iterations;
+      skElement = entry->sk;
+      pfr = ring_sk(skElement);
 
-      /*
-	We try to add the packet to the right cluster
-	element, but if we're working in round-robin and this
-	element is full, we try to add this to the next available
-	element. If none with at least a free slot can be found
-	then we give up :-(
-      */
-
-      for(num_iterations = 0;
-	  num_iterations < cluster_ptr->cluster.num_cluster_elements;
-	  num_iterations++) {
-
-	skElement = cluster_ptr->cluster.sk[skb_hash];
-
-	if(skElement != NULL) {
-	  pfr = ring_sk(skElement);
-
-	  if((pfr != NULL)
-	     && (pfr->ring_slots != NULL)
-	     && ((pfr->ring_netdev->dev == skb->dev)
-		 || ((skb->dev->flags & IFF_SLAVE)
-		     && (pfr->ring_netdev->dev == skb->dev->master)))
-	     && is_valid_skb_direction(pfr->direction, recv_packet)
-	     ) {
-	    if(check_and_init_free_slot(pfr, pfr->slots_info->insert_off) /* Not full */) {
-	      /* We've found the ring where the packet can be stored */
-	      room_available |= add_skb_to_ring(skb, pfr, &hdr, is_ip_pkt, 
-						displ, channel_id, num_rx_channels);
-	      rc = 1; /* Ring found: we've done our job */
-	      break;
-	    }
-	  }
-	}
-
-	if(cluster_ptr->cluster.hashing_mode != cluster_round_robin)
-	  break;
-	else
-	  skb_hash = (skb_hash + 1) % cluster_ptr->cluster.num_cluster_elements;
+      if((pfr != NULL)
+	 && ((pfr->ring_netdev->dev == skb->dev)
+	     || (pfr->ring_netdev == &any_device_element) /* Socket bound to 'any' */
+	     || ((skb->dev->flags & IFF_SLAVE) && (pfr->ring_netdev->dev == skb->dev->master)))
+	 && (pfr->ring_netdev != &none_device_element) /* Not a dummy socket bound to "none" */
+	 && (pfr->cluster_id == 0 /* No cluster */ )
+	 && (pfr->ring_slots != NULL)
+	 && is_valid_skb_direction(pfr->direction, recv_packet)
+	 ) {
+	/* We've found the ring where the packet can be stored */
+	int old_caplen = hdr.caplen;  /* Keep old lenght */
+	hdr.caplen = min(hdr.caplen, pfr->bucket_len);
+	room_available |= add_skb_to_ring(skb, pfr, &hdr, is_ip_pkt,
+					  displ, channel_id, num_rx_channels);
+	hdr.caplen = old_caplen;
+	rc = 1;	/* Ring found: we've done our job */
       }
     }
-  } /* Clustering */
 
-  ring_read_unlock();
+    /* [2] Check socket clusters */
+    list_for_each(ptr, &ring_cluster_list) {
+      ring_cluster_element *cluster_ptr;
+      struct pf_ring_socket *pfr;
+
+      cluster_ptr = list_entry(ptr, ring_cluster_element, list);
+
+      if(cluster_ptr->cluster.num_cluster_elements > 0) {
+	u_int skb_hash = hash_pkt_cluster(cluster_ptr, &hdr);
+	u_short num_iterations;
+
+	/*
+	  We try to add the packet to the right cluster
+	  element, but if we're working in round-robin and this
+	  element is full, we try to add this to the next available
+	  element. If none with at least a free slot can be found
+	  then we give up :-(
+	*/
+
+	for(num_iterations = 0;
+	    num_iterations < cluster_ptr->cluster.num_cluster_elements;
+	    num_iterations++) {
+
+	  skElement = cluster_ptr->cluster.sk[skb_hash];
+
+	  if(skElement != NULL) {
+	    pfr = ring_sk(skElement);
+
+	    if((pfr != NULL)
+	       && (pfr->ring_slots != NULL)
+	       && ((pfr->ring_netdev->dev == skb->dev)
+		   || ((skb->dev->flags & IFF_SLAVE)
+		       && (pfr->ring_netdev->dev == skb->dev->master)))
+	       && is_valid_skb_direction(pfr->direction, recv_packet)
+	       ) {
+	      if(check_and_init_free_slot(pfr, pfr->slots_info->insert_off) /* Not full */) {
+		/* We've found the ring where the packet can be stored */
+		room_available |= add_skb_to_ring(skb, pfr, &hdr, is_ip_pkt,
+						  displ, channel_id, num_rx_channels);
+		rc = 1; /* Ring found: we've done our job */
+		break;
+	      }
+	    }
+	  }
+
+	  if(cluster_ptr->cluster.hashing_mode != cluster_round_robin)
+	    break;
+	  else
+	    skb_hash = (skb_hash + 1) % cluster_ptr->cluster.num_cluster_elements;
+	}
+      }
+    } /* Clustering */
+
+    ring_read_unlock();
 
 #ifdef PROFILING
-  rdt1 = _rdtsc() - rdt1;
-  rdt2 = _rdtsc();
+    rdt1 = _rdtsc() - rdt1;
+    rdt2 = _rdtsc();
 #endif
 
-  /* Fragment handling */
-  if(skk != NULL)
-    kfree_skb(skk);
+    /* Fragment handling */
+    if(skk != NULL)
+      kfree_skb(skk);
+  }
 
   if(rc == 1) {
-    if(transparent_mode != driver2pf_ring_non_transparent) {
+    if(transparent_mode != driver2pf_ring_non_transparent)
       rc = 0;
-    } else {
+    else {
       if(recv_packet && real_skb) {
 	if(enable_debug)
 	  printk("[PF_RING] kfree_skb()\n");
@@ -2807,11 +2829,11 @@ static int skb_ring_handler(struct sk_buff *skb,
 #endif
 
   //printk("[PF_RING] Returned %d\n", rc);
-  
+
   if((rc == 1) && (room_available == 0))
     rc = 2;
 
-  return(rc);		/*  0 = packet not handled */
+  return(rc); /*  0 = packet not handled */
 }
 
 /* ********************************** */
@@ -2890,7 +2912,7 @@ static int handle_sw_filtering_hash_bucket(struct pf_ring_socket *pfr,
 {
   u_int32_t hash_value = hash_pkt(rule->rule.vlan_id, rule->rule.proto,
 				  rule->rule.host_peer_a, rule->rule.host_peer_b,
-				  rule->rule.port_peer_a, rule->rule.port_peer_b) 
+				  rule->rule.port_peer_a, rule->rule.port_peer_b)
     % DEFAULT_RING_HASH_SIZE;
   int rc = -1;
 
@@ -3227,8 +3249,19 @@ static int ring_release(struct socket *sock)
     num_any_rings--;
   else {
     if(pfr->ring_netdev
-       && (pfr->ring_netdev->dev->ifindex < MAX_NUM_IFIDX))
+       && (pfr->ring_netdev->dev->ifindex < MAX_NUM_IFIDX)) {
       num_rings_per_device[pfr->ring_netdev->dev->ifindex]--;
+
+      if(quick_mode) {
+	if(device_rings[pfr->ring_netdev->dev->ifindex][pfr->channel_id] == pfr) {
+	  /*
+	    We must make sure that this is really us and not that by some chance
+	    (e.g. bind failed) another ring
+	  */
+	  device_rings[pfr->ring_netdev->dev->ifindex][pfr->channel_id] = NULL;   
+	}   
+      }
+    }
   }
 
   if(pfr->ring_netdev != &none_device_element) {
@@ -3369,7 +3402,8 @@ static int packet_ring_bind(struct sock *sk, char *dev_name)
     return(-EINVAL);
 
   list_for_each_safe(ptr, tmp_ptr, &ring_aware_device_list) {
-    ring_device_element *dev_ptr = list_entry(ptr, ring_device_element, device_list);
+    ring_device_element *dev_ptr = list_entry(ptr, ring_device_element,
+					      device_list);
 
     if(strcmp(dev_ptr->dev->name, dev_name) == 0) {
       dev = dev_ptr;
@@ -3380,6 +3414,7 @@ static int packet_ring_bind(struct sock *sk, char *dev_name)
   if((dev == NULL) || (dev->dev->type != ARPHRD_ETHER))
     return(-EINVAL);
 
+  /* printk("[PF_RING] DeviceId: %u\n", dev->dev->ifindex); */
 
   if(enable_debug)
     printk("[PF_RING] packet_ring_bind(%s, bucket_len=%d) called\n",
@@ -3395,7 +3430,7 @@ static int packet_ring_bind(struct sock *sk, char *dev_name)
     Leave this statement here as last one. In fact when
     the ring_netdev != &none_device_element the socket is ready to be used.
   */
-  pfr->ring_netdev = dev;
+  pfr->ring_netdev = dev, pfr->channel_id = RING_ANY_CHANNEL;
 
   /* Time to rebind to a new device */
   ring_proc_add(pfr);
@@ -3412,12 +3447,12 @@ static int packet_ring_bind(struct sock *sk, char *dev_name)
   pfr->num_rx_channels = 1;
 #endif
 
-  if(dev == &any_device_element)
+  if((dev == &any_device_element) && (!quick_mode)) {
     num_any_rings++;
-  else {
-    if(dev->dev->ifindex < MAX_NUM_IFIDX)
+  } else {
+    if(dev->dev->ifindex < MAX_NUM_IFIDX) {
       num_rings_per_device[dev->dev->ifindex]++;
-    else
+    } else
       printk("[PF_RING] INTERNAL ERROR: ifindex %d for %s is > than MAX_NUM_IFIDX\n",
 	     dev->dev->ifindex, dev->dev->name);
   }
@@ -4524,6 +4559,15 @@ static int ring_setsockopt(struct socket *sock,
     if(copy_from_user(&channel_id, optval, sizeof(channel_id)))
       return -EFAULT;
 
+    if(channel_id >= MAX_NUM_RX_CHANNELS) return(-EINVAL);
+
+    if(quick_mode) {
+      if(device_rings[pfr->ring_netdev->dev->ifindex][channel_id] != NULL)
+	return(-EINVAL); /* Socket already bound on this device */
+
+      device_rings[pfr->ring_netdev->dev->ifindex][channel_id] = pfr;
+    }
+
     pfr->channel_id = channel_id;
     if(enable_debug)
       printk("[PF_RING] [pfr->channel_id=%d][channel_id=%d]\n",
@@ -5207,7 +5251,7 @@ static int ring_getsockopt(struct socket *sock,
     if(pfr->dna_device != NULL) {
       if(copy_to_user(optval, pfr->dna_device->device_address, 6))
 	return -EFAULT;
-    } else if((pfr->ring_netdev != NULL) 
+    } else if((pfr->ring_netdev != NULL)
 	      && (pfr->ring_netdev->dev != NULL)) {
       if(copy_to_user(optval, pfr->ring_netdev->dev->dev_addr, 6))
 	return -EFAULT;
