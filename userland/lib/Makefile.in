@@ -67,7 +67,7 @@ install: ${STATICLIB} ${DYNAMICLIB}
 	mkdir -p ${INSTDIR}/include
 	cp ${STATICLIB} ${INSTDIR}/lib/
 	cp ${DYNAMICLIB} ${INSTDIR}/lib/
-	cp pfring_e1000e_dna.h pfring.h ${INSTDIR}/include/
+	cp pfring.h ${INSTDIR}/include/
 	ldconfig
 
 clean:
