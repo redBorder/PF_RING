@@ -662,6 +662,11 @@ typedef int (*do_add_packet_to_ring)(struct pf_ring_socket *pfr,
 				     struct pfring_pkthdr *hdr, struct sk_buff *skb,
 				     int displ, u_int8_t parse_pkt_first);
 
+typedef int (*do_add_raw_packet_to_ring)(struct pf_ring_socket *pfr, 
+					 struct pfring_pkthdr *hdr, 
+					 char *data, u_int data_len,
+					 u_int8_t parse_pkt_first);
+
 /* ************************************************* */
 
 /*
@@ -731,6 +736,7 @@ struct pf_ring_socket {
   /* Function pointer */
   do_handle_sw_filtering_hash_bucket handle_hash_rule;
   do_add_packet_to_ring add_packet_to_ring;
+  do_add_raw_packet_to_ring add_raw_packet_to_ring;
 
   /* Kernel consumer */
   u_int8_t kernel_consumer_plugin_id; /* If != 0 it identifies a plugin responsible for consuming packets */

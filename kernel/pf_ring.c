@@ -1171,11 +1171,10 @@ static inline void ring_remove(struct sock *sk)
 
 /* ******************************************************* */
 
-static int parse_pkt(struct sk_buff *skb,
-		     u_int16_t skb_displ,
-		     struct pfring_pkthdr *hdr, u_int8_t reset_all)
+static int parse_raw_pkt(char *data, u_int data_len,
+			 struct pfring_pkthdr *hdr, u_int8_t reset_all)
 {
-  struct ethhdr *eh = (struct ethhdr *)(skb->data - skb_displ);
+  struct ethhdr *eh = (struct ethhdr *)data;
   u_int16_t displ, ip_len;
 
   if(reset_all)
@@ -1188,29 +1187,32 @@ static int parse_pkt(struct sk_buff *skb,
   memcpy(&hdr->extended_hdr.parsed_pkt.smac, eh->h_source, sizeof(eh->h_source));
 
   hdr->extended_hdr.parsed_pkt.eth_type = ntohs(eh->h_proto);
-  hdr->extended_hdr.parsed_pkt.offset.eth_offset = -skb_displ;
+  hdr->extended_hdr.parsed_pkt.offset.eth_offset = 0;
 
   if(hdr->extended_hdr.parsed_pkt.eth_type == 0x8100 /* 802.1q (VLAN) */) {
     hdr->extended_hdr.parsed_pkt.offset.vlan_offset =
       hdr->extended_hdr.parsed_pkt.offset.eth_offset + sizeof(struct ethhdr);
     hdr->extended_hdr.parsed_pkt.vlan_id =
-      (skb->data[hdr->extended_hdr.parsed_pkt.offset.vlan_offset] & 15) * 256 +
-      skb->data[hdr->extended_hdr.parsed_pkt.offset.vlan_offset + 1];
+      (data[hdr->extended_hdr.parsed_pkt.offset.vlan_offset] & 15) * 256 +
+      data[hdr->extended_hdr.parsed_pkt.offset.vlan_offset + 1];
     hdr->extended_hdr.parsed_pkt.eth_type =
-      (skb->data[hdr->extended_hdr.parsed_pkt.offset.vlan_offset + 2]) * 256 +
-      skb->data[hdr->extended_hdr.parsed_pkt.offset.vlan_offset + 3];
+      (data[hdr->extended_hdr.parsed_pkt.offset.vlan_offset + 2]) * 256 +
+      data[hdr->extended_hdr.parsed_pkt.offset.vlan_offset + 3];
     displ = 4;
   } else {
     displ = 0;
     hdr->extended_hdr.parsed_pkt.vlan_id = 0;	/* Any VLAN */
   }
 
+  if(enable_debug)
+    printk("[PF_RING] [eth_type=%04X]\n", hdr->extended_hdr.parsed_pkt.eth_type);
+
   if(hdr->extended_hdr.parsed_pkt.eth_type == 0x0800 /* IPv4 */ ) {
     struct iphdr *ip;
 
     hdr->extended_hdr.parsed_pkt.offset.l3_offset = hdr->extended_hdr.parsed_pkt.offset.eth_offset + displ + sizeof(struct ethhdr);
 
-    ip = (struct iphdr *)(skb->data + hdr->extended_hdr.parsed_pkt.offset.l3_offset);
+    ip = (struct iphdr *)(&data[hdr->extended_hdr.parsed_pkt.offset.l3_offset]);
 
     hdr->extended_hdr.parsed_pkt.ipv4_src = ntohl(ip->saddr);
     hdr->extended_hdr.parsed_pkt.ipv4_dst = ntohl(ip->daddr);
@@ -1225,7 +1227,7 @@ static int parse_pkt(struct sk_buff *skb,
     ip_len = 40;
 
     hdr->extended_hdr.parsed_pkt.offset.l3_offset = hdr->extended_hdr.parsed_pkt.offset.eth_offset+displ+sizeof(struct ethhdr);
-    ipv6 = (struct ipv6hdr*)(skb->data+hdr->extended_hdr.parsed_pkt.offset.l3_offset);
+    ipv6 = (struct ipv6hdr*)(&data[hdr->extended_hdr.parsed_pkt.offset.l3_offset]);
 
     /* Values of IPv6 addresses are stored as network byte order */
     hdr->extended_hdr.parsed_pkt.ipv6_src = ipv6->saddr;
@@ -1247,15 +1249,14 @@ static int parse_pkt(struct sk_buff *skb,
       upper-layer header
     */
 
-    while(hdr->extended_hdr.parsed_pkt.l3_proto == NEXTHDR_HOP	||
-	  hdr->extended_hdr.parsed_pkt.l3_proto == NEXTHDR_DEST	||
-	  hdr->extended_hdr.parsed_pkt.l3_proto == NEXTHDR_ROUTING	||
-	  hdr->extended_hdr.parsed_pkt.l3_proto == NEXTHDR_AUTH	||
-	  hdr->extended_hdr.parsed_pkt.l3_proto == NEXTHDR_ESP	||
-	  hdr->extended_hdr.parsed_pkt.l3_proto == NEXTHDR_FRAGMENT)
-      {
+    while(hdr->extended_hdr.parsed_pkt.l3_proto == NEXTHDR_HOP	   ||
+	  hdr->extended_hdr.parsed_pkt.l3_proto == NEXTHDR_DEST	   ||
+	  hdr->extended_hdr.parsed_pkt.l3_proto == NEXTHDR_ROUTING ||
+	  hdr->extended_hdr.parsed_pkt.l3_proto == NEXTHDR_AUTH	   ||
+	  hdr->extended_hdr.parsed_pkt.l3_proto == NEXTHDR_ESP	   ||
+	  hdr->extended_hdr.parsed_pkt.l3_proto == NEXTHDR_FRAGMENT) {
 	struct ipv6_opt_hdr *ipv6_opt;
-	ipv6_opt = (struct ipv6_opt_hdr *)(skb->data+hdr->extended_hdr.parsed_pkt.offset.l3_offset+ip_len);
+	ipv6_opt = (struct ipv6_opt_hdr *)(&data[hdr->extended_hdr.parsed_pkt.offset.l3_offset+ip_len]);
 	ip_len += 8;
 	if(hdr->extended_hdr.parsed_pkt.l3_proto == NEXTHDR_AUTH)
 	  /*
@@ -1273,20 +1274,31 @@ static int parse_pkt(struct sk_buff *skb,
     return(0); /* No IP */
   }
 
+  if(enable_debug)
+    printk("[PF_RING] [l3_proto=%d]\n", hdr->extended_hdr.parsed_pkt.l3_proto);
+
   if((hdr->extended_hdr.parsed_pkt.l3_proto == IPPROTO_TCP) || (hdr->extended_hdr.parsed_pkt.l3_proto == IPPROTO_UDP)) {
     hdr->extended_hdr.parsed_pkt.offset.l4_offset = hdr->extended_hdr.parsed_pkt.offset.l3_offset+ip_len;
 
     if(hdr->extended_hdr.parsed_pkt.l3_proto == IPPROTO_TCP) {
-      struct tcphdr *tcp = (struct tcphdr *)(skb->data+hdr->extended_hdr.parsed_pkt.offset.l4_offset);
+      struct tcphdr *tcp = (struct tcphdr *)(&data[hdr->extended_hdr.parsed_pkt.offset.l4_offset]);
+
       hdr->extended_hdr.parsed_pkt.l4_src_port = ntohs(tcp->source), hdr->extended_hdr.parsed_pkt.l4_dst_port = ntohs(tcp->dest);
+
+      if(enable_debug)
+	printk("[PF_RING] [l4_offset=%d][l4_src_port/l4_dst_port=%d/%d]\n",
+	       hdr->extended_hdr.parsed_pkt.offset.l4_offset,
+	       hdr->extended_hdr.parsed_pkt.l4_src_port,
+	       hdr->extended_hdr.parsed_pkt.l4_dst_port);
+
       hdr->extended_hdr.parsed_pkt.offset.payload_offset = hdr->extended_hdr.parsed_pkt.offset.l4_offset + (tcp->doff * 4);
       hdr->extended_hdr.parsed_pkt.tcp.seq_num = ntohl(tcp->seq), hdr->extended_hdr.parsed_pkt.tcp.ack_num = ntohl(tcp->ack_seq);
-      hdr->extended_hdr.parsed_pkt.tcp.flags =
-	(tcp->fin * TH_FIN_MULTIPLIER) + (tcp->syn * TH_SYN_MULTIPLIER) +
+      hdr->extended_hdr.parsed_pkt.tcp.flags = (tcp->fin * TH_FIN_MULTIPLIER) + (tcp->syn * TH_SYN_MULTIPLIER) +
 	(tcp->rst * TH_RST_MULTIPLIER) + (tcp->psh * TH_PUSH_MULTIPLIER) +
 	(tcp->ack * TH_ACK_MULTIPLIER) + (tcp->urg * TH_URG_MULTIPLIER);
     } else if(hdr->extended_hdr.parsed_pkt.l3_proto == IPPROTO_UDP) {
-      struct udphdr *udp = (struct udphdr *)(skb->data + hdr->extended_hdr.parsed_pkt.offset.l4_offset);
+      struct udphdr *udp = (struct udphdr *)(&data[hdr->extended_hdr.parsed_pkt.offset.l4_offset]);
+
       hdr->extended_hdr.parsed_pkt.l4_src_port = ntohs(udp->source), hdr->extended_hdr.parsed_pkt.l4_dst_port = ntohs(udp->dest);
       hdr->extended_hdr.parsed_pkt.offset.payload_offset = hdr->extended_hdr.parsed_pkt.offset.l4_offset + sizeof(struct udphdr);
     } else
@@ -1294,9 +1306,28 @@ static int parse_pkt(struct sk_buff *skb,
   } else
     hdr->extended_hdr.parsed_pkt.l4_src_port = hdr->extended_hdr.parsed_pkt.l4_dst_port = 0;
 
-  hdr->extended_hdr.parsed_pkt.offset.eth_offset = skb_displ;
-
   return(1);	/* IP */
+}
+
+/* ********************************** */
+
+static int parse_pkt(struct sk_buff *skb,
+		     u_int16_t skb_displ,
+		     struct pfring_pkthdr *hdr,
+		     u_int8_t reset_all)
+{
+  char pkt_header[72];
+  int rc, len = sizeof(pkt_header)-1;
+
+  if(skb->len < len)
+    len = skb->len-skb_displ;
+
+  skb_copy_bits(skb, -skb_displ, pkt_header, len);
+
+  rc = parse_raw_pkt(pkt_header, len, hdr, reset_all);
+  hdr->extended_hdr.parsed_pkt.offset.eth_offset = -skb_displ;
+
+  return(rc);
 }
 
 /* ********************************** */
@@ -1725,8 +1756,10 @@ inline int copy_data_to_ring(struct sk_buff *skb,
   char *ring_bucket;
   u_int32_t off, taken;
 
-  if(pfr->ring_slots == NULL) return(0);
+  /* printk("[PF_RING] ==> copy_data_to_ring()\n"); */
 
+  if(pfr->ring_slots == NULL) return(0);
+  
   if(!quick_mode) write_lock_bh(&pfr->ring_index_lock);
   // smp_rmb();
 
@@ -1812,7 +1845,7 @@ inline int copy_data_to_ring(struct sk_buff *skb,
 
 /* ********************************** */
 
-static int copy_raw_data_to_ring(struct pf_ring_socket *pfr,
+inline int copy_raw_data_to_ring(struct pf_ring_socket *pfr,
 				 struct pfring_pkthdr *dummy_hdr,
 				 void *raw_data, uint raw_data_len) {
   return(copy_data_to_ring(NULL, pfr, dummy_hdr, 0, 0, NULL, raw_data, raw_data_len));
@@ -1820,11 +1853,11 @@ static int copy_raw_data_to_ring(struct pf_ring_socket *pfr,
 
 /* ********************************** */
 
-static int add_pkt_to_ring(struct sk_buff *skb,
-			    struct pf_ring_socket *_pfr,
-			    struct pfring_pkthdr *hdr,
-			    int displ, u_int8_t channel_id,
-			    int offset, void *plugin_mem)
+inline int add_pkt_to_ring(struct sk_buff *skb,
+			   struct pf_ring_socket *_pfr,
+			   struct pfring_pkthdr *hdr,
+			   int displ, u_int8_t channel_id,
+			   int offset, void *plugin_mem)
 {
   struct pf_ring_socket *pfr = (_pfr->master_ring != NULL) ? _pfr->master_ring : _pfr;
   int32_t the_bit = 1 << channel_id;
@@ -1866,6 +1899,21 @@ static int add_packet_to_ring(struct pf_ring_socket *pfr, struct pfring_pkthdr *
 
   ring_read_lock();
   add_pkt_to_ring(skb, pfr, hdr, 0, RING_ANY_CHANNEL, displ, NULL);
+  ring_read_unlock();
+  return(0);
+}
+
+/* ********************************** */
+
+static int add_raw_packet_to_ring(struct pf_ring_socket *pfr, struct pfring_pkthdr *hdr,
+				  char *data, u_int data_len,
+				  u_int8_t parse_pkt_first)
+{
+  if(parse_pkt_first)
+    parse_raw_pkt(data, data_len, hdr, 0 /* Do not reset user-specified fields */);
+
+  ring_read_lock();
+  copy_raw_data_to_ring(pfr, hdr, data, data_len);
   ring_read_unlock();
   return(0);
 }
@@ -2530,8 +2578,8 @@ static struct sk_buff* defrag_skb(struct sk_buff *skb,
 		   skb_shinfo(skk)->frag_list);
 
 	  skb = skk;
-	  parse_pkt(skb, displ, hdr, 1);
 	  hdr->len = hdr->caplen = skb->len + displ;
+	  parse_pkt(skb, displ, hdr, 1);
 	  return(skb);
 	} else {
 	  //printk("[PF_RING] Fragment queued \n");
@@ -2675,6 +2723,7 @@ static int skb_ring_handler(struct sk_buff *skb,
   rdt1 = _rdtsc();
 #endif
 
+  hdr.len = hdr.caplen = skb->len + displ;
   is_ip_pkt = parse_pkt(skb, displ, &hdr, 1);
 
   if(enable_ip_defrag) {
@@ -2690,7 +2739,6 @@ static int skb_ring_handler(struct sk_buff *skb,
   }
 
   set_skb_time(skb, &hdr);
-  hdr.len = hdr.caplen = skb->len + displ;
 
   if(skb->dev)
     hdr.extended_hdr.if_index = skb->dev->ifindex;
@@ -3124,6 +3172,7 @@ static int ring_create(
   pfr->poll_num_pkts_watermark = DEFAULT_MIN_PKT_QUEUED;
   pfr->handle_hash_rule = handle_sw_filtering_hash_bucket;
   pfr->add_packet_to_ring = add_packet_to_ring;
+  pfr->add_raw_packet_to_ring = add_raw_packet_to_ring;
   init_waitqueue_head(&pfr->ring_slots_waitqueue);
   rwlock_init(&pfr->ring_index_lock);
   rwlock_init(&pfr->ring_rules_lock);
@@ -3258,8 +3307,8 @@ static int ring_release(struct socket *sock)
 	    We must make sure that this is really us and not that by some chance
 	    (e.g. bind failed) another ring
 	  */
-	  device_rings[pfr->ring_netdev->dev->ifindex][pfr->channel_id] = NULL;   
-	}   
+	  device_rings[pfr->ring_netdev->dev->ifindex][pfr->channel_id] = NULL;
+	}
       }
     }
   }
