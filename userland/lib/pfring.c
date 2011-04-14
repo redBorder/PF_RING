@@ -455,6 +455,7 @@ pfring* pfring_open_consumer(char *device_name, u_int8_t promisc,
     } else {
       close(ring->fd);
       err = -1;
+      free(ring);
     }
   } else {
     err = -1;
