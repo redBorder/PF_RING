@@ -1098,7 +1098,7 @@ int pfring_read(pfring *ring, char* buffer, u_int buffer_len,
       
       if(buffer && (bktLen > 0)) {
 	memcpy(buffer, &bucket[sizeof(struct pfring_pkthdr)], bktLen);
-	buffer[bktLen-1] = '\0';
+	buffer[bktLen] = '\0';
       }
 
       next_off = ring->slots_info->remove_off + real_slot_len;
