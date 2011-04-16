@@ -548,9 +548,9 @@ typedef struct {
 
 /* ************************************************* */
 
-#define RING_ANY_CHANNEL          ((u_int8_t)-1)
+#define RING_ANY_CHANNEL          ((u_int32_t)-1)
 #define UNKNOWN_RX_CHANNEL        RING_ANY_CHANNEL
-#define MAX_NUM_RX_CHANNELS       256
+#define MAX_NUM_RX_CHANNELS       32 /* channel_id is a 32 bit value */
 #define UNKNOWN_NUM_RX_CHANNELS   1
 
 /* ************************************************* */
@@ -907,8 +907,8 @@ extern void do_ring_dna_device_handler(dna_device_operation operation,
 				       dna_wait_packet wait_packet_function_ptr);
 
 typedef int (*handle_ring_skb)(struct sk_buff *skb, u_char recv_packet,
-			       u_char real_skb, u_int8_t channel_id,
-			       u_int8_t num_rx_channels);
+			       u_char real_skb, u_int32_t channel_id,
+			       u_int32_t num_rx_channels);
 typedef int (*handle_ring_buffer)(struct net_device *dev,
 				  char *data, int len);
 typedef int (*handle_add_hdr_to_ring)(struct pf_ring_socket *pfr,

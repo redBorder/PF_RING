@@ -92,8 +92,6 @@ extern "C" {
 
   /* ********************************* */
 
-#define MAX_NUM_RX_CHANNELS        256
-
   typedef struct {
     /* DNA (Direct NIC Access) */
     u_char dna_mapped_device;    
@@ -127,7 +125,7 @@ extern "C" {
   int pfring_set_cluster(pfring *ring, u_int clusterId, cluster_type the_type);
   int pfring_set_master_id(pfring *ring, u_int32_t master_id);
   int pfring_set_master(pfring *ring, pfring *master);
-  int pfring_set_channel_id(pfring *ring, int32_t channel_id);
+  int pfring_set_channel_id(pfring *ring, u_int32_t channel_id);
   int pfring_add_hw_rule(pfring *ring, hw_filtering_rule *rule);
   int pfring_remove_hw_rule(pfring *ring, u_int16_t rule_id);
   int pfring_set_application_name(pfring *ring, char *name);

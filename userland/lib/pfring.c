@@ -137,7 +137,7 @@ int pfring_set_cluster(pfring *ring, u_int clusterId, cluster_type the_type) {
 
 /* ******************************* */
 
-int pfring_set_channel_id(pfring *ring, int32_t channel_id) {
+int pfring_set_channel_id(pfring *ring, u_int32_t channel_id) {
 #ifdef USE_PCAP
   return(-1);
 #else
@@ -237,7 +237,7 @@ static int set_if_promisc(const char *device, int set_promisc) {
 int pfring_bind(pfring *ring, char *device_name) {
   struct sockaddr sa;
   char *at;
-  int32_t channel_id = -1;
+  u_int32_t channel_id = RING_ANY_CHANNEL;
   int rc = 0;
 
   if((device_name == NULL) || (strcmp(device_name, "none") == 0))
@@ -287,10 +287,7 @@ int pfring_bind(pfring *ring, char *device_name) {
   rc = bind(ring->fd, (struct sockaddr *)&sa, sizeof(sa));
 
   if(rc == 0) {
-    if(channel_id != -1) {
-      rc = pfring_set_channel_id(ring, channel_id);
-    } else
-      rc = pfring_set_channel_id(ring, RING_ANY_CHANNEL /* channel_id */);
+    rc = pfring_set_channel_id(ring, channel_id);
 
     if(rc != 0)
       printf("pfring_set_channel_id() failed: %d\n", rc);    
