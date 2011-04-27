@@ -198,15 +198,15 @@ static int reflect_packet(struct sk_buff *skb,
 
 /* ********************************** */
 
-#if 0
+#if 1
 
 static rwlock_t ring_mgmt_lock;
 
 inline void init_ring_readers(void)      { ring_mgmt_lock = RW_LOCK_UNLOCKED; }
-inline void ring_write_lock(void)        { write_lock_bh(&ring_mgmt_lock);    }
-inline void ring_write_unlock(void)      { write_unlock_bh(&ring_mgmt_lock);  }
-inline void ring_read_lock(void)         { read_lock_bh(&ring_mgmt_lock);     }
-inline void ring_read_unlock(void)       { read_unlock_bh(&ring_mgmt_lock);   }
+inline void ring_write_lock(void)        { write_lock(&ring_mgmt_lock);    }
+inline void ring_write_unlock(void)      { write_unlock(&ring_mgmt_lock);  }
+inline void ring_read_lock(void)         { read_lock(&ring_mgmt_lock);     }
+inline void ring_read_unlock(void)       { read_unlock(&ring_mgmt_lock);   }
 
 #else
 
@@ -1778,7 +1778,7 @@ inline int copy_data_to_ring(struct sk_buff *skb,
 
   /* We need to lock as two ksoftirqd might put data onto the same ring */
 
-  if(!quick_mode) write_lock_bh(&pfr->ring_index_lock);
+  if(!quick_mode) write_lock(&pfr->ring_index_lock);
   // smp_rmb();
 
   off = pfr->slots_info->insert_off;
@@ -1792,7 +1792,7 @@ inline int copy_data_to_ring(struct sk_buff *skb,
       printk("[PF_RING] ==> slot(off=%d) is full [insert_off=%u][remove_off=%u][slot_len=%u][num_queued_pkts=%u]\n",
 	     off, pfr->slots_info->insert_off, pfr->slots_info->remove_off, pfr->slots_info->slot_len, num_queued_pkts(pfr));
 
-    if(!quick_mode) write_unlock_bh(&pfr->ring_index_lock);
+    if(!quick_mode) write_unlock(&pfr->ring_index_lock);
     return(0);
   }
 
@@ -1845,7 +1845,7 @@ inline int copy_data_to_ring(struct sk_buff *skb,
   smp_wmb();
   pfr->slots_info->tot_insert++;
 
-  if(!quick_mode) write_unlock_bh(&pfr->ring_index_lock);
+  if(!quick_mode) write_unlock(&pfr->ring_index_lock);
 
   if(waitqueue_active(&pfr->ring_slots_waitqueue)
      && (num_queued_pkts(pfr) >= pfr->poll_num_pkts_watermark))
@@ -1896,10 +1896,10 @@ inline int add_pkt_to_ring(struct sk_buff *skb,
 
   if(pfr->kernel_consumer_plugin_id
      && plugin_registration[pfr->kernel_consumer_plugin_id]->pfring_packet_reader) {
-    write_lock_bh(&pfr->ring_index_lock); /* Serialize */
+    write_lock(&pfr->ring_index_lock); /* Serialize */
     plugin_registration[pfr->kernel_consumer_plugin_id]->pfring_packet_reader(pfr, skb, channel_id, hdr, displ);
     pfr->slots_info->tot_pkts++;
-    write_unlock_bh(&pfr->ring_index_lock);
+    write_unlock(&pfr->ring_index_lock);
     return(0);
   }
 
@@ -2374,7 +2374,7 @@ static int add_skb_to_ring(struct sk_buff *skb,
 
     /* [3] Packet sampling */
     if(pfr->sample_rate > 1) {
-      write_lock_bh(&pfr->ring_index_lock);
+      write_lock(&pfr->ring_index_lock);
       pfr->slots_info->tot_pkts++;
 
       if(pfr->pktToSample <= 1) {
@@ -2389,7 +2389,7 @@ static int add_skb_to_ring(struct sk_buff *skb,
 		 pfr->slots_info->insert_off, skb->pkt_type,
 		 skb->cloned);
 
-	write_unlock_bh(&pfr->ring_index_lock);
+	write_unlock(&pfr->ring_index_lock);
 
 	if(free_parse_mem)
 	  free_parse_memory(parse_memory_buffer);
@@ -2398,7 +2398,7 @@ static int add_skb_to_ring(struct sk_buff *skb,
 	return(-1);
       }
 
-      write_unlock_bh(&pfr->ring_index_lock);
+      write_unlock(&pfr->ring_index_lock);
     }
 
     if(hdr->caplen > 0) {
@@ -3263,9 +3263,9 @@ static virtual_filtering_device_element* add_virtual_filtering_device(struct soc
     INIT_LIST_HEAD(&elem->list);
   }
 
-  write_lock_bh(&virtual_filtering_lock);
+  write_lock(&virtual_filtering_lock);
   list_add(&elem->list, &virtual_filtering_devices_list);  /* Add as first entry */
-  write_unlock_bh(&virtual_filtering_lock);
+  write_unlock(&virtual_filtering_lock);
 
   return(elem);
 }
@@ -3279,7 +3279,7 @@ static int remove_virtual_filtering_device(struct sock *sock, char *device_name)
   if(enable_debug)
     printk("[PF_RING] --> remove_virtual_filtering_device(%s)\n", device_name);
 
-  write_lock_bh(&virtual_filtering_lock);
+  write_lock(&virtual_filtering_lock);
   list_for_each_safe(ptr, tmp_ptr, &virtual_filtering_devices_list) {
     virtual_filtering_device_element *filtering_ptr;
 
@@ -3287,13 +3287,13 @@ static int remove_virtual_filtering_device(struct sock *sock, char *device_name)
 
     if(strcmp(filtering_ptr->info.device_name, device_name) == 0) {
       list_del(ptr);
-      write_unlock_bh(&virtual_filtering_lock);
+      write_unlock(&virtual_filtering_lock);
       kfree(filtering_ptr);
       return(0);
     }
   }
 
-  write_unlock_bh(&virtual_filtering_lock);
+  write_unlock(&virtual_filtering_lock);
 
   return(-EINVAL);	/* Not found */
 }
@@ -3330,7 +3330,7 @@ static int ring_release(struct socket *sock)
 
   /*
     The calls below must be placed outside the
-    write_lock_bh...write_unlock_bh block.
+    write_lock...write_unlock block.
   */
   sock_orphan(sk);
   ring_proc_remove(pfr);

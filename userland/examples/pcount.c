@@ -320,7 +320,7 @@ int32_t gmt2local(time_t t) {
 
 void printHelp(void) {
 
-  printf("pcount\n(C) 2003-08 Deri Luca <deri@ntop.org>\n");
+  printf("pcount\n(C) 2003-11 Deri Luca <deri@ntop.org>\n");
   printf("-h              [Print help]\n");
   printf("-i <device>     [Device name]\n");
   printf("-f <filter>     [pcap filter]\n");
@@ -380,7 +380,7 @@ int main(int argc, char* argv[]) {
     switch(c) {
     case 'h':
       printHelp();
-      return(0);
+      exit(0);
       break;
     case 'i':
       device = strdup(optarg);
