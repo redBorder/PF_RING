@@ -1778,7 +1778,7 @@ inline int copy_data_to_ring(struct sk_buff *skb,
 
   /* We need to lock as two ksoftirqd might put data onto the same ring */
 
-  if(!quick_mode) write_lock(&pfr->ring_index_lock);
+  /* if(!quick_mode) */ write_lock(&pfr->ring_index_lock);
   // smp_rmb();
 
   off = pfr->slots_info->insert_off;
@@ -1792,7 +1792,7 @@ inline int copy_data_to_ring(struct sk_buff *skb,
       printk("[PF_RING] ==> slot(off=%d) is full [insert_off=%u][remove_off=%u][slot_len=%u][num_queued_pkts=%u]\n",
 	     off, pfr->slots_info->insert_off, pfr->slots_info->remove_off, pfr->slots_info->slot_len, num_queued_pkts(pfr));
 
-    if(!quick_mode) write_unlock(&pfr->ring_index_lock);
+    /* if(!quick_mode) */ write_unlock(&pfr->ring_index_lock);
     return(0);
   }
 
@@ -1845,7 +1845,7 @@ inline int copy_data_to_ring(struct sk_buff *skb,
   smp_wmb();
   pfr->slots_info->tot_insert++;
 
-  if(!quick_mode) write_unlock(&pfr->ring_index_lock);
+  /* if(!quick_mode) */ write_unlock(&pfr->ring_index_lock);
 
   if(waitqueue_active(&pfr->ring_slots_waitqueue)
      && (num_queued_pkts(pfr) >= pfr->poll_num_pkts_watermark))
