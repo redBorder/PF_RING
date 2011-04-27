@@ -1332,10 +1332,10 @@ static int parse_pkt(struct sk_buff *skb,
 		     u_int8_t reset_all)
 {
   char pkt_header[72] = { 0 };
-  int rc, len = sizeof(pkt_header)-1;
+  int rc, len = sizeof(pkt_header);
 
-  if(skb->len < len)
-    len = skb->len-skb_displ;
+  if(len > (skb->len + skb_displ))
+    len = skb->len + skb_displ;
 
   skb_copy_bits(skb, -skb_displ, pkt_header, len);
 
