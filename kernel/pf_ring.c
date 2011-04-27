@@ -2729,10 +2729,6 @@ static int skb_ring_handler(struct sk_buff *skb,
   uint64_t rdt = _rdtsc(), rdt1, rdt2;
 #endif
 
-#if(LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,30))
-  // channel_id = skb_get_rx_queue(skb);
-#endif
-
   if(channel_id > MAX_NUM_RX_CHANNELS) channel_id = MAX_NUM_RX_CHANNELS;
 
   if((!skb) /* Invalid skb */ ||((!enable_tx_capture) && (!recv_packet))) {
