@@ -698,6 +698,7 @@ struct pf_ring_socket {
 
   /* Channel */
   int32_t channel_id;  /* -1 = any channel */
+  u_int16_t num_channels_per_ring;
 
   /* Ring Slots */
   char* ring_memory;

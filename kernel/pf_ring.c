@@ -1771,14 +1771,15 @@ inline int copy_data_to_ring(struct sk_buff *skb,
 			     void *raw_data, uint raw_data_len) {
   char *ring_bucket;
   u_int32_t off, taken;
-
+  u_short do_lock = ((!quick_mode) || (pfr->num_channels_per_ring > 0)) ? 1 : 0;
+  
   /* printk("[PF_RING] ==> copy_data_to_ring()\n"); */
 
   if(pfr->ring_slots == NULL) return(0);
 
   /* We need to lock as two ksoftirqd might put data onto the same ring */
 
-  /* if(!quick_mode) */ write_lock(&pfr->ring_index_lock);
+  if(do_lock) write_lock(&pfr->ring_index_lock);
   // smp_rmb();
 
   off = pfr->slots_info->insert_off;
@@ -1792,7 +1793,7 @@ inline int copy_data_to_ring(struct sk_buff *skb,
       printk("[PF_RING] ==> slot(off=%d) is full [insert_off=%u][remove_off=%u][slot_len=%u][num_queued_pkts=%u]\n",
 	     off, pfr->slots_info->insert_off, pfr->slots_info->remove_off, pfr->slots_info->slot_len, num_queued_pkts(pfr));
 
-    /* if(!quick_mode) */ write_unlock(&pfr->ring_index_lock);
+   if(do_lock) write_unlock(&pfr->ring_index_lock);
     return(0);
   }
 
@@ -1845,7 +1846,7 @@ inline int copy_data_to_ring(struct sk_buff *skb,
   smp_wmb();
   pfr->slots_info->tot_insert++;
 
-  /* if(!quick_mode) */ write_unlock(&pfr->ring_index_lock);
+ if(do_lock) write_unlock(&pfr->ring_index_lock);
 
   if(waitqueue_active(&pfr->ring_slots_waitqueue)
      && (num_queued_pkts(pfr) >= pfr->poll_num_pkts_watermark))
@@ -4665,6 +4666,8 @@ static int ring_setsockopt(struct socket *sock,
       */
       int i;
       
+      pfr->num_channels_per_ring = 0;
+
       for(i=0; i<MAX_NUM_RX_CHANNELS; i++) {
 	u_int32_t the_bit = 1 << i;
 
@@ -4683,6 +4686,7 @@ static int ring_setsockopt(struct socket *sock,
 	  if(enable_debug) printk("[PF_RING] Setting channel %d\n", i);
 
 	  device_rings[pfr->ring_netdev->dev->ifindex][i] = pfr;
+	  pfr->num_channels_per_ring++;
 	}
       }      
     }
