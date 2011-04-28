@@ -3088,6 +3088,7 @@ static void ixgbe_setup_mrqc(struct ixgbe_adapter *adapter)
 	/* Perform hash on these packet types */
 	mrqc |= IXGBE_MRQC_RSS_FIELD_IPV4
 	      | IXGBE_MRQC_RSS_FIELD_IPV4_TCP
+              | IXGBE_MRQC_RSS_FIELD_IPV4_UDP /* L.Deri */
 	      | IXGBE_MRQC_RSS_FIELD_IPV6
 	      | IXGBE_MRQC_RSS_FIELD_IPV6_TCP;
 
