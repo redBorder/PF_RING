@@ -104,34 +104,30 @@ void print_stats() {
   deltaMillisec = delta_time(&endTime, &startTime);
 
   for(i=0; i < num_channels; i++) {
-    nBytes += numBytes[i];
-    nPkts += numPkts[i];
+    nBytes += numBytes[i], nPkts += numPkts[i];
   
     if(pfring_stats(ring[i], &pfringStat) >= 0) {
-      double thpt;
-      thpt = ((double)8*numBytes[i])/(deltaMillisec*1000);
+      double thpt = ((double)8*numBytes[i])/(deltaMillisec*1000);
 
       fprintf(stderr, "=========================\n"
 	      "Absolute Stats: [channel=%d][%u pkts rcvd][%u pkts dropped]\n"
 	      "Total Pkts=%u/Dropped=%.1f %%\n",
 	      i, (unsigned int)pfringStat.recv, (unsigned int)pfringStat.drop,
 	      (unsigned int)(pfringStat.recv+pfringStat.drop),
-	      pfringStat.recv == 0 ? 0 : 
-	      (double)(pfringStat.drop*100)/(double)(pfringStat.recv+pfringStat.drop));
-      fprintf(stderr, "%llu pkts - %llu bytes", nPkts, nBytes);
-      fprintf(stderr, " [%.1f pkt/sec - %.2f Mbit/sec]\n",
-	      (double)(nPkts*1000)/deltaMillisec, thpt);
+	      pfringStat.recv == 0 ? 0 : (double)(pfringStat.drop*100)/(double)(pfringStat.recv+pfringStat.drop));
+      fprintf(stderr, "%llu pkts - %llu bytes", numPkts[i], numBytes[i]);
+      fprintf(stderr, " [%.1f pkt/sec - %.2f Mbit/sec]\n", (double)(numPkts[i]*1000)/deltaMillisec, thpt);
       pkt_dropped += pfringStat.drop;
 
       if(lastTime.tv_sec > 0) {
-	double pps;
-
-	deltaMillisec = delta_time(&endTime, &lastTime);
+	double pps, delta;
+	
+	delta = delta_time(&endTime, &lastTime);
 	diff = pfringStat.recv-lastPkts[i];
-	pps = ((double)diff/(double)(deltaMillisec/1000));
+	pps = ((double)diff/(double)(delta/1000));
 	fprintf(stderr, "=========================\n"
 		"Actual Stats: [channel=%d][%llu pkts][%.1f ms][%.1f pkt/sec]\n",
-		i, (long long unsigned int)diff, deltaMillisec, pps);
+		i, (long long unsigned int)diff, delta, pps);
 	pkt_thpt += pps;
       }
 
@@ -142,8 +138,10 @@ void print_stats() {
   lastTime.tv_sec = endTime.tv_sec, lastTime.tv_usec = endTime.tv_usec;
 
   fprintf(stderr, "=========================\n");
-  fprintf(stderr, "Aggregate stats (all channels): [%.1f pkt/sec][%llu pkts dropped]\n", 
-	  pkt_thpt, pkt_dropped);
+  fprintf(stderr, "Aggregate stats (all channels): [%.1f pkt/sec][%.1f Mbps][%llu pkts dropped]\n", 
+	  (double)(nPkts*1000)/(double)deltaMillisec,
+	  (double)(nBytes*8)/(double)deltaMillisec,
+	  pkt_dropped);
   fprintf(stderr, "=========================\n\n");
 }
 
@@ -187,6 +185,7 @@ void printHelp(void) {
 
   printf("-e <direction>  0=RX+TX, 1=RX only, 2=TX only\n");
   printf("-l <len>        Capture length\n");
+  printf("-w <watermark>  Watermark\n");
   printf("-a              Active packet wait\n");
   printf("-v              Verbose\n");
 }
@@ -236,14 +235,15 @@ void* packet_consumer_thread(void* _id) {
 
 int main(int argc, char* argv[]) {
   char *device = NULL, c;
-  int promisc, snaplen = DEFAULT_SNAPLEN, rc;
+  int promisc, snaplen = DEFAULT_SNAPLEN, rc, watermark = 0;
   packet_direction direction = rx_and_tx_direction;
   pfring  *pd;
   long i;
 
   startTime.tv_sec = 0;
+  wait_for_packet = 1;
 
-  while((c = getopt(argc,argv,"hi:l:vae:" /* "f:" */)) != -1) {
+  while((c = getopt(argc,argv,"hi:l:vae:w:" /* "f:" */)) != -1) {
     switch(c) {
     case 'h':
       printHelp();
@@ -269,6 +269,9 @@ int main(int argc, char* argv[]) {
       break;
     case 'v':
       verbose = 1;
+      break;
+    case 'w':
+      watermark = atoi(optarg);
       break;
     }
   }
@@ -311,8 +314,6 @@ int main(int argc, char* argv[]) {
     alarm(ALARM_SLEEP);
   }
 
-  wait_for_packet = 1;
-
   printf("Spawning %d threads, one per channel, each bound to a different core\n", num_channels);
 
   for(i=0; i<num_channels; i++) {
@@ -333,6 +334,11 @@ int main(int argc, char* argv[]) {
   
     if((rc = pfring_set_direction(ring[i], direction)) != 0)
       printf("pfring_set_direction returned [rc=%d][direction=%d]\n", rc, direction);
+
+    if(watermark > 0) {
+      if((rc = pfring_set_poll_watermark(pd, watermark)) != 0)
+	printf("pfring_set_poll_watermark returned [rc=%d][watermark=%d]\n", rc, watermark);
+    }
 
     pfring_enable_ring(ring[i]);
 

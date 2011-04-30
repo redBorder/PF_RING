@@ -689,6 +689,7 @@ struct pf_ring_socket {
   char sock_proc_name[64];
 
   /* Poll Watermark */
+  u_int32_t num_poll_calls;
   u_int16_t poll_num_pkts_watermark;
 
   /* Master Ring */

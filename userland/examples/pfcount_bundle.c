@@ -89,7 +89,7 @@ void print_stats() {
   double deltaMillisec;
   static u_int8_t print_all;
   static u_int64_t lastPkts[MAX_NUM_BUNDLE_ELEMENTS] = { 0 };
-  u_int64_t diff;
+  u_int64_t diff, tot_pkts, tot_drops;
   static struct timeval lastTime;
 
   if(startTime.tv_sec == 0) {
@@ -101,23 +101,31 @@ void print_stats() {
   gettimeofday(&endTime, NULL);
   deltaMillisec = delta_time(&endTime, &startTime);
 
+  tot_pkts = tot_drops = 0;
   for(i=0; i<bundle.num_sockets; i++)  {
     if(pfring_stats(ring[i], &pfringStat) >= 0) {
       if(print_all && (lastTime.tv_sec > 0)) {
 	deltaMillisec = delta_time(&endTime, &lastTime);
 	diff = pfringStat.recv-lastPkts[i];
-	fprintf(stderr, "[%d] Actual Stats: %llu pkts [%.1f ms][%.1f pkt/sec]\n",
+	tot_pkts += diff, tot_drops += pfringStat.drop;
+	fprintf(stderr, "[%d] Actual Stats: %llu pkts [%.1f ms][%.1f pkt/sec][%llu drops]\n",
 		i, (long long unsigned int)diff,
-		deltaMillisec, ((double)diff/(double)(deltaMillisec/1000)));
+		deltaMillisec, ((double)diff/(double)(deltaMillisec/1000)),
+		(long long unsigned int)pfringStat.drop);
       }
       
       lastPkts[i] = pfringStat.recv;
     }
   }
   
+  fprintf(stderr, "\nAggregate Stats:  %llu pkts [%.1f ms][%.1f pkt/sec][%llu drops]\n",
+	  (long long unsigned int)tot_pkts,
+	  deltaMillisec, ((double)tot_pkts/(double)(deltaMillisec/1000)),
+	  (long long unsigned int)tot_drops);
+
   lastTime.tv_sec = endTime.tv_sec, lastTime.tv_usec = endTime.tv_usec;
 
-  fprintf(stderr, "=========================\n\n");
+  fprintf(stderr, "=========================\n");
 }
 
 /* ******************************** */
@@ -468,16 +476,24 @@ int main(int argc, char* argv[]) {
   init_pfring_bundle(&bundle, pick_round_robin);
 
   while(dev != NULL) {
+    printf("Adding %s to bundle\n", dev);
+
     ring[num_ring] = pfring_open(dev, promisc, snaplen, 0);
 
     if(ring[num_ring] == NULL) {
-      printf("pfring_open error (perhaps you use quick mode and have already a socket bound to %s ?)\n",
-	     dev);
+      printf("pfring_open error (perhaps you use quick mode and have already a socket bound to %s ?)\n", dev);
       return(-1);
     } 
     
     pfring_set_application_name(ring[num_ring], "pfcount_bundle");
     pfring_version(ring[num_ring], &version);
+
+    if(watermark > 0) {
+      int rc;
+
+      if((rc = pfring_set_poll_watermark(ring[num_ring], watermark)) != 0)
+	printf("pfring_set_poll_watermark returned [rc=%d][watermark=%d]\n", rc, watermark);
+    }
     
     add_to_pfring_bundle(&bundle, ring[num_ring]);
 

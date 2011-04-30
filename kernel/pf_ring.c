@@ -885,6 +885,7 @@ static int ring_proc_get_info(char *buf, char **start, off_t offset,
 	rlen += sprintf(buf + rlen, "Bucket Len         : %d\n", fsi->data_len);
 	rlen += sprintf(buf + rlen, "Slot Len           : %d [bucket+header]\n", fsi->slot_len);
 	rlen += sprintf(buf + rlen, "Tot Memory         : %d\n", fsi->tot_mem);
+	rlen += sprintf(buf + rlen, "Num Poll Calls     : %u\n", pfr->num_poll_calls);
 	rlen += sprintf(buf + rlen, "Tot Packets        : %lu\n", (unsigned long)fsi->tot_pkts);
 	rlen += sprintf(buf + rlen, "Tot Pkt Lost       : %lu\n", (unsigned long)fsi->tot_lost);
 	rlen += sprintf(buf + rlen, "Tot Insert         : %lu\n", (unsigned long)fsi->tot_insert);
@@ -3925,6 +3926,8 @@ unsigned int ring_poll(struct file *file,
 
   if(enable_debug)
     printk("[PF_RING] -- poll called\n");
+
+  pfr->num_poll_calls++;
 
   if(pfr->dna_device == NULL) {
     /* PF_RING mode (No DNA) */

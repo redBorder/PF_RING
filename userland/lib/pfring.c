@@ -1475,11 +1475,10 @@ int pfring_bundle_read(pfring_bundle *bundle,
   switch(bundle->policy) {
   case pick_round_robin:
     for(i=0; i<bundle->num_sockets; i++) {
-      u_int sock_id = (bundle->last_read_socket + i) % bundle->num_sockets;
-      
-      if(pfring_there_is_pkt_available(bundle->sockets[sock_id])) {
-	bundle->last_read_socket = (bundle->last_read_socket + 1) % bundle->num_sockets;
-	return(pfring_read(bundle->sockets[sock_id], buffer,
+      bundle->last_read_socket = (bundle->last_read_socket + 1) % bundle->num_sockets;
+
+      if(pfring_there_is_pkt_available(bundle->sockets[bundle->last_read_socket])) {
+	return(pfring_read(bundle->sockets[bundle->last_read_socket], buffer,
 			   buffer_len, hdr, wait_for_incoming_packet));
       }
     }
@@ -1508,12 +1507,16 @@ int pfring_bundle_read(pfring_bundle *bundle,
     break;
   }
 
-  rc = pfring_bundle_poll(bundle, DEFAULT_POLL_DURATION);
+  if(wait_for_incoming_packet) {
+    rc = pfring_bundle_poll(bundle, DEFAULT_POLL_DURATION);
+    
+    if(rc > 0) {
+      goto redo_pfring_bundle_read;
+    } else
+      return(rc);
+  }
 
-  if(rc > 0) {
-    goto redo_pfring_bundle_read;
-  } else
-    return(rc);
+  return(0);
 }
 
 /* *********************************** */
