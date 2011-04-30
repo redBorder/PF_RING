@@ -618,7 +618,7 @@ int main(int argc, char* argv[]) {
   if(num_threads > 0)
     pthread_rwlock_init(&statsLock, NULL);
 
-  pd = pfring_open(device, promisc,  snaplen, (num_threads > 0) ? 1 : 0);
+  pd = pfring_open(device, promisc,  snaplen, (num_threads > 1) ? 1 : 0);
 
   if(pd == NULL) {
     printf("pfring_open error\n");

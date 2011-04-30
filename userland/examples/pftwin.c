@@ -459,13 +459,13 @@ int main(int argc, char* argv[]) {
   /* hardcode: promisc=1, to_ms=500 */
   promisc = 1;
 
-  if((pd = pfring_open("none", promisc,  snaplen, 1)) == NULL) {
+  if((pd = pfring_open("none", promisc,  snaplen, 0)) == NULL) {
     printf("pfring_open error\n");
     return(-1);
   }
 
   if(a_device) {
-    if((a_pd = pfring_open(a_device, promisc,  snaplen, 1)) == NULL) {
+    if((a_pd = pfring_open(a_device, promisc,  snaplen, 0)) == NULL) {
       printf("pfring_open(%s) error\n", a_device);
       return(-1);
     } else {
@@ -480,7 +480,7 @@ int main(int argc, char* argv[]) {
 	a_pd = NULL;
     
   if(b_device) {
-    if((b_pd = pfring_open(b_device, promisc,  snaplen, 1)) == NULL) {
+    if((b_pd = pfring_open(b_device, promisc,  snaplen, 0)) == NULL) {
       printf("pfring_open(%s) error\n", b_device);
       return(-1);
     } else {

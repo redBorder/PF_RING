@@ -27,6 +27,8 @@
 #define MAX_NUM_LOOPS          100
 #define YIELD_MULTIPLIER        10
 
+#undef USE_MB
+
 #define gcc_mb() __asm__ __volatile__("": : :"memory");
 
 //#define RING_DEBUG
@@ -361,6 +363,7 @@ pfring* pfring_open_consumer(char *device_name, u_int8_t promisc,
     memset(ring, 0, sizeof(pfring));
 
   ring->reentrant = _reentrant;
+  ring->poll_duration = DEFAULT_POLL_DURATION;
   ring->fd = socket(PF_RING, SOCK_RAW, htons(ETH_P_ALL));
 
 #ifdef RING_DEBUG
@@ -630,6 +633,11 @@ int pfring_set_poll_watermark(pfring *ring, u_int16_t watermark) {
 #endif
 }
 
+/* **************************************************** */
+
+void pfring_set_poll_duration(pfring *ring, u_int duration) { 
+  ring->poll_duration = duration; 
+}
 
 /* **************************************************** */
 
@@ -639,7 +647,7 @@ int pfring_poll(pfring *ring, u_int wait_duration) {
   
   /* Sleep when nothing is happening */
   pfd.fd      = ring->fd;
-  pfd.events  = POLLIN | POLLERR;
+  pfd.events  = POLLIN /* | POLLERR */;
   pfd.revents = 0;  
   errno       = 0;
   
@@ -1033,7 +1041,7 @@ static int parse_pkt(char *pkt, struct pfring_pkthdr *hdr)
 
 /* **************************************************** */
 
-int pfring_read(pfring *ring, char* buffer, u_int buffer_len,
+int pfring_recv(pfring *ring, char* buffer, u_int buffer_len,
 		struct pfring_pkthdr *hdr,
 		u_int8_t wait_for_incoming_packet) {
 #ifdef USE_PCAP
@@ -1099,17 +1107,20 @@ int pfring_read(pfring *ring, char* buffer, u_int buffer_len,
       insert_off = ring->slots_info->insert_off;
       if(bktLen > buffer_len) bktLen = buffer_len;
       
-      if(buffer && (bktLen > 0))
+      if(buffer && (bktLen > 0)) {
 	memcpy(buffer, &bucket[sizeof(struct pfring_pkthdr)], bktLen);
+      }
 
       next_off = ring->slots_info->remove_off + real_slot_len;
-      if ((next_off + ring->slots_info->slot_len) > (ring->slots_info->tot_mem - sizeof(FlowSlotInfo))){
+      if((next_off + ring->slots_info->slot_len) > (ring->slots_info->tot_mem - sizeof(FlowSlotInfo))) {
         next_off = 0;
       }
 
+#ifdef USE_MB
       /* This prevents the compiler from reordering instructions.
        * http://en.wikipedia.org/wiki/Memory_ordering#Compiler_memory_barrier */
       gcc_mb();
+#endif
 
       ring->slots_info->tot_read++;
       ring->slots_info->remove_off = next_off;
@@ -1129,7 +1140,7 @@ int pfring_read(pfring *ring, char* buffer, u_int buffer_len,
     if(ring->reentrant) pthread_spin_unlock(&ring->spinlock);
 
     if(wait_for_incoming_packet) {
-      rc = pfring_poll(ring, DEFAULT_POLL_DURATION);
+      rc = pfring_poll(ring, ring->poll_duration);
       
       if(rc == -1)
 	return(-1);
@@ -1149,15 +1160,6 @@ void pfring_breakloop(pfring *ring) {
 #else
   ring->break_recv_loop = 1;
 #endif
-}
-
-/* **************************************************** */
-
-int pfring_recv(pfring *ring, char* buffer, u_int buffer_len,
-		struct pfring_pkthdr *hdr,
-		u_int8_t wait_for_incoming_packet) {
-  return(pfring_read(ring, buffer, buffer_len,
-		     hdr, wait_for_incoming_packet));
 }
 
 /* ******************************* */
@@ -1431,7 +1433,7 @@ int pfring_bundle_poll(pfring_bundle *bundle, u_int wait_duration) {
   
   for(i=0; i<bundle->num_sockets; i++) {
     pfd[i].fd = bundle->sockets[i]->fd;
-    pfd[i].events  = POLLIN | POLLERR;
+    pfd[i].events  = POLLIN /* | POLLERR */;
     pfd[i].revents = 0;
   }
 
@@ -1478,7 +1480,7 @@ int pfring_bundle_read(pfring_bundle *bundle,
       bundle->last_read_socket = (bundle->last_read_socket + 1) % bundle->num_sockets;
 
       if(pfring_there_is_pkt_available(bundle->sockets[bundle->last_read_socket])) {
-	return(pfring_read(bundle->sockets[bundle->last_read_socket], buffer,
+	return(pfring_recv(bundle->sockets[bundle->last_read_socket], buffer,
 			   buffer_len, hdr, wait_for_incoming_packet));
       }
     }
@@ -1501,14 +1503,14 @@ int pfring_bundle_read(pfring_bundle *bundle,
     }
 
     if(num_found > 0) {
-      return(pfring_read(bundle->sockets[sock_id], buffer,
+      return(pfring_recv(bundle->sockets[sock_id], buffer,
 			 buffer_len, hdr, wait_for_incoming_packet));
     }
     break;
   }
 
   if(wait_for_incoming_packet) {
-    rc = pfring_bundle_poll(bundle, DEFAULT_POLL_DURATION);
+    rc = pfring_bundle_poll(bundle, bundle->sockets[0]->poll_duration);
     
     if(rc > 0) {
       goto redo_pfring_bundle_read;

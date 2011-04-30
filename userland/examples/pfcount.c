@@ -450,6 +450,7 @@ void printHelp(void) {
   printf("-s <string>     String to search on packets\n");
   printf("-l <len>        Capture length\n");
   printf("-w <watermark>  Watermark\n");
+  printf("-p <poll wait>  Poll wait (msec)\n");
   printf("-a              Active packet wait\n");
   printf("-v              Verbose\n");
 }
@@ -528,7 +529,7 @@ int main(int argc, char* argv[]) {
   int promisc, snaplen = DEFAULT_SNAPLEN, rc;
   u_int clusterId = 0;
   packet_direction direction = rx_and_tx_direction;
-  u_int16_t watermark = 0;
+  u_int16_t watermark = 0, poll_duration = 0;
 
 #if 0
   struct sched_param schedparam;
@@ -568,7 +569,7 @@ int main(int argc, char* argv[]) {
   startTime.tv_sec = 0;
   thiszone = gmt2local(0);
 
-  while((c = getopt(argc,argv,"hi:c:dl:vs:ae:n:w:" /* "f:" */)) != '?') {
+  while((c = getopt(argc,argv,"hi:c:dl:vs:ae:n:w:p:" /* "f:" */)) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -619,6 +620,9 @@ int main(int argc, char* argv[]) {
     case 'w':
       watermark = atoi(optarg);
       break;
+    case 'p':
+      poll_duration = atoi(optarg);
+      break;
     }
   }
 
@@ -632,7 +636,7 @@ int main(int argc, char* argv[]) {
     pthread_rwlock_init(&statsLock, NULL);
 
   if(!dna_mode)
-    pd = pfring_open(device, promisc,  snaplen, (num_threads > 0) ? 1 : 0);
+    pd = pfring_open(device, promisc,  snaplen, (num_threads > 1) ? 1 : 0);
 #ifdef ENABLE_DNA_SUPPORT
   else
     pd = pfring_open_dna(device, promisc, 0 /* we don't use threads */);
@@ -678,6 +682,9 @@ int main(int argc, char* argv[]) {
       if((rc = pfring_set_poll_watermark(pd, watermark)) != 0)
 	printf("pfring_set_poll_watermark returned [rc=%d][watermark=%d]\n", rc, watermark);
     }
+
+    if(poll_duration > 0)
+      pfring_set_poll_duration(pd, poll_duration);
 
 #if 0
     if(0) {

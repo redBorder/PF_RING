@@ -289,7 +289,7 @@ int main (int argc, char * argv [])
   printf ("%s: requested to start #%d thread%s\n", progname, threadsno, threadsno > 1 ? "s" : "");
 
   /* Open the interface for packet capturing */
-  if (! (ring = pfring_open (interface, promiscuous, snapshot, 1)))
+  if (! (ring = pfring_open (interface, promiscuous, snapshot, 0)))
     {
       printf ("%s: cannot open interface '%s'\n", progname, interface);
       return -1;

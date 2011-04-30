@@ -70,7 +70,7 @@ extern int pthread_spin_unlock (pthread_spinlock_t *__lock) __THROW;
 #define MAX_CAPLEN             16384
 #define PAGE_SIZE               4096
 
-#define DEFAULT_POLL_DURATION   1000
+#define DEFAULT_POLL_DURATION   500
 
 #define POLL_SLEEP_STEP           10 /* ns = 0.1 ms */
 #define POLL_SLEEP_MIN          POLL_SLEEP_STEP
@@ -109,6 +109,7 @@ extern "C" {
     int fd;
     FlowSlotInfo *slots_info;
     u_int poll_sleep;
+    u_int16_t poll_duration;
     u_int8_t clear_promisc, reentrant, break_recv_loop;
     u_long num_poll_calls;
     pthread_spinlock_t spinlock;
@@ -163,12 +164,10 @@ extern "C" {
   void pfring_close(pfring *ring);
   int  pfring_send(pfring *ring, char *pkt, u_int pkt_len);
   int pfring_stats(pfring *ring, pfring_stat *stats);
-  int pfring_read(pfring *ring, char* buffer, u_int buffer_len,
+  int pfring_recv(pfring *ring, char* buffer, u_int buffer_len,
 		  struct pfring_pkthdr *hdr,
 		  u_int8_t wait_for_incoming_packet);
   void pfring_breakloop(pfring *);
-  int pfring_recv(pfring *ring, char* buffer, u_int buffer_len, 
-		  struct pfring_pkthdr *hdr, u_int8_t wait_for_incoming_packet);
   int pfring_get_filtering_rule_stats(pfring *ring, u_int16_t rule_id,
 				      char* stats, u_int *stats_len);
   u_int8_t pfring_get_num_rx_channels(pfring *ring);
@@ -194,6 +193,7 @@ extern "C" {
   int pfring_set_sampling_rate(pfring *ring, u_int32_t rate /* 1 = no sampling */);
   int pfring_get_selectable_fd(pfring *ring);
   int pfring_get_bound_device_address(pfring *ring, u_char mac_address[6]);
+  void pfring_set_poll_duration(pfring *ring, u_int duration);
 
   /* PF_RING Socket bundle */
   void init_pfring_bundle(pfring_bundle *bundle, bundle_read_policy p);
@@ -204,6 +204,7 @@ extern "C" {
 			 struct pfring_pkthdr *hdr,
 			 u_int8_t wait_for_incoming_packet);
   void pfring_bundle_close(pfring_bundle *bundle);  
+
 #ifdef  __cplusplus
 }
 #endif
