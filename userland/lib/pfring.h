@@ -67,13 +67,15 @@ extern int pthread_spin_unlock (pthread_spinlock_t *__lock) __THROW;
 #include <linux/pf_ring.h>
 #include <linux/if_ether.h>
 
-#define MAX_CAPLEN       16384
-#define PAGE_SIZE         4096
+#define MAX_CAPLEN             16384
+#define PAGE_SIZE               4096
 
-#define POLL_SLEEP_STEP         10 /* ns = 0.1 ms */
-#define POLL_SLEEP_MIN        POLL_SLEEP_STEP
-#define POLL_SLEEP_MAX        1000 /* ns */
-#define POLL_QUEUE_MIN_LEN     500 /* # packets */
+#define DEFAULT_POLL_DURATION   1000
+
+#define POLL_SLEEP_STEP           10 /* ns = 0.1 ms */
+#define POLL_SLEEP_MIN          POLL_SLEEP_STEP
+#define POLL_SLEEP_MAX          1000 /* ns */
+#define POLL_QUEUE_MIN_LEN       500 /* # packets */
 
 #ifndef max
 #define max(a, b) (a > b ? a : b)
@@ -99,6 +101,7 @@ extern "C" {
     dna_device dna_dev;    
     u_int32_t *rx_reg_ptr[MAX_NUM_RX_CHANNELS];
     dna_device_operation last_dna_operation;
+    void *priv_data;
     
     /* All devices */
     char *buffer, *slots, *device_name;
@@ -113,12 +116,27 @@ extern "C" {
     struct sockaddr_ll sock_tx;
   } pfring;
 
+  /* ********************************* */
+  
+#define MAX_NUM_BUNDLE_ELEMENTS 32
+  
+  typedef enum {
+    pick_round_robin = 0,
+    pick_fifo,
+  } bundle_read_policy;
+
+  typedef struct {
+    bundle_read_policy policy;
+    u_int16_t num_sockets, last_read_socket;
+    pfring *sockets[MAX_NUM_BUNDLE_ELEMENTS];
+  } pfring_bundle;
+
+  /* ********************************* */
+
   typedef struct {
     u_int64_t recv, drop;
   } pfring_stat;
 
-  /* NOTE: keep 'struct pfring_pkthdr' in sync with 'struct pcap_pkthdr' (ring.h) */
-  
   /* ********************************* */
 
   int pfring_set_direction(pfring *ring, packet_direction direction);
@@ -177,6 +195,15 @@ extern "C" {
   int pfring_get_selectable_fd(pfring *ring);
   int pfring_get_bound_device_address(pfring *ring, u_char mac_address[6]);
 
+  /* PF_RING Socket bundle */
+  void init_pfring_bundle(pfring_bundle *bundle, bundle_read_policy p);
+  int add_to_pfring_bundle(pfring_bundle *bundle, pfring *ring);
+  int pfring_bundle_poll(pfring_bundle *bundle, u_int wait_duration);
+  int pfring_bundle_read(pfring_bundle *bundle, 
+			 char* buffer, u_int buffer_len,
+			 struct pfring_pkthdr *hdr,
+			 u_int8_t wait_for_incoming_packet);
+  void pfring_bundle_close(pfring_bundle *bundle);  
 #ifdef  __cplusplus
 }
 #endif

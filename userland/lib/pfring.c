@@ -651,6 +651,12 @@ int pfring_poll(pfring *ring, u_int wait_duration) {
 
 /* **************************************************** */
 
+inline int pfring_there_is_pkt_available(pfring *ring) {
+  return(ring->slots_info->tot_insert != ring->slots_info->tot_read);
+}
+
+/* **************************************************** */
+
 int pfring_version(pfring *ring, u_int32_t *version) {
 #ifdef USE_PCAP
   return(-1);
@@ -1082,7 +1088,7 @@ int pfring_read(pfring *ring, char* buffer, u_int buffer_len,
     if(ring->reentrant)
       pthread_spin_lock(&ring->spinlock);
 
-    if(ring->slots_info->tot_insert != ring->slots_info->tot_read) {
+    if(pfring_there_is_pkt_available(ring)) {
       char *bucket = &ring->slots[ring->slots_info->remove_off];
       u_int32_t next_off, real_slot_len, insert_off, bktLen;
 
@@ -1123,7 +1129,7 @@ int pfring_read(pfring *ring, char* buffer, u_int buffer_len,
     if(ring->reentrant) pthread_spin_unlock(&ring->spinlock);
 
     if(wait_for_incoming_packet) {
-      rc = pfring_poll(ring, 1000);
+      rc = pfring_poll(ring, DEFAULT_POLL_DURATION);
       
       if(rc == -1)
 	return(-1);
@@ -1395,6 +1401,129 @@ int pfring_get_bound_device_address(pfring *ring, u_char mac_address[6]) {
     return(getsockopt(ring->fd, 0, SO_GET_BOUND_DEVICE_ADDRESS, mac_address, &len));
   }
 #endif
+}
+
+/* *********************************** */
+
+void init_pfring_bundle(pfring_bundle *bundle, bundle_read_policy p) {
+  memset(bundle, 0, sizeof(pfring_bundle));
+  bundle->policy = p;
+}
+
+/* *********************************** */
+
+int add_to_pfring_bundle(pfring_bundle *bundle, pfring *ring) {
+  if(bundle->num_sockets >= (MAX_NUM_BUNDLE_ELEMENTS-1))
+    return(-1);
+
+  pfring_enable_ring(ring);
+  bundle->sockets[bundle->num_sockets++] = ring;
+
+  return(0);
+}
+
+/* *********************************** */
+
+/* Returns the first bundle socket with something to read */
+int pfring_bundle_poll(pfring_bundle *bundle, u_int wait_duration) {
+  int i, rc;
+  struct pollfd pfd[MAX_NUM_BUNDLE_ELEMENTS];
+  
+  for(i=0; i<bundle->num_sockets; i++) {
+    pfd[i].fd = bundle->sockets[i]->fd;
+    pfd[i].events  = POLLIN | POLLERR;
+    pfd[i].revents = 0;
+  }
+
+  errno = 0;
+  rc = poll(pfd, bundle->num_sockets, wait_duration);
+  
+  if(rc > 0) {
+    for(i=0; i<bundle->num_sockets; i++)
+      if(pfd[i].revents != 0)
+	return(i);
+  } else if(rc == 0)
+    return(-1);
+
+  return(-2); /* Default */
+}
+
+/* *********************************** */
+
+inline int is_before(struct timeval *ts_a,  struct timeval *ts_b) {
+  if(ts_a->tv_sec < ts_b->tv_sec)
+    return(1);
+  else if(ts_a->tv_sec == ts_b->tv_sec) {
+    if(ts_a->tv_usec < ts_b->tv_usec)
+      return(1);
+  } 
+  
+  return(0);
+}
+
+/* *********************************** */
+
+int pfring_bundle_read(pfring_bundle *bundle, 
+		       char* buffer, u_int buffer_len,
+		       struct pfring_pkthdr *hdr,
+		       u_int8_t wait_for_incoming_packet) {
+  u_int i, sock_id, num_found, rc;
+  struct timeval ts;
+
+ redo_pfring_bundle_read:
+
+  switch(bundle->policy) {
+  case pick_round_robin:
+    for(i=0; i<bundle->num_sockets; i++) {
+      u_int sock_id = (bundle->last_read_socket + i) % bundle->num_sockets;
+      
+      if(pfring_there_is_pkt_available(bundle->sockets[sock_id])) {
+	bundle->last_read_socket = (bundle->last_read_socket + 1) % bundle->num_sockets;
+	return(pfring_read(bundle->sockets[sock_id], buffer,
+			   buffer_len, hdr, wait_for_incoming_packet));
+      }
+    }
+    break;
+
+  case pick_fifo:
+    num_found = 0;
+
+    for(i=0; i<bundle->num_sockets; i++) {
+      pfring *ring = bundle->sockets[i];
+
+      if(pfring_there_is_pkt_available(ring)) {
+	struct pfring_pkthdr *header = (struct pfring_pkthdr*)&ring->slots[ring->slots_info->remove_off];
+
+	if((num_found == 0) || is_before(&header->ts, &ts)) {
+	  memcpy(&ts, &header->ts, sizeof(struct timeval));
+	  num_found++, sock_id = i;
+	}
+      }
+    }
+
+    if(num_found > 0) {
+      return(pfring_read(bundle->sockets[sock_id], buffer,
+			 buffer_len, hdr, wait_for_incoming_packet));
+    }
+    break;
+  }
+
+  rc = pfring_bundle_poll(bundle, DEFAULT_POLL_DURATION);
+
+  if(rc > 0) {
+    goto redo_pfring_bundle_read;
+  } else
+    return(rc);
+}
+
+/* *********************************** */
+
+/* Returns the first bundle socket with something to read */
+void pfring_bundle_close(pfring_bundle *bundle) {
+  int i;
+  
+  for(i=0; i<bundle->num_sockets; i++)
+    pfring_close(bundle->sockets[i]);  
 }
 
 /* *********************************** */

@@ -181,6 +181,11 @@ struct pfring_extended_pkthdr {
   struct pkt_parsing_info parsed_pkt; /* packet parsing info */
 };
 
+/* NOTE
+
+   Keep 'struct pfring_pkthdr' in sync with 'struct pcap_pkthdr'   
+*/
+
 struct pfring_pkthdr {
   /* pcap header */
   struct timeval ts;    /* time stamp */
