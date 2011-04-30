@@ -74,6 +74,7 @@
 #define SO_GET_RING_ID                   175
 #define SO_GET_PACKET_CONSUMER_MODE      176
 #define SO_GET_BOUND_DEVICE_ADDRESS      177
+#define SO_GET_NUM_QUEUED_PKTS           178
 
 /* Map */
 #define SO_MAP_DNA_DEVICE                180
@@ -689,6 +690,7 @@ struct pf_ring_socket {
   char sock_proc_name[64];
 
   /* Poll Watermark */
+  u_int8_t inside_polling;
   u_int32_t num_poll_calls;
   u_int16_t poll_num_pkts_watermark;
 

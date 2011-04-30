@@ -405,7 +405,7 @@ static inline int get_next_slot_offset(struct pf_ring_socket *pfr, u_int32_t off
   struct pfring_pkthdr *hdr;
   u_int32_t real_slot_size;
 
-  // smp_rmb();
+  smp_rmb();
 
   hdr = (struct pfring_pkthdr*)get_slot(pfr, off);
   real_slot_size = pfr->slot_header_len + hdr->extended_hdr.parsed_header_len + hdr->caplen;
@@ -423,7 +423,7 @@ static inline int get_next_slot_offset(struct pf_ring_socket *pfr, u_int32_t off
 
 static inline u_int32_t num_queued_pkts(struct pf_ring_socket *pfr)
 {
-  // smp_rmb();
+  smp_rmb();
 
   if(pfr->ring_slots != NULL) {
     u_int32_t tot_insert = pfr->slots_info->tot_insert, tot_read = pfr->slots_info->tot_read;
@@ -458,7 +458,7 @@ inline u_int get_num_ring_free_slots(struct pf_ring_socket * pfr)
 
 static inline int check_and_init_free_slot(struct pf_ring_socket *pfr, int off)
 {
-  // smp_rmb();
+  smp_rmb();
 
   if(pfr->slots_info->insert_off == pfr->slots_info->remove_off) {
     /*
@@ -1050,15 +1050,13 @@ static int ring_alloc_mem(struct sock *sk)
   tot_mem |= tot_mem >> 16;
   tot_mem++;
 
+  /* Memory is already zeroed */
   pfr->ring_memory = vmalloc_user(tot_mem);
 
   if(pfr->ring_memory != NULL) {
     if(enable_debug)
       printk("[PF_RING] successfully allocated %lu bytes at 0x%08lx\n",
 	     (unsigned long)tot_mem, (unsigned long)pfr->ring_memory);
-
-    /* Memory is already zeroed */
-    /* memset(pfr->ring_memory, 0, tot_mem); */
   } else {
     printk("[PF_RING] ERROR: not enough memory for ring\n");
     return(-1);
@@ -1781,7 +1779,7 @@ inline int copy_data_to_ring(struct sk_buff *skb,
   /* We need to lock as two ksoftirqd might put data onto the same ring */
 
   if(do_lock) write_lock(&pfr->ring_index_lock);
-  // smp_rmb();
+  smp_rmb();
 
   off = pfr->slots_info->insert_off;
   pfr->slots_info->tot_pkts++;
@@ -1844,13 +1842,12 @@ inline int copy_data_to_ring(struct sk_buff *skb,
     NOTE: smp_* barriers are _compiler_ barriers on UP, mandatory barriers on SMP
     a consumer _must_ see the new value of tot_insert only after the buffer update completes
   */
-  smp_wmb();
   pfr->slots_info->tot_insert++;
+  smp_mb();
 
  if(do_lock) write_unlock(&pfr->ring_index_lock);
 
-  if(waitqueue_active(&pfr->ring_slots_waitqueue)
-     && (num_queued_pkts(pfr) >= pfr->poll_num_pkts_watermark))
+ if(pfr->inside_polling && (num_queued_pkts(pfr) >= pfr->poll_num_pkts_watermark))
     wake_up_interruptible(&pfr->ring_slots_waitqueue);
 
 #if(LINUX_VERSION_CODE > KERNEL_VERSION(2,6,32))
@@ -2733,8 +2730,8 @@ static int skb_ring_handler(struct sk_buff *skb,
 #ifdef PROFILING
   uint64_t rdt = _rdtsc(), rdt1, rdt2;
 #endif
-
-  if(channel_id > MAX_NUM_RX_CHANNELS) channel_id = MAX_NUM_RX_CHANNELS;
+  
+  if(channel_id > MAX_NUM_RX_CHANNELS) channel_id = 0 /* MAX_NUM_RX_CHANNELS */;  
 
   if((!skb) /* Invalid skb */ ||((!enable_tx_capture) && (!recv_packet))) {
     /*
@@ -3936,11 +3933,15 @@ unsigned int ring_poll(struct file *file,
       printk("[PF_RING] poll called (non DNA device)\n");
 
     pfr->ring_active = 1;
-    // smp_rmb();
+    smp_rmb();
 
     //if(pfr->slots_info->tot_read == pfr->slots_info->tot_insert)
-    if(num_queued_pkts(pfr) < pfr->poll_num_pkts_watermark)
+    if(num_queued_pkts(pfr) < pfr->poll_num_pkts_watermark) {
+      pfr->inside_polling = 1;
       poll_wait(file, &pfr->ring_slots_waitqueue, wait);
+      pfr->inside_polling = 0;
+      smp_mb();
+    }
 
     if(num_queued_pkts(pfr) >= pfr->poll_num_pkts_watermark)
       mask |= POLLIN | POLLRDNORM;
@@ -4671,7 +4672,7 @@ static int ring_setsockopt(struct socket *sock,
       
       pfr->num_channels_per_ring = 0;
 
-      for(i=0; i<MAX_NUM_RX_CHANNELS; i++) {
+      for(i=0; i<pfr->num_rx_channels; i++) {
 	u_int32_t the_bit = 1 << i;
 
 	if((channel_id & the_bit) == the_bit) {
@@ -4682,7 +4683,7 @@ static int ring_setsockopt(struct socket *sock,
 
       /* Everything seems to work thus let's set the values */
 
-      for(i=0; i<MAX_NUM_RX_CHANNELS; i++) {
+      for(i=0; i<pfr->num_rx_channels; i++) {
 	u_int32_t the_bit = 1 << i;
 
 	if((channel_id & the_bit) == the_bit) {
@@ -5383,6 +5384,18 @@ static int ring_getsockopt(struct socket *sock,
 	return -EFAULT;
     } else
       return -EFAULT;
+    break;
+
+  case SO_GET_NUM_QUEUED_PKTS:
+    {
+      u_int32_t num_queued = num_queued_pkts(pfr);
+
+      if(len < sizeof(num_queued))
+	return -EINVAL;
+      
+      if(copy_to_user(optval, &num_queued, sizeof(num_queued)))
+	return -EFAULT;
+    }
     break;
 
   default:

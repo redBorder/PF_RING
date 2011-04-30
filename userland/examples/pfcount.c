@@ -481,10 +481,6 @@ void* packet_consumer_thread(void* _id) {
   }
 
   while(1) {
-    struct simple_stats {
-      u_int64_t num_pkts, num_bytes;
-    };
-    struct simple_stats stats;
     struct pfring_pkthdr hdr;
     int rc;
     u_int len;
@@ -494,7 +490,7 @@ void* packet_consumer_thread(void* _id) {
     if(pfring_recv(pd, (char*)buffer, sizeof(buffer), &hdr, wait_for_packet) > 0) {
       if(do_shutdown) break;
       dummyProcesssPacket(&hdr, buffer, thread_id);
-      
+
 #ifdef TEST_SEND
       buffer[0] = 0x99;
       buffer[1] = 0x98;
@@ -502,10 +498,15 @@ void* packet_consumer_thread(void* _id) {
       pfring_send(pd, buffer, hdr.caplen);
 #endif
     } else {
-      /* usleep(100); */
+      usleep(1);
     }
 
     if(0) {
+      struct simple_stats {
+	u_int64_t num_pkts, num_bytes;
+      };
+      struct simple_stats stats;
+
       len = sizeof(stats);
       rc = pfring_get_filtering_rule_stats(pd, 5, (char*)&stats, &len);
       if(rc < 0)

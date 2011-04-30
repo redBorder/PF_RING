@@ -29,6 +29,9 @@
 
 #undef USE_MB
 
+#define rmb()   asm volatile("lfence":::"memory")
+#define wmb()   asm volatile("sfence" ::: "memory")
+
 #define gcc_mb() __asm__ __volatile__("": : :"memory");
 
 //#define RING_DEBUG
@@ -698,6 +701,24 @@ u_int8_t pfring_get_num_rx_channels(pfring *ring) {
 
 /* **************************************************** */
 
+u_int32_t pfring_get_num_queued_pkts(pfring *ring) {
+#ifdef USE_PCAP
+  return(1);
+#else
+  if(ring == NULL)
+    return(0);
+  else {
+    socklen_t len = sizeof(u_int32_t);
+    u_int32_t num_queued_pkts;
+    int rc = getsockopt(ring->fd, 0, SO_GET_NUM_QUEUED_PKTS, &num_queued_pkts, &len);
+
+    return((rc == 0) ? num_queued_pkts : 0);
+  }
+#endif
+}
+
+/* **************************************************** */
+
 u_int16_t pfring_get_ring_id(pfring *ring) {
 #ifdef USE_PCAP
   return(1);
@@ -1085,7 +1106,7 @@ int pfring_recv(pfring *ring, char* buffer, u_int buffer_len,
   } else {
     int rc = 0;
 
-    if((ring == NULL) || (ring->buffer == NULL)) return(-1);
+    if(ring->buffer == NULL) return(-1);
 
     ring->break_recv_loop = 0;
 
@@ -1095,6 +1116,8 @@ int pfring_recv(pfring *ring, char* buffer, u_int buffer_len,
 
     if(ring->reentrant)
       pthread_spin_lock(&ring->spinlock);
+
+    rmb();
 
     if(pfring_there_is_pkt_available(ring)) {
       char *bucket = &ring->slots[ring->slots_info->remove_off];
@@ -1116,12 +1139,6 @@ int pfring_recv(pfring *ring, char* buffer, u_int buffer_len,
         next_off = 0;
       }
 
-#ifdef USE_MB
-      /* This prevents the compiler from reordering instructions.
-       * http://en.wikipedia.org/wiki/Memory_ordering#Compiler_memory_barrier */
-      gcc_mb();
-#endif
-
       ring->slots_info->tot_read++;
       ring->slots_info->remove_off = next_off;
 
@@ -1131,7 +1148,13 @@ int pfring_recv(pfring *ring, char* buffer, u_int buffer_len,
 	ring->slots_info->remove_off = ring->slots_info->insert_off;
       }
 
-      // wmb();
+#ifdef USE_MB
+      /* This prevents the compiler from reordering instructions.
+       * http://en.wikipedia.org/wiki/Memory_ordering#Compiler_memory_barrier */
+      gcc_mb();
+#endif
+      
+      wmb();
       if(ring->reentrant) pthread_spin_unlock(&ring->spinlock);
       return(1);
     }
@@ -1141,7 +1164,7 @@ int pfring_recv(pfring *ring, char* buffer, u_int buffer_len,
 
     if(wait_for_incoming_packet) {
       rc = pfring_poll(ring, ring->poll_duration);
-      
+
       if(rc == -1)
 	return(-1);
       else
