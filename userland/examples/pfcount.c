@@ -131,14 +131,14 @@ void print_stats() {
 
     if(print_all && (lastTime.tv_sec > 0)) {
       deltaMillisec = delta_time(&endTime, &lastTime);
-      diff = pfringStat.recv-lastPkts;
+      diff = nPkts-lastPkts;
       fprintf(stderr, "=========================\n"
 	      "Actual Stats: %llu pkts [%.1f ms][%.1f pkt/sec]\n",
 	      (long long unsigned int)diff,
 	      deltaMillisec, ((double)diff/(double)(deltaMillisec/1000)));
     }
 
-    lastPkts = pfringStat.recv;
+    lastPkts = nPkts;
   }
 
   lastTime.tv_sec = endTime.tv_sec, lastTime.tv_usec = endTime.tv_usec;
@@ -451,6 +451,7 @@ void printHelp(void) {
   printf("-l <len>        Capture length\n");
   printf("-w <watermark>  Watermark\n");
   printf("-p <poll wait>  Poll wait (msec)\n");
+  printf("-b <cpu %%>      CPU pergentage priority (0-99)\n");
   printf("-a              Active packet wait\n");
   printf("-v              Verbose\n");
 }
@@ -479,6 +480,8 @@ void* packet_consumer_thread(void* _id) {
       printf("Set thread %lu on core %lu/%u\n", thread_id, core_id, numCPU);
     }
   }
+
+
 
   while(1) {
     struct pfring_pkthdr hdr;
@@ -522,6 +525,56 @@ void* packet_consumer_thread(void* _id) {
   return(NULL);
 }
 
+#define gcc_mb() __asm__ __volatile__("": : :"memory");
+typedef void (*pfringProcesssPacket)(const struct pfring_pkthdr *h, const u_char *p, long threadId);
+
+int pfring_loop(pfring *ring, u_char* buffer, u_int buffer_len,
+		struct pfring_pkthdr *hdr, pfringProcesssPacket looper) {
+  u_int size_hdr = sizeof(struct pfring_pkthdr);
+
+  if(ring == NULL) return(-1);
+  if(ring->buffer == NULL) return(-1);
+
+  while(1) {
+
+    if(ring->slots_info->tot_insert != ring->slots_info->tot_read) {
+      char *bucket = &ring->slots[ring->slots_info->remove_off];
+      u_int32_t next_off, real_slot_len, insert_off, bktLen;
+
+      memcpy(hdr, bucket, size_hdr);
+
+      bktLen = hdr->caplen+hdr->extended_hdr.parsed_header_len;
+      real_slot_len = size_hdr + bktLen;
+      insert_off = ring->slots_info->insert_off;
+      if(bktLen > buffer_len) bktLen = buffer_len;
+      
+      if(buffer && (bktLen > 0)) {
+	memcpy(buffer, &bucket[size_hdr], bktLen);
+      }
+
+      next_off = ring->slots_info->remove_off + real_slot_len;
+      if((next_off + ring->slots_info->slot_len) > (ring->slots_info->tot_mem - sizeof(FlowSlotInfo))) {
+	next_off = 0;
+      }
+
+      ring->slots_info->tot_read++;
+      ring->slots_info->remove_off = next_off;
+
+      /* Ugly safety check */
+      if((ring->slots_info->tot_insert == ring->slots_info->tot_read)
+	 && (ring->slots_info->remove_off > ring->slots_info->insert_off)) {
+	ring->slots_info->remove_off = ring->slots_info->insert_off;
+      }
+      numPkts[0]++, numBytes[0] += hdr->len;
+    } else {
+	if(pfring_poll(ring, ring->poll_duration) == -1)
+	  return(-1);
+    }
+  }
+  
+  return(-1); /* Not reached */
+}
+
 /* *************************************** */
 
 int main(int argc, char* argv[]) {
@@ -530,18 +583,18 @@ int main(int argc, char* argv[]) {
   int promisc, snaplen = DEFAULT_SNAPLEN, rc;
   u_int clusterId = 0;
   packet_direction direction = rx_and_tx_direction;
-  u_int16_t watermark = 0, poll_duration = 0;
+  u_int16_t watermark = 0, poll_duration = 0, cpu_percentage = 0;
 
 #if 0
   struct sched_param schedparam;
 
-  schedparam.sched_priority = 99;
+  /* mlockall(MCL_CURRENT|MCL_FUTURE); */
+
+  schedparam.sched_priority = 50;
   if(sched_setscheduler(0, SCHED_FIFO, &schedparam) == -1) {
     printf("error while setting the scheduler, errno=%i\n", errno);
     exit(1);
   }
-
-  mlockall(MCL_CURRENT|MCL_FUTURE);
 
 #undef TEST_PROCESSOR_AFFINITY
 #ifdef TEST_PROCESSOR_AFFINITY
@@ -570,7 +623,7 @@ int main(int argc, char* argv[]) {
   startTime.tv_sec = 0;
   thiszone = gmt2local(0);
 
-  while((c = getopt(argc,argv,"hi:c:dl:vs:ae:n:w:p:" /* "f:" */)) != '?') {
+  while((c = getopt(argc,argv,"hi:c:dl:vs:ae:n:w:p:b:" /* "f:" */)) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -621,6 +674,9 @@ int main(int argc, char* argv[]) {
     case 'w':
       watermark = atoi(optarg);
       break;
+    case 'b':
+      cpu_percentage = atoi(optarg);
+      break;
     case 'p':
       poll_duration = atoi(optarg);
       break;
@@ -635,6 +691,11 @@ int main(int argc, char* argv[]) {
 
   if(num_threads > 0)
     pthread_rwlock_init(&statsLock, NULL);
+ 
+  if(cpu_percentage > 0) {
+    if(cpu_percentage > 99) cpu_percentage = 99;
+    pfring_config(cpu_percentage);
+  }
 
   if(!dna_mode)
     pd = pfring_open(device, promisc,  snaplen, (num_threads > 1) ? 1 : 0);
@@ -800,7 +861,13 @@ int main(int argc, char* argv[]) {
       pthread_create(&my_thread, NULL, packet_consumer_thread, (void*)i);
   }
 
-  packet_consumer_thread(0);
+  if(0) {
+    u_char buffer[2048];
+    struct pfring_pkthdr hdr;
+
+    pfring_loop(pd, buffer, sizeof(buffer), &hdr, dummyProcesssPacket);
+  } else
+    packet_consumer_thread(0);
 
   pfring_close(pd);
 

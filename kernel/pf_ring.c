@@ -405,7 +405,7 @@ static inline int get_next_slot_offset(struct pf_ring_socket *pfr, u_int32_t off
   struct pfring_pkthdr *hdr;
   u_int32_t real_slot_size;
 
-  smp_rmb();
+  // smp_rmb();
 
   hdr = (struct pfring_pkthdr*)get_slot(pfr, off);
   real_slot_size = pfr->slot_header_len + hdr->extended_hdr.parsed_header_len + hdr->caplen;
@@ -423,7 +423,7 @@ static inline int get_next_slot_offset(struct pf_ring_socket *pfr, u_int32_t off
 
 static inline u_int32_t num_queued_pkts(struct pf_ring_socket *pfr)
 {
-  smp_rmb();
+  // smp_rmb();
 
   if(pfr->ring_slots != NULL) {
     u_int32_t tot_insert = pfr->slots_info->tot_insert, tot_read = pfr->slots_info->tot_read;
@@ -458,7 +458,7 @@ inline u_int get_num_ring_free_slots(struct pf_ring_socket * pfr)
 
 static inline int check_and_init_free_slot(struct pf_ring_socket *pfr, int off)
 {
-  smp_rmb();
+  // smp_rmb();
 
   if(pfr->slots_info->insert_off == pfr->slots_info->remove_off) {
     /*
@@ -1779,7 +1779,7 @@ inline int copy_data_to_ring(struct sk_buff *skb,
   /* We need to lock as two ksoftirqd might put data onto the same ring */
 
   if(do_lock) write_lock(&pfr->ring_index_lock);
-  smp_rmb();
+  // smp_rmb();
 
   off = pfr->slots_info->insert_off;
   pfr->slots_info->tot_pkts++;
@@ -1843,11 +1843,12 @@ inline int copy_data_to_ring(struct sk_buff *skb,
     a consumer _must_ see the new value of tot_insert only after the buffer update completes
   */
   pfr->slots_info->tot_insert++;
-  smp_mb();
+  //smp_mb();
+  wmb();
 
  if(do_lock) write_unlock(&pfr->ring_index_lock);
 
- if(pfr->inside_polling && (num_queued_pkts(pfr) >= pfr->poll_num_pkts_watermark))
+ if(num_queued_pkts(pfr) >= pfr->poll_num_pkts_watermark)
     wake_up_interruptible(&pfr->ring_slots_waitqueue);
 
 #if(LINUX_VERSION_CODE > KERNEL_VERSION(2,6,32))
@@ -3933,14 +3934,14 @@ unsigned int ring_poll(struct file *file,
       printk("[PF_RING] poll called (non DNA device)\n");
 
     pfr->ring_active = 1;
-    smp_rmb();
+    // smp_rmb();
 
     //if(pfr->slots_info->tot_read == pfr->slots_info->tot_insert)
     if(num_queued_pkts(pfr) < pfr->poll_num_pkts_watermark) {
       pfr->inside_polling = 1;
       poll_wait(file, &pfr->ring_slots_waitqueue, wait);
       pfr->inside_polling = 0;
-      smp_mb();
+      // smp_mb();
     }
 
     if(num_queued_pkts(pfr) >= pfr->poll_num_pkts_watermark)

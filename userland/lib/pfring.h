@@ -140,6 +140,7 @@ extern "C" {
 
   /* ********************************* */
 
+  void pfring_config(u_short cpu_percentage);
   int pfring_set_direction(pfring *ring, packet_direction direction);
   int pfring_set_cluster(pfring *ring, u_int clusterId, cluster_type the_type);
   int pfring_set_master_id(pfring *ring, u_int32_t master_id);

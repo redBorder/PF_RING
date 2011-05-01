@@ -24,7 +24,7 @@
 
 #include "pfring.h"
 
-#define MAX_NUM_LOOPS          100
+#define MAX_NUM_LOOPS         1000
 #define YIELD_MULTIPLIER        10
 
 #undef USE_MB
@@ -57,6 +57,25 @@ unsigned long long rdtsc() {
   return(a);
 }
 #endif
+
+/* ******************************* */
+
+void pfring_config(u_short cpu_percentage) {
+  static u_int pfring_initialized = 0;
+
+  if(!pfring_initialized) {
+    struct sched_param schedparam;
+    
+    /* mlockall(MCL_CURRENT|MCL_FUTURE); */
+
+    pfring_initialized = 1;
+    schedparam.sched_priority = cpu_percentage;
+    if(sched_setscheduler(0, SCHED_FIFO, &schedparam) == -1) {
+      printf("error while setting the scheduler, errno=%i\n", errno);
+      exit(1);
+    }
+  }
+}
 
 /* ******************************* */
 
@@ -909,6 +928,7 @@ int pfring_stats(pfring *ring, pfring_stat *stats) {
   }
 
   if((ring != NULL) && (ring->slots_info != NULL) && (stats != NULL)) {
+    rmb();
     stats->recv = ring->slots_info->tot_read;
     stats->drop = ring->slots_info->tot_lost;
     return(0);
@@ -1079,7 +1099,6 @@ int pfring_recv(pfring *ring, char* buffer, u_int buffer_len,
   } else
     return(0);
 #endif
-
   if(ring == NULL) return(-1);
 
   if(ring->dna_mapped_device) {
@@ -1117,7 +1136,7 @@ int pfring_recv(pfring *ring, char* buffer, u_int buffer_len,
     if(ring->reentrant)
       pthread_spin_lock(&ring->spinlock);
 
-    rmb();
+    //rmb();
 
     if(pfring_there_is_pkt_available(ring)) {
       char *bucket = &ring->slots[ring->slots_info->remove_off];
@@ -1153,24 +1172,23 @@ int pfring_recv(pfring *ring, char* buffer, u_int buffer_len,
        * http://en.wikipedia.org/wiki/Memory_ordering#Compiler_memory_barrier */
       gcc_mb();
 #endif
-      
-      wmb();
+           
       if(ring->reentrant) pthread_spin_unlock(&ring->spinlock);
       return(1);
     }
 
     /* Nothing to do: we need to wait */
     if(ring->reentrant) pthread_spin_unlock(&ring->spinlock);
-
+   
     if(wait_for_incoming_packet) {
       rc = pfring_poll(ring, ring->poll_duration);
-
+      
       if(rc == -1)
 	return(-1);
       else
 	goto do_pfring_recv;
     }
-
+    
     return(-1); /* Not reached */
   }
 }

@@ -95,12 +95,12 @@ void print_stats() {
 
     if(lastTime.tv_sec > 0) {
       deltaSec = (double)delta_time(&endTime, &lastTime)/1000000;
-      diff = pcapStat.ps_recv-lastPkts;
+      diff = numPkts-lastPkts;
       fprintf(stderr, "=========================\n"
 	      "Actual Stats: %llu pkts [%.1f ms][%.1f pkt/sec]\n",
 	      (long long unsigned int)diff, deltaSec*1000, 
 	      ((double)diff/(double)(deltaSec)));
-      lastPkts = pcapStat.ps_recv;
+      lastPkts = numPkts;
     }
 
     fprintf(stderr, "=========================\n");
@@ -336,7 +336,7 @@ int main(int argc, char* argv[]) {
   int promisc, snaplen = DEFAULT_SNAPLEN;;
   struct bpf_program fcode;
 
-#if 0  
+#if 0
   struct sched_param schedparam;
 
   schedparam.sched_priority = 99;

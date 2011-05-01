@@ -93,7 +93,8 @@ void print_stats() {
   static struct timeval lastTime;
   int i;
   unsigned long long nBytes = 0, nPkts = 0, pkt_dropped = 0;
-  double pkt_thpt = 0;
+  unsigned long long nPktsLast = 0;
+  double pkt_thpt = 0, delta;
 
   if(startTime.tv_sec == 0) {
     gettimeofday(&startTime, NULL);
@@ -102,6 +103,8 @@ void print_stats() {
 
   gettimeofday(&endTime, NULL);
   deltaMillisec = delta_time(&endTime, &startTime);
+
+  delta = delta_time(&endTime, &lastTime);
 
   for(i=0; i < num_channels; i++) {
     nBytes += numBytes[i], nPkts += numPkts[i];
@@ -112,18 +115,18 @@ void print_stats() {
       fprintf(stderr, "=========================\n"
 	      "Absolute Stats: [channel=%d][%u pkts rcvd][%u pkts dropped]\n"
 	      "Total Pkts=%u/Dropped=%.1f %%\n",
-	      i, (unsigned int)pfringStat.recv, (unsigned int)pfringStat.drop,
-	      (unsigned int)(pfringStat.recv+pfringStat.drop),
-	      pfringStat.recv == 0 ? 0 : (double)(pfringStat.drop*100)/(double)(pfringStat.recv+pfringStat.drop));
+	      i, (unsigned int)numPkts[i], (unsigned int)pfringStat.drop,
+	      (unsigned int)(numPkts[i]+pfringStat.drop),
+	      numPkts[i] == 0 ? 0 : (double)(pfringStat.drop*100)/(double)(numPkts[i]+pfringStat.drop));
       fprintf(stderr, "%llu pkts - %llu bytes", numPkts[i], numBytes[i]);
       fprintf(stderr, " [%.1f pkt/sec - %.2f Mbit/sec]\n", (double)(numPkts[i]*1000)/deltaMillisec, thpt);
       pkt_dropped += pfringStat.drop;
 
       if(lastTime.tv_sec > 0) {
-	double pps, delta;
+	double pps;
 	
-	delta = delta_time(&endTime, &lastTime);
-	diff = pfringStat.recv-lastPkts[i];
+	diff = numPkts[i]-lastPkts[i];
+	nPktsLast += diff;
 	pps = ((double)diff/(double)(delta/1000));
 	fprintf(stderr, "=========================\n"
 		"Actual Stats: [channel=%d][%llu pkts][%.1f ms][%.1f pkt/sec]\n",
@@ -131,17 +134,16 @@ void print_stats() {
 	pkt_thpt += pps;
       }
 
-      lastPkts[i] = pfringStat.recv;
+
+      lastPkts[i] = numPkts[i];
     }
   }
 
   lastTime.tv_sec = endTime.tv_sec, lastTime.tv_usec = endTime.tv_usec;
 
   fprintf(stderr, "=========================\n");
-  fprintf(stderr, "Aggregate stats (all channels): [%.1f pkt/sec][%.1f Mbps][%llu pkts dropped]\n", 
-	  (double)(nPkts*1000)/(double)deltaMillisec,
-	  (double)(nBytes*8)/(double)deltaMillisec,
-	  pkt_dropped);
+  fprintf(stderr, "Aggregate stats (all channels): [%.1f pkt/sec][%llu pkts dropped]\n", 
+	  (double)(nPktsLast*1000)/(double)delta, pkt_dropped);
   fprintf(stderr, "=========================\n\n");
 }
 
@@ -186,6 +188,7 @@ void printHelp(void) {
   printf("-e <direction>  0=RX+TX, 1=RX only, 2=TX only\n");
   printf("-l <len>        Capture length\n");
   printf("-w <watermark>  Watermark\n");
+  printf("-b <cpu %%>      CPU pergentage priority (0-99)\n");
   printf("-a              Active packet wait\n");
   printf("-v              Verbose\n");
 }
@@ -239,11 +242,11 @@ int main(int argc, char* argv[]) {
   packet_direction direction = rx_and_tx_direction;
   pfring  *pd;
   long i;
+  u_int16_t cpu_percentage = 0;
 
   startTime.tv_sec = 0;
-  wait_for_packet = 1;
 
-  while((c = getopt(argc,argv,"hi:l:vae:w:" /* "f:" */)) != -1) {
+  while((c = getopt(argc,argv,"hi:l:vae:w:b:" /* "f:" */)) != -1) {
     switch(c) {
     case 'h':
       printHelp();
@@ -343,6 +346,11 @@ int main(int argc, char* argv[]) {
     pfring_enable_ring(ring[i]);
 
     pthread_create(&pd_thread[i], NULL, packet_consumer_thread, (void*)i);
+  }
+
+  if(cpu_percentage > 0) {
+    if(cpu_percentage > 99) cpu_percentage = 99;
+    pfring_config(cpu_percentage);
   }
   
   for(i=0; i<num_channels; i++)
