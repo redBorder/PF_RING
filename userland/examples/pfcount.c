@@ -648,7 +648,7 @@ int main(int argc, char* argv[]) {
   if(num_threads > 0)
     pthread_rwlock_init(&statsLock, NULL);
  
-  if(cpu_percentage > 0) {
+  if(wait_for_packet && (cpu_percentage > 0)) {
     if(cpu_percentage > 99) cpu_percentage = 99;
     pfring_config(cpu_percentage);
   }
