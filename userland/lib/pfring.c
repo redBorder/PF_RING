@@ -1630,8 +1630,8 @@ int dna_init(pfring* ring, u_short len) {
 
 void dna_term(pfring* ring) { ; }
 
-u_int8_t dna_there_is_a_packet_to_read(pfring* ring, 
-				       u_int8_t wait_for_incoming_packet) {
+int8_t dna_there_is_a_packet_to_read(pfring* ring, 
+				     u_int8_t wait_for_incoming_packet) {
   return(0);
 }
 
