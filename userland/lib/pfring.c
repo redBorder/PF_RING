@@ -27,7 +27,7 @@
 #define MAX_NUM_LOOPS         1000
 #define YIELD_MULTIPLIER        10
 
-#undef USE_MB
+#define USE_MB
 
 #define rmb()   asm volatile("lfence":::"memory")
 #define wmb()   asm volatile("sfence" ::: "memory")
@@ -67,7 +67,7 @@ void pfring_config(u_short cpu_percentage) {
   if(!pfring_initialized) {
     struct sched_param schedparam;
     
-    /* mlockall(MCL_CURRENT|MCL_FUTURE); */
+    /*if(cpu_percentage >= 50) mlockall(MCL_CURRENT|MCL_FUTURE); */
 
     pfring_initialized = 1;
     schedparam.sched_priority = cpu_percentage;
@@ -447,6 +447,8 @@ pfring* pfring_open_consumer(char *device_name, u_int8_t promisc,
       ring->buffer = (char *)mmap(NULL, memSlotsLen,
 				  PROT_READ|PROT_WRITE,
 				  MAP_SHARED, ring->fd, 0);
+
+      /* printf("mmap len %u\n", memSlotsLen); */
 
       if(ring->buffer == MAP_FAILED) {
 	printf("mmap() failed");
@@ -1185,6 +1187,7 @@ int pfring_recv(pfring *ring, char* buffer, u_int buffer_len,
 	ring->slots_info->remove_off = ring->slots_info->insert_off;
       }
 
+      //ring->slots_info->tot_read = ring->slots_info->tot_insert, ring->slots_info->remove_off = ring->slots_info->insert_off;
 #ifdef USE_MB
       /* This prevents the compiler from reordering instructions.
        * http://en.wikipedia.org/wiki/Memory_ordering#Compiler_memory_barrier */

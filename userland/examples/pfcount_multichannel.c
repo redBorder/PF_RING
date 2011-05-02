@@ -229,6 +229,9 @@ void* packet_consumer_thread(void* _id) {
     if(pfring_recv(ring[thread_id], (char*)buffer, sizeof(buffer), &hdr, wait_for_packet) > 0) {
       if(do_shutdown) break;
       numPkts[thread_id]++, numBytes[thread_id] += hdr.len;
+    } else {
+      // if(wait_for_packet == 0) sched_yield();
+      usleep(1);
     }
   }
 
@@ -276,6 +279,9 @@ int main(int argc, char* argv[]) {
       break;
     case 'w':
       watermark = atoi(optarg);
+      break;
+    case 'b':
+      cpu_percentage = atoi(optarg);
       break;
     case 'r':
       rehash_rss = 1;

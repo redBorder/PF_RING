@@ -504,7 +504,7 @@ void* packet_consumer_thread(void* _id) {
       pfring_send(pd, buffer, hdr.caplen);
 #endif
     } else {
-      usleep(1);
+      if(wait_for_packet == 0) sched_yield();
     }
 
     if(0) {
@@ -773,7 +773,7 @@ int main(int argc, char* argv[]) {
   if(dna_mode) {
     num_threads = 1;
   } else {
-    if(num_threads > 0) wait_for_packet = 1;
+    // if(num_threads > 1) wait_for_packet = 1;
   }
 
   pfring_enable_ring(pd);
@@ -820,7 +820,7 @@ int main(int argc, char* argv[]) {
       pthread_create(&my_thread, NULL, packet_consumer_thread, (void*)i);
   }
 
-  if(0) {
+  if(1) {
     pfring_loop(pd, dummyProcesssPacket, (u_char*)NULL);
   } else
     packet_consumer_thread(0);

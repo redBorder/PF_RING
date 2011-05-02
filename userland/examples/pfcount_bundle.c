@@ -384,6 +384,8 @@ void printHelp(void) {
   printf("-s <string>     String to search on packets\n");
   printf("-l <len>        Capture length\n");
   printf("-w <watermark>  Watermark\n");
+  printf("-b <cpu %%>      CPU pergentage priority (0-99)\n");
+  printf("-r              Rehash RSS packets\n");
   printf("-a              Active packet wait\n");
   printf("-v              Verbose\n");
 }
@@ -415,13 +417,14 @@ int main(int argc, char* argv[]) {
   char *device = NULL, c, *string = NULL, *dev;
   int promisc, snaplen = DEFAULT_SNAPLEN;
   packet_direction direction = rx_and_tx_direction;
-  u_int16_t watermark = 0;
+  u_int16_t watermark = 0, rehash_rss = 0;
   u_int32_t version;
+  u_int16_t cpu_percentage = 0;
 
   startTime.tv_sec = 0;
   thiszone = gmt2local(0);
 
-  while((c = getopt(argc,argv,"hi:dl:vs:ae:w:" /* "f:" */)) != '?') {
+  while((c = getopt(argc,argv,"hi:dl:vs:ae:w:b:r" /* "f:" */)) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -460,6 +463,12 @@ int main(int argc, char* argv[]) {
       break;
     case 'w':
       watermark = atoi(optarg);
+      break;
+    case 'b':
+      cpu_percentage = atoi(optarg);
+      break;
+    case 'r':
+      rehash_rss = 1;
       break;
     }
   }

@@ -756,7 +756,7 @@ int main(int argc, char* argv[]) {
   if(dna_mode)
     num_threads = 1;
   else {
-    if(num_threads > 0) wait_for_packet = 1;
+    if(num_threads > 1) wait_for_packet = 1;
   }
 
   pfring_enable_ring(pd);
