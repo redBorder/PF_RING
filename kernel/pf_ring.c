@@ -2310,6 +2310,11 @@ static int add_skb_to_ring(struct sk_buff *skb,
   u_int last_matched_plugin = 0;
   u_int8_t hash_found = 0;
 
+#ifdef CONFIG_RPS
+  if(pfr && pfr->rehash_rss && skb->dev)
+      channel_id = hash_pkt_header(hdr, 0, 0) % skb->dev->real_num_rx_queues;
+#endif
+
   /* This is a memory holder for storing parsed packet information
      that will then be freed when the packet has been handled
   */
@@ -2781,7 +2786,12 @@ static int skb_ring_handler(struct sk_buff *skb,
 
   if(quick_mode) {
     struct pf_ring_socket *pfr = device_rings[skb->dev->ifindex][channel_id];
-    
+
+#ifdef CONFIG_RPS
+    if(pfr && pfr->rehash_rss && skb->dev)
+      channel_id = hash_pkt_header(&hdr, 0, 0) % skb->dev->real_num_rx_queues;
+#endif
+
     if(enable_debug) printk("[PF_RING] Expecting channel %d [%p]\n", channel_id, pfr);
 
     if((pfr != NULL)
@@ -2896,9 +2906,9 @@ static int skb_ring_handler(struct sk_buff *skb,
     else {
       if(recv_packet && real_skb) {
 	if(enable_debug)
-	  printk("[PF_RING] kfree_skb()\n");
+	  printk("[PF_RING] consume_skb()\n");
 
-	kfree_skb(orig_skb);
+	consume_skb(orig_skb); /* Free memory */
       }
     }
   }
@@ -5121,6 +5131,17 @@ static int ring_setsockopt(struct socket *sock,
       if((pfr->v_filtering_dev = add_virtual_filtering_device(sock->sk, &elem)) == NULL)
 	return -EFAULT;
     }
+    break;
+
+  case SO_REHASH_RSS_PACKET:
+    if(enable_debug)
+      printk("[PF_RING] * SO_REHASH_RSS_PACKET *\n");
+#ifdef CONFIG_RPS
+    found = 1, pfr->rehash_rss = 1;
+#else
+    printk("[PF_RING] Your kernel does not support multiqueues: please use a newer kernel\n");
+    return -EFAULT;
+#endif
     break;
 
   default:

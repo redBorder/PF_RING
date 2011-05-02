@@ -139,7 +139,8 @@ void print_stats() {
   if(pfring_get_filtering_rule_stats(pd, 5, (char*)&stats, &len) >= 0) {
     fprintf(stderr, "=========================\n");
     fprintf(stderr, "Dummy Plugin Stats (ICMP) [Pkts: %llu][Bytes: %llu]\n",
-	    stats.num_pkts, stats.num_bytes);
+	    (long long unsigned int)stats.num_pkts, 
+	    (long long unsigned int)stats.num_bytes);
   }
   
   fprintf(stderr, "=========================\n\n");

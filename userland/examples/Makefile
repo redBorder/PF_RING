@@ -6,8 +6,7 @@
 # on top of PCAP library and linked now to use
 # the version with PF_RING aware functionalities.
 #
-# Rocco Carbone <rocco /at/ ntop /dot/ org> - 2Q 2008 GPL
-#
+
 
 
 #
@@ -23,7 +22,7 @@ DNA_DEFINE = #-DENABLE_DNA_SUPPORT
 #
 # PF_RING aware libpcap
 #
-O_FLAG     = #-O2
+O_FLAG     = # -O2
 EXTRA_LIBS = #-ldag
 PCAPDIR    = ../libpcap-1.1.1-ring
 LIBPCAP    = ${PCAPDIR}/libpcap.a  ${EXTRA_LIBS}

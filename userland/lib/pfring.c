@@ -39,14 +39,15 @@
 /* ********************************* */
 
 /* DNA */
-int dna_init(pfring* ring, u_short len);
-void dna_term(pfring* ring);
-u_int8_t dna_there_is_a_packet_to_read(pfring* ring, 
-				       u_int8_t wait_for_incoming_packet);
-char* dna_get_next_packet(pfring* ring, 
-			  char* buffer, u_int buffer_len, 
-			  struct pfring_pkthdr *hdr);
-void dna_dump_stats(pfring* ring);
+extern int dna_init(pfring* ring, u_short len);
+extern void dna_term(pfring* ring);
+
+extern int8_t dna_there_is_a_packet_to_read(pfring* ring, 
+					    u_int8_t wait_for_incoming_packet);
+extern char* dna_get_next_packet(pfring* ring, 
+				 char* buffer, u_int buffer_len, 
+				 struct pfring_pkthdr *hdr);
+extern void dna_dump_stats(pfring* ring);
 
 /* ******************************* */
 
@@ -385,6 +386,7 @@ pfring* pfring_open_consumer(char *device_name, u_int8_t promisc,
     memset(ring, 0, sizeof(pfring));
 
   ring->reentrant = _reentrant;
+  ring->caplen    = caplen;
   ring->poll_duration = DEFAULT_POLL_DURATION;
   ring->fd = socket(PF_RING, SOCK_RAW, htons(ETH_P_ALL));
 
@@ -652,6 +654,20 @@ int pfring_set_poll_watermark(pfring *ring, u_int16_t watermark) {
 #else
   return(ring ? setsockopt(ring->fd, 0, SO_SET_POLL_WATERMARK,
 			   &watermark, sizeof(watermark)): -1);
+#endif
+}
+
+/* **************************************************** */
+
+int pfring_enable_rss_rehash(pfring *ring) {
+#ifdef USE_PCAP
+  return(-1);
+#else
+  char dummy;
+
+  if(!ring) return(-1);
+  else if(ring->dna_mapped_device) return(-1);
+  return(setsockopt(ring->fd, 0, SO_REHASH_RSS_PACKET, &dummy, sizeof(dummy)));
 #endif
 }
 
@@ -1103,13 +1119,15 @@ int pfring_recv(pfring *ring, char* buffer, u_int buffer_len,
 
   if(ring->dna_mapped_device) {
     char *pkt = NULL;
-
-    if(wait_for_incoming_packet) {
+    int8_t status = 1;
+    
+    if(wait_for_incoming_packet || (ring->dna_dev.device_model == intel_ixgbe)) {
       if(ring->reentrant) pthread_spin_lock(&ring->spinlock);
-      dna_there_is_a_packet_to_read(ring, wait_for_incoming_packet);
+      status = dna_there_is_a_packet_to_read(ring, wait_for_incoming_packet);
       if(ring->reentrant) pthread_spin_unlock(&ring->spinlock);
     }
 
+    if(status <= 0) return (0);
     pkt = dna_get_next_packet(ring, buffer, buffer_len, hdr);
 
     if(pkt && (hdr->len > 0)) {
@@ -1191,6 +1209,31 @@ int pfring_recv(pfring *ring, char* buffer, u_int buffer_len,
     
     return(-1); /* Not reached */
   }
+}
+
+/* **************************************************** */
+
+int pfring_loop(pfring *ring, pfringProcesssPacket looper, const u_char *user_bytes) {
+  u_char *buffer = (u_char*)malloc(ring->caplen);
+  struct pfring_pkthdr hdr;
+  int rc = 0;
+
+  if(!buffer)
+    return(-1);
+
+  ring->break_recv_loop = 0;
+  
+  while(!ring->break_recv_loop) {
+    rc = pfring_recv(ring, (char*)buffer, ring->caplen, &hdr, 1);
+    if(rc < 0) 
+      break;
+    else if(rc > 0)
+      looper(&hdr, buffer, user_bytes);
+  }
+
+  free(buffer);
+
+  return(rc);
 }
 
 /* **************************************************** */
@@ -1510,8 +1553,8 @@ int pfring_bundle_read(pfring_bundle *bundle,
 		       char* buffer, u_int buffer_len,
 		       struct pfring_pkthdr *hdr,
 		       u_int8_t wait_for_incoming_packet) {
-  u_int i, sock_id, num_found, rc;
-  struct timeval ts;
+  u_int i, sock_id = 0, num_found, rc;
+  struct timeval ts = { 0 };
 
  redo_pfring_bundle_read:
 

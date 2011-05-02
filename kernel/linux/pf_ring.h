@@ -37,8 +37,8 @@
 #define pfring_ptr ec_ptr
 
 /* Versioning */
-#define RING_VERSION                "4.6.3"
-#define RING_VERSION_NUM           0x040603
+#define RING_VERSION                "4.6.4"
+#define RING_VERSION_NUM           0x040604
 
 /* Set */
 #define SO_ADD_TO_CLUSTER                 99
@@ -60,9 +60,9 @@
 #define SO_SET_PACKET_CONSUMER_MODE      115
 #define SO_DEACTIVATE_RING               116
 #define SO_SET_POLL_WATERMARK            117
-#define SO_SET_VPFRING_EVENTFD           118 /* vPFRing*/
+#define SO_SET_VPFRING_EVENTFD           118 /* vPFRing */
 #define SO_SET_VIRTUAL_FILTERING_DEVICE  119
-
+#define SO_REHASH_RSS_PACKET             120
 
 
 /* Get */
@@ -679,7 +679,7 @@ typedef int (*do_add_raw_packet_to_ring)(struct pf_ring_socket *pfr,
  * Ring options
  */
 struct pf_ring_socket {
-  u_int8_t ring_active, num_rx_channels;
+  u_int8_t ring_active, num_rx_channels, rehash_rss;
   ring_device_element *ring_netdev;
   u_short ring_pid;
   u_int32_t ring_id;

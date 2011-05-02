@@ -1,6 +1,6 @@
 /*
  *
- * (C) 2005-10 - Luca Deri <deri@ntop.org>
+ * (C) 2005-11 - Luca Deri <deri@ntop.org>
  *
  *
  * This program is free software; you can redistribute it and/or modify
@@ -92,6 +92,8 @@ extern "C" {
   static char staticBucket[2048];
 #endif
 
+  typedef void (*pfringProcesssPacket)(const struct pfring_pkthdr *h, const u_char *p, const u_char *user_bytes);
+
   /* ********************************* */
 
   typedef struct {
@@ -105,6 +107,7 @@ extern "C" {
     
     /* All devices */
     char *buffer, *slots, *device_name;
+    u_int16_t caplen;
     u_int8_t kernel_packet_consumer;
     int fd;
     FlowSlotInfo *slots_info;
@@ -168,6 +171,7 @@ extern "C" {
   int pfring_recv(pfring *ring, char* buffer, u_int buffer_len,
 		  struct pfring_pkthdr *hdr,
 		  u_int8_t wait_for_incoming_packet);
+  int pfring_loop(pfring *ring, pfringProcesssPacket looper, const u_char *user_bytes);
   void pfring_breakloop(pfring *);
   int pfring_get_filtering_rule_stats(pfring *ring, u_int16_t rule_id,
 				      char* stats, u_int *stats_len);
@@ -190,6 +194,7 @@ extern "C" {
   int pfring_remove_filtering_rule(pfring *ring, u_int16_t rule_id);
   int pfring_toggle_filtering_policy(pfring *ring, u_int8_t rules_default_accept_policy);
   int pfring_set_poll_watermark(pfring *ring, u_int16_t watermark);
+  int pfring_enable_rss_rehash(pfring *ring);
   int pfring_poll(pfring *ring, u_int wait_duration);
   int pfring_version(pfring *ring, u_int32_t *version);
   int pfring_set_sampling_rate(pfring *ring, u_int32_t rate /* 1 = no sampling */);

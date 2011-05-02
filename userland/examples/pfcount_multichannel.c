@@ -190,6 +190,7 @@ void printHelp(void) {
   printf("-w <watermark>  Watermark\n");
   printf("-b <cpu %%>      CPU pergentage priority (0-99)\n");
   printf("-a              Active packet wait\n");
+  printf("-r              Rehash RSS packets\n");
   printf("-v              Verbose\n");
 }
 
@@ -238,7 +239,7 @@ void* packet_consumer_thread(void* _id) {
 
 int main(int argc, char* argv[]) {
   char *device = NULL, c;
-  int promisc, snaplen = DEFAULT_SNAPLEN, rc, watermark = 0;
+  int promisc, snaplen = DEFAULT_SNAPLEN, rc, watermark = 0, rehash_rss = 0;
   packet_direction direction = rx_and_tx_direction;
   pfring  *pd;
   long i;
@@ -246,7 +247,7 @@ int main(int argc, char* argv[]) {
 
   startTime.tv_sec = 0;
 
-  while((c = getopt(argc,argv,"hi:l:vae:w:b:" /* "f:" */)) != -1) {
+  while((c = getopt(argc,argv,"hi:l:vae:w:b:r" /* "f:" */)) != -1) {
     switch(c) {
     case 'h':
       printHelp();
@@ -275,6 +276,9 @@ int main(int argc, char* argv[]) {
       break;
     case 'w':
       watermark = atoi(optarg);
+      break;
+    case 'r':
+      rehash_rss = 1;
       break;
     }
   }
@@ -342,6 +346,9 @@ int main(int argc, char* argv[]) {
       if((rc = pfring_set_poll_watermark(pd, watermark)) != 0)
 	printf("pfring_set_poll_watermark returned [rc=%d][watermark=%d]\n", rc, watermark);
     }
+
+    if(rehash_rss)
+      pfring_enable_rss_rehash(ring[i]);
 
     pfring_enable_ring(ring[i]);
 
