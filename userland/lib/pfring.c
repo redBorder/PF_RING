@@ -1216,6 +1216,124 @@ int pfring_recv(pfring *ring, char* buffer, u_int buffer_len,
 
 /* **************************************************** */
 
+int pfring_recv_batch(pfring *ring, char* buffer, u_int buffer_len,
+		      u_int32_t offset[], u_int num_offset,
+		      u_int8_t wait_for_incoming_packet) {
+#ifdef USE_PCAP
+  pcap_t *pcapPtr = (pcap_t*)ring;
+  const u_char *packet;
+
+  packet = pcap_next(pcapPtr, (struct pcap_pkthdr*)hdr);
+  if(hdr->caplen > 0) {
+    if(buffer && (buffer_len > 0)) {
+      memcpy(buffer, packet, min(hdr->caplen, buffer_len));
+      parse_pkt(buffer, hdr);
+    }
+    return(1);
+  } else
+    return(0);
+#endif
+  if(ring == NULL) return(-1);
+
+  if(ring->dna_mapped_device) {
+    return(-1); /* TODO */
+  } else {
+    int rc = 0, wrapped = 0;
+
+    if(ring->buffer == NULL) return(-1);
+
+    ring->break_recv_loop = 0;
+
+  do_pfring_recv_batch:
+    if(ring->break_recv_loop)
+      return(0);
+
+    if(ring->reentrant)
+      pthread_spin_lock(&ring->spinlock);
+
+    //rmb();
+    
+    if(pfring_there_is_pkt_available(ring)) {
+      u_int32_t begin_offset = ring->slots_info->remove_off, end_offset = (u_int32_t)-1, diff_offset = 0,
+	curr_offset = ring->slots_info->remove_off, tot_len = 0, tot_pkts = 0;
+      
+      while(pfring_there_is_pkt_available(ring)
+	    && (tot_len < buffer_len) 
+	    && (num_offset > tot_pkts)
+	    && (!ring->break_recv_loop)) {
+	char *bucket;
+	struct pfring_pkthdr *hdr;
+	u_int32_t next_off, real_slot_len, insert_off, bktLen, newLen;
+
+	bucket = &ring->slots[curr_offset];
+	hdr = (struct pfring_pkthdr*)bucket;
+	offset[tot_pkts] = curr_offset-begin_offset + diff_offset;
+	bktLen = hdr->caplen+hdr->extended_hdr.parsed_header_len;
+	real_slot_len = sizeof(struct pfring_pkthdr) + bktLen;
+	
+	newLen = tot_len + real_slot_len;
+	if(newLen > buffer_len)
+	  break; /* We don't have enough space left */
+	else
+	  tot_len = newLen;
+
+	insert_off = ring->slots_info->insert_off;
+	if(bktLen > buffer_len) bktLen = buffer_len;
+
+	next_off = curr_offset + real_slot_len;
+	if((next_off + ring->slots_info->slot_len) > (ring->slots_info->tot_mem - sizeof(FlowSlotInfo))) {
+	  if(wrapped) break;
+	  end_offset = next_off, wrapped = 1;
+	  diff_offset = end_offset - begin_offset, next_off = 0;
+	}
+
+	ring->slots_info->tot_read++, tot_pkts++, curr_offset = next_off;
+	
+	/* Ugly safety check */
+	if((ring->slots_info->tot_insert == ring->slots_info->tot_read)
+	   && (next_off > ring->slots_info->insert_off)) {
+	  curr_offset = ring->slots_info->insert_off;
+	  break;
+	} 	  
+      }
+
+      if(wrapped) {
+	/* Wrap around */
+	memcpy(buffer, &ring->slots[begin_offset], diff_offset);
+	memcpy(&buffer[diff_offset], ring->slots, curr_offset);
+      } else
+	memcpy(buffer, &ring->slots[begin_offset], curr_offset-begin_offset);
+
+      ring->slots_info->remove_off = curr_offset;
+
+#ifdef USE_MB
+      /* This prevents the compiler from reordering instructions.
+       * http://en.wikipedia.org/wiki/Memory_ordering#Compiler_memory_barrier */
+      gcc_mb();
+#endif
+           
+      if(ring->reentrant) pthread_spin_unlock(&ring->spinlock);
+      return(tot_pkts);
+    }    
+
+    /* Nothing to do: we need to wait */
+    if(ring->reentrant) pthread_spin_unlock(&ring->spinlock);
+   
+    if(wait_for_incoming_packet) {
+      rc = pfring_poll(ring, ring->poll_duration);
+      
+      if(rc == -1)
+	return(-1);
+      else
+	goto do_pfring_recv_batch;
+    }
+    
+    return(-1); /* Not reached */
+  }
+}
+
+/* **************************************************** */
+
 int pfring_loop(pfring *ring, pfringProcesssPacket looper, const u_char *user_bytes) {
   u_char *buffer = (u_char*)malloc(ring->caplen);
   struct pfring_pkthdr hdr;

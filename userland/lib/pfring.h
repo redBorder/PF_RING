@@ -171,6 +171,9 @@ extern "C" {
   int pfring_recv(pfring *ring, char* buffer, u_int buffer_len,
 		  struct pfring_pkthdr *hdr,
 		  u_int8_t wait_for_incoming_packet);
+  int pfring_recv_batch(pfring *ring, char* buffer, u_int buffer_len,
+			u_int32_t offset[], u_int num_offset,
+			u_int8_t wait_for_incoming_packet);
   int pfring_loop(pfring *ring, pfringProcesssPacket looper, const u_char *user_bytes);
   void pfring_breakloop(pfring *);
   int pfring_get_filtering_rule_stats(pfring *ring, u_int16_t rule_id,
