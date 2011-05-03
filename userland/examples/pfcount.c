@@ -820,7 +820,7 @@ int main(int argc, char* argv[]) {
       pthread_create(&my_thread, NULL, packet_consumer_thread, (void*)i);
   }
 
-  if(1) {
+  if(0) {
     pfring_loop(pd, dummyProcesssPacket, (u_char*)NULL);
   } else
     packet_consumer_thread(0);
