@@ -107,7 +107,7 @@ extern "C" {
     
     /* All devices */
     char *buffer, *slots, *device_name;
-    u_int16_t caplen;
+    u_int16_t caplen, slot_header_len;
     u_int8_t kernel_packet_consumer;
     int fd;
     FlowSlotInfo *slots_info;

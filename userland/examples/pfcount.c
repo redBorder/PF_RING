@@ -467,6 +467,7 @@ void* packet_consumer_thread(void* _id) {
   u_char buffer[2048];
   int s;
   u_long core_id = thread_id % numCPU;
+  struct pfring_pkthdr hdr;
 
   /* printf("packet_consumer_thread(%lu)\n", thread_id); */
 
@@ -484,10 +485,9 @@ void* packet_consumer_thread(void* _id) {
     }
   }
 
-
+  memset(&hdr, 0, sizeof(hdr));
 
   while(1) {
-    struct pfring_pkthdr hdr;
     int rc;
     u_int len;
 

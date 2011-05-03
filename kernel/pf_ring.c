@@ -408,7 +408,11 @@ static inline int get_next_slot_offset(struct pf_ring_socket *pfr, u_int32_t off
   // smp_rmb();
 
   hdr = (struct pfring_pkthdr*)get_slot(pfr, off);
-  real_slot_size = pfr->slot_header_len + hdr->extended_hdr.parsed_header_len + hdr->caplen;
+
+  real_slot_size = pfr->slot_header_len + hdr->caplen;
+
+  if(!quick_mode)
+    real_slot_size += hdr->extended_hdr.parsed_header_len;
 
   if((off + real_slot_size + pfr->slots_info->slot_len) > (pfr->slots_info->tot_mem - sizeof(FlowSlotInfo))) {
     *real_off = pfr->slots_info->tot_mem - sizeof(FlowSlotInfo) - off;
@@ -1031,7 +1035,11 @@ static int ring_alloc_mem(struct sock *sk)
    *
    * ********************************************** */
 
-  pfr->slot_header_len = sizeof(struct pfring_pkthdr);
+  if(quick_mode)
+    pfr->slot_header_len = sizeof(struct timeval) + 8 /* ts+caplen+len */;
+  else
+    pfr->slot_header_len = sizeof(struct pfring_pkthdr);
+
   the_slot_len = pfr->slot_header_len + pfr->bucket_len;
 
   tot_mem = PAGE_ALIGN(sizeof(FlowSlotInfo) + min_num_slots * the_slot_len);
@@ -1801,8 +1809,9 @@ inline int copy_data_to_ring(struct sk_buff *skb,
   if(skb != NULL) {
     /* skb copy mode */
 
-    if((plugin_mem != NULL) && (offset > 0)) {
-      memcpy(&ring_bucket[pfr->slot_header_len], plugin_mem, offset);
+    if(!quick_mode) {
+      if((plugin_mem != NULL) && (offset > 0))
+	memcpy(&ring_bucket[pfr->slot_header_len], plugin_mem, offset);    
     }
 
     if(hdr->caplen > 0) {
@@ -1830,7 +1839,7 @@ inline int copy_data_to_ring(struct sk_buff *skb,
     hdr->len = hdr->caplen = raw_data_len, hdr->extended_hdr.if_index = FAKE_PACKET;
     /* printk("[PF_RING] Copied raw data at slot with offset %d [len=%d]\n", off, raw_data_len); */
   }
-
+  
   memcpy(ring_bucket, hdr, pfr->slot_header_len); /* Copy extended packet header */
 
   pfr->slots_info->insert_off = get_next_slot_offset(pfr, off, &taken);
@@ -2662,6 +2671,7 @@ static inline void set_skb_time(struct sk_buff *skb, struct pfring_pkthdr *hdr) 
 #else /* 2.6.22 and above */
   if(skb->tstamp.tv64 == 0)
     __net_timestamp(skb); /* If timestamp is missing add it */
+
   hdr->ts = ktime_to_timeval(skb->tstamp);
 
 #if(LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,30))
@@ -2762,34 +2772,41 @@ static int skb_ring_handler(struct sk_buff *skb,
   rdt1 = _rdtsc();
 #endif
 
-  hdr.len = hdr.caplen = skb->len + displ;
-  is_ip_pkt = parse_pkt(skb, displ, &hdr, 1);
-
-  if(enable_ip_defrag) {
-    if(real_skb
-       && is_ip_pkt
-       && recv_packet
-       && (ring_table_size > 0)) {
-      skb = defrag_skb(skb, displ, &hdr);
-
-      if(skb == NULL)
-	return(0);
-    }
-  }
-
   set_skb_time(skb, &hdr);
 
-  if(skb->dev)
-    hdr.extended_hdr.if_index = skb->dev->ifindex;
-  else
-    hdr.extended_hdr.if_index = -1;
+  hdr.len = hdr.caplen = skb->len + displ;
+
+  if(!quick_mode) {
+    is_ip_pkt = parse_pkt(skb, displ, &hdr, 1);
+      
+    if(enable_ip_defrag) {
+      if(real_skb
+	 && is_ip_pkt
+	 && recv_packet
+	 && (ring_table_size > 0)) {
+	skb = defrag_skb(skb, displ, &hdr);
+	  
+	if(skb == NULL)
+	  return(0);
+      }
+    }  
+      
+    if(skb->dev)
+      hdr.extended_hdr.if_index = skb->dev->ifindex;
+    else
+      hdr.extended_hdr.if_index = -1;
+  }
 
   if(quick_mode) {
     struct pf_ring_socket *pfr = device_rings[skb->dev->ifindex][channel_id];
 
+    hdr.extended_hdr.parsed_header_len = 0;
+
 #ifdef CONFIG_RPS
-    if(pfr && pfr->rehash_rss && skb->dev)
+    if(pfr && pfr->rehash_rss && skb->dev) {
+      parse_pkt(skb, displ, &hdr, 1);
       channel_id = hash_pkt_header(&hdr, 0, 0) % skb->dev->real_num_rx_queues;
+    }
 #endif
 
     if(enable_debug) printk("[PF_RING] Expecting channel %d [%p]\n", channel_id, pfr);
@@ -5418,6 +5435,14 @@ static int ring_getsockopt(struct socket *sock,
       if(copy_to_user(optval, &num_queued, sizeof(num_queued)))
 	return -EFAULT;
     }
+    break;
+
+  case SO_GET_PKT_HEADER_LEN:    
+    if(len < sizeof(pfr->slot_header_len))
+      return -EINVAL;
+    
+    if(copy_to_user(optval, &pfr->slot_header_len, sizeof(pfr->slot_header_len)))
+      return -EFAULT;    
     break;
 
   default:

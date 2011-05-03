@@ -75,9 +75,10 @@
 #define SO_GET_PACKET_CONSUMER_MODE      176
 #define SO_GET_BOUND_DEVICE_ADDRESS      177
 #define SO_GET_NUM_QUEUED_PKTS           178
+#define SO_GET_PKT_HEADER_LEN            179
 
 /* Map */
-#define SO_MAP_DNA_DEVICE                180
+#define SO_MAP_DNA_DEVICE                190
 
 
 #define REFLECTOR_NAME_LEN                 8

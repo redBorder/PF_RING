@@ -362,6 +362,26 @@ int pfring_enable_hw_timestamp(pfring* ring, char *device_name) {
 
 /* **************************************************** */
 
+static u_int16_t pfring_get_slot_header_len(pfring *ring) {
+#ifdef USE_PCAP
+  return(-1);
+#else
+  if(ring == NULL)
+    return(1);
+  else {
+    u_int16_t hlen;
+    socklen_t len = sizeof(hlen);
+    int ret, rc = getsockopt(ring->fd, 0, SO_GET_PKT_HEADER_LEN, &hlen, &len);
+
+    ret = (rc == 0) ? hlen : -1;
+
+    return(ret);
+  }
+#endif
+}
+
+/* **************************************************** */
+
 pfring* pfring_open_consumer(char *device_name, u_int8_t promisc,
 			     u_int32_t caplen, u_int8_t _reentrant,
 			     u_int8_t consumer_plugin_id,
@@ -478,6 +498,13 @@ pfring* pfring_open_consumer(char *device_name, u_int8_t promisc,
 #ifdef ENABLE_HW_TIMESTAMP
       pfring_enable_hw_timestamp(ring, device_name);
 #endif
+
+      ring->slot_header_len = pfring_get_slot_header_len(ring);
+      if(ring->slot_header_len == (u_int16_t)-1) {
+	printf("ring failure (pfring_get_slot_header_len)\n");
+	free(ring);
+	return(NULL);
+      }
     } else {
       close(ring->fd);
       err = -1;
@@ -1162,16 +1189,19 @@ int pfring_recv(pfring *ring, char* buffer, u_int buffer_len,
       char *bucket = &ring->slots[ring->slots_info->remove_off];
       u_int32_t next_off, real_slot_len, insert_off, bktLen;
 
-      memcpy(hdr, bucket, sizeof(struct pfring_pkthdr));
+      memcpy(hdr, bucket, ring->slot_header_len);
 
-      bktLen = hdr->caplen+hdr->extended_hdr.parsed_header_len;
-      real_slot_len = sizeof(struct pfring_pkthdr) + bktLen;
+      if(ring->slot_header_len != sizeof(struct pfring_pkthdr))
+	bktLen = hdr->caplen;
+      else
+	bktLen = hdr->caplen+hdr->extended_hdr.parsed_header_len;
+
+      real_slot_len = ring->slot_header_len + bktLen;
       insert_off = ring->slots_info->insert_off;
       if(bktLen > buffer_len) bktLen = buffer_len;
       
-      if(buffer && (bktLen > 0)) {
-	memcpy(buffer, &bucket[sizeof(struct pfring_pkthdr)], bktLen);
-      }
+      if(buffer && (bktLen > 0))
+	memcpy(buffer, &bucket[ring->slot_header_len], bktLen);      
 
       next_off = ring->slots_info->remove_off + real_slot_len;
       if((next_off + ring->slots_info->slot_len) > (ring->slots_info->tot_mem - sizeof(FlowSlotInfo))) {
