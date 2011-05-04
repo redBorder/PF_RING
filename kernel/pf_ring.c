@@ -349,6 +349,18 @@ MODULE_PARM_DESC(quick_mode,
 
 /* ***************** Legacy code ************************ */
 
+u_int get_num_rx_queues(struct net_device *dev) {
+#if(LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30))
+  return(1);
+#else
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,38)) && defined(CONFIG_RPS)
+  return(dev->real_num_rx_queues);
+#else
+  return(dev->real_num_tx_queues);
+#endif
+#endif
+}
+
 #if defined(RHEL_MAJOR) && (RHEL_MAJOR == 5) && (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,18))
 /* Redhat backports these functions to 2.6.18 so do nothing */
 #else
@@ -2319,10 +2331,8 @@ static int add_skb_to_ring(struct sk_buff *skb,
   u_int last_matched_plugin = 0;
   u_int8_t hash_found = 0;
 
-#ifdef CONFIG_RPS
   if(pfr && pfr->rehash_rss && skb->dev)
-      channel_id = hash_pkt_header(hdr, 0, 0) % skb->dev->real_num_rx_queues;
-#endif
+    channel_id = hash_pkt_header(hdr, 0, 0) % get_num_rx_queues(skb->dev);
 
   /* This is a memory holder for storing parsed packet information
      that will then be freed when the packet has been handled
@@ -2802,12 +2812,10 @@ static int skb_ring_handler(struct sk_buff *skb,
 
     hdr.extended_hdr.parsed_header_len = 0;
 
-#ifdef CONFIG_RPS
     if(pfr && pfr->rehash_rss && skb->dev) {
       parse_pkt(skb, displ, &hdr, 1);
-      channel_id = hash_pkt_header(&hdr, 0, 0) % skb->dev->real_num_rx_queues;
+      channel_id = hash_pkt_header(&hdr, 0, 0) % get_num_rx_queues(skb->dev);
     }
-#endif
 
     if(enable_debug) printk("[PF_RING] Expecting channel %d [%p]\n", channel_id, pfr);
 
