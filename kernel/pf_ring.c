@@ -2719,7 +2719,7 @@ static int skb_ring_handler(struct sk_buff *skb,
 			    u_int32_t num_rx_channels)
 {
   struct sock *skElement;
-  int rc = 0, is_ip_pkt, room_available = 0;
+  int rc = 0, is_ip_pkt = 0, room_available = 0;
   struct list_head *ptr;
   struct pfring_pkthdr hdr;
   int displ;
@@ -5161,12 +5161,8 @@ static int ring_setsockopt(struct socket *sock,
   case SO_REHASH_RSS_PACKET:
     if(enable_debug)
       printk("[PF_RING] * SO_REHASH_RSS_PACKET *\n");
-#ifdef CONFIG_RPS
+
     found = 1, pfr->rehash_rss = 1;
-#else
-    printk("[PF_RING] Your kernel does not support multiqueues: please use a newer kernel\n");
-    return -EFAULT;
-#endif
     break;
 
   default:
