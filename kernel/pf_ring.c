@@ -2931,9 +2931,9 @@ static int skb_ring_handler(struct sk_buff *skb,
     else {
       if(recv_packet && real_skb) {
 	if(enable_debug)
-	  printk("[PF_RING] consume_skb()\n");
+	  printk("[PF_RING] kfree_skb()\n");
 
-	consume_skb(orig_skb); /* Free memory */
+	kfree_skb(orig_skb); /* Free memory */
       }
     }
   }
