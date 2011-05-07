@@ -1863,9 +1863,10 @@ inline int copy_data_to_ring(struct sk_buff *skb,
     NOTE: smp_* barriers are _compiler_ barriers on UP, mandatory barriers on SMP
     a consumer _must_ see the new value of tot_insert only after the buffer update completes
   */
+  smp_mb();
+  //wmb();
+
   pfr->slots_info->tot_insert++;
-  //smp_mb();
-  wmb();
 
  if(do_lock) write_unlock(&pfr->ring_index_lock);
 

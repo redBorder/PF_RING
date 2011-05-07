@@ -1208,6 +1208,12 @@ int pfring_recv(pfring *ring, char* buffer, u_int buffer_len,
         next_off = 0;
       }
 
+#ifdef USE_MB
+      /* This prevents the compiler from reordering instructions.
+       * http://en.wikipedia.org/wiki/Memory_ordering#Compiler_memory_barrier */
+      gcc_mb();
+#endif
+
       ring->slots_info->tot_read++;
       ring->slots_info->remove_off = next_off;
 
@@ -1216,13 +1222,6 @@ int pfring_recv(pfring *ring, char* buffer, u_int buffer_len,
 	 && (ring->slots_info->remove_off > ring->slots_info->insert_off)) {
 	ring->slots_info->remove_off = ring->slots_info->insert_off;
       }
-
-      //ring->slots_info->tot_read = ring->slots_info->tot_insert, ring->slots_info->remove_off = ring->slots_info->insert_off;
-#ifdef USE_MB
-      /* This prevents the compiler from reordering instructions.
-       * http://en.wikipedia.org/wiki/Memory_ordering#Compiler_memory_barrier */
-      gcc_mb();
-#endif
            
       if(ring->reentrant) pthread_spin_unlock(&ring->spinlock);
       return(1);
