@@ -44,6 +44,8 @@
 
 #include "pfring.h"
 
+#define ENABLE_DNA_SUPPORT
+
 #define ALARM_SLEEP             1
 #define DEFAULT_SNAPLEN       128
 #define MAX_NUM_THREADS        64
@@ -54,7 +56,7 @@ pfring_stat pfringStats;
 static struct timeval startTime;
 pfring  *ring[MAX_NUM_THREADS] = { NULL };
 unsigned long long numPkts[MAX_NUM_THREADS] = { 0 }, numBytes[MAX_NUM_THREADS] = { 0 };
-u_int8_t wait_for_packet = 1,  do_shutdown = 0;
+u_int8_t wait_for_packet = 1,  do_shutdown = 0, dna_mode = 0;
 pthread_t pd_thread[MAX_NUM_THREADS];
 
 #define DEFAULT_DEVICE     "eth0"
@@ -181,13 +183,14 @@ void my_sigalarm(int sig) {
 /* *************************************** */
 
 void printHelp(void) {
-  printf("pfcount_multichannel\n(C) 2005-10 Deri Luca <deri@ntop.org>\n\n");
+  printf("pfcount_multichannel\n(C) 2005-11 Deri Luca <deri@ntop.org>\n\n");
   printf("-h              Print this help\n");
   printf("-i <device>     Device name (No device@channel)\n");
 
   printf("-e <direction>  0=RX+TX, 1=RX only, 2=TX only\n");
   printf("-l <len>        Capture length\n");
   printf("-w <watermark>  Watermark\n");
+  printf("-p <poll wait>  Poll wait (msec)\n");
   printf("-b <cpu %%>      CPU pergentage priority (0-99)\n");
   printf("-a              Active packet wait\n");
   printf("-r              Rehash RSS packets\n");
@@ -217,10 +220,6 @@ void* packet_consumer_thread(void* _id) {
   }
 
   while(1) {
-    struct simple_stats {
-      u_int64_t num_pkts, num_bytes;
-    };
-
     u_char buffer[2048];
     struct pfring_pkthdr hdr;
 
@@ -231,7 +230,7 @@ void* packet_consumer_thread(void* _id) {
       numPkts[thread_id]++, numBytes[thread_id] += hdr.len;
     } else {
       // if(wait_for_packet == 0) sched_yield();
-      usleep(1);
+      //usleep(1);
     }
   }
 
@@ -244,13 +243,13 @@ int main(int argc, char* argv[]) {
   char *device = NULL, c;
   int promisc, snaplen = DEFAULT_SNAPLEN, rc, watermark = 0, rehash_rss = 0;
   packet_direction direction = rx_and_tx_direction;
-  pfring  *pd;
+  pfring  *pd = NULL;
   long i;
-  u_int16_t cpu_percentage = 0;
+  u_int16_t cpu_percentage = 0, poll_duration = 0;
 
   startTime.tv_sec = 0;
 
-  while((c = getopt(argc,argv,"hi:l:vae:w:b:r" /* "f:" */)) != -1) {
+  while((c = getopt(argc,argv,"hi:l:vae:w:b:rp:d" /* "f:" */)) != -1) {
     switch(c) {
     case 'h':
       printHelp();
@@ -267,6 +266,11 @@ int main(int argc, char* argv[]) {
 	direction = atoi(optarg);
 	break;
       }
+      break;
+    case 'd':
+#ifdef ENABLE_DNA_SUPPORT
+      dna_mode = 1;
+#endif
       break;
     case 'l':
       snaplen = atoi(optarg);
@@ -286,6 +290,9 @@ int main(int argc, char* argv[]) {
     case 'r':
       rehash_rss = 1;
       break;
+    case 'p':
+      poll_duration = atoi(optarg);
+      break;
     }
   }
 
@@ -296,10 +303,14 @@ int main(int argc, char* argv[]) {
   /* hardcode: promisc=1, to_ms=500 */
   promisc = 1;
 
-  pd = pfring_open(device, promisc,  snaplen, 0);
-
+  if(!dna_mode)
+    pd = pfring_open(device, promisc,  snaplen, 0);
+#ifdef ENABLE_DNA_SUPPORT
+    pd = pfring_open_dna(device, promisc, 0 /* we don't use threads */);    
+#endif  
+  
   if(pd == NULL) {
-    printf("pfring_open error\n");
+    printf("pfring_open error (%s)\n", device);
     return(-1);
   } else {
     u_int32_t version;
@@ -352,6 +363,9 @@ int main(int argc, char* argv[]) {
       if((rc = pfring_set_poll_watermark(pd, watermark)) != 0)
 	printf("pfring_set_poll_watermark returned [rc=%d][watermark=%d]\n", rc, watermark);
     }
+
+    if(poll_duration > 0)
+      pfring_set_poll_duration(ring[i], poll_duration);
 
     if(rehash_rss)
       pfring_enable_rss_rehash(ring[i]);
