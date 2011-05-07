@@ -344,8 +344,13 @@ int main(int argc, char* argv[]) {
     char devname[64];
     
     snprintf(devname, sizeof(devname), "%s@%ld", device, i);
-    ring[i] = pfring_open(devname, promisc,  snaplen, 0);
 
+  if(!dna_mode)
+    ring[i] = pfring_open(device, promisc,  snaplen, 0);
+#ifdef ENABLE_DNA_SUPPORT
+  ring[i] = pfring_open_dna(device, promisc, 0 /* we don't use threads */);    
+#endif  
+    
     if(ring[i] == NULL) {
       printf("pfring_open error\n");
       return(-1);
