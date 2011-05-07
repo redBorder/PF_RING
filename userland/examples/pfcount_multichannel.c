@@ -360,20 +360,22 @@ int main(int argc, char* argv[]) {
       snprintf(buf, sizeof(buf), "pfcount_multichannel-thread %ld", i);
       pfring_set_application_name(ring[i], buf);
     }
-  
-    if((rc = pfring_set_direction(ring[i], direction)) != 0)
-      printf("pfring_set_direction returned [rc=%d][direction=%d]\n", rc, direction);
 
-    if(watermark > 0) {
-      if((rc = pfring_set_poll_watermark(pd, watermark)) != 0)
-	printf("pfring_set_poll_watermark returned [rc=%d][watermark=%d]\n", rc, watermark);
+    if(!dna_mode) {
+      if((rc = pfring_set_direction(ring[i], direction)) != 0)
+	printf("pfring_set_direction returned [rc=%d][direction=%d]\n", rc, direction);
+      
+      if(watermark > 0) {
+	if((rc = pfring_set_poll_watermark(pd, watermark)) != 0)
+	  printf("pfring_set_poll_watermark returned [rc=%d][watermark=%d]\n", rc, watermark);
+      }
+
+    if(rehash_rss)
+      pfring_enable_rss_rehash(ring[i]);
     }
 
     if(poll_duration > 0)
       pfring_set_poll_duration(ring[i], poll_duration);
-
-    if(rehash_rss)
-      pfring_enable_rss_rehash(ring[i]);
 
     pfring_enable_ring(ring[i]);
 
