@@ -99,7 +99,7 @@ void print_stats() {
 
   gettimeofday(&endTime, NULL);
   deltaMillisec = delta_time(&endTime, &startTime);
-  
+
   if(pfring_stats(pd, &pfringStat) >= 0) {
     double thpt;
     int i;
@@ -117,7 +117,7 @@ void print_stats() {
 	    "Total Pkts=%u/Dropped=%.1f %%\n",
 	    (unsigned int)pfringStat.recv, (unsigned int)pfringStat.drop,
 	    (unsigned int)(pfringStat.recv+pfringStat.drop),
-	    pfringStat.recv == 0 ? 0 : 
+	    pfringStat.recv == 0 ? 0 :
 	    (double)(pfringStat.drop*100)/(double)(pfringStat.recv+pfringStat.drop));
     fprintf(stderr, "%llu pkts - %llu bytes", nPkts, nBytes);
 
@@ -167,7 +167,7 @@ void add_rule(u_int add_rule) {
     printf("pfring_add_hash_filtering_rule(2) failed\n");
 #else
   filtering_rule rule;
-  
+
   memset(&rule, 0, sizeof(rule));
 
   rule.rule_id = 5;
@@ -287,12 +287,12 @@ char* intoa(unsigned int addr) {
 inline char* in6toa(struct in6_addr addr6) {
   static char buf[sizeof "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"];
 
-  snprintf(buf, sizeof(buf), 
+  snprintf(buf, sizeof(buf),
 	   "%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x",
-	   addr6.s6_addr[0], addr6.s6_addr[1], addr6.s6_addr[2], 
-	   addr6.s6_addr[3], addr6.s6_addr[4], addr6.s6_addr[5], addr6.s6_addr[6], 
-	   addr6.s6_addr[7], addr6.s6_addr[8], addr6.s6_addr[9], addr6.s6_addr[10], 
-	   addr6.s6_addr[11], addr6.s6_addr[12], addr6.s6_addr[13], addr6.s6_addr[14], 
+	   addr6.s6_addr[0], addr6.s6_addr[1], addr6.s6_addr[2],
+	   addr6.s6_addr[3], addr6.s6_addr[4], addr6.s6_addr[5], addr6.s6_addr[6],
+	   addr6.s6_addr[7], addr6.s6_addr[8], addr6.s6_addr[9], addr6.s6_addr[10],
+	   addr6.s6_addr[11], addr6.s6_addr[12], addr6.s6_addr[13], addr6.s6_addr[14],
 	   addr6.s6_addr[15]);
 
   return(buf);
@@ -342,14 +342,14 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u
     if(h->extended_hdr.parsed_header_len > 0) {
       printf("[eth_type=0x%04X]", h->extended_hdr.parsed_pkt.eth_type);
       printf("[l3_proto=%u]", (unsigned int)h->extended_hdr.parsed_pkt.l3_proto);
-      
-      printf("[%s:%d -> ", (h->extended_hdr.parsed_pkt.eth_type == 0x86DD) ? 
-	     in6toa(h->extended_hdr.parsed_pkt.ipv6_src) : intoa(h->extended_hdr.parsed_pkt.ipv4_src), 
+
+      printf("[%s:%d -> ", (h->extended_hdr.parsed_pkt.eth_type == 0x86DD) ?
+	     in6toa(h->extended_hdr.parsed_pkt.ipv6_src) : intoa(h->extended_hdr.parsed_pkt.ipv4_src),
 	     h->extended_hdr.parsed_pkt.l4_src_port);
-      printf("%s:%d] ", (h->extended_hdr.parsed_pkt.eth_type == 0x86DD) ? 
-	     in6toa(h->extended_hdr.parsed_pkt.ipv6_dst) : intoa(h->extended_hdr.parsed_pkt.ipv4_dst), 
+      printf("%s:%d] ", (h->extended_hdr.parsed_pkt.eth_type == 0x86DD) ?
+	     in6toa(h->extended_hdr.parsed_pkt.ipv6_dst) : intoa(h->extended_hdr.parsed_pkt.ipv4_dst),
 	     h->extended_hdr.parsed_pkt.l4_dst_port);
-      
+
       printf("[%s -> %s] ",
 	     etheraddr_string(h->extended_hdr.parsed_pkt.smac, buf1),
 	     etheraddr_string(h->extended_hdr.parsed_pkt.dmac, buf2));
@@ -384,7 +384,7 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u
 	     h->extended_hdr.parsed_pkt.offset.l3_offset,
 	     h->extended_hdr.parsed_pkt.offset.l4_offset,
 	     h->extended_hdr.parsed_pkt.offset.payload_offset);
-      
+
     } else {
       if(eth_type == 0x0806)
 	printf("[ARP]");
@@ -447,6 +447,7 @@ void printHelp(void) {
   printf("-e <direction>  0=RX+TX, 1=RX only, 2=TX only\n");
   printf("-s <string>     String to search on packets\n");
   printf("-l <len>        Capture length\n");
+  printf("-g <core_id>    Bind this app to a code (only with -n 0)\n");
   printf("-w <watermark>  Watermark\n");
   printf("-p <poll wait>  Poll wait (msec)\n");
   printf("-b <cpu %%>      CPU pergentage priority (0-99)\n");
@@ -457,28 +458,37 @@ void printHelp(void) {
 
 /* *************************************** */
 
+  /* Bind this thread to a specific core */
+
+int bind2core(u_int core_id) {
+  cpu_set_t cpuset;
+  int s;
+
+  CPU_ZERO(&cpuset);
+  CPU_SET(core_id, &cpuset);
+  if((s = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset)) != 0) {
+    printf("Error while binding to core %u: errno=%i\n", core_id, s);
+    return(-1);
+  } else {
+    return(0);
+  }
+}
+
+/* *************************************** */
+
 void* packet_consumer_thread(void* _id) {
-  long thread_id = (long)_id; 
+  long thread_id = (long)_id;
   u_int numCPU = sysconf( _SC_NPROCESSORS_ONLN );
   u_char buffer[2048];
-  int s;
+
   u_long core_id = thread_id % numCPU;
   struct pfring_pkthdr hdr;
 
   /* printf("packet_consumer_thread(%lu)\n", thread_id); */
 
   if((num_threads > 1) && (numCPU > 1)) {
-    /* Bind this thread to a specific core */
-    cpu_set_t cpuset;
-
-    CPU_ZERO(&cpuset);
-    CPU_SET(core_id, &cpuset);
-    if((s = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset)) != 0)
-      printf("Error while binding thread %ld to core %ld: errno=%i\n", 
-	     thread_id, core_id, s);
-    else {
+    if(bind2core(core_id) == 0)
       printf("Set thread %lu on core %lu/%u\n", thread_id, core_id, numCPU);
-    }
   }
 
   memset(&hdr, 0, sizeof(hdr));
@@ -488,7 +498,7 @@ void* packet_consumer_thread(void* _id) {
     u_int len;
 
     if(do_shutdown) break;
-    
+
     if(pfring_recv(pd, (char*)buffer, sizeof(buffer), &hdr, wait_for_packet) > 0) {
       if(do_shutdown) break;
       dummyProcesssPacket(&hdr, buffer, (u_char*)thread_id);
@@ -531,6 +541,7 @@ int main(int argc, char* argv[]) {
   u_char mac_address[6];
   int promisc, snaplen = DEFAULT_SNAPLEN, rc;
   u_int clusterId = 0;
+  int bind_core = -1;
   packet_direction direction = rx_and_tx_direction;
   u_int16_t watermark = 0, poll_duration = 0, cpu_percentage = 0, rehash_rss = 0;
 
@@ -572,7 +583,7 @@ int main(int argc, char* argv[]) {
   startTime.tv_sec = 0;
   thiszone = gmt2local(0);
 
-  while((c = getopt(argc,argv,"hi:c:dl:vs:ae:n:w:p:b:r" /* "f:" */)) != '?') {
+  while((c = getopt(argc,argv,"hi:c:dl:vs:ae:n:w:p:b:rg:" /* "f:" */)) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -630,6 +641,9 @@ int main(int argc, char* argv[]) {
     case 'r':
       rehash_rss = 1;
       break;
+    case 'g':
+      bind_core = atoi(optarg);
+      break;
     }
   }
 
@@ -641,7 +655,7 @@ int main(int argc, char* argv[]) {
 
   if(num_threads > 0)
     pthread_rwlock_init(&statsLock, NULL);
- 
+
   if(wait_for_packet && (cpu_percentage > 0)) {
     if(cpu_percentage > 99) cpu_percentage = 99;
     pfring_config(cpu_percentage);
@@ -766,13 +780,13 @@ int main(int argc, char* argv[]) {
 
   if(0) {
     filtering_rule rule;
-    
+
     memset(&rule, 0, sizeof(rule));
-    
+
     rule.rule_id = 5;
     rule.rule_action = forward_packet_and_stop_rule_evaluation;
     rule.core_fields.port_low = 80, rule.core_fields.port_high = 80;
-    
+
     if(pfring_add_filtering_rule(pd, &rule) < 0)
       printf("pfring_add_hash_filtering_rule(2) failed\n");
     else
@@ -783,15 +797,15 @@ int main(int argc, char* argv[]) {
     filtering_rule rule;
 
 #define DUMMY_PLUGIN_ID   1
-    
+
     memset(&rule, 0, sizeof(rule));
-    
+
     rule.rule_id = 5;
     rule.rule_action = forward_packet_and_stop_rule_evaluation;
     rule.core_fields.proto = 6 /* tcp */;
     // rule.plugin_action.plugin_id = DUMMY_PLUGIN_ID; /* Dummy plugin */
     // rule.extended_fields.filter_plugin_id = DUMMY_PLUGIN_ID; /* Enable packet parsing/filtering */
-    
+
     if(pfring_add_filtering_rule(pd, &rule) < 0)
       printf("pfring_add_hash_filtering_rule(2) failed\n");
     else
@@ -804,7 +818,12 @@ int main(int argc, char* argv[]) {
 
     for(i=1; i<num_threads; i++)
       pthread_create(&my_thread, NULL, packet_consumer_thread, (void*)i);
+
+    bind_core = -1;
   }
+
+  if(bind_core >= 0)
+    bind2core(bind_core);
 
   if(0) {
     pfring_loop(pd, dummyProcesssPacket, (u_char*)NULL);
