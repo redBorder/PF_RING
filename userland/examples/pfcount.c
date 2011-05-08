@@ -44,8 +44,6 @@
 
 #include "pfring.h"
 
-#define ENABLE_DNA_SUPPORT
-
 #define ALARM_SLEEP             1
 #define DEFAULT_SNAPLEN       128
 #define MAX_NUM_THREADS        64
@@ -444,9 +442,7 @@ void printHelp(void) {
 
   /* printf("-f <filter>     [pfring filter]\n"); */
 
-#ifdef ENABLE_DNA_SUPPORT
   printf("-d              Open the device in DNA mode\n");
-#endif
   printf("-c <cluster id> cluster id\n");
   printf("-e <direction>  0=RX+TX, 1=RX only, 2=TX only\n");
   printf("-s <string>     String to search on packets\n");
@@ -600,9 +596,7 @@ int main(int argc, char* argv[]) {
       clusterId = atoi(optarg);
       break;
     case 'd':
-#ifdef ENABLE_DNA_SUPPORT
       dna_mode = 1;
-#endif
       break;
     case 'l':
       snaplen = atoi(optarg);
@@ -655,10 +649,8 @@ int main(int argc, char* argv[]) {
 
   if(!dna_mode)
     pd = pfring_open(device, promisc,  snaplen, (num_threads > 1) ? 1 : 0);
-#ifdef ENABLE_DNA_SUPPORT
   else
     pd = pfring_open_dna(device, promisc, 0 /* we don't use threads */);
-#endif
 
   if(pd == NULL) {
     printf("pfring_open error (perhaps you use quick mode and have already a socket bound to %s ?)\n",
@@ -689,10 +681,7 @@ int main(int argc, char* argv[]) {
     printf("pfring_set_cluster returned %d\n", rc);
   }
 
-#ifdef ENABLE_DNA_SUPPORT
   if(dna_mode == 0) {
-#endif
-
     if((rc = pfring_set_direction(pd, direction)) != 0)
       printf("pfring_set_direction returned [rc=%d][direction=%d]\n", rc, direction);
 
@@ -756,10 +745,7 @@ int main(int argc, char* argv[]) {
       }
     }
 #endif
-
-#ifdef ENABLE_DNA_SUPPORT
   }
-#endif
 
   signal(SIGINT, sigproc);
   signal(SIGTERM, sigproc);

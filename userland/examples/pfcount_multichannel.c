@@ -44,8 +44,6 @@
 
 #include "pfring.h"
 
-#define ENABLE_DNA_SUPPORT
-
 #define ALARM_SLEEP             1
 #define DEFAULT_SNAPLEN       128
 #define MAX_NUM_THREADS        64
@@ -153,21 +151,17 @@ void print_stats() {
 
 void sigproc(int sig) {
   static int called = 0;
-#if 0
   int i;
-#endif
 
   fprintf(stderr, "Leaving...\n");
   if(called) return; else called = 1;
   do_shutdown = 1;
   print_stats();
 
-#if 0
   for(i=0; i<num_channels; i++) {
     pthread_join(pd_thread[i], NULL);
     pfring_close(ring[i]);
   }
-#endif
 
   exit(0);
 }
@@ -268,9 +262,7 @@ int main(int argc, char* argv[]) {
       }
       break;
     case 'd':
-#ifdef ENABLE_DNA_SUPPORT
       dna_mode = 1;
-#endif
       break;
     case 'l':
       snaplen = atoi(optarg);
@@ -305,9 +297,8 @@ int main(int argc, char* argv[]) {
 
   if(!dna_mode)
     pd = pfring_open(device, promisc,  snaplen, 0);
-#ifdef ENABLE_DNA_SUPPORT
+  else
     pd = pfring_open_dna(device, promisc, 0 /* we don't use threads */);    
-#endif  
   
   if(pd == NULL) {
     printf("pfring_open error (%s)\n", device);
@@ -332,7 +323,6 @@ int main(int argc, char* argv[]) {
   signal(SIGTERM, sigproc);
   signal(SIGINT, sigproc);
 
-
   if(!verbose) {
     signal(SIGALRM, my_sigalarm);
     alarm(ALARM_SLEEP);
@@ -346,10 +336,9 @@ int main(int argc, char* argv[]) {
     snprintf(devname, sizeof(devname), "%s@%ld", device, i);
 
   if(!dna_mode)
-    ring[i] = pfring_open(device, promisc,  snaplen, 0);
-#ifdef ENABLE_DNA_SUPPORT
-  ring[i] = pfring_open_dna(device, promisc, 0 /* we don't use threads */);    
-#endif  
+    ring[i] = pfring_open(devname, promisc,  snaplen, 0);
+  else
+    ring[i] = pfring_open_dna(devname, promisc, 0 /* we don't use threads */);    
     
     if(ring[i] == NULL) {
       printf("pfring_open error\n");

@@ -615,6 +615,8 @@ void pfring_close(pfring *ring) {
 #else
   if(!ring) return;
 
+  ring->is_shutting_down = 1;
+
   if(ring->dna_mapped_device) {
     dna_term(ring);
 
@@ -845,7 +847,7 @@ int pfring_get_hash_filtering_rule_stats(pfring *ring,
     if(rc < 0)
       return(rc);
     else {
-      *stats_len = min(*stats_len, rc);
+      *stats_len = min_val(*stats_len, rc);
       memcpy(stats, buffer, *stats_len);
       return(0);
     }
@@ -1137,7 +1139,7 @@ int pfring_recv(pfring *ring, char* buffer, u_int buffer_len,
   packet = pcap_next(pcapPtr, (struct pcap_pkthdr*)hdr);
   if(hdr->caplen > 0) {
     if(buffer && (buffer_len > 0)) {
-      memcpy(buffer, packet, min(hdr->caplen, buffer_len));
+      memcpy(buffer, packet, min_val(hdr->caplen, buffer_len));
       parse_pkt(buffer, hdr);
     }
     return(1);
@@ -1255,7 +1257,7 @@ int pfring_recv_batch(pfring *ring, char* buffer, u_int buffer_len,
   packet = pcap_next(pcapPtr, (struct pcap_pkthdr*)hdr);
   if(hdr->caplen > 0) {
     if(buffer && (buffer_len > 0)) {
-      memcpy(buffer, packet, min(hdr->caplen, buffer_len));
+      memcpy(buffer, packet, min_val(hdr->caplen, buffer_len));
       parse_pkt(buffer, hdr);
     }
     return(1);
@@ -1274,7 +1276,7 @@ int pfring_recv_batch(pfring *ring, char* buffer, u_int buffer_len,
     ring->break_recv_loop = 0;
 
   do_pfring_recv_batch:
-    if(ring->break_recv_loop)
+    if(ring->break_recv_loop || ring->is_shutting_down)
       return(0);
 
     if(ring->reentrant)
@@ -1293,6 +1295,9 @@ int pfring_recv_batch(pfring *ring, char* buffer, u_int buffer_len,
 	char *bucket;
 	struct pfring_pkthdr *hdr;
 	u_int32_t next_off, real_slot_len, insert_off, bktLen, newLen;
+
+	if(ring->is_shutting_down)
+	  return(0);
 
 	bucket = &ring->slots[curr_offset];
 	hdr = (struct pfring_pkthdr*)bucket;
@@ -1348,7 +1353,7 @@ int pfring_recv_batch(pfring *ring, char* buffer, u_int buffer_len,
     /* Nothing to do: we need to wait */
     if(ring->reentrant) pthread_spin_unlock(&ring->spinlock);
    
-    if(wait_for_incoming_packet) {
+    if(wait_for_incoming_packet && (!ring->is_shutting_down)) {
       rc = pfring_poll(ring, ring->poll_duration);
       
       if(rc == -1)

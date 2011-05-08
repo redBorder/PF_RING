@@ -439,13 +439,8 @@ typedef struct _sw_filtering_hash_bucket {
 
 #if !defined(__cplusplus)
 
-#ifndef min
-#define min(a,b) ((a < b) ? a : b)
-#endif
-
-#ifndef max
-#define max(a,b) ((a > b) ? a : b)
-#endif
+#define min_val(a,b) ((a < b) ? a : b)
+#define max_val(a,b) ((a > b) ? a : b)
 
 #endif
 
@@ -627,6 +622,11 @@ typedef struct {
 
 
 typedef struct {
+  /* DNA */
+  u_int num_dna_rx_queues; /* 0 for non DNA devices */
+  u_int8_t is_dna_device;
+  dna_device_model dna_device_model;
+
   pfring_device_type device_type; /* Device Type */
 
   /*

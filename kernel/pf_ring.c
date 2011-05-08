@@ -167,7 +167,7 @@ static u_int8_t num_rings_per_device[MAX_NUM_IFIDX] = { 0 };
 static struct pf_ring_socket* device_rings[MAX_NUM_IFIDX][MAX_NUM_RX_CHANNELS] = { { NULL } };
 static u_int8_t num_any_rings = 0;
 
-/* List of all dna (direct nic access) devices */
+/* List of all DNA (direct nic access) devices */
 static struct list_head ring_dna_devices_list;
 static u_int dna_devices_list_size = 0;
 
@@ -198,7 +198,7 @@ static int reflect_packet(struct sk_buff *skb,
 
 /* ********************************** */
 
-#if 1
+#if 0
 
 static rwlock_t ring_mgmt_lock;
 
@@ -592,15 +592,29 @@ static int ring_proc_dev_get_info(char *buf, char **start, off_t offset,
     struct net_device *dev = dev_ptr->dev;
     char dev_buf[16] = { 0 }, *dev_family = "???";
 
-    switch(dev_ptr->device_type) {
-    case standard_nic_family: dev_family = "Standard NIC"; break;
-    case intel_82599_family:  dev_family = "Intel 82599"; break;
-    case silicom_redirector_family: dev_family = "Silicom Redirector"; break;
+    if(dev_ptr->is_dna_device) {
+      switch(dev_ptr->dna_device_model) {
+      case intel_e1000e:
+	dev_family = "Intel e1000e"; break;
+      case intel_igb:
+	dev_family = "Intel igb"; break;
+	break;
+      case intel_ixgbe:
+	dev_family = "Intel ixgbe"; break;
+	break;
+      }
+    } else {
+      switch(dev_ptr->device_type) {
+      case standard_nic_family: dev_family = "Standard NIC"; break;
+      case intel_82599_family:  dev_family = "Intel 82599"; break;
+      case silicom_redirector_family: dev_family = "Silicom Redirector"; break;
+      }
     }
 
     rlen =  sprintf(buf,      "Name:              %s\n", dev->name);
     rlen += sprintf(buf+rlen, "Index:             %d\n", dev->ifindex);
-
+    rlen += sprintf(buf+rlen, "Polling Mode:      %s\n", dev_ptr->is_dna_device ? "DNA" : "NAPI/TNAPI");
+    
     switch(dev->type) {
     case 1:   strcpy(dev_buf, "Ethernet"); break;
     case 772: strcpy(dev_buf, "Loopback"); break;
@@ -610,14 +624,19 @@ static int ring_proc_dev_get_info(char *buf, char **start, off_t offset,
     rlen += sprintf(buf+rlen, "Type:              %s\n", dev_buf);
     rlen += sprintf(buf+rlen, "Family:            %s\n", dev_family);
 
-    if(dev->ifindex < MAX_NUM_IFIDX)
-      rlen += sprintf(buf+rlen, "# bound sockets:   %d\n",
-		      num_rings_per_device[dev->ifindex]);
+    if(!dev_ptr->is_dna_device) {
+      if(dev->ifindex < MAX_NUM_IFIDX) {
+	rlen += sprintf(buf+rlen, "# bound sockets:   %d\n",
+			num_rings_per_device[dev->ifindex]);
+      }
+    }
 
 #if(LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,31))
     rlen += sprintf(buf+rlen, "Max # TX Queues:   %d\n", dev->num_tx_queues);
-    rlen += sprintf(buf+rlen, "# Used TX Queues:  %d\n", dev->real_num_tx_queues);
 #endif
+    
+    rlen += sprintf(buf+rlen, "# Used RX Queues:  %d\n", 
+		    dev_ptr->is_dna_device ? dev_ptr->num_dna_rx_queues : get_num_rx_queues(dev));
   }
 
   return rlen;
@@ -1846,7 +1865,7 @@ inline int copy_data_to_ring(struct sk_buff *skb,
     }
   } else {
     /* Raw data copy mode */
-    raw_data_len = min(raw_data_len, pfr->bucket_len); /* Avoid overruns */
+    raw_data_len = min_val(raw_data_len, pfr->bucket_len); /* Avoid overruns */
     memcpy(&ring_bucket[pfr->slot_header_len], raw_data, raw_data_len); /* Copy raw data if present */
     hdr->len = hdr->caplen = raw_data_len, hdr->extended_hdr.if_index = FAKE_PACKET;
     /* printk("[PF_RING] Copied raw data at slot with offset %d [len=%d]\n", off, raw_data_len); */
@@ -1914,7 +1933,7 @@ inline int add_pkt_to_ring(struct sk_buff *skb,
      && ((pfr->channel_id & the_bit) != the_bit))
     return(0); /* Wrong channel */
 
-  hdr->caplen = min(pfr->bucket_len - offset, hdr->caplen);
+  hdr->caplen = min_val(pfr->bucket_len - offset, hdr->caplen);
 
   if(pfr->kernel_consumer_plugin_id
      && plugin_registration[pfr->kernel_consumer_plugin_id]->pfring_packet_reader) {
@@ -2508,8 +2527,7 @@ static int register_plugin(struct pfring_plugin_registration *reg)
   plugin_registration[reg->plugin_id] = reg;
   plugin_registration_size++;
 
-  max_registered_plugin_id =
-    max(max_registered_plugin_id, reg->plugin_id);
+  max_registered_plugin_id = max_val(max_registered_plugin_id, reg->plugin_id);
 
   printk("[PF_RING] registered plugin [id=%d][max=%d][%p]\n",
 	 reg->plugin_id, max_registered_plugin_id,
@@ -2825,7 +2843,7 @@ static int skb_ring_handler(struct sk_buff *skb,
        ) {
       /* printk("==>>> [%d][%d]\n", skb->dev->ifindex, channel_id); */
 
-      rc = 1, hdr.len = skb->len, hdr.caplen = min(hdr.caplen, pfr->bucket_len);
+      rc = 1, hdr.len = skb->len, hdr.caplen = min_val(hdr.caplen, pfr->bucket_len);
       room_available |= copy_data_to_ring(skb, pfr, &hdr, displ, 0, NULL, NULL, 0);
     }
   } else {
@@ -2853,7 +2871,7 @@ static int skb_ring_handler(struct sk_buff *skb,
 	 ) {
 	/* We've found the ring where the packet can be stored */
 	int old_caplen = hdr.caplen;  /* Keep old lenght */
-	hdr.caplen = min(hdr.caplen, pfr->bucket_len);
+	hdr.caplen = min_val(hdr.caplen, pfr->bucket_len);
 	room_available |= add_skb_to_ring(skb, pfr, &hdr, is_ip_pkt,
 					  displ, channel_id, num_rx_channels);
 	hdr.caplen = old_caplen;
@@ -3377,7 +3395,8 @@ static int ring_release(struct socket *sock)
   else {
     if(pfr->ring_netdev
        && (pfr->ring_netdev->dev->ifindex < MAX_NUM_IFIDX)) {
-      num_rings_per_device[pfr->ring_netdev->dev->ifindex]--;
+      if(num_rings_per_device[pfr->ring_netdev->dev->ifindex] > 0)
+	num_rings_per_device[pfr->ring_netdev->dev->ifindex]--;
 
       if(quick_mode) {
 	int i;
@@ -3536,6 +3555,8 @@ static int packet_ring_bind(struct sock *sk, char *dev_name)
   if(dev_name == NULL)
     return(-EINVAL);
 
+  /* ************** */
+
   list_for_each_safe(ptr, tmp_ptr, &ring_aware_device_list) {
     ring_device_element *dev_ptr = list_entry(ptr, ring_device_element,
 					      device_list);
@@ -3606,7 +3627,7 @@ static int ring_bind(struct socket *sock, struct sockaddr *sa, int addr_len)
     printk("[PF_RING] ring_bind() called\n");
 
   /*
-   *      Check legality
+   * Check legality
    */
   if(addr_len != sizeof(struct sockaddr))
     return -EINVAL;
@@ -3630,7 +3651,7 @@ static int ring_bind(struct socket *sock, struct sockaddr *sa, int addr_len)
 				&init_net,
 #endif
 				sa->sa_data)) == NULL) {
-
+      
       if(enable_debug)
 	printk("[PF_RING] search failed\n");
       return(-EINVAL);
@@ -4228,11 +4249,23 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 
       if((!strcmp(entry->dev.netdev->name, mapping->device_name))
 	 && (entry->dev.channel_id == mapping->channel_id)) {
-	pfr->dna_device = &entry->dev, pfr->ring_netdev->dev = entry->dev.netdev;
+	pfr->dna_device = &entry->dev, pfr->ring_netdev->dev = entry->dev.netdev /* Default */;
 
 	if(enable_debug)
 	  printk("[PF_RING] ring_map_dna_device(%s, %u): added mapping\n",
 		 mapping->device_name, mapping->channel_id);
+	
+	/* Now let's set the read ring_netdev device */
+	list_for_each_safe(ptr, tmp_ptr, &ring_aware_device_list) {
+	  ring_device_element *dev_ptr = list_entry(ptr, ring_device_element, device_list);
+	  
+	  if(!strcmp(dev_ptr->dev->name, mapping->device_name)) {	    
+	    if(enable_debug)
+	      printk("[PF_RING] ==>> %s [%p]\n", dev_ptr->dev->name, dev_ptr);
+	    pfr->ring_netdev = dev_ptr;
+	    break;
+	  }
+	}
 
 	/* Lock driver */
 	pfr->dna_device->usage_notification(pfr->dna_device->adapter_ptr, 1 /* lock */);
@@ -5384,8 +5417,18 @@ static int ring_getsockopt(struct socket *sock,
 	/* Device not yet bound */
 	num_rx_channels = UNKNOWN_NUM_RX_CHANNELS;
       } else {
-	num_rx_channels = pfr->num_rx_channels;
+	if(pfr->ring_netdev->is_dna_device)
+	  num_rx_channels = pfr->ring_netdev->num_dna_rx_queues;
+	else
+	  num_rx_channels = max_val(pfr->num_rx_channels, get_num_rx_queues(pfr->ring_netdev->dev));
       }
+
+      if(enable_debug)	
+	printk("[PF_RING] --> SO_GET_NUM_RX_CHANNELS[%s]=%d [dna=%d/dns_rx_channels=%d][%p]\n", 
+	       pfr->ring_netdev->dev->name, num_rx_channels,
+	       pfr->ring_netdev->is_dna_device, 
+	       pfr->ring_netdev->num_dna_rx_queues,
+	       pfr->ring_netdev);
 
       if(copy_to_user(optval, &num_rx_channels, sizeof(num_rx_channels)))
 	return -EFAULT;
@@ -5484,7 +5527,9 @@ void dna_device_handler(dna_device_operation operation,
 			dna_device_notify dev_notify_function_ptr)
 {
   if(enable_debug)
-    printk("[PF_RING] dna_device_handler(%s)\n", netdev->name);
+    printk("[PF_RING] dna_device_handler(%s@%u [operation=%s])\n",
+	   netdev->name, channel_id, 
+	   operation == add_device_mapping ? "add_device_mapping" : "remove_device_mapping");
 
   if(operation == add_device_mapping) {
     dna_device_list *next;
@@ -5514,6 +5559,25 @@ void dna_device_handler(dna_device_operation operation,
       dna_devices_list_size++;
       /* Increment usage count to avoid unloading it while DNA modules are in use */
       try_module_get(THIS_MODULE);
+
+      /* We now have to update the device list */
+      {
+	struct list_head *ptr, *tmp_ptr;
+ 
+	list_for_each_safe(ptr, tmp_ptr, &ring_aware_device_list) {
+	  ring_device_element *dev_ptr = list_entry(ptr, ring_device_element, device_list);
+
+	  if(strcmp(dev_ptr->dev->name, netdev->name) == 0) {
+	    dev_ptr->num_dna_rx_queues = max_val(dev_ptr->num_dna_rx_queues, channel_id+1);
+	    dev_ptr->is_dna_device = 1, dev_ptr->dna_device_model = device_model;
+
+	    if(enable_debug)
+	      printk("[PF_RING] ==>> Updating DNA %s [num_dna_rx_queues=%d][%p]\n",
+		     dev_ptr->dev->name, dev_ptr->num_dna_rx_queues, dev_ptr);
+	    break;
+	  }
+	}
+      }
     } else {
       printk("[PF_RING] Could not kmalloc slot!!\n");
     }
