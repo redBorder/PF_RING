@@ -2621,9 +2621,8 @@ static struct sk_buff* defrag_skb(struct sk_buff *skb,
   struct iphdr *iphdr = NULL;
   struct sk_buff *skk = NULL;
 
-  skb_reset_network_header(skb);
+  skb_set_network_header(skb, hdr->extended_hdr.parsed_pkt.offset.l3_offset - displ);
   skb_reset_transport_header(skb);
-  skb_set_network_header(skb, ETH_HLEN - displ);
 
   iphdr = ip_hdr(skb);
 
@@ -2659,7 +2658,6 @@ static struct sk_buff* defrag_skb(struct sk_buff *skb,
 	  skb = skk;
 	  hdr->len = hdr->caplen = skb->len + displ;
 	  parse_pkt(skb, displ, hdr, 1);
-	  return(skb);
 	} else {
 	  //printk("[PF_RING] Fragment queued \n");
 	  return(NULL);	/* mask rcvd fragments */
@@ -2678,7 +2676,7 @@ static struct sk_buff* defrag_skb(struct sk_buff *skb,
       printk("[PF_RING] Re-assembling fragmented IPv6 packet hs not been implemented\n");
   }
 
-  return(NULL);
+  return(skb);
 }
 
 /* ********************************** */
@@ -2805,7 +2803,7 @@ static int skb_ring_handler(struct sk_buff *skb,
 
   if(!quick_mode) {
     is_ip_pkt = parse_pkt(skb, displ, &hdr, 1);
-      
+    
     if(enable_ip_defrag) {
       if(real_skb
 	 && is_ip_pkt
