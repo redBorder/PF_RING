@@ -576,6 +576,9 @@ typedef enum {
 typedef struct {
   char device_name[16];
   pfring_device_type device_type;  
+
+  /* Entry in the /proc filesystem */
+  struct proc_dir_entry *proc_entry; 
 } virtual_filtering_device_info;
 
 #ifdef __KERNEL__
@@ -691,7 +694,6 @@ struct pf_ring_socket {
   char sock_proc_name[64];
 
   /* Poll Watermark */
-  u_int8_t inside_polling;
   u_int32_t num_poll_calls;
   u_int16_t poll_num_pkts_watermark;
 
