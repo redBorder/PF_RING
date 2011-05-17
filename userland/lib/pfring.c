@@ -1129,6 +1129,25 @@ static int parse_pkt(char *pkt, struct pfring_pkthdr *hdr)
 
 /* **************************************************** */
 
+void pfring_dna_recv_multiple(pfring *ring, 
+			      pfringProcesssPacket looper,
+			      struct pfring_pkthdr *hdr) {
+  if(ring->reentrant) pthread_spin_lock(&ring->spinlock);
+
+  while(!ring->break_recv_loop) {
+    u_char *pkt = (u_char*)dna_get_next_packet(ring, NULL, 1500, hdr);
+    
+    if(pkt)
+      looper(hdr, pkt, NULL);
+    else
+      usleep(1);
+  }
+
+  if(ring->reentrant) pthread_spin_unlock(&ring->spinlock);
+}
+
+/* **************************************************** */
+
 int pfring_recv(pfring *ring, char* buffer, u_int buffer_len,
 		struct pfring_pkthdr *hdr,
 		u_int8_t wait_for_incoming_packet) {
@@ -1150,27 +1169,34 @@ int pfring_recv(pfring *ring, char* buffer, u_int buffer_len,
 
   if(ring->dna_mapped_device) {
     char *pkt = NULL;
-    int8_t status = 1;
-    
-    if(wait_for_incoming_packet || (ring->dna_dev.device_model == intel_ixgbe)) {
-      if(ring->reentrant) pthread_spin_lock(&ring->spinlock);
-      status = dna_there_is_a_packet_to_read(ring, wait_for_incoming_packet);
-      if(ring->reentrant) pthread_spin_unlock(&ring->spinlock);
-    }
+    int8_t status = 1;   
 
-    if(status <= 0) return (0);
+    buffer = NULL;
+
+    if(ring->reentrant) pthread_spin_lock(&ring->spinlock);
+  redo_pfring_recv:
     pkt = dna_get_next_packet(ring, buffer, buffer_len, hdr);
 
     if(pkt && (hdr->len > 0)) {
       /* Set the (1) below to (0) for enabling packet parsing for DNA devices */
       if(0)
 	hdr->extended_hdr.parsed_header_len = 0;
-      else
+      else if(buffer)
 	parse_pkt(buffer, hdr);      
 
+      if(ring->reentrant) pthread_spin_unlock(&ring->spinlock);
       return(1);
-    } else
-      return(0);
+    }
+
+    if(wait_for_incoming_packet) {
+      status = dna_there_is_a_packet_to_read(ring, wait_for_incoming_packet);
+    }
+
+    if(status > 0) 
+      goto redo_pfring_recv;
+
+    if(ring->reentrant) pthread_spin_unlock(&ring->spinlock);
+    return(0);
   } else {
     int rc = 0;
 

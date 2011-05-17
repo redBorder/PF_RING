@@ -333,9 +333,7 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u
 	   (unsigned)h->ts.tv_usec, nsec);
 
 #if 0
-    for(i=0; i<32; i++)
-      printf("%02X ", p[i]);
-
+    for(i=0; i<32; i++) printf("%02X ", p[i]);
     printf("\n");
 #endif
 
@@ -492,6 +490,15 @@ void* packet_consumer_thread(void* _id) {
   }
 
   memset(&hdr, 0, sizeof(hdr));
+
+  /* Dummy for DNA testing */
+  if(dna_mode) {
+    while(1) {
+      pfring_dna_recv_multiple(pd, dummyProcesssPacket, &hdr);
+    }
+
+    return(0);
+  }
 
   while(1) {
     int rc;

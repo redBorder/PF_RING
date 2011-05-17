@@ -79,6 +79,7 @@ int main(int argc, char* argv[]) {
 
   }
 
+  sleep(30);
   pfring_close(pd);
 
   return(0);
