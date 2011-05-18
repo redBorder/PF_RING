@@ -39,6 +39,7 @@
  * - Piotr Romanus <promanus@crossbeamsys.com>
  * - Lior Okman <lior.okman@insightix.com>
  * - Fedor Sakharov <fedor.sakharov@gmail.com>
+ * - Daniel Christopher <Chris.Daniel@visualnetworksystems.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -2687,12 +2688,12 @@ static inline void set_skb_time(struct sk_buff *skb, struct pfring_pkthdr *hdr) 
   if(skb->stamp.tv_sec == 0)
     do_gettimeofday(&skb->stamp);  /* If timestamp is missing add it */
   hdr->ts.tv_sec = skb->stamp.tv_sec, hdr->ts.tv_usec = skb->stamp.tv_usec;
-  hdr->extended_hdr->timestamp_ns = 0; /* No nsec for old kernels */
+  hdr->extended_hdr.timestamp_ns = 0; /* No nsec for old kernels */
 #elif(LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22))
   if(skb->tstamp.off_sec == 0)
     __net_timestamp(skb); /* If timestamp is missing add it */
   hdr->ts.tv_sec = skb->tstamp.off_sec, hdr->ts.tv_usec = skb->tstamp.off_usec;
-  hdr->extended_hdr->timestamp_ns = 0; /* No nsec for old kernels */
+  hdr->extended_hdr.timestamp_ns = 0; /* No nsec for old kernels */
 #else /* 2.6.22 and above */
   if(skb->tstamp.tv64 == 0)
     __net_timestamp(skb); /* If timestamp is missing add it */
