@@ -97,6 +97,8 @@ extern "C" {
   /* ********************************* */
 
   typedef struct {
+    u_int8_t initialized;
+
     /* DNA (Direct NIC Access) */
     u_char dna_mapped_device;    
     u_int32_t tot_dna_read_pkts, rx_reg;

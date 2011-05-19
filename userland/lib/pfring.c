@@ -519,6 +519,7 @@ pfring* pfring_open_consumer(char *device_name, u_int8_t promisc,
     if(ring->reentrant)
       pthread_spin_init(&ring->spinlock, PTHREAD_PROCESS_PRIVATE);
 
+    ring->initialized = 1;
     return(ring);
   } else
     return(NULL);
@@ -651,6 +652,8 @@ void pfring_close(pfring *ring) {
 
   free(ring);
 #endif
+
+  ring->initialized = 0;
 }
 
 /* **************************************************** */
@@ -1135,11 +1138,14 @@ void pfring_dna_recv_multiple(pfring *ring,
   if(ring->reentrant) pthread_spin_lock(&ring->spinlock);
 
   while(!ring->break_recv_loop) {
-    u_char *pkt = (u_char*)dna_get_next_packet(ring, NULL, 1500, hdr);
-    
-    if(pkt)
-      looper(hdr, pkt, NULL);
-    else
+    if(dna_there_is_a_packet_to_read(ring, 1)) {
+      u_char *pkt = (u_char*)dna_get_next_packet(ring, NULL, 1500, hdr);
+      
+      if(pkt)
+	looper(hdr, pkt, NULL);
+      else
+	usleep(1);
+    } else 
       usleep(1);
   }
 
@@ -1551,7 +1557,6 @@ pfring* pfring_open_dna(char *device_name,  u_int8_t promisc, u_int8_t _reentran
 
       channel_id = atoi(&at[1]);
     }
-
     /* printf("channel_id=%d\n", channel_id); */
     rc = pfring_map_dna_device(ring, add_device_mapping,
 			       device_name, channel_id);
@@ -1632,6 +1637,7 @@ pfring* pfring_open_dna(char *device_name,  u_int8_t promisc, u_int8_t _reentran
       if(ring->reentrant)
 	pthread_spin_init(&ring->spinlock, PTHREAD_PROCESS_PRIVATE);
 
+      ring->initialized = 1;
       return(ring);
     } else {
       printf("pfring_map_dna_device() failed [rc=%d]: device already in use or non-DNA driver?\n", rc);

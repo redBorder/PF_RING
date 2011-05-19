@@ -3846,6 +3846,7 @@ static int ring_mmap(struct file *file,
       break;
 
     case 1:
+      /* DNA: packet descriptors */
       if((rc = do_memory_mmap(vma, size,
 			      (void *)pfr->dna_device->descr_packet_memory, VM_LOCKED, 1)) < 0)
 	return(rc);
@@ -4268,7 +4269,6 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 			       dna_device_mapping * mapping)
 {
   if(mapping->operation == remove_device_mapping) {
-
     /* Unlock driver */
     if(pfr->dna_device != NULL)
       pfr->dna_device->usage_notification(pfr->dna_device->adapter_ptr, 0 /* unlock */);
