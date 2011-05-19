@@ -63,7 +63,7 @@
 
 /* Enable plugin PF_RING functions */
 #define PF_RING_PLUGIN
-#include <linux/pf_ring.h>
+#include "../linux/pf_ring.h"
 
 #include "dummy_plugin.h"
 
