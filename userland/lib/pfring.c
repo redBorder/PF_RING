@@ -1628,6 +1628,10 @@ pfring* pfring_open_dna(char *device_name,  u_int8_t promisc, u_int8_t _reentran
 #ifdef DEBUG
       pfring_dump_dna_stats(ring);
 #endif
+
+      if(ring->reentrant)
+	pthread_spin_init(&ring->spinlock, PTHREAD_PROCESS_PRIVATE);
+
       return(ring);
     } else {
       printf("pfring_map_dna_device() failed [rc=%d]: device already in use or non-DNA driver?\n", rc);
@@ -1637,13 +1641,6 @@ pfring* pfring_open_dna(char *device_name,  u_int8_t promisc, u_int8_t _reentran
     }
   } else {
     err = -1;
-  }
-
-  if(err == 0) {
-    if(ring->reentrant)
-      pthread_spin_init(&ring->spinlock, PTHREAD_PROCESS_PRIVATE);
-
-    return(ring);
   }
 
   if(ring) {
