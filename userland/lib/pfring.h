@@ -177,6 +177,7 @@ extern "C" {
   void pfring_dna_recv_multiple(pfring *ring,
 				pfringProcesssPacket looper,
 				struct pfring_pkthdr *hdr,
+				char *buffer, u_int buffer_len,
 				u_int8_t wait_for_packet,
 				void *user_data);
   int pfring_recv_batch(pfring *ring, char* buffer, u_int buffer_len,

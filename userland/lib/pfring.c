@@ -1135,21 +1135,24 @@ static int parse_pkt(char *pkt, struct pfring_pkthdr *hdr)
 void pfring_dna_recv_multiple(pfring *ring,
 			      pfringProcesssPacket looper,
 			      struct pfring_pkthdr *hdr,
+			      char *buffer, u_int buffer_len,
 			      u_int8_t wait_for_packet,
 			      void *user_data) {
   if(ring->reentrant) pthread_spin_lock(&ring->spinlock);
 
+  if(buffer == NULL) buffer_len = 0;
+
   while(!ring->break_recv_loop) {
-    u_char *pkt = (u_char*)dna_get_next_packet(ring, NULL, 1500, hdr);
+    u_char *pkt = (u_char*)dna_get_next_packet(ring, buffer, buffer_len, hdr);
 
     if(pkt) {
-      parse_pkt((char*)pkt, hdr); /* Remove for speed */
+      if(buffer) parse_pkt((char*)pkt, hdr);
       looper(hdr, pkt, user_data);
     } else {
-      if(1)
-	dna_there_is_a_packet_to_read(ring, 1);
-      else
-	usleep(1);      
+      if(wait_for_packet) {
+	//dna_there_is_a_packet_to_read(ring, 1);
+	usleep(1); /* Can be removed */
+      }
     }
   }
 
