@@ -494,7 +494,7 @@ void* packet_consumer_thread(void* _id) {
   /* Dummy for DNA testing */
   if(dna_mode) {
     while(1) {
-      pfring_dna_recv_multiple(pd, dummyProcesssPacket, &hdr);
+      pfring_dna_recv_multiple(pd, dummyProcesssPacket, &hdr, wait_for_packet, _id);
     }
 
     return(0);

@@ -42,10 +42,10 @@
 extern int dna_init(pfring* ring, u_short len);
 extern void dna_term(pfring* ring);
 
-extern int8_t dna_there_is_a_packet_to_read(pfring* ring, 
+extern int8_t dna_there_is_a_packet_to_read(pfring* ring,
 					    u_int8_t wait_for_incoming_packet);
-extern char* dna_get_next_packet(pfring* ring, 
-				 char* buffer, u_int buffer_len, 
+extern char* dna_get_next_packet(pfring* ring,
+				 char* buffer, u_int buffer_len,
 				 struct pfring_pkthdr *hdr);
 extern void dna_dump_stats(pfring* ring);
 
@@ -66,7 +66,7 @@ void pfring_config(u_short cpu_percentage) {
 
   if(!pfring_initialized) {
     struct sched_param schedparam;
-    
+
     /*if(cpu_percentage >= 50) mlockall(MCL_CURRENT|MCL_FUTURE); */
 
     pfring_initialized = 1;
@@ -315,7 +315,7 @@ int pfring_bind(pfring *ring, char *device_name) {
     rc = pfring_set_channel_id(ring, channel_id);
 
     if(rc != 0)
-      printf("pfring_set_channel_id() failed: %d\n", rc);    
+      printf("pfring_set_channel_id() failed: %d\n", rc);
   }
 
   return(rc);
@@ -596,7 +596,7 @@ static int pfring_map_dna_device(pfring *ring,
     return (-1);
   } else
     ring->last_dna_operation = operation;
-  
+
   mapping.operation = operation;
   snprintf(mapping.device_name, sizeof(mapping.device_name),
 	   "%s", device_name);
@@ -707,8 +707,8 @@ int pfring_enable_rss_rehash(pfring *ring) {
 
 /* **************************************************** */
 
-void pfring_set_poll_duration(pfring *ring, u_int duration) { 
-  ring->poll_duration = duration; 
+void pfring_set_poll_duration(pfring *ring, u_int duration) {
+  ring->poll_duration = duration;
 }
 
 /* **************************************************** */
@@ -716,16 +716,16 @@ void pfring_set_poll_duration(pfring *ring, u_int duration) {
 int pfring_poll(pfring *ring, u_int wait_duration) {
   struct pollfd pfd;
   int rc;
-  
+
   /* Sleep when nothing is happening */
   pfd.fd      = ring->fd;
   pfd.events  = POLLIN /* | POLLERR */;
-  pfd.revents = 0;  
+  pfd.revents = 0;
   errno       = 0;
-  
+
   rc = poll(&pfd, 1, wait_duration);
-  ring->num_poll_calls++;  
-  
+  ring->num_poll_calls++;
+
   return(rc);
 }
 
@@ -1132,21 +1132,25 @@ static int parse_pkt(char *pkt, struct pfring_pkthdr *hdr)
 
 /* **************************************************** */
 
-void pfring_dna_recv_multiple(pfring *ring, 
+void pfring_dna_recv_multiple(pfring *ring,
 			      pfringProcesssPacket looper,
-			      struct pfring_pkthdr *hdr) {
+			      struct pfring_pkthdr *hdr,
+			      u_int8_t wait_for_packet,
+			      void *user_data) {
   if(ring->reentrant) pthread_spin_lock(&ring->spinlock);
 
   while(!ring->break_recv_loop) {
-    if(dna_there_is_a_packet_to_read(ring, 1)) {
-      u_char *pkt = (u_char*)dna_get_next_packet(ring, NULL, 1500, hdr);
-      
-      if(pkt)
-	looper(hdr, pkt, NULL);
+    u_char *pkt = (u_char*)dna_get_next_packet(ring, NULL, 1500, hdr);
+
+    if(pkt) {
+      parse_pkt((char*)pkt, hdr); /* Remove for speed */
+      looper(hdr, pkt, user_data);
+    } else {
+      if(1)
+	dna_there_is_a_packet_to_read(ring, 1);
       else
-	usleep(1);
-    } else 
-      usleep(1);
+	usleep(1);      
+    }
   }
 
   if(ring->reentrant) pthread_spin_unlock(&ring->spinlock);
@@ -1175,7 +1179,7 @@ int pfring_recv(pfring *ring, char* buffer, u_int buffer_len,
 
   if(ring->dna_mapped_device) {
     char *pkt = NULL;
-    int8_t status = 1;   
+    int8_t status = 1;
 
     buffer = NULL;
 
@@ -1188,7 +1192,7 @@ int pfring_recv(pfring *ring, char* buffer, u_int buffer_len,
       if(0)
 	hdr->extended_hdr.parsed_header_len = 0;
       else if(buffer)
-	parse_pkt(buffer, hdr);      
+	parse_pkt(buffer, hdr);
 
       if(ring->reentrant) pthread_spin_unlock(&ring->spinlock);
       return(1);
@@ -1198,7 +1202,7 @@ int pfring_recv(pfring *ring, char* buffer, u_int buffer_len,
       status = dna_there_is_a_packet_to_read(ring, wait_for_incoming_packet);
     }
 
-    if(status > 0) 
+    if(status > 0)
       goto redo_pfring_recv;
 
     if(ring->reentrant) pthread_spin_unlock(&ring->spinlock);
@@ -1233,9 +1237,9 @@ int pfring_recv(pfring *ring, char* buffer, u_int buffer_len,
       real_slot_len = ring->slot_header_len + bktLen;
       insert_off = ring->slots_info->insert_off;
       if(bktLen > buffer_len) bktLen = buffer_len;
-      
+
       if(buffer && (bktLen > 0))
-	memcpy(buffer, &bucket[ring->slot_header_len], bktLen);      
+	memcpy(buffer, &bucket[ring->slot_header_len], bktLen);
 
       next_off = ring->slots_info->remove_off + real_slot_len;
       if((next_off + ring->slots_info->slot_len) > (ring->slots_info->tot_mem - sizeof(FlowSlotInfo))) {
@@ -1256,23 +1260,23 @@ int pfring_recv(pfring *ring, char* buffer, u_int buffer_len,
 	 && (ring->slots_info->remove_off > ring->slots_info->insert_off)) {
 	ring->slots_info->remove_off = ring->slots_info->insert_off;
       }
-           
+
       if(ring->reentrant) pthread_spin_unlock(&ring->spinlock);
       return(1);
     }
 
     /* Nothing to do: we need to wait */
     if(ring->reentrant) pthread_spin_unlock(&ring->spinlock);
-   
+
     if(wait_for_incoming_packet) {
       rc = pfring_poll(ring, ring->poll_duration);
-      
+
       if(rc == -1)
 	return(-1);
       else
 	goto do_pfring_recv;
     }
-    
+
     return(-1); /* Not reached */
   }
 }
@@ -1315,13 +1319,13 @@ int pfring_recv_batch(pfring *ring, char* buffer, u_int buffer_len,
       pthread_spin_lock(&ring->spinlock);
 
     //rmb();
-    
+
     if(pfring_there_is_pkt_available(ring)) {
       u_int32_t begin_offset = ring->slots_info->remove_off, end_offset = (u_int32_t)-1, diff_offset = 0,
 	curr_offset = ring->slots_info->remove_off, tot_len = 0, tot_pkts = 0;
-      
+
       while(pfring_there_is_pkt_available(ring)
-	    && (tot_len < buffer_len) 
+	    && (tot_len < buffer_len)
 	    && (num_offset > tot_pkts)
 	    && (!ring->break_recv_loop)) {
 	char *bucket;
@@ -1336,7 +1340,7 @@ int pfring_recv_batch(pfring *ring, char* buffer, u_int buffer_len,
 	offset[tot_pkts] = curr_offset-begin_offset + diff_offset;
 	bktLen = hdr->caplen+hdr->extended_hdr.parsed_header_len;
 	real_slot_len = sizeof(struct pfring_pkthdr) + bktLen;
-	
+
 	newLen = tot_len + real_slot_len;
 	if(newLen > buffer_len)
 	  break; /* We don't have enough space left */
@@ -1354,13 +1358,13 @@ int pfring_recv_batch(pfring *ring, char* buffer, u_int buffer_len,
 	}
 
 	ring->slots_info->tot_read++, tot_pkts++, curr_offset = next_off;
-	
+
 	/* Ugly safety check */
 	if((ring->slots_info->tot_insert == ring->slots_info->tot_read)
 	   && (next_off > ring->slots_info->insert_off)) {
 	  curr_offset = ring->slots_info->insert_off;
 	  break;
-	} 	  
+	}
       }
 
       if(wrapped) {
@@ -1377,23 +1381,23 @@ int pfring_recv_batch(pfring *ring, char* buffer, u_int buffer_len,
        * http://en.wikipedia.org/wiki/Memory_ordering#Compiler_memory_barrier */
       gcc_mb();
 #endif
-           
+
       if(ring->reentrant) pthread_spin_unlock(&ring->spinlock);
       return(tot_pkts);
-    }    
+    }
 
     /* Nothing to do: we need to wait */
     if(ring->reentrant) pthread_spin_unlock(&ring->spinlock);
-   
+
     if(wait_for_incoming_packet && (!ring->is_shutting_down)) {
       rc = pfring_poll(ring, ring->poll_duration);
-      
+
       if(rc == -1)
 	return(-1);
       else
 	goto do_pfring_recv_batch;
     }
-    
+
     return(-1); /* Not reached */
   }
 }
@@ -1409,10 +1413,10 @@ int pfring_loop(pfring *ring, pfringProcesssPacket looper, const u_char *user_by
     return(-1);
 
   ring->break_recv_loop = 0;
-  
+
   while(!ring->break_recv_loop) {
     rc = pfring_recv(ring, (char*)buffer, ring->caplen, &hdr, 1);
-    if(rc < 0) 
+    if(rc < 0)
       break;
     else if(rc > 0)
       looper(&hdr, buffer, user_bytes);
@@ -1698,7 +1702,7 @@ int add_to_pfring_bundle(pfring_bundle *bundle, pfring *ring) {
 int pfring_bundle_poll(pfring_bundle *bundle, u_int wait_duration) {
   int i, rc;
   struct pollfd pfd[MAX_NUM_BUNDLE_ELEMENTS];
-  
+
   for(i=0; i<bundle->num_sockets; i++) {
     pfd[i].fd = bundle->sockets[i]->fd;
     pfd[i].events  = POLLIN /* | POLLERR */;
@@ -1707,7 +1711,7 @@ int pfring_bundle_poll(pfring_bundle *bundle, u_int wait_duration) {
 
   errno = 0;
   rc = poll(pfd, bundle->num_sockets, wait_duration);
-  
+
   if(rc > 0) {
     for(i=0; i<bundle->num_sockets; i++)
       if(pfd[i].revents != 0)
@@ -1726,14 +1730,14 @@ inline int is_before(struct timeval *ts_a,  struct timeval *ts_b) {
   else if(ts_a->tv_sec == ts_b->tv_sec) {
     if(ts_a->tv_usec < ts_b->tv_usec)
       return(1);
-  } 
-  
+  }
+
   return(0);
 }
 
 /* *********************************** */
 
-int pfring_bundle_read(pfring_bundle *bundle, 
+int pfring_bundle_read(pfring_bundle *bundle,
 		       char* buffer, u_int buffer_len,
 		       struct pfring_pkthdr *hdr,
 		       u_int8_t wait_for_incoming_packet) {
@@ -1779,7 +1783,7 @@ int pfring_bundle_read(pfring_bundle *bundle,
 
   if(wait_for_incoming_packet) {
     rc = pfring_bundle_poll(bundle, bundle->sockets[0]->poll_duration);
-    
+
     if(rc > 0) {
       goto redo_pfring_bundle_read;
     } else
@@ -1794,9 +1798,9 @@ int pfring_bundle_read(pfring_bundle *bundle,
 /* Returns the first bundle socket with something to read */
 void pfring_bundle_close(pfring_bundle *bundle) {
   int i;
-  
+
   for(i=0; i<bundle->num_sockets; i++)
-    pfring_close(bundle->sockets[i]);  
+    pfring_close(bundle->sockets[i]);
 }
 
 /* *********************************** */
@@ -1804,20 +1808,20 @@ void pfring_bundle_close(pfring_bundle *bundle) {
 #ifndef HAVE_DNA
 /* Dummy stubs */
 
-int dna_init(pfring* ring, u_short len) { 
+int dna_init(pfring* ring, u_short len) {
   printf("Your PF_RING library has not been compiled with DNA support\n");
-  return(-1); 
+  return(-1);
 }
 
 void dna_term(pfring* ring) { ; }
 
-int8_t dna_there_is_a_packet_to_read(pfring* ring, 
+int8_t dna_there_is_a_packet_to_read(pfring* ring,
 				     u_int8_t wait_for_incoming_packet) {
   return(0);
 }
 
-char* dna_get_next_packet(pfring* ring, 
-			  char* buffer, u_int buffer_len, 
+char* dna_get_next_packet(pfring* ring,
+			  char* buffer, u_int buffer_len,
 			  struct pfring_pkthdr *hdr) {
   return(NULL);
 }
