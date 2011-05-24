@@ -74,8 +74,7 @@ int main(int argc, char* argv[]) {
   char *device, *buffer;
   u_int buffer_len, num_runs, test_len, i, test_id, j;
   struct timeval startTime, endTime;
-  double deltaUsec;
-  double ten_gbytes = 14880952*64;
+  double deltaUsec, call_per_sec, thpt, call_duration_usec;
 
   device = "eth0";
   pd = pfring_open(device, 1,  128, 0);
@@ -98,7 +97,7 @@ int main(int argc, char* argv[]) {
   test_id = 64;
   buffer_len = test_id*1024;
   buffer = malloc(buffer_len);
-  num_runs = 100000;
+  num_runs = 10000;
 
   for(j=0; j<=test_id; j++) {
     test_len = j*1024;
@@ -110,11 +109,14 @@ int main(int argc, char* argv[]) {
 
     gettimeofday(&endTime, NULL);
     deltaUsec = delta_time(&endTime, &startTime);
-    printf("%02d Test len=%d KB, %.2f calls/sec [%.1f usec/call] [Needed #calls %.1f calls for 10Git]\n",
-	   j, test_len/1024, ((double)num_runs*1000)/deltaUsec,
-	   deltaUsec/num_runs,
-	   ten_gbytes/test_len);
-  }
+    call_duration_usec = deltaUsec/((double)num_runs);
+    call_per_sec = ((double)num_runs*1000000)/deltaUsec;
+    thpt = (double)(call_per_sec * test_len * 8) / (double)1000000000;
+
+    printf("%02d [Test len=%d KB][%.2f calls/sec][%.1f usec/call][Thpt: %.2f Gbps][%s]\n",
+	   j, test_len/1024, call_per_sec, call_duration_usec, thpt,
+	   (thpt > (double)10) ? "10 Gbit Wire rate" : "No Wire rate");
+  } 
 
   free(buffer);
 
@@ -125,7 +127,7 @@ int main(int argc, char* argv[]) {
   buffer = malloc(buffer_len);
   num_runs = 1000;
 
-  for(j=0; j<=test_id; j++) {
+  for(j=1; j<=test_id; j++) {
     test_len = j*1024*1024;
 
     gettimeofday(&startTime, NULL);
@@ -135,9 +137,13 @@ int main(int argc, char* argv[]) {
 
     gettimeofday(&endTime, NULL);
     deltaUsec = delta_time(&endTime, &startTime);
-    printf("%02d Test len=%d MB, %.2f calls/sec [%.1f usec/call][Needed # %.1f calls for 10Git]\n", j,
-	   test_len/(1024*1024), ((double)num_runs*1000)/deltaUsec,
-	   deltaUsec/num_runs, ten_gbytes/test_len);
+    call_duration_usec = deltaUsec/((double)num_runs);
+    call_per_sec = ((double)num_runs*1000000)/deltaUsec;
+    thpt = (double)(call_per_sec * test_len * 8) / (double)1000000000;
+
+    printf("%02d [Test len=%d KB][%.2f calls/sec][%.1f usec/call][Thpt: %.2f Gbps][%s]\n",
+	   j, test_len/1024, call_per_sec, call_duration_usec, thpt,
+	   (thpt > (double)10) ? "10 Gbit Wire rate" : "No Wire rate");
   }
 
   pfring_close(pd);

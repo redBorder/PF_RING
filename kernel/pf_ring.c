@@ -5553,6 +5553,12 @@ static int ring_getsockopt(struct socket *sock,
 	    return(-EFAULT); /* Not enough memory */
 	}
 	
+	{
+	  u_int i;
+	  
+	  for(i=0; i<len; i++) loobpack_test_buffer[i] = i;
+	}
+
 	if(copy_to_user(optval, loobpack_test_buffer, len))
 	  return -EFAULT;	  
       }
