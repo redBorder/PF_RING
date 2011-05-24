@@ -177,6 +177,10 @@ static u_int plugin_registration_size = 0;
 static struct pfring_plugin_registration *plugin_registration[MAX_PLUGIN_ID] = { NULL };
 static u_short max_registered_plugin_id = 0;
 
+/* Dumy buffer used for loopback_test */
+u_int32_t loobpack_test_buffer_len = 4*1024*1024;
+u_char *loobpack_test_buffer = NULL;
+
 /* ********************************** */
 
 /* /proc entry for ring module */
@@ -5540,16 +5544,17 @@ static int ring_getsockopt(struct socket *sock,
       /* printk("SO_GET_LOOPBACK_TEST (len=%d)\n", len); */
 
       if(len > 0) {
-	u_char *buffer = kmalloc(len, GFP_KERNEL);
-	
-	if(buffer == NULL) return -EFAULT;
+	if(len > loobpack_test_buffer_len) return(-EFAULT);
 
-	if(copy_to_user(optval, buffer, len)) {
-	  kfree(buffer);
-	  return -EFAULT;
+	if(loobpack_test_buffer == NULL) {
+	  loobpack_test_buffer = kmalloc(loobpack_test_buffer_len, GFP_ATOMIC);
+	  
+	  if(loobpack_test_buffer == NULL)
+	    return(-EFAULT); /* Not enough memory */
 	}
-
-	kfree(buffer);
+	
+	if(copy_to_user(optval, loobpack_test_buffer, len))
+	  return -EFAULT;	  
       }
     }
     break;
@@ -6052,6 +6057,9 @@ static void __exit ring_exit(void)
 #endif
   unregister_netdevice_notifier(&ring_netdev_notifier);
   ring_proc_term();
+
+  if(loobpack_test_buffer != NULL)
+    kfree(loobpack_test_buffer);
 
   printk("[PF_RING] unloaded\n");
 }

@@ -75,6 +75,7 @@ int main(int argc, char* argv[]) {
   u_int buffer_len, num_runs, test_len, i, test_id, j;
   struct timeval startTime, endTime;
   double deltaUsec;
+  double ten_gbytes = 14880952*64;
 
   device = "eth0";
   pd = pfring_open(device, 1,  128, 0);
@@ -101,17 +102,42 @@ int main(int argc, char* argv[]) {
 
   for(j=0; j<=test_id; j++) {
     test_len = j*1024;
-    
+
     gettimeofday(&startTime, NULL);
-    
+
     for(i=0; i<num_runs; i++)
       pfring_loopback_test(pd, buffer, buffer_len, test_len);
-    
+
     gettimeofday(&endTime, NULL);
     deltaUsec = delta_time(&endTime, &startTime);
-    printf("%02d Test len=%d, %.2f calls/sec [%.1f usec/call]\n", j,
-	   test_len, ((double)num_runs*1000)/deltaUsec,
-	   deltaUsec/num_runs);   
+    printf("%02d Test len=%d KB, %.2f calls/sec [%.1f usec/call] [Needed #calls %.1f calls for 10Git]\n",
+	   j, test_len/1024, ((double)num_runs*1000)/deltaUsec,
+	   deltaUsec/num_runs,
+	   ten_gbytes/test_len);
+  }
+
+  free(buffer);
+
+  /* ************************************** */
+
+  test_id = 4;
+  buffer_len = test_id*1024*1024;
+  buffer = malloc(buffer_len);
+  num_runs = 1000;
+
+  for(j=0; j<=test_id; j++) {
+    test_len = j*1024*1024;
+
+    gettimeofday(&startTime, NULL);
+
+    for(i=0; i<num_runs; i++)
+      pfring_loopback_test(pd, buffer, buffer_len, test_len);
+
+    gettimeofday(&endTime, NULL);
+    deltaUsec = delta_time(&endTime, &startTime);
+    printf("%02d Test len=%d MB, %.2f calls/sec [%.1f usec/call][Needed # %.1f calls for 10Git]\n", j,
+	   test_len/(1024*1024), ((double)num_runs*1000)/deltaUsec,
+	   deltaUsec/num_runs, ten_gbytes/test_len);
   }
 
   pfring_close(pd);
