@@ -192,6 +192,7 @@ extern "C" {
   u_int32_t pfring_get_num_queued_pkts(pfring *ring);
   u_int8_t pfring_get_packet_consumer_mode(pfring *ring);
   int pfring_set_virtual_device(pfring *ring, virtual_filtering_device_info *info);
+  int pfring_loopback_test(pfring *ring, char *buffer, u_int buffer_len, u_int test_len);
   int pfring_set_packet_consumer_mode(pfring *ring, u_int8_t plugin_id,
 				      char *plugin_data, u_int plugin_data_len);
   int pfring_get_hash_filtering_rule_stats(pfring *ring,

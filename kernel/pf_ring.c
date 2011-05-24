@@ -5254,7 +5254,8 @@ static int ring_setsockopt(struct socket *sock,
 
 static int ring_getsockopt(struct socket *sock,
 			   int level, int optname,
-			   char __user * optval, int __user * optlen)
+			   char __user *optval, 
+			   int __user *optlen)
 {
   int len;
   struct pf_ring_socket *pfr = ring_sk(sock->sk);
@@ -5533,6 +5534,26 @@ static int ring_getsockopt(struct socket *sock,
       return -EFAULT;
     break;
 
+  case SO_GET_LOOPBACK_TEST:
+    /* Used for testing purposes only */
+    {
+      /* printk("SO_GET_LOOPBACK_TEST (len=%d)\n", len); */
+
+      if(len > 0) {
+	u_char *buffer = kmalloc(len, GFP_KERNEL);
+	
+	if(buffer == NULL) return -EFAULT;
+
+	if(copy_to_user(optval, buffer, len)) {
+	  kfree(buffer);
+	  return -EFAULT;
+	}
+
+	kfree(buffer);
+      }
+    }
+    break;
+
   default:
     return -ENOPROTOOPT;
   }
@@ -5582,8 +5603,8 @@ void dna_device_handler(dna_device_operation operation,
       next->dev.packet_memory_tot_len = packet_memory_tot_len;
       next->dev.descr_packet_memory = descr_packet_memory;
       next->dev.descr_packet_memory_num_slots = descr_packet_memory_num_slots;
-      next->dev.descr_packet_memory_slot_len =  descr_packet_memory_slot_len;
-      next->dev.descr_packet_memory_tot_len =   descr_packet_memory_tot_len;
+      next->dev.descr_packet_memory_slot_len  = descr_packet_memory_slot_len;
+      next->dev.descr_packet_memory_tot_len   = descr_packet_memory_tot_len;
       next->dev.phys_card_memory = phys_card_memory;
       next->dev.phys_card_memory_len = phys_card_memory_len;
       next->dev.channel_id = channel_id;

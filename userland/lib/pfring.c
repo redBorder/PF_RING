@@ -1522,6 +1522,19 @@ int pfring_set_virtual_device(pfring *ring, virtual_filtering_device_info *info)
 
 /* **************************************************** */
 
+int pfring_loopback_test(pfring *ring, char *buffer, u_int buffer_len, u_int test_len) {
+  socklen_t len;
+  
+  if(ring == NULL) return(-1);
+  
+  if(test_len > buffer_len) test_len = buffer_len;
+  len = test_len;
+
+  return(getsockopt(ring->fd, 0, SO_GET_LOOPBACK_TEST, (char*)buffer, &len));
+}
+
+/* **************************************************** */
+
 #ifdef DEBUG
 static void pfring_dump_dna_stats(pfring* ring) {
   dna_dump_stats(ring);
