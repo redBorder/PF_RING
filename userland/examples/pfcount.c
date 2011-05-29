@@ -325,9 +325,15 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u
     u_short eth_type, vlan_id;
     char buf1[32], buf2[32];
     struct ip ip;
-    int s = (h->ts.tv_sec + thiszone) % 86400;
-    u_int nsec = h->extended_hdr.timestamp_ns % 1000;
+    int s;
+    uint nsec;
 
+    if(h->ts.tv_sec == 0)
+      gettimeofday((struct timeval*)&h->ts, NULL);
+
+    s = (h->ts.tv_sec + thiszone) % 86400;
+    nsec = h->extended_hdr.timestamp_ns % 1000;
+    
     printf("%02d:%02d:%02d.%06u%03u ",
 	   s / 3600, (s % 3600) / 60, s % 60,
 	   (unsigned)h->ts.tv_usec, nsec);

@@ -102,7 +102,7 @@ extern "C" {
     /* DNA (Direct NIC Access) */
     u_char dna_mapped_device;    
     u_int16_t num_pkts_before_dns_sync, dna_sync_watermark;
-    u_int32_t tot_dna_read_pkts, rx_reg;
+    u_int32_t tot_dna_read_pkts, rx_reg, last_rx_slot_read;
     dna_device dna_dev;    
     u_int32_t *rx_reg_ptr;
     dna_device_operation last_dna_operation;

@@ -610,6 +610,7 @@ typedef struct {
 } ring_cluster_element;
 
 typedef struct {
+  u8 in_use;
   dna_device dev;
   struct list_head list;
 } dna_device_list;
@@ -704,6 +705,7 @@ struct pf_ring_socket {
   /* Direct NIC Access */
   u_int8_t mmap_count;
   dna_device *dna_device;
+  dna_device_list *dna_device_entry;
 
   /* Cluster */
   u_short cluster_id; /* 0 = no cluster */

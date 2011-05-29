@@ -1146,7 +1146,10 @@ void pfring_dna_recv_multiple(pfring *ring,
     u_char *pkt = (u_char*)dna_get_next_packet(ring, buffer, buffer_len, hdr);
 
     if(pkt) {
-      if(buffer) parse_pkt((char*)pkt, hdr);
+      if(buffer) {
+	// gettimeofday(&hdr->ts, NULL);
+	parse_pkt((char*)pkt, hdr);
+      }
       looper(hdr, pkt, user_data);
     } else {
       if(wait_for_packet) {

@@ -3545,15 +3545,6 @@ static int ring_release(struct socket *sock)
     }
   }
 
-  if(pfr->dna_device != NULL) {
-    dna_device_mapping mapping;
-
-    mapping.operation = remove_device_mapping;
-    snprintf(mapping.device_name, sizeof(mapping.device_name)-1,
-	     "%s", pfr->ring_netdev->dev->name);
-    ring_map_dna_device(pfr, &mapping);
-  }
-
   if(pfr->v_filtering_dev != NULL) {
     remove_virtual_filtering_device(sk, pfr->v_filtering_dev->info.device_name);
     pfr->v_filtering_dev = NULL;
@@ -3579,6 +3570,15 @@ static int ring_release(struct socket *sock)
 
   if(ring_memory_ptr != NULL)
     vfree(ring_memory_ptr);
+
+  if(pfr->dna_device_entry != NULL) {
+    dna_device_mapping mapping;
+
+    mapping.operation = remove_device_mapping;
+    snprintf(mapping.device_name, sizeof(mapping.device_name), "%s",  pfr->dna_device_entry->dev.netdev->name);
+    mapping.channel_id = pfr->dna_device_entry->dev.channel_id;
+    ring_map_dna_device(pfr, &mapping);
+  }
 
   kfree(pfr);
 
@@ -4270,10 +4270,33 @@ static int add_sock_to_cluster(struct sock *sock,
 /* ************************************* */
 
 static int ring_map_dna_device(struct pf_ring_socket *pfr,
-			       dna_device_mapping * mapping)
+			       dna_device_mapping *mapping)
 {
+  struct list_head *ptr, *tmp_ptr;
+  dna_device_list *entry;
+
+  printk("[PF_RING] ring_map_dna_device(%s@%d): %s\n",
+	 mapping->device_name,
+	 mapping->channel_id,
+	 (mapping->operation == remove_device_mapping) ? "remove" : "add");
+	 
   if(mapping->operation == remove_device_mapping) {
     /* Unlock driver */
+    u8 found = 0;
+
+    list_for_each_safe(ptr, tmp_ptr, &ring_dna_devices_list) {
+      entry = list_entry(ptr, dna_device_list, list);
+
+      if((!strcmp(entry->dev.netdev->name, mapping->device_name))
+	 && (entry->dev.channel_id == mapping->channel_id)
+	 && (entry->in_use)) {
+	entry->in_use = 0, found = 1;
+	break;
+      }
+    }
+
+    if(!found) return(-1);
+
     if(pfr->dna_device != NULL)
       pfr->dna_device->usage_notification(pfr->dna_device->adapter_ptr, 0 /* unlock */);
 
@@ -4283,9 +4306,6 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 	     mapping->device_name);
     return(0);
   } else {
-    struct list_head *ptr, *tmp_ptr;
-    dna_device_list *entry;
-
     ring_proc_remove(pfr);
 
     list_for_each_safe(ptr, tmp_ptr, &ring_dna_devices_list) {
@@ -4293,6 +4313,17 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 
       if((!strcmp(entry->dev.netdev->name, mapping->device_name))
 	 && (entry->dev.channel_id == mapping->channel_id)) {
+
+	printk("[PF_RING] ==>> %s@%d [in_use=%d][%p]\n",
+	       entry->dev.netdev->name, 
+	       mapping->channel_id,
+	       entry->in_use, entry);
+
+	if(entry->in_use)
+	  return(-1);
+	else
+	  entry->in_use = 1, pfr->dna_device_entry = entry;
+	
 	pfr->dna_device = &entry->dev, pfr->ring_netdev->dev = entry->dev.netdev /* Default */;
 
 	if(enable_debug)
@@ -5258,7 +5289,7 @@ static int ring_setsockopt(struct socket *sock,
 
 static int ring_getsockopt(struct socket *sock,
 			   int level, int optname,
-			   char __user *optval, 
+			   char __user *optval,
 			   int __user *optlen)
 {
   int len;
@@ -5548,19 +5579,19 @@ static int ring_getsockopt(struct socket *sock,
 
 	if(loobpack_test_buffer == NULL) {
 	  loobpack_test_buffer = kmalloc(loobpack_test_buffer_len, GFP_ATOMIC);
-	  
+
 	  if(loobpack_test_buffer == NULL)
 	    return(-EFAULT); /* Not enough memory */
 	}
-	
+
 	{
 	  u_int i;
-	  
+
 	  for(i=0; i<len; i++) loobpack_test_buffer[i] = i;
 	}
 
 	if(copy_to_user(optval, loobpack_test_buffer, len))
-	  return -EFAULT;	  
+	  return -EFAULT;
       }
     }
     break;
@@ -5608,6 +5639,7 @@ void dna_device_handler(dna_device_operation operation,
 
     next = kmalloc(sizeof(dna_device_list), GFP_ATOMIC);
     if(next != NULL) {
+      next->in_use = 0;
       next->dev.packet_memory = packet_memory;
       next->dev.packet_memory_num_slots = packet_memory_num_slots;
       next->dev.packet_memory_slot_len = packet_memory_slot_len;
