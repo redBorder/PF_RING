@@ -616,7 +616,7 @@ void pfring_close(pfring *ring) {
 #else
   if(!ring) return;
 
-  ring->is_shutting_down = 1;
+  ring->is_shutting_down = ring->break_recv_loop = 1;
 
   if(ring->dna_mapped_device) {
     dna_term(ring);
@@ -1153,8 +1153,8 @@ void pfring_dna_recv_multiple(pfring *ring,
       looper(hdr, pkt, user_data);
     } else {
       if(wait_for_packet) {
-	//dna_there_is_a_packet_to_read(ring, 1);
-	usleep(1); /* Can be removed */
+	dna_there_is_a_packet_to_read(ring, 1);
+	// usleep(1); /* Can be removed */
       }
     }
   }
@@ -1181,7 +1181,8 @@ int pfring_recv(pfring *ring, char* buffer, u_int buffer_len,
   } else
     return(0);
 #endif
-  if(ring == NULL) return(-1);
+
+  if((ring == NULL) || ring->is_shutting_down) return(-1);
 
   if(ring->dna_mapped_device) {
     char *pkt = NULL;
@@ -1190,7 +1191,10 @@ int pfring_recv(pfring *ring, char* buffer, u_int buffer_len,
     buffer = NULL;
 
     if(ring->reentrant) pthread_spin_lock(&ring->spinlock);
+
   redo_pfring_recv:
+    if(ring->is_shutting_down) return(-1);
+
     pkt = dna_get_next_packet(ring, buffer, buffer_len, hdr);
 
     if(pkt && (hdr->len > 0)) {

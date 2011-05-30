@@ -159,8 +159,8 @@ void sigproc(int sig) {
   print_stats();
 
   for(i=0; i<num_channels; i++) {
-    pthread_join(pd_thread[i], NULL);
     pfring_close(ring[i]);
+    pthread_join(pd_thread[i], NULL);
   }
 
   exit(0);
