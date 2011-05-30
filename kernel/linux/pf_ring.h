@@ -60,9 +60,11 @@
 #define SO_SET_PACKET_CONSUMER_MODE      115
 #define SO_DEACTIVATE_RING               116
 #define SO_SET_POLL_WATERMARK            117
-#define SO_SET_VPFRING_EVENTFD           118 /* vPFRing */
-#define SO_SET_VIRTUAL_FILTERING_DEVICE  119
-#define SO_REHASH_RSS_PACKET             120
+#define SO_SET_VIRTUAL_FILTERING_DEVICE  118
+#define SO_REHASH_RSS_PACKET             119
+#define SO_SET_VPFRING_HOST_EVENTFD      120 /* host  to guest */
+#define SO_SET_VPFRING_GUEST_EVENTFD     121 /* guest to host (unused) */
+#define SO_SET_VPFRING_CLEAN_EVENTFDS    122
 
 
 /* Get */
@@ -757,9 +759,9 @@ struct pf_ring_socket {
   u_int8_t kernel_consumer_plugin_id; /* If != 0 it identifies a plugin responsible for consuming packets */
   char *kernel_consumer_options, *kernel_consumer_private;
 
-#if(LINUX_VERSION_CODE > KERNEL_VERSION(2,6,32))
-  struct eventfd_ctx *vpfring_ctx; /* eventfd ctx used by vPFRing */
-#endif
+#ifdef VPFRING_SUPPORT
+  struct eventfd_ctx *vpfring_host_eventfd_ctx;   /* host  -> guest     */
+#endif //VPFRING_SUPPORT
 };
 
 /* **************************************** */
@@ -1084,8 +1086,8 @@ struct pcaplike_pkthdr {
 
 /* *********************************** */
 
-/* vPFRing */
- 
+#ifdef VPFRING_SUPPORT
+
 struct vpfring_eventfd_info {
   u_int32_t id; /* an id (unused now, but maybe useful in future) */
   int32_t fd; 
@@ -1093,6 +1095,11 @@ struct vpfring_eventfd_info {
 
 /* Values for the FlowSlotInfo.vpfring_guest_flags bitmap */
 #define VPFRING_GUEST_NO_INTERRUPT 1
+
+/* Host event IDs */
+#define VPFRING_HOST_EVENT_RX_INT 0
+
+#endif //VPFRING_SUPPORT
 
 /* *********************************** */
 

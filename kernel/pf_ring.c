@@ -104,7 +104,8 @@
 #include <net/ipv6.h>
 
 #if(LINUX_VERSION_CODE > KERNEL_VERSION(2,6,22))
-#include <linux/eventfd.h> /* needed by vPFRing */
+#include <linux/eventfd.h>
+#define VPFRING_SUPPORT
 #endif
 
 #include <linux/pf_ring.h>
@@ -1895,12 +1896,10 @@ inline int copy_data_to_ring(struct sk_buff *skb,
  if(num_queued_pkts(pfr) >= pfr->poll_num_pkts_watermark)
     wake_up_interruptible(&pfr->ring_slots_waitqueue);
 
-#if(LINUX_VERSION_CODE > KERNEL_VERSION(2,6,32))
-  /* Signaling on vPFRing's eventfd ctx when needed */
-  if(pfr->vpfring_ctx && (!(pfr->slots_info->vpfring_guest_flags & VPFRING_GUEST_NO_INTERRUPT))) {
-    eventfd_signal(pfr->vpfring_ctx, 1);
-  }
-#endif
+#ifdef VPFRING_SUPPORT
+  if (pfr->vpfring_host_eventfd_ctx && !(pfr->slots_info->vpfring_guest_flags & VPFRING_GUEST_NO_INTERRUPT)) 
+     eventfd_signal(pfr->vpfring_host_eventfd_ctx, 1);
+#endif //VPFRING_SUPPORT
 
   return(1);
 }
@@ -3559,11 +3558,10 @@ static int ring_release(struct socket *sock)
   sock_put(sk);
   ring_write_unlock();
 
-#if(LINUX_VERSION_CODE > KERNEL_VERSION(2,6,32))
-  /* Release the vPFRing eventfd */
-  if(pfr->vpfring_ctx)
-    eventfd_ctx_put(pfr->vpfring_ctx);
-#endif
+#ifdef VPFRING_SUPPORT
+  if (pfr->vpfring_host_eventfd_ctx)
+    eventfd_ctx_put(pfr->vpfring_host_eventfd_ctx);
+#endif //VPFRING_SUPPORT
 
   if(pfr->appl_name != NULL)
     kfree(pfr->appl_name);
@@ -4698,10 +4696,10 @@ static int ring_setsockopt(struct socket *sock,
   packet_direction direction;
   hw_filtering_rule hw_rule;
   struct list_head *ptr, *tmp_ptr;
-#if(LINUX_VERSION_CODE > KERNEL_VERSION(2,6,32))
+#ifdef VPFRING_SUPPORT
   struct vpfring_eventfd_info eventfd_i;
   struct file *eventfp;
-#endif
+#endif //VPFRING_SUPPORT
 
   if(pfr == NULL)
     return(-EINVAL);
@@ -5236,22 +5234,6 @@ static int ring_setsockopt(struct socket *sock,
     }
     break;
 
-#if(LINUX_VERSION_CODE > KERNEL_VERSION(2,6,32))
-  case SO_SET_VPFRING_EVENTFD:
-    if(optlen != sizeof(eventfd_i))
-      return -EINVAL;
-
-    if(copy_from_user(&eventfd_i, optval, sizeof(eventfd_i)))
-      return -EFAULT;
-
-    if(IS_ERR(eventfp = eventfd_fget(eventfd_i.fd))) {
-      return -EFAULT;
-    }
-
-    pfr->vpfring_ctx = eventfd_ctx_fileget(eventfp);
-    break;
-#endif
-
   case SO_SET_VIRTUAL_FILTERING_DEVICE:
     {
       virtual_filtering_device_info elem;
@@ -5273,6 +5255,34 @@ static int ring_setsockopt(struct socket *sock,
 
     found = 1, pfr->rehash_rss = 1;
     break;
+
+#ifdef VPFRING_SUPPORT
+  case SO_SET_VPFRING_HOST_EVENTFD:
+    if(optlen != sizeof(eventfd_i))
+      return -EINVAL;
+    
+    if(copy_from_user(&eventfd_i, optval, sizeof(eventfd_i)))
+       return -EFAULT;
+    
+    if (IS_ERR(eventfp = eventfd_fget(eventfd_i.fd)))
+      return -EFAULT;
+   
+      /* We don't need to check the id (we have only one event)
+       * eventfd_i.id == VPFRING_HOST_EVENT_RX_INT */
+
+    pfr->vpfring_host_eventfd_ctx = eventfd_ctx_fileget(eventfp);
+    break;
+ 
+  case SO_SET_VPFRING_GUEST_EVENTFD:
+    return -EINVAL; /* (unused) */
+    break;
+
+  case SO_SET_VPFRING_CLEAN_EVENTFDS:
+    if (pfr->vpfring_host_eventfd_ctx)
+      eventfd_ctx_put(pfr->vpfring_host_eventfd_ctx);
+    pfr->vpfring_host_eventfd_ctx = NULL;
+    break;
+#endif //VPFRING_SUPPORT
 
   default:
     found = 0;
