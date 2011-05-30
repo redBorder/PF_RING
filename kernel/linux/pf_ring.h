@@ -1086,8 +1086,6 @@ struct pcaplike_pkthdr {
 
 /* *********************************** */
 
-#ifdef VPFRING_SUPPORT
-
 struct vpfring_eventfd_info {
   u_int32_t id; /* an id (unused now, but maybe useful in future) */
   int32_t fd; 
@@ -1098,8 +1096,6 @@ struct vpfring_eventfd_info {
 
 /* Host event IDs */
 #define VPFRING_HOST_EVENT_RX_INT 0
-
-#endif //VPFRING_SUPPORT
 
 /* *********************************** */
 
