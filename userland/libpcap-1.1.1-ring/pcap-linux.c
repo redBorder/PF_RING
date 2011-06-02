@@ -1172,7 +1172,8 @@ pcap_activate_linux(pcap_t *handle)
 		  pfring_set_cluster(handle->ring, atoi(clusterId), cluster_per_flow);
 		else
 		  pfring_set_cluster(handle->ring, atoi(clusterId), cluster_round_robin);
-
+	    
+	    pfring_set_poll_watermark(handle->ring, 1 /* watermark */);
 	    pfring_enable_ring(handle->ring);
 	  } else
 	    handle->ring = NULL;
