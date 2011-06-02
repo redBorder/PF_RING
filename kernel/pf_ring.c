@@ -5627,6 +5627,8 @@ void dna_device_handler(dna_device_operation operation,
 			u_int descr_packet_memory_num_slots,
 			u_int descr_packet_memory_slot_len,
 			u_int descr_packet_memory_tot_len,
+			unsigned long tx_packet_memory,					
+			void *tx_descr_packet_memory,
 			u_int channel_id,
 			void *phys_card_memory,
 			u_int phys_card_memory_len,
@@ -5660,6 +5662,8 @@ void dna_device_handler(dna_device_operation operation,
       next->dev.descr_packet_memory_tot_len   = descr_packet_memory_tot_len;
       next->dev.phys_card_memory = phys_card_memory;
       next->dev.phys_card_memory_len = phys_card_memory_len;
+      next->dev.tx_packet_memory = tx_packet_memory;
+      next->dev.tx_descr_packet_memory = tx_descr_packet_memory;
       next->dev.channel_id = channel_id;
       next->dev.netdev = netdev;
       next->dev.device_model = device_model;

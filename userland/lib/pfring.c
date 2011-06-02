@@ -663,7 +663,11 @@ int  pfring_send(pfring *ring, char *pkt, u_int pkt_len) {
   pcap_t *pcapPtr = (pcap_t*)ring;
   return(pcap_inject(pcapPtr, pkt, pkt_len));
 #else
-  return(sendto(ring->fd, pkt, pkt_len, 0, (struct sockaddr *)&ring->sock_tx, sizeof(ring->sock_tx)));
+  if(ring->dna_mapped_device)
+    return(dna_send_packet(ring, pkt, pkt_len));
+  else
+    return(sendto(ring->fd, pkt, pkt_len, 0, 
+		  (struct sockaddr *)&ring->sock_tx, sizeof(ring->sock_tx)));
 #endif
 }
 

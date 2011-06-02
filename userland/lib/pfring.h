@@ -102,9 +102,9 @@ extern "C" {
     /* DNA (Direct NIC Access) */
     u_char dna_mapped_device;    
     u_int16_t num_pkts_before_dns_sync, dna_sync_watermark;
-    u_int32_t tot_dna_read_pkts, rx_reg, last_rx_slot_read;
+    u_int32_t tot_dna_read_pkts, rx_reg, tx_reg, last_rx_slot_read;
     dna_device dna_dev;    
-    u_int32_t *rx_reg_ptr;
+    u_int32_t *rx_reg_ptr, *tx_reg_ptr;
     dna_device_operation last_dna_operation;
     void *priv_data;
     
@@ -180,6 +180,7 @@ extern "C" {
 				char *buffer, u_int buffer_len,
 				u_int8_t wait_for_packet,
 				void *user_data);
+  int dna_send_packet(pfring* ring, char* buffer, u_int buffer_len);
   int pfring_recv_batch(pfring *ring, char* buffer, u_int buffer_len,
 			u_int32_t offset[], u_int num_offset,
 			u_int8_t wait_for_incoming_packet);

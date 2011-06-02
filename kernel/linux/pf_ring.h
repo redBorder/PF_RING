@@ -531,6 +531,8 @@ typedef struct {
   u_int channel_id;
   char *phys_card_memory; /* Invalid in userland */
   u_int phys_card_memory_len;
+  unsigned long tx_packet_memory;
+  void *tx_descr_packet_memory;
   struct net_device *netdev; /* Invalid in userland */
   dna_device_model device_model;
   u_char device_address[6];
@@ -876,6 +878,8 @@ typedef void  (*handle_ring_dna_device)(dna_device_operation operation,
 					u_int descr_packet_memory_num_slots,
 					u_int descr_packet_memory_slot_len,
 					u_int descr_packet_memory_tot_len,
+					unsigned long tx_packet_memory,					
+					void *tx_descr_packet_memory,
 					u_int channel_id,
 					void *phys_card_memory,
 					u_int phys_card_memory_len,
@@ -912,6 +916,8 @@ extern void do_ring_dna_device_handler(dna_device_operation operation,
 				       u_int descr_packet_memory_num_slots,
 				       u_int descr_packet_memory_slot_len,
 				       u_int descr_packet_memory_tot_len,
+				       unsigned long tx_packet_memory,					
+				       void *tx_descr_packet_memory,
 				       u_int channel_id,
 				       void *phys_card_memory,
 				       u_int phys_card_memory_len,
