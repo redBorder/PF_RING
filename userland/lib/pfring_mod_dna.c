@@ -18,8 +18,8 @@
 #include <sys/types.h>
 #include <pthread.h>
 
-#include "pfring_api.h"
 #include "pfring.h"
+#include "pfring_mod.h"
 #include "pfring_utils.h"
 #include "pfring_mod_dna.h"
 

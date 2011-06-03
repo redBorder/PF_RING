@@ -15,7 +15,7 @@
  */
 
 
-#include "pfring_api.h"
+#include "pfring.h"
 #include "pfring_utils.h"
 
 int parse_pkt(char *pkt, struct pfring_pkthdr *hdr)
