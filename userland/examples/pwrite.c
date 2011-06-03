@@ -140,10 +140,10 @@ int main(int argc, char* argv[]) {
   pfring_enable_ring(pd);
   
   while(1) {
-    u_char buffer[2048];
+    u_char *buffer;
     struct pfring_pkthdr hdr;
     
-    if(pfring_recv(pd, (char*)buffer, sizeof(buffer), &hdr, 1 /* wait_for_packet */) > 0)
+    if(pfring_recv(pd, &buffer, 0, &hdr, 1 /* wait_for_packet */) > 0)
       pcap_dump((u_char*)dumper, (struct pcap_pkthdr*)&hdr, buffer), num_pkts++;
   }
 

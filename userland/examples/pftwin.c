@@ -345,7 +345,7 @@ void* packet_consumer_thread() {
       u_int64_t num_pkts, num_bytes;
     };
 
-    u_char buffer[2048];
+    u_char *buffer;
     struct simple_stats stats;
     struct pfring_pkthdr hdr;
     int rc;
@@ -353,7 +353,7 @@ void* packet_consumer_thread() {
 
     if(do_shutdown) break;
 
-    if(pfring_recv(pd, (char*)buffer, sizeof(buffer), &hdr, 1) > 0) {
+    if(pfring_recv(pd, &buffer, 0, &hdr, 1) > 0) {
       if(do_shutdown) break;
       dummyProcesssPacket(&hdr, buffer);
     }

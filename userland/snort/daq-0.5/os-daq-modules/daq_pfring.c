@@ -343,10 +343,10 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
       DAQ_PktHdr_t hdr;
       DAQ_Verdict verdict;
 
-      ret = pfring_recv((current_ring = context->ring_handle), context->pkt_buffer, context->snaplen, &phdr, 0 /* Dont't wait */);
+      ret = pfring_recv((current_ring = context->ring_handle), &context->pkt_buffer, context->snaplen, &phdr, 0 /* Dont't wait */);
 
       if((ret == -1) && (context->twin_ring_handle != NULL))
-	ret = pfring_recv((current_ring = context->twin_ring_handle), context->pkt_buffer, context->snaplen, &phdr, 0 /* Dont't wait */);      
+	ret = pfring_recv((current_ring = context->twin_ring_handle), &context->pkt_buffer, context->snaplen, &phdr, 0 /* Dont't wait */);      
 
       if(ret == -1) {
 	/* No packet to read: let's poll */

@@ -17,11 +17,8 @@ int      pfring_dna_open (pfring *ring);
 
 void     pfring_dna_close(pfring *ring);
 int      pfring_dna_stats(pfring *ring, pfring_stat *stats);
-int      pfring_dna_recv (pfring *ring, char* buffer, u_int buffer_len, 
+int      pfring_dna_recv (pfring *ring, u_char** buffer, u_int buffer_len, 
 			  struct pfring_pkthdr *hdr, u_int8_t wait_for_incoming_packet);
-void     pfring_dna_recv_multiple(pfring *ring, pfringProcesssPacket looper,
-				  struct pfring_pkthdr *hdr, char *buffer, u_int buffer_len, 
-				  u_int8_t wait_for_packet, void *user_data);
 int      pfring_dna_set_poll_duration(pfring *ring, u_int duration);
 int pfring_dna_send(pfring *ring, char *pkt, u_int pkt_len);
 
@@ -32,7 +29,7 @@ extern void dna_term(pfring* ring);
 extern int8_t dna_there_is_a_packet_to_read(pfring* ring,
 					    u_int8_t wait_for_incoming_packet);
 extern char* dna_get_next_packet(pfring* ring,
-				 char* buffer, u_int buffer_len,
+				 u_char** buffer, u_int buffer_len,
 				 struct pfring_pkthdr *hdr);
 extern void dna_dump_stats(pfring* ring);
 extern int dna_send_packet(pfring* ring, char* buffer, u_int buffer_len);

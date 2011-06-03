@@ -53,7 +53,8 @@ static int pfring_map_dna_device(pfring *ring,
 /* **************************************************** */
 
 void pfring_dna_close(pfring *ring) {
-  dna_term(ring);
+  if(ring->dna_term)
+    ring->dna_term(ring);
 
   if(ring->dna_dev.packet_memory != 0)
     munmap((void*)ring->dna_dev.packet_memory,
@@ -85,48 +86,10 @@ int pfring_dna_stats(pfring *ring, pfring_stat *stats) {
 
 /* **************************************************** */
 
-void pfring_dna_recv_multiple(pfring *ring,
-			      pfringProcesssPacket looper,
-			      struct pfring_pkthdr *hdr,
-			      char *buffer, u_int buffer_len,
-			      u_int8_t wait_for_packet,
-			      void *user_data) {
-  if(ring->reentrant) pthread_spin_lock(&ring->spinlock);
-
-  if(buffer == NULL) buffer_len = 0;
-
-  ring->break_recv_loop = 0;
-
-  while(!ring->break_recv_loop) {
-    u_char *pkt;
-
-    if(ring->is_shutting_down) break;
-
-    pkt = (u_char*)dna_get_next_packet(ring, buffer, buffer_len, hdr);
-
-    if(pkt) {
-      if(buffer) {
-	// gettimeofday(&hdr->ts, NULL);
-	parse_pkt((char*)pkt, hdr);
-      }
-      looper(hdr, pkt, user_data);
-    } else {
-      if(wait_for_packet) {
-	dna_there_is_a_packet_to_read(ring, 1);
-	// usleep(1); /* Can be removed */
-      }
-    }
-  }
-
-  if(ring->reentrant) pthread_spin_unlock(&ring->spinlock);
-}
-
-/* **************************************************** */
-
-int pfring_dna_recv(pfring *ring, char* buffer, u_int buffer_len,
-		struct pfring_pkthdr *hdr,
-		u_int8_t wait_for_incoming_packet) {
-  char *pkt = NULL;
+int pfring_dna_recv(pfring *ring, u_char** buffer, u_int buffer_len,
+		    struct pfring_pkthdr *hdr,
+		    u_int8_t wait_for_incoming_packet) {
+  u_char *pkt = NULL;
   int8_t status = 1;
 
   if(ring->is_shutting_down) return(-1);
@@ -140,21 +103,21 @@ int pfring_dna_recv(pfring *ring, char* buffer, u_int buffer_len,
       return(-1);
     }
 
-    pkt = dna_get_next_packet(ring, buffer, buffer_len, hdr);
+    pkt = ring->dna_next_packet(ring, buffer, buffer_len, hdr);
 
     if(pkt && (hdr->len > 0)) {
       /* Set the (1) below to (0) for enabling packet parsing for DNA devices */
       if(0)
 	hdr->extended_hdr.parsed_header_len = 0;
-      else if(buffer)
-	parse_pkt(buffer, hdr);
+      else if(buffer_len > 0)
+	parse_pkt(*buffer, hdr);
 
       if(ring->reentrant) pthread_spin_unlock(&ring->spinlock);
       return(1);
     }
 
     if(wait_for_incoming_packet) {
-      status = dna_there_is_a_packet_to_read(ring, wait_for_incoming_packet);
+      status = ring->dna_check_packet_to_read(ring, wait_for_incoming_packet);
     }
 
     if(status > 0)
@@ -195,12 +158,11 @@ int pfring_dna_open(pfring *ring) {
   ring->close = pfring_dna_close;
   ring->stats = pfring_dna_stats;
   ring->recv = pfring_dna_recv;
-  ring->recv_multiple = pfring_dna_recv_multiple;
-  ring->get_num_rx_channels = pfring_main_get_num_rx_channels;
+  ring->get_num_rx_channels = pfring_mod_get_num_rx_channels;
   ring->set_poll_duration = pfring_dna_set_poll_duration;
-  ring->send = pfring_dna_send;
+  ring->send = NULL; /* Set by the dna library */
   ring->last_dna_operation = remove_device_mapping;
-  ring->set_poll_watermark = pfring_main_set_poll_watermark;
+  ring->set_poll_watermark = pfring_mod_set_poll_watermark;
   ring->fd = socket(PF_RING, SOCK_RAW, htons(ETH_P_ALL));
 
 #ifdef DEBUG
@@ -312,11 +274,7 @@ int pfring_dna_open(pfring *ring) {
 /* *********************************** */
 
 int pfring_dna_set_poll_duration(pfring *ring, u_int duration) {
-  return pfring_main_set_poll_duration(ring, duration);
+  return pfring_mod_set_poll_duration(ring, duration);
 }
 
-/* *********************************** */
 
-int pfring_dna_send(pfring *ring, char *pkt, u_int pkt_len) {
-  return(dna_send_packet(ring, pkt, pkt_len));
-}

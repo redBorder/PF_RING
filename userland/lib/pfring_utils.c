@@ -18,7 +18,7 @@
 #include "pfring.h"
 #include "pfring_utils.h"
 
-int parse_pkt(char *pkt, struct pfring_pkthdr *hdr)
+int parse_pkt(u_char *pkt, struct pfring_pkthdr *hdr)
 {
   struct iphdr *ip;
   struct eth_hdr *eh = (struct eth_hdr*)pkt;

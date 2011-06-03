@@ -4312,10 +4312,11 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
       if((!strcmp(entry->dev.netdev->name, mapping->device_name))
 	 && (entry->dev.channel_id == mapping->channel_id)) {
 
-	printk("[PF_RING] ==>> %s@%d [in_use=%d][%p]\n",
-	       entry->dev.netdev->name, 
-	       mapping->channel_id,
-	       entry->in_use, entry);
+	if(enable_debug)
+	  printk("[PF_RING] ==>> %s@%d [in_use=%d][%p]\n",
+		 entry->dev.netdev->name, 
+		 mapping->channel_id,
+		 entry->in_use, entry);
 
 	if(entry->in_use)
 	  return(-1);

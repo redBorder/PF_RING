@@ -326,11 +326,11 @@ int main(int argc, char* argv[])
 
   while(1) 
     {
-      u_char buffer[2048];
+      u_char *buffer;
       struct pfring_pkthdr hdr;
       
       /* need this line otherwise pkts are not reflected */
-      if(pfring_recv(pd, (char*)buffer, sizeof(buffer), &hdr, 1) > 0) {
+      if(pfring_recv(pd, &buffer, 0, &hdr, 1) > 0) {
 	dummyProcesssPacket(&hdr, buffer);
       }
     }

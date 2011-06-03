@@ -393,14 +393,14 @@ void printHelp(void) {
 /* *************************************** */
 
 void* packet_consumer(void) {
-  u_char buffer[2048];
+  u_char* buffer;
 
   while(1) {
     struct pfring_pkthdr hdr;
 
     if(do_shutdown) break;
     
-    if(pfring_bundle_read(&bundle, (char*)buffer, sizeof(buffer), &hdr, wait_for_packet) > 0) {
+    if(pfring_bundle_read(&bundle, &buffer, 0, &hdr, wait_for_packet) > 0) {
       if(do_shutdown) break;
       dummyProcesssPacket(&hdr, buffer, 0);
     } else {

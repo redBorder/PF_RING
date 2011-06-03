@@ -81,10 +81,6 @@ struct udphdr {
 #define TH_ACK_MULTIPLIER	0x10
 #define TH_URG_MULTIPLIER	0x20
 
-int parse_pkt(char *pkt, struct pfring_pkthdr *hdr);
-
-int set_if_promisc(const char *device, int set_promisc);
-
 
 #endif /* _PFRING_UTILS_H_ */
 

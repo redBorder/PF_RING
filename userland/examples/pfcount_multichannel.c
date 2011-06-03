@@ -443,16 +443,16 @@ void* packet_consumer_thread(void* _id) {
   }
 
   while(1) {
-    u_char buffer[2048];
+    u_char *buffer = NULL;
     struct pfring_pkthdr hdr;
 
     if(do_shutdown) break;
 
-    if(pfring_recv(ring[thread_id], (char*)buffer, sizeof(buffer), &hdr, wait_for_packet) > 0) {
+    if(pfring_recv(ring[thread_id], &buffer, 0, &hdr, wait_for_packet) > 0) {
       if(do_shutdown) break;
       dummyProcesssPacket(&hdr, buffer, (u_char*)thread_id);
     } else {
-      // if(wait_for_packet == 0) sched_yield();
+      if(wait_for_packet == 0) sched_yield();
       //usleep(1);
     }
   }

@@ -125,14 +125,11 @@ extern "C" {
     dna_device dna_dev;    
     u_int32_t *rx_reg_ptr, *tx_reg_ptr;
     dna_device_operation last_dna_operation;
-
-    int      using_pf_ring;
     void     *priv_data;
 
     void     (*close)                (pfring *);
     int	     (*stats)                (pfring *, pfring_stat *);
-    int      (*recv)                 (pfring *, char*, u_int, struct pfring_pkthdr *, u_int8_t);
-    void     (*recv_multiple)        (pfring *,	pfringProcesssPacket,struct pfring_pkthdr *, char *, u_int, u_int8_t, void *);
+    int      (*recv)                 (pfring *, u_char**, u_int, struct pfring_pkthdr *, u_int8_t);
     int      (*set_poll_watermark)   (pfring *, u_int16_t);
     int      (*set_poll_duration)    (pfring *, u_int);
     int      (*add_hw_rule)          (pfring *, hw_filtering_rule *);
@@ -144,6 +141,12 @@ extern "C" {
     u_int8_t (*get_num_rx_channels)  (pfring *);
     int      (*set_sampling_rate)    (pfring *, u_int32_t);
     int      (*get_selectable_fd)    (pfring *);
+
+    /* DNA only */
+    int      (*dna_init)             (pfring *);
+    void     (*dna_term)             (pfring *);    
+    u_int8_t (*dna_check_packet_to_read) (pfring *, u_int8_t);
+    u_char*  (*dna_next_packet)      (pfring *, u_char **, u_int, struct pfring_pkthdr *);
 
     /* All devices */
     char *buffer, *slots, *device_name;
@@ -169,7 +172,7 @@ extern "C" {
   void pfring_shutdown(pfring *ring);
   void pfring_close(pfring *ring);
   int pfring_stats(pfring *ring, pfring_stat *stats);
-  int pfring_recv(pfring *ring, char* buffer, u_int buffer_len,
+  int pfring_recv(pfring *ring, u_char** buffer, u_int buffer_len,
 		  struct pfring_pkthdr *hdr,
 		  u_int8_t wait_for_incoming_packet);
   void pfring_recv_multiple(pfring *ring,
@@ -241,21 +244,16 @@ extern "C" {
   int add_to_pfring_bundle(pfring_bundle *bundle, pfring *ring);
   int pfring_bundle_poll(pfring_bundle *bundle, u_int wait_duration);
   int pfring_bundle_read(pfring_bundle *bundle, 
-			 char* buffer, u_int buffer_len,
+			 u_char** buffer, u_int buffer_len,
 			 struct pfring_pkthdr *hdr,
 			 u_int8_t wait_for_incoming_packet);
   void pfring_bundle_close(pfring_bundle *bundle);  
 
-  /* Deprecated */
 
-  pfring* pfring_open_dna(char *device_name,  u_int8_t promisc, u_int8_t reentrant);
-  void pfring_dna_recv_multiple(pfring *ring,
-				pfringProcesssPacket looper,
-				struct pfring_pkthdr *hdr,
-				char *buffer, u_int buffer_len,
-				u_int8_t wait_for_packet,
-				void *user_data);
-
+  /* Utils */
+  int parse_pkt(u_char *pkt, struct pfring_pkthdr *hdr);
+  int set_if_promisc(const char *device, int set_promisc);
+  
   /* ********************************* */
 
   typedef struct {

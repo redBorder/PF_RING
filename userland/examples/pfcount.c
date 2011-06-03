@@ -328,8 +328,10 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u
     int s;
     uint nsec;
 
-    if(h->ts.tv_sec == 0)
+    if(h->ts.tv_sec == 0) {
       gettimeofday((struct timeval*)&h->ts, NULL);
+      parse_pkt((u_char*)p, (struct pfring_pkthdr*)h);
+    }
 
     s = (h->ts.tv_sec + thiszone) % 86400;
     nsec = h->extended_hdr.timestamp_ns % 1000;
@@ -482,7 +484,7 @@ int bind2core(u_int core_id) {
 void* packet_consumer_thread(void* _id) {
   long thread_id = (long)_id;
   u_int numCPU = sysconf( _SC_NPROCESSORS_ONLN );
-  u_char buffer[2048];
+  u_char *buffer;
 
   u_long core_id = thread_id % numCPU;
   struct pfring_pkthdr hdr;
@@ -502,7 +504,7 @@ void* packet_consumer_thread(void* _id) {
 
     if(do_shutdown) break;
 
-    if(pfring_recv(pd, (char*)buffer, sizeof(buffer), &hdr, wait_for_packet) > 0) {
+    if(pfring_recv(pd, &buffer, 0, &hdr, wait_for_packet) > 0) {
       if(do_shutdown) break;
       dummyProcesssPacket(&hdr, buffer, (u_char*)thread_id);
 
@@ -815,7 +817,7 @@ int main(int argc, char* argv[]) {
   if(bind_core >= 0)
     bind2core(bind_core);
 
-  if(0) {
+  if(1) {
     pfring_loop(pd, dummyProcesssPacket, (u_char*)NULL);
   } else
     packet_consumer_thread(0);

@@ -162,11 +162,10 @@ pfring* pfring_open(char *device_name, u_int8_t promisc,
     }
 
   /* default */
-
   if (!mod_found) {
     ring->device_name = strdup(device_name ? device_name : "any");
 
-    ret = pfring_main_open(ring);
+    ret = pfring_mod_open(ring);
   }
 
   if (ret < 0){
@@ -266,7 +265,7 @@ int pfring_stats(pfring *ring, pfring_stat *stats) {
 
 /* **************************************************** */
 
-int pfring_recv(pfring *ring, char* buffer, u_int buffer_len,
+int pfring_recv(pfring *ring, u_char** buffer, u_int buffer_len,
 		struct pfring_pkthdr *hdr,
 		u_int8_t wait_for_incoming_packet) {
   if (ring && ring->recv)
@@ -277,42 +276,23 @@ int pfring_recv(pfring *ring, char* buffer, u_int buffer_len,
 
 /* **************************************************** */
 
-/* TODO replace with pfring_loop */
-void pfring_recv_multiple(pfring *ring,
-			  pfringProcesssPacket looper,
-			  struct pfring_pkthdr *hdr,
-			  char *buffer, u_int buffer_len,
-			  u_int8_t wait_for_packet,
-			  void *user_data) {
-  if (ring && ring->recv_multiple)
-    ring->recv_multiple(ring, looper, hdr, buffer, buffer_len, wait_for_packet, user_data);
-}
-
-
-/* **************************************************** */
-
 int pfring_loop(pfring *ring, pfringProcesssPacket looper, const u_char *user_bytes) {
-  if (!ring)
-    return -1;
-
-  u_char *buffer = (u_char*) malloc(ring->caplen);
+  u_char *buffer = NULL;
   struct pfring_pkthdr hdr;
   int rc = 0;
 
-  if(!buffer)
-    return(-1);
+  if (!ring)
+    return -1;
 
   ring->break_recv_loop = 0;
 
   while(!ring->break_recv_loop) {
-    rc = pfring_recv(ring, (char*)buffer, ring->caplen, &hdr, 1);
+    rc = pfring_recv(ring, &buffer, 0, &hdr, 1);
     if(rc < 0)
       break;
     else if(rc > 0)
       looper(&hdr, buffer, user_bytes);
   }
-
-  free(buffer);
 
   return(rc);
 }
@@ -333,15 +313,3 @@ int pfring_get_selectable_fd(pfring *ring) {
   return -1;
 }
 
-/* **************************************************** */
-/*
-void pfring_dna_recv_multiple(pfring *ring,
-				pfringProcesssPacket looper,
-				struct pfring_pkthdr *hdr,
-				char *buffer, u_int buffer_len,
-				u_int8_t wait_for_packet,
-				void *user_data){
-  fprintf(stderr, "Warning: deprecated API. Use pfring_recv_multiple instead\n");
-  pfring_recv_multiple(ring, looper, hdr, buffer, buffer_len, wait_for_packet, user_data);
-}
-*/

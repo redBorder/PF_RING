@@ -139,7 +139,7 @@ static void * sniffer (void * _thread)
   my_thread_t * t = _thread;
 
   struct pfring_pkthdr header;
-  char * packet;             /* pointer to the packet */
+  u_char * packet;             /* pointer to the packet */
 
   /* Get memory for packet capturing */
   packet = calloc (t -> snapshot, 1);
@@ -150,7 +150,7 @@ static void * sniffer (void * _thread)
   while (t -> partial < t -> maxcount)
     {
       /* Please give me just a packet from the ring */
-      if (pfring_recv (t -> ring, packet, t -> snapshot, & header, 1) > 0)
+      if (pfring_recv (t -> ring, &packet, t -> snapshot, & header, 1) > 0)
 	{
 	  t -> partial ++;
 	  if (t -> bar)

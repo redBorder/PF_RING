@@ -141,7 +141,7 @@ int main (int argc, char * argv [])
   pfring ** ringtable = NULL;
   int r;
   u_int32_t ringdriver;
-  char * packet;
+  u_char * packet;
   struct pfring_pkthdr header;
 
   /* How many packets */
@@ -242,7 +242,7 @@ int main (int argc, char * argv [])
   while (! maxcount || (partial + errors) < maxcount)
     {
       /* Please give me just a packet at once from the ring */
-      if (pfring_recv (ringtable [r], packet, snapshot, & header, 1) > 0)
+      if (pfring_recv (ringtable [r], &packet, snapshot, & header, 1) > 0)
 	{
 	  partial ++;
 	  if (! quiet)

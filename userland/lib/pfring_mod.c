@@ -94,9 +94,6 @@ int pfring_enable_hw_timestamp(pfring* ring, char *device_name) {
 /* **************************************************** */
 
 static u_int16_t pfring_get_slot_header_len(pfring *ring) {
-  if (!ring || !ring->using_pf_ring)
-    return -1;
-
   if(ring == NULL)
     return(1);
   else {
@@ -121,24 +118,22 @@ inline int pfring_there_is_pkt_available(pfring *ring) {
 /*     Functions part of the "specialized" subset       */
 /* **************************************************** */
 
-int pfring_main_open(pfring *ring) {
+int pfring_mod_open(pfring *ring) {
   /* Setting pointers, we need these functions soon */
-  ring->close = pfring_main_close;
-  ring->stats = pfring_main_stats;
-  ring->recv  = pfring_main_recv;
-  ring->set_poll_watermark = pfring_main_set_poll_watermark;
-  ring->set_poll_duration = pfring_main_set_poll_duration;
-  ring->add_hw_rule = pfring_main_add_hw_rule;
-  ring->remove_hw_rule = pfring_main_remove_hw_rule;
-  ring->set_channel_id = pfring_main_set_channel_id;
-  ring->set_application_name = pfring_main_set_application_name;
-  ring->bind = pfring_main_bind;
-  ring->send = pfring_main_send;
-  ring->get_num_rx_channels = pfring_main_get_num_rx_channels;
-  ring->set_sampling_rate = pfring_main_set_sampling_rate;
-  ring->get_selectable_fd = pfring_main_get_selectable_fd;
-
-  ring->using_pf_ring = 1;
+  ring->close = pfring_mod_close;
+  ring->stats = pfring_mod_stats;
+  ring->recv  = pfring_mod_recv;
+  ring->set_poll_watermark = pfring_mod_set_poll_watermark;
+  ring->set_poll_duration = pfring_mod_set_poll_duration;
+  ring->add_hw_rule = pfring_mod_add_hw_rule;
+  ring->remove_hw_rule = pfring_mod_remove_hw_rule;
+  ring->set_channel_id = pfring_mod_set_channel_id;
+  ring->set_application_name = pfring_mod_set_application_name;
+  ring->bind = pfring_mod_bind;
+  ring->send = pfring_mod_send;
+  ring->get_num_rx_channels = pfring_mod_get_num_rx_channels;
+  ring->set_sampling_rate = pfring_mod_set_sampling_rate;
+  ring->get_selectable_fd = pfring_mod_get_selectable_fd;
 
   ring->poll_duration = DEFAULT_POLL_DURATION;
   ring->fd = socket(PF_RING, SOCK_RAW, htons(ETH_P_ALL));
@@ -259,27 +254,27 @@ pfring* pfring_open_consumer(char *device_name, u_int8_t promisc,
 
 /* ******************************* */
 
-int pfring_main_add_hw_rule(pfring *ring, hw_filtering_rule *rule) {
+int pfring_mod_add_hw_rule(pfring *ring, hw_filtering_rule *rule) {
   return(ring ? setsockopt(ring->fd, 0, SO_ADD_HW_FILTERING_RULE,
 			   rule, sizeof(hw_filtering_rule)) : -1);
 }
 
 /* ******************************* */
 
-int pfring_main_remove_hw_rule(pfring *ring, u_int16_t rule_id) {
+int pfring_mod_remove_hw_rule(pfring *ring, u_int16_t rule_id) {
   return(ring ? setsockopt(ring->fd, 0, SO_DEL_HW_FILTERING_RULE, &rule_id, sizeof(rule_id)) : -1);
 }
 
 /* ******************************* */
 
-int pfring_main_set_channel_id(pfring *ring, u_int32_t channel_id) {
+int pfring_mod_set_channel_id(pfring *ring, u_int32_t channel_id) {
   return(ring ? setsockopt(ring->fd, 0, SO_SET_CHANNEL_ID,
 			   &channel_id, sizeof(channel_id)): -1);
 }
 
 /* ******************************* */
 
-int pfring_main_set_application_name(pfring *ring, char *name) {
+int pfring_mod_set_application_name(pfring *ring, char *name) {
 #if !defined(SO_SET_APPL_NAME)
   return(-1);
 #else
@@ -290,7 +285,7 @@ int pfring_main_set_application_name(pfring *ring, char *name) {
 
 /* **************************************************** */
 
-int pfring_main_bind(pfring *ring, char *device_name) {
+int pfring_mod_bind(pfring *ring, char *device_name) {
   struct sockaddr sa;
   char *at;
   u_int32_t channel_id = RING_ANY_CHANNEL;
@@ -354,7 +349,7 @@ int pfring_main_bind(pfring *ring, char *device_name) {
 
 /* **************************************************** */
 
-void pfring_main_close(pfring *ring) {
+void pfring_mod_close(pfring *ring) {
   if(ring->buffer != NULL) {
     munmap(ring->buffer, ring->slots_info->tot_mem);
   }
@@ -367,20 +362,20 @@ void pfring_main_close(pfring *ring) {
 
 /* **************************************************** */
 
-int  pfring_main_send(pfring *ring, char *pkt, u_int pkt_len) {
+int  pfring_mod_send(pfring *ring, char *pkt, u_int pkt_len) {
   return(sendto(ring->fd, pkt, pkt_len, 0, (struct sockaddr *)&ring->sock_tx, sizeof(ring->sock_tx)));
 }
 
 /* **************************************************** */
 
-int pfring_main_set_poll_watermark(pfring *ring, u_int16_t watermark) {
+int pfring_mod_set_poll_watermark(pfring *ring, u_int16_t watermark) {
   return(ring ? setsockopt(ring->fd, 0, SO_SET_POLL_WATERMARK,
 			   &watermark, sizeof(watermark)): -1);
 }
 
 /* **************************************************** */
 
-int pfring_main_set_poll_duration(pfring *ring, u_int duration) {
+int pfring_mod_set_poll_duration(pfring *ring, u_int duration) {
   ring->poll_duration = duration;
 
   return duration;
@@ -388,7 +383,7 @@ int pfring_main_set_poll_duration(pfring *ring, u_int duration) {
 
 /* **************************************************** */
 
-u_int8_t pfring_main_get_num_rx_channels(pfring *ring) {
+u_int8_t pfring_mod_get_num_rx_channels(pfring *ring) {
   socklen_t len = sizeof(u_int32_t);
   u_int8_t num_rx_channels;
   int rc = getsockopt(ring->fd, 0, SO_GET_NUM_RX_CHANNELS, &num_rx_channels, &len);
@@ -398,7 +393,7 @@ u_int8_t pfring_main_get_num_rx_channels(pfring *ring) {
 
 /* **************************************************** */
 
-int pfring_main_set_sampling_rate(pfring *ring, u_int32_t rate /* 1 = no sampling */) {
+int pfring_mod_set_sampling_rate(pfring *ring, u_int32_t rate /* 1 = no sampling */) {
   int rc;
 
   rc = ring ? setsockopt(ring->fd, 0, SO_SET_SAMPLING_RATE,
@@ -409,7 +404,7 @@ int pfring_main_set_sampling_rate(pfring *ring, u_int32_t rate /* 1 = no samplin
 
 /* ******************************* */
 
-int pfring_main_stats(pfring *ring, pfring_stat *stats) {
+int pfring_mod_stats(pfring *ring, pfring_stat *stats) {
 
   if((ring->slots_info != NULL) && (stats != NULL)) {
     rmb();
@@ -422,9 +417,9 @@ int pfring_main_stats(pfring *ring, pfring_stat *stats) {
 
 /* **************************************************** */
 
-int pfring_main_recv(pfring *ring, char* buffer, u_int buffer_len,
-		struct pfring_pkthdr *hdr,
-		u_int8_t wait_for_incoming_packet) {
+int pfring_mod_recv(pfring *ring, u_char** buffer, u_int buffer_len,
+		    struct pfring_pkthdr *hdr,
+		    u_int8_t wait_for_incoming_packet) {
 
   if(ring->is_shutting_down) return(-1);
 
@@ -458,8 +453,10 @@ int pfring_main_recv(pfring *ring, char* buffer, u_int buffer_len,
       insert_off = ring->slots_info->insert_off;
       if(bktLen > buffer_len) bktLen = buffer_len;
 
-      if(buffer && (bktLen > 0))
-	memcpy(buffer, &bucket[ring->slot_header_len], bktLen);
+      if(buffer_len == 0)
+	*buffer = (u_char*)&bucket[ring->slot_header_len];
+      else
+	memcpy(*buffer, &bucket[ring->slot_header_len], bktLen);            
 
       next_off = ring->slots_info->remove_off + real_slot_len;
       if((next_off + ring->slots_info->slot_len) > (ring->slots_info->tot_mem - sizeof(FlowSlotInfo))) {
@@ -502,8 +499,8 @@ int pfring_main_recv(pfring *ring, char* buffer, u_int buffer_len,
 
 /* ******************************* */
 
-int pfring_main_get_selectable_fd(pfring *ring) {
-  if (!ring || !ring->using_pf_ring)
+int pfring_mod_get_selectable_fd(pfring *ring) {
+  if (!ring)
     return -1;
 
   return(ring->fd);
@@ -515,7 +512,7 @@ int pfring_main_get_selectable_fd(pfring *ring) {
 /* **************************************************** */
 
 int pfring_set_direction(pfring *ring, packet_direction direction) {
-  if (!ring || !ring->using_pf_ring)
+  if (!ring)
     return -1;
 
   return(ring ? setsockopt(ring->fd, 0, SO_SET_PACKET_DIRECTION,
@@ -525,7 +522,7 @@ int pfring_set_direction(pfring *ring, packet_direction direction) {
 /* ******************************* */
 
 int pfring_set_master_id(pfring *ring, u_int32_t master_id) {
-  if (!ring || !ring->using_pf_ring)
+  if (!ring)
     return -1;
 
   return(ring ? setsockopt(ring->fd, 0, SO_SET_MASTER_RING,
@@ -535,7 +532,7 @@ int pfring_set_master_id(pfring *ring, u_int32_t master_id) {
 /* ******************************* */
 
 int pfring_set_master(pfring *ring, pfring *master) {
-  if (!ring || !ring->using_pf_ring)
+  if (!ring)
     return -1;
 
   int id = pfring_get_ring_id(master);
@@ -549,7 +546,7 @@ int pfring_set_master(pfring *ring, pfring *master) {
 /* ******************************* */
 
 int pfring_set_cluster(pfring *ring, u_int clusterId, cluster_type the_type) {
-  if (!ring || !ring->using_pf_ring)
+  if (!ring)
     return -1;
 
   struct add_to_cluster cluster;
@@ -564,7 +561,7 @@ int pfring_set_cluster(pfring *ring, u_int clusterId, cluster_type the_type) {
 /* ******************************* */
 
 int pfring_remove_from_cluster(pfring *ring) {
-  if (!ring || !ring->using_pf_ring)
+  if (!ring)
     return -1;
 
   return(ring ? setsockopt(ring->fd, 0, SO_REMOVE_FROM_CLUSTER,
@@ -574,7 +571,7 @@ int pfring_remove_from_cluster(pfring *ring) {
 /* ******************************* */
 
 int pfring_purge_idle_hash_rules(pfring *ring, u_int16_t inactivity_sec) {
-  if (!ring || !ring->using_pf_ring)
+  if (!ring)
     return -1;
 
   return(ring ? setsockopt(ring->fd, 0, SO_PURGE_IDLE_HASH_RULES,
@@ -626,7 +623,7 @@ u_int8_t pfring_open_multichannel(char *device_name, u_int8_t promisc,
 
 int pfring_toggle_filtering_policy(pfring *ring,
 				   u_int8_t rules_default_accept_policy) {
-  if (!ring || !ring->using_pf_ring)
+  if (!ring)
     return -1;
 
   return(ring ? setsockopt(ring->fd, 0, SO_TOGGLE_FILTER_POLICY,
@@ -637,7 +634,7 @@ int pfring_toggle_filtering_policy(pfring *ring,
 /* **************************************************** */
 
 int pfring_enable_rss_rehash(pfring *ring) {
-  if (!ring || !ring->using_pf_ring)
+  if (!ring)
     return -1;
 
   char dummy;
@@ -646,9 +643,8 @@ int pfring_enable_rss_rehash(pfring *ring) {
 
 /* **************************************************** */
 
-/* TODO: Is this part of the API? Which subset? */
 int pfring_poll(pfring *ring, u_int wait_duration) {
-  if (!ring || !ring->using_pf_ring)
+  if (!ring)
     return -1;
 
   struct pollfd pfd;
@@ -679,7 +675,7 @@ int pfring_version(pfring *ring, u_int32_t *version) {
 /* **************************************************** */
 
 u_int32_t pfring_get_num_queued_pkts(pfring *ring) {
-  if (!ring || !ring->using_pf_ring)
+  if (!ring)
     return 0;
 
   socklen_t len = sizeof(u_int32_t);
@@ -692,7 +688,7 @@ u_int32_t pfring_get_num_queued_pkts(pfring *ring) {
 /* **************************************************** */
 
 u_int16_t pfring_get_ring_id(pfring *ring) {
-  if (!ring || !ring->using_pf_ring)
+  if (!ring)
     return 1;
 
   u_int32_t id;
@@ -708,7 +704,7 @@ u_int16_t pfring_get_ring_id(pfring *ring) {
 
 int pfring_get_filtering_rule_stats(pfring *ring, u_int16_t rule_id,
 				    char* stats, u_int *stats_len) {
-  if (!ring || !ring->using_pf_ring)
+  if (!ring)
     return -1;
 
   if(*stats_len < sizeof(u_int16_t))
@@ -726,7 +722,7 @@ int pfring_get_filtering_rule_stats(pfring *ring, u_int16_t rule_id,
 int pfring_get_hash_filtering_rule_stats(pfring *ring,
 					 hash_filtering_rule* rule,
 					 char* stats, u_int *stats_len) {
-  if (!ring || !ring->using_pf_ring)
+  if (!ring)
     return -1;
 
   char buffer[2048];
@@ -750,7 +746,7 @@ int pfring_get_hash_filtering_rule_stats(pfring *ring,
 /* **************************************************** */
 
 int pfring_add_filtering_rule(pfring *ring, filtering_rule* rule_to_add) {
-  if (!ring || !ring->using_pf_ring)
+  if (!ring)
     return -1;
 
   int rc;
@@ -775,7 +771,7 @@ int pfring_add_filtering_rule(pfring *ring, filtering_rule* rule_to_add) {
 /* **************************************************** */
 
 int pfring_enable_ring(pfring *ring) {
-  if (!ring || !ring->using_pf_ring)
+  if (!ring)
     return -1;
 
   char dummy;
@@ -785,7 +781,7 @@ int pfring_enable_ring(pfring *ring) {
 /* **************************************************** */
 
 int pfring_disable_ring(pfring *ring) {
-  if (!ring || !ring->using_pf_ring)
+  if (!ring)
     return -1;
 
   char dummy;
@@ -795,7 +791,7 @@ int pfring_disable_ring(pfring *ring) {
 /* **************************************************** */
 
 int pfring_remove_filtering_rule(pfring *ring, u_int16_t rule_id) {
-  if (!ring || !ring->using_pf_ring)
+  if (!ring)
     return -1;
 
   int rc;
@@ -811,7 +807,7 @@ int pfring_remove_filtering_rule(pfring *ring, u_int16_t rule_id) {
 int pfring_handle_hash_filtering_rule(pfring *ring,
 				      hash_filtering_rule* rule_to_add,
 				      u_char add_rule) {
-  if (!ring || !ring->using_pf_ring)
+  if (!ring)
     return -1;
 
   int rc;
@@ -827,7 +823,7 @@ int pfring_handle_hash_filtering_rule(pfring *ring,
 /* ******************************* */
 
 u_int8_t pfring_get_packet_consumer_mode(pfring *ring) {
-  if (!ring || !ring->using_pf_ring)
+  if (!ring)
     return -1;
 
   u_int8_t id;
@@ -843,7 +839,7 @@ u_int8_t pfring_get_packet_consumer_mode(pfring *ring) {
 
 int pfring_set_packet_consumer_mode(pfring *ring, u_int8_t plugin_id,
 				    char *plugin_data, u_int plugin_data_len) {
-  if (!ring || !ring->using_pf_ring)
+  if (!ring)
     return -1;
 
   char buffer[4096];
@@ -862,7 +858,7 @@ int pfring_set_packet_consumer_mode(pfring *ring, u_int8_t plugin_id,
 /* **************************************************** */
 
 int pfring_set_virtual_device(pfring *ring, virtual_filtering_device_info *info) {
-  if (!ring || !ring->using_pf_ring)
+  if (!ring)
     return -1;
 
   return(setsockopt(ring->fd, 0, SO_SET_VIRTUAL_FILTERING_DEVICE,
@@ -956,7 +952,7 @@ inline int is_before(struct timeval *ts_a,  struct timeval *ts_b) {
 /* *********************************** */
 
 int pfring_bundle_read(pfring_bundle *bundle,
-		       char* buffer, u_int buffer_len,
+		       u_char** buffer, u_int buffer_len,
 		       struct pfring_pkthdr *hdr,
 		       u_int8_t wait_for_incoming_packet) {
   u_int i, sock_id = 0, num_found, rc;

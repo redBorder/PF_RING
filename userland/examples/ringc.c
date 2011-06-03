@@ -188,7 +188,7 @@ int main (int argc, char * argv [])
   int snapshot = DEFAULT_SNAPSHOT;
 
   u_int32_t ringdriver;
-  char packet [2048];
+  u_char *packet;
   struct pfring_pkthdr header;
 
   /* How many packets */
@@ -259,7 +259,7 @@ int main (int argc, char * argv [])
 
   while (! done && (! maxcount || partial < maxcount))
     /* Please give me just a packet at once from the ring */
-    if (pfring_recv (ring, packet, sizeof (packet), & header, 1) > 0)
+    if (pfring_recv (ring, &packet, sizeof (packet), & header, 1) > 0)
       partial ++,
 	bytes += header.caplen,
 	printf ("\r");
