@@ -13,6 +13,8 @@
 #ifndef _PFRING_MAIN_H_
 #define _PFRING_MAIN_H_
 
+#include "pfring_api.h"
+
 int      pfring_main_open (pfring *ring);
 
 void     pfring_main_close(pfring *ring);
