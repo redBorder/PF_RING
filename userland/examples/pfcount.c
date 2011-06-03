@@ -55,7 +55,7 @@ pthread_rwlock_t statsLock;
 
 static struct timeval startTime;
 unsigned long long numPkts[MAX_NUM_THREADS] = { 0 }, numBytes[MAX_NUM_THREADS] = { 0 };
-u_int8_t wait_for_packet = 1, dna_mode = 0, do_shutdown = 0;
+u_int8_t wait_for_packet = 1, do_shutdown = 0;
 
 /* *************************************** */
 /*
@@ -441,12 +441,11 @@ int32_t gmt2local(time_t t) {
 void printHelp(void) {
   printf("pfcount\n(C) 2005-11 Deri Luca <deri@ntop.org>\n\n");
   printf("-h              Print this help\n");
-  printf("-i <device>     Device name. Use device@channel for channels\n");
+  printf("-i <device>     Device name. Use device@channel for channels, and dna:ethX for DNA\n");
   printf("-n <threads>    Number of polling threads (default %d)\n", num_threads);
 
   /* printf("-f <filter>     [pfring filter]\n"); */
 
-  printf("-d              Open the device in DNA mode\n");
   printf("-c <cluster id> cluster id\n");
   printf("-e <direction>  0=RX+TX, 1=RX only, 2=TX only\n");
   printf("-s <string>     String to search on packets\n");
@@ -462,7 +461,7 @@ void printHelp(void) {
 
 /* *************************************** */
 
-  /* Bind this thread to a specific core */
+/* Bind this thread to a specific core */
 
 int bind2core(u_int core_id) {
   cpu_set_t cpuset;
@@ -496,16 +495,6 @@ void* packet_consumer_thread(void* _id) {
   }
 
   memset(&hdr, 0, sizeof(hdr));
-
-  /* Dummy for DNA testing */
-  if(dna_mode) {
-    while(1) {
-      pfring_dna_recv_multiple(pd, dummyProcesssPacket, &hdr, 
-			       NULL, 0, wait_for_packet, _id);
-    }
-
-    return(0);
-  }
 
   while(1) {
     int rc;
@@ -620,9 +609,6 @@ int main(int argc, char* argv[]) {
     case 'c':
       clusterId = atoi(optarg);
       break;
-    case 'd':
-      dna_mode = 1;
-      break;
     case 'l':
       snaplen = atoi(optarg);
       break;
@@ -660,7 +646,8 @@ int main(int argc, char* argv[]) {
       break;
     }
   }
-
+  
+  if(verbose) watermark = 1;
   if(device == NULL) device = DEFAULT_DEVICE;
   if(num_threads > MAX_NUM_THREADS) num_threads = MAX_NUM_THREADS;
 
@@ -675,13 +662,10 @@ int main(int argc, char* argv[]) {
     pfring_config(cpu_percentage);
   }
 
-  if(!dna_mode)
-    pd = pfring_open(device, promisc,  snaplen, (num_threads > 1) ? 1 : 0);
-  else
-    pd = pfring_open_dna(device, promisc, 0 /* we don't use threads */);
+  pd = pfring_open(device, promisc,  snaplen, (num_threads > 1) ? 1 : 0);
 
   if(pd == NULL) {
-    printf("pfring_open error (perhaps you use quick mode and have already a socket bound to %s ?)\n",
+    printf("pfring_open error (pf_ring not loaded or perhaps you use quick mode and have already a socket bound to %s ?)\n",
 	   device);
     return(-1);
   } else {
@@ -698,8 +682,8 @@ int main(int argc, char* argv[]) {
 
   if(pfring_get_bound_device_address(pd, mac_address) != 0)
     printf("pfring_get_bound_device_address() failed\n");
-
-  printf("Capturing from %s [%s]\n", device, etheraddr_string(mac_address, buf));
+  else
+    printf("Capturing from %s [%s]\n", device, etheraddr_string(mac_address, buf));
 
   printf("# Device RX channels: %d\n", pfring_get_num_rx_channels(pd));
   printf("# Polling threads:    %d\n", num_threads);
@@ -709,71 +693,69 @@ int main(int argc, char* argv[]) {
     printf("pfring_set_cluster returned %d\n", rc);
   }
 
-  if(dna_mode == 0) {
-    if((rc = pfring_set_direction(pd, direction)) != 0)
-      printf("pfring_set_direction returned [rc=%d][direction=%d]\n", rc, direction);
+  if((rc = pfring_set_direction(pd, direction)) != 0)
+    printf("pfring_set_direction returned [rc=%d][direction=%d]\n", rc, direction);
 
-    if(watermark > 0) {
-      if((rc = pfring_set_poll_watermark(pd, watermark)) != 0)
-	printf("pfring_set_poll_watermark returned [rc=%d][watermark=%d]\n", rc, watermark);
-    }
+  if(watermark > 0) {
+    if((rc = pfring_set_poll_watermark(pd, watermark)) != 0)
+      printf("pfring_set_poll_watermark returned [rc=%d][watermark=%d]\n", rc, watermark);
+  }
 
-    if(rehash_rss)
-      pfring_enable_rss_rehash(pd);
+  if(rehash_rss)
+    pfring_enable_rss_rehash(pd);
 
-    if(poll_duration > 0)
-      pfring_set_poll_duration(pd, poll_duration);
+  if(poll_duration > 0)
+    pfring_set_poll_duration(pd, poll_duration);
 
 #if 0
-    if(0) {
+  if(0) {
+    if(1) {
+      pfring_toggle_filtering_policy(pd, 0); /* Default to drop */
+
+      add_rule(1);
+    } else {
+      struct dummy_filter {
+	u_int32_t src_host;
+      };
+
+      struct dummy_filter filter;
+      filtering_rule rule;
+
+      memset(&rule, 0, sizeof(rule));
+
       if(1) {
-	pfring_toggle_filtering_policy(pd, 0); /* Default to drop */
-
-	add_rule(1);
-      } else {
-	struct dummy_filter {
-	  u_int32_t src_host;
-	};
-
-	struct dummy_filter filter;
-	filtering_rule rule;
-
-	memset(&rule, 0, sizeof(rule));
-
-	if(1) {
-	  filter.src_host = ntohl(inet_addr("10.100.0.238"));
+	filter.src_host = ntohl(inet_addr("10.100.0.238"));
 
 #if 0
-	  rule.rule_id = 5;
-	  rule.rule_action = forward_packet_and_stop_rule_evaluation;
-	  rule.core_fields.proto = 1;
-	  rule.core_fields.host_low = 0, rule.core_fields.host_high = 0;
-	  rule.plugin_action.plugin_id = 1; /* Dummy plugin */
+	rule.rule_id = 5;
+	rule.rule_action = forward_packet_and_stop_rule_evaluation;
+	rule.core_fields.proto = 1;
+	rule.core_fields.host_low = 0, rule.core_fields.host_high = 0;
+	rule.plugin_action.plugin_id = 1; /* Dummy plugin */
 
-	  rule.extended_fields.filter_plugin_id = 1; /* Dummy plugin */
-	  memcpy(rule.extended_fields.filter_plugin_data, &filter, sizeof(filter));
-	  /* strcpy(rule.extended_fields.payload_pattern, "hello"); */
+	rule.extended_fields.filter_plugin_id = 1; /* Dummy plugin */
+	memcpy(rule.extended_fields.filter_plugin_data, &filter, sizeof(filter));
+	/* strcpy(rule.extended_fields.payload_pattern, "hello"); */
 #else
-	  rule.rule_id = 5;
-	  rule.rule_action = forward_packet_and_stop_rule_evaluation;
-	  rule.core_fields.port_low = 80, rule.core_fields.port_high = 80;
-	  //rule.core_fields.host4_low = rule.core_fields.host4_high = ntohl(inet_addr("192.168.0.160"));
-	  // snprintf(rule.extended_fields.payload_pattern, sizeof(rule.extended_fields.payload_pattern), "GET");
+	rule.rule_id = 5;
+	rule.rule_action = forward_packet_and_stop_rule_evaluation;
+	rule.core_fields.port_low = 80, rule.core_fields.port_high = 80;
+	//rule.core_fields.host4_low = rule.core_fields.host4_high = ntohl(inet_addr("192.168.0.160"));
+	// snprintf(rule.extended_fields.payload_pattern, sizeof(rule.extended_fields.payload_pattern), "GET");
 #endif
-	  if(pfring_add_filtering_rule(pd, &rule) < 0)
-	    printf("pfring_add_filtering_rule() failed\n");
-	} else {
-	  rule.rule_id = 10; pfring_add_filtering_rule(pd, &rule);
-	  rule.rule_id = 5;  pfring_add_filtering_rule(pd, &rule);
-	  rule.rule_id = 15; pfring_add_filtering_rule(pd, &rule);
-	  rule.rule_id = 5;  pfring_add_filtering_rule(pd, &rule);
-	  if(pfring_remove_filtering_rule(pd, 15) < 0)
-	    printf("pfring_remove_filtering_rule() failed\n");
-	}
+	if(pfring_add_filtering_rule(pd, &rule) < 0)
+	  printf("pfring_add_filtering_rule() failed\n");
+      } else {
+	rule.rule_id = 10; pfring_add_filtering_rule(pd, &rule);
+	rule.rule_id = 5;  pfring_add_filtering_rule(pd, &rule);
+	rule.rule_id = 15; pfring_add_filtering_rule(pd, &rule);
+	rule.rule_id = 5;  pfring_add_filtering_rule(pd, &rule);
+	if(pfring_remove_filtering_rule(pd, 15) < 0)
+	  printf("pfring_remove_filtering_rule() failed\n");
       }
     }
-#endif
   }
+#endif  
 
   signal(SIGINT, sigproc);
   signal(SIGTERM, sigproc);
@@ -782,12 +764,6 @@ int main(int argc, char* argv[]) {
   if(!verbose) {
     signal(SIGALRM, my_sigalarm);
     alarm(ALARM_SLEEP);
-  }
-
-  if(dna_mode) {
-    num_threads = 1;
-  } else {
-    // if(num_threads > 1) wait_for_packet = 1;
   }
 
   pfring_enable_ring(pd);

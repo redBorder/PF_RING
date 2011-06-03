@@ -54,7 +54,7 @@ pfring_stat pfringStats;
 static struct timeval startTime;
 pfring  *ring[MAX_NUM_THREADS] = { NULL };
 unsigned long long numPkts[MAX_NUM_THREADS] = { 0 }, numBytes[MAX_NUM_THREADS] = { 0 };
-u_int8_t wait_for_packet = 1,  do_shutdown = 0, dna_mode = 0;
+u_int8_t wait_for_packet = 1,  do_shutdown = 0;
 pthread_t pd_thread[MAX_NUM_THREADS];
 
 #define DEFAULT_DEVICE     "eth0"
@@ -158,9 +158,12 @@ void sigproc(int sig) {
   do_shutdown = 1;
   print_stats();
 
+  for(i=0; i<num_channels; i++)
+    pfring_shutdown(ring[i]);
+
   for(i=0; i<num_channels; i++) {
-    pfring_close(ring[i]);
     pthread_join(pd_thread[i], NULL);
+    pfring_close(ring[i]);
   }
 
   exit(0);
@@ -179,7 +182,7 @@ void my_sigalarm(int sig) {
 void printHelp(void) {
   printf("pfcount_multichannel\n(C) 2005-11 Deri Luca <deri@ntop.org>\n\n");
   printf("-h              Print this help\n");
-  printf("-i <device>     Device name (No device@channel)\n");
+  printf("-i <device>     Device name (No device@channel), and dna:ethX for DNA\n");
 
   printf("-e <direction>  0=RX+TX, 1=RX only, 2=TX only\n");
   printf("-l <len>        Capture length\n");
@@ -189,6 +192,232 @@ void printHelp(void) {
   printf("-a              Active packet wait\n");
   printf("-r              Rehash RSS packets\n");
   printf("-v              Verbose\n");
+}
+
+/* ****************************************************** */
+
+static char hex[] = "0123456789ABCDEF";
+
+char* etheraddr_string(const u_char *ep, char *buf) {
+  u_int i, j;
+  char *cp;
+
+  cp = buf;
+  if ((j = *ep >> 4) != 0)
+    *cp++ = hex[j];
+  else
+    *cp++ = '0';
+
+  *cp++ = hex[*ep++ & 0xf];
+
+  for(i = 5; (int)--i >= 0;) {
+    *cp++ = ':';
+    if ((j = *ep >> 4) != 0)
+      *cp++ = hex[j];
+    else
+      *cp++ = '0';
+
+    *cp++ = hex[*ep++ & 0xf];
+  }
+
+  *cp = '\0';
+  return (buf);
+}
+
+/* ****************************************************** */
+
+/*
+ * A faster replacement for inet_ntoa().
+ */
+char* _intoa(unsigned int addr, char* buf, u_short bufLen) {
+  char *cp, *retStr;
+  u_int byte;
+  int n;
+
+  cp = &buf[bufLen];
+  *--cp = '\0';
+
+  n = 4;
+  do {
+    byte = addr & 0xff;
+    *--cp = byte % 10 + '0';
+    byte /= 10;
+    if (byte > 0) {
+      *--cp = byte % 10 + '0';
+      byte /= 10;
+      if (byte > 0)
+	*--cp = byte + '0';
+    }
+    *--cp = '.';
+    addr >>= 8;
+  } while (--n > 0);
+
+  /* Convert the string to lowercase */
+  retStr = (char*)(cp+1);
+
+  return(retStr);
+}
+
+/* ************************************ */
+
+char* intoa(unsigned int addr) {
+  static char buf[sizeof "ff:ff:ff:ff:ff:ff:255.255.255.255"];
+
+  return(_intoa(addr, buf, sizeof(buf)));
+}
+
+/* ************************************ */
+
+inline char* in6toa(struct in6_addr addr6) {
+  static char buf[sizeof "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"];
+
+  snprintf(buf, sizeof(buf),
+	   "%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x",
+	   addr6.s6_addr[0], addr6.s6_addr[1], addr6.s6_addr[2],
+	   addr6.s6_addr[3], addr6.s6_addr[4], addr6.s6_addr[5], addr6.s6_addr[6],
+	   addr6.s6_addr[7], addr6.s6_addr[8], addr6.s6_addr[9], addr6.s6_addr[10],
+	   addr6.s6_addr[11], addr6.s6_addr[12], addr6.s6_addr[13], addr6.s6_addr[14],
+	   addr6.s6_addr[15]);
+
+  return(buf);
+}
+
+/* ****************************************************** */
+
+char* proto2str(u_short proto) {
+  static char protoName[8];
+
+  switch(proto) {
+  case IPPROTO_TCP:  return("TCP");
+  case IPPROTO_UDP:  return("UDP");
+  case IPPROTO_ICMP: return("ICMP");
+  default:
+    snprintf(protoName, sizeof(protoName), "%d", proto);
+    return(protoName);
+  }
+}
+
+/* ****************************************************** */
+
+static int32_t thiszone;
+
+void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u_char *user_bytes) {
+  long threadId = (long)user_bytes;
+
+  if(verbose) {
+    struct ether_header ehdr;
+    u_short eth_type, vlan_id;
+    char buf1[32], buf2[32];
+    struct ip ip;
+    int s;
+    uint nsec;
+
+    if(h->ts.tv_sec == 0)
+      gettimeofday((struct timeval*)&h->ts, NULL);
+
+    s = (h->ts.tv_sec + thiszone) % 86400;
+    nsec = h->extended_hdr.timestamp_ns % 1000;
+    
+    printf("%02d:%02d:%02d.%06u%03u ",
+	   s / 3600, (s % 3600) / 60, s % 60,
+	   (unsigned)h->ts.tv_usec, nsec);
+
+#if 0
+    for(i=0; i<32; i++) printf("%02X ", p[i]);
+    printf("\n");
+#endif
+
+    if(h->extended_hdr.parsed_header_len > 0) {
+      printf("[eth_type=0x%04X]", h->extended_hdr.parsed_pkt.eth_type);
+      printf("[l3_proto=%u]", (unsigned int)h->extended_hdr.parsed_pkt.l3_proto);
+
+      printf("[%s:%d -> ", (h->extended_hdr.parsed_pkt.eth_type == 0x86DD) ?
+	     in6toa(h->extended_hdr.parsed_pkt.ipv6_src) : intoa(h->extended_hdr.parsed_pkt.ipv4_src),
+	     h->extended_hdr.parsed_pkt.l4_src_port);
+      printf("%s:%d] ", (h->extended_hdr.parsed_pkt.eth_type == 0x86DD) ?
+	     in6toa(h->extended_hdr.parsed_pkt.ipv6_dst) : intoa(h->extended_hdr.parsed_pkt.ipv4_dst),
+	     h->extended_hdr.parsed_pkt.l4_dst_port);
+
+      printf("[%s -> %s] ",
+	     etheraddr_string(h->extended_hdr.parsed_pkt.smac, buf1),
+	     etheraddr_string(h->extended_hdr.parsed_pkt.dmac, buf2));
+    }
+
+    memcpy(&ehdr, p+h->extended_hdr.parsed_header_len, sizeof(struct ether_header));
+    eth_type = ntohs(ehdr.ether_type);
+
+    printf("[%s -> %s][eth_type=0x%04X] ",
+	   etheraddr_string(ehdr.ether_shost, buf1),
+	   etheraddr_string(ehdr.ether_dhost, buf2), eth_type);
+
+
+    if(eth_type == 0x8100) {
+      vlan_id = (p[14] & 15)*256 + p[15];
+      eth_type = (p[16])*256 + p[17];
+      printf("[vlan %u] ", vlan_id);
+      p+=4;
+    }
+
+    if(eth_type == 0x0800) {
+      memcpy(&ip, p+h->extended_hdr.parsed_header_len+sizeof(ehdr), sizeof(struct ip));
+      printf("[%s]", proto2str(ip.ip_p));
+      printf("[%s:%d ", intoa(ntohl(ip.ip_src.s_addr)), h->extended_hdr.parsed_pkt.l4_src_port);
+      printf("-> %s:%d] ", intoa(ntohl(ip.ip_dst.s_addr)), h->extended_hdr.parsed_pkt.l4_dst_port);
+
+      printf("[tos=%d][tcp_seq_num=%u][caplen=%d][len=%d][parsed_header_len=%d]"
+	     "[eth_offset=%d][l3_offset=%d][l4_offset=%d][payload_offset=%d]\n",
+	     h->extended_hdr.parsed_pkt.ipv4_tos, h->extended_hdr.parsed_pkt.tcp.seq_num,
+	     h->caplen, h->len, h->extended_hdr.parsed_header_len,
+	     h->extended_hdr.parsed_pkt.offset.eth_offset,
+	     h->extended_hdr.parsed_pkt.offset.l3_offset,
+	     h->extended_hdr.parsed_pkt.offset.l4_offset,
+	     h->extended_hdr.parsed_pkt.offset.payload_offset);
+
+    } else {
+      if(eth_type == 0x0806)
+	printf("[ARP]");
+      else
+	printf("[eth_type=0x%04X]", eth_type);
+
+      printf("[caplen=%d][len=%d][parsed_header_len=%d]"
+	     "[eth_offset=%d][l3_offset=%d][l4_offset=%d][payload_offset=%d]\n",
+	     h->caplen, h->len, h->extended_hdr.parsed_header_len,
+	     h->extended_hdr.parsed_pkt.offset.eth_offset,
+	     h->extended_hdr.parsed_pkt.offset.l3_offset,
+	     h->extended_hdr.parsed_pkt.offset.l4_offset,
+	     h->extended_hdr.parsed_pkt.offset.payload_offset);
+    }
+  }
+
+  numPkts[threadId]++, numBytes[threadId] += h->len;
+}
+
+/* *************************************** */
+
+int32_t gmt2local(time_t t) {
+  int dt, dir;
+  struct tm *gmt, *loc;
+  struct tm sgmt;
+
+  if (t == 0)
+    t = time(NULL);
+  gmt = &sgmt;
+  *gmt = *gmtime(&t);
+  loc = localtime(&t);
+  dt = (loc->tm_hour - gmt->tm_hour) * 60 * 60 +
+    (loc->tm_min - gmt->tm_min) * 60;
+
+  /*
+   * If the year or julian day is different, we span 00:00 GMT
+   * and must add or subtract a day. Check the year first to
+   * avoid problems when the julian day wraps.
+   */
+  dir = loc->tm_year - gmt->tm_year;
+  if (dir == 0)
+    dir = loc->tm_yday - gmt->tm_yday;
+  dt += dir * 24 * 60 * 60;
+
+  return (dt);
 }
 
 /* *************************************** */
@@ -221,7 +450,7 @@ void* packet_consumer_thread(void* _id) {
 
     if(pfring_recv(ring[thread_id], (char*)buffer, sizeof(buffer), &hdr, wait_for_packet) > 0) {
       if(do_shutdown) break;
-      numPkts[thread_id]++, numBytes[thread_id] += hdr.len;
+      dummyProcesssPacket(&hdr, buffer, (u_char*)thread_id);
     } else {
       // if(wait_for_packet == 0) sched_yield();
       //usleep(1);
@@ -237,13 +466,14 @@ int main(int argc, char* argv[]) {
   char *device = NULL, c;
   int promisc, snaplen = DEFAULT_SNAPLEN, rc, watermark = 0, rehash_rss = 0;
   packet_direction direction = rx_and_tx_direction;
-  pfring  *pd = NULL;
   long i;
   u_int16_t cpu_percentage = 0, poll_duration = 0;
+  u_int32_t version;
 
   startTime.tv_sec = 0;
+  thiszone = gmt2local(0);
 
-  while((c = getopt(argc,argv,"hi:l:vae:w:b:rp:d" /* "f:" */)) != -1) {
+  while((c = getopt(argc,argv,"hi:l:vae:w:b:rp:" /* "f:" */)) != -1) {
     switch(c) {
     case 'h':
       printHelp();
@@ -260,9 +490,6 @@ int main(int argc, char* argv[]) {
 	direction = atoi(optarg);
 	break;
       }
-      break;
-    case 'd':
-      dna_mode = 1;
       break;
     case 'l':
       snaplen = atoi(optarg);
@@ -288,6 +515,7 @@ int main(int argc, char* argv[]) {
     }
   }
 
+  if(verbose) watermark = 1;
   if(device == NULL) device = DEFAULT_DEVICE;
 
   printf("Capturing from %s\n", device);
@@ -295,74 +523,37 @@ int main(int argc, char* argv[]) {
   /* hardcode: promisc=1, to_ms=500 */
   promisc = 1;
 
-  if(!dna_mode)
-    pd = pfring_open(device, promisc,  snaplen, 0);
-  else
-    pd = pfring_open_dna(device, promisc, 0 /* we don't use threads */);    
+
+  num_channels = pfring_open_multichannel(device,  promisc, snaplen, 0, ring);
   
-  if(pd == NULL) {
-    printf("pfring_open error (%s)\n", device);
+  if(num_channels <= 0) {
+    printf("pfring_open_multichannel() returned %d\n", num_channels);
     return(-1);
-  } else {
-    u_int32_t version;
-
-    pfring_set_application_name(pd, "pfcount");
-    pfring_version(pd, &version);
-
-    printf("Using PF_RING v.%d.%d.%d\n",
-	   (version & 0xFFFF0000) >> 16,
-	   (version & 0x0000FF00) >> 8,
-	   version & 0x000000FF);
   }
+
+  pfring_version(ring[0], &version);  
+  printf("Using PF_RING v.%d.%d.%d\n",
+	 (version & 0xFFFF0000) >> 16,
+	 (version & 0x0000FF00) >> 8,
+	 version & 0x000000FF);
   
-  num_channels = pfring_get_num_rx_channels(pd);
-  printf("# Device RX channels: %d\n", pfring_get_num_rx_channels(pd));
-  pfring_close(pd);
-
-  signal(SIGINT, sigproc);
-  signal(SIGTERM, sigproc);
-  signal(SIGINT, sigproc);
-
-  if(!verbose) {
-    signal(SIGALRM, my_sigalarm);
-    alarm(ALARM_SLEEP);
-  }
-
-  printf("Spawning %d threads, one per channel, each bound to a different core\n", num_channels);
-
   for(i=0; i<num_channels; i++) {
-    char devname[64];
+    char buf[32];
     
-    snprintf(devname, sizeof(devname), "%s@%ld", device, i);
+    snprintf(buf, sizeof(buf), "pfcount_multichannel-thread %ld", i);
+    pfring_set_application_name(ring[i], buf);
 
-  if(!dna_mode)
-    ring[i] = pfring_open(devname, promisc,  snaplen, 0);
-  else
-    ring[i] = pfring_open_dna(devname, promisc, 0 /* we don't use threads */);    
-    
-    if(ring[i] == NULL) {
-      printf("pfring_open error\n");
-      return(-1);
-    } else {
-      char buf[32];
-
-      snprintf(buf, sizeof(buf), "pfcount_multichannel-thread %ld", i);
-      pfring_set_application_name(ring[i], buf);
-    }
-
-    if(!dna_mode) {
-      if((rc = pfring_set_direction(ring[i], direction)) != 0)
+    if((rc = pfring_set_direction(ring[i], direction)) != 0)
 	printf("pfring_set_direction returned [rc=%d][direction=%d]\n", rc, direction);
-      
-      if(watermark > 0) {
-	if((rc = pfring_set_poll_watermark(pd, watermark)) != 0)
-	  printf("pfring_set_poll_watermark returned [rc=%d][watermark=%d]\n", rc, watermark);
-      }
-
+    
+    if(watermark > 0) {
+      if((rc = pfring_set_poll_watermark(ring[i], watermark)) != 0)
+	printf("pfring_set_poll_watermark returned [rc=%d][watermark=%d]\n", rc, watermark);
+    }
+    
     if(rehash_rss)
       pfring_enable_rss_rehash(ring[i]);
-    }
-
+    
     if(poll_duration > 0)
       pfring_set_poll_duration(ring[i], poll_duration);
 
@@ -374,6 +565,15 @@ int main(int argc, char* argv[]) {
   if(cpu_percentage > 0) {
     if(cpu_percentage > 99) cpu_percentage = 99;
     pfring_config(cpu_percentage);
+  }
+
+  signal(SIGINT, sigproc);
+  signal(SIGTERM, sigproc);
+  signal(SIGINT, sigproc);
+
+  if(!verbose) {
+    signal(SIGALRM, my_sigalarm);
+    alarm(ALARM_SLEEP);
   }
   
   for(i=0; i<num_channels; i++)

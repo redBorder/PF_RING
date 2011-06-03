@@ -127,9 +127,9 @@ int main(int argc, char* argv[]) {
   /* hardcode: promisc=1, to_ms=500 */
   promisc = 1;
 
-  pd = pfring_open_dna(in_dev, promisc, 0);
+  pd = pfring_open(in_dev, promisc, 1500, 0);
   if(pd == NULL) {
-    printf("pfring_dna_open %s error\n", in_dev);
+    printf("pfring_open %s error\n", in_dev);
     return(-1);
   } else {
     u_int32_t version;

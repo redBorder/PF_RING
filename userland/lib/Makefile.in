@@ -21,7 +21,7 @@ DNA_OBJS  = @DNA_OBJS@
 #
 # Object files
 #
-OBJS      = pfring.o ${DNA_OBJS}
+OBJS      = pfring.o  pfring_main.o  pfring_mod_dna.o pfring_utils.o ${DNA_OBJS}
 
 #
 # C compiler and flags
