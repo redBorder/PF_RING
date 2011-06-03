@@ -167,7 +167,7 @@ PPCODE:
 
   EXTEND (sp, 1);
 
-  if (ring && pfring_recv (ring, packet, sizeof (packet), & header, 1) > 0)
+  if (ring && pfring_recv (ring, (u_char**)&packet, sizeof (packet), & header, 1) > 0)
     {
 #if defined(ROCCO)
       len = header . caplen -
@@ -264,7 +264,7 @@ PPCODE:
 
   EXTEND (sp, 1);
 
-  if (ring && pfring_recv (ring, packet, sizeof (packet), & header, 1) > 0)
+  if (ring && pfring_recv (ring, (u_char**)&packet, sizeof (packet), & header, 1) > 0)
     {
       len = sizeof (struct ether_header);
       s = packet;
@@ -299,7 +299,7 @@ PPCODE:
 
   EXTEND (sp, 7);
 
-  while (ring && pfring_recv (ring, packet, sizeof (packet), & header, 1) > 0)
+  while (ring && pfring_recv (ring, (u_char**)&packet, sizeof (packet), & header, 1) > 0)
     {
       /* Hook to the Ethernet Protocol in the packet */
       struct ether_header * e = (struct ether_header *) packet;
@@ -388,7 +388,7 @@ PPCODE:
 
   EXTEND (sp, 20);
 
-  while (ring && pfring_recv (ring, packet, sizeof (packet), & header, 1) > 0)
+  while (ring && pfring_recv (ring, (u_char**)&packet, sizeof (packet), & header, 1) > 0)
     {
       if (header . extended_hdr . parsed_pkt . l3_proto)
 	{
@@ -463,7 +463,7 @@ void xs_pfring_header (pfref, h)
 
   struct pfring_pkthdr header;
 
-  while (ring && pfring_recv (ring, packet, sizeof (packet), & header, 1) > 0)
+  while (ring && pfring_recv (ring, (u_char**)&packet, sizeof (packet), & header, 1) > 0)
     {
       if (header . extended_hdr . parsed_pkt . l3_proto)
 	{
