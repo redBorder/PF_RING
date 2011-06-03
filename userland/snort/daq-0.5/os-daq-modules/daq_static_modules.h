@@ -38,3 +38,6 @@ extern const DAQ_Module_t nfq_daq_module_data;
 #ifdef BUILD_PCAP_MODULE
 extern const DAQ_Module_t pcap_daq_module_data;
 #endif
+#ifdef BUILD_PFRING_MODULE
+extern const DAQ_Module_t pfring_daq_module_data;
+#endif
