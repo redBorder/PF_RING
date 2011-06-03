@@ -24,7 +24,7 @@
 
 /* ********************************* */
 
-#include "pfring.h"
+#include "pfring_mod.h"
 
 #ifdef HAVE_DAG
 #include "pfring_dag.h"

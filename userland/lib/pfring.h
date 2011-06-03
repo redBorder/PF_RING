@@ -35,6 +35,7 @@ extern int pthread_spin_unlock (pthread_spinlock_t *__lock) __THROW;
 #include <stdarg.h>
 #include <sys/types.h>
 
+#ifndef HAVE_PCAP
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -45,6 +46,8 @@ extern int pthread_spin_unlock (pthread_spinlock_t *__lock) __THROW;
 #include <sys/socket.h>
 #include <linux/if.h>
 #include <linux/sockios.h>
+#endif
+
 #include <linux/if_packet.h>
 #include <arpa/inet.h>
 #include <sys/ioctl.h>
