@@ -103,13 +103,34 @@ void printHelp(void) {
 
 /* *************************************** */
 
+/* Bind this thread to a specific core */
+
+int bind2core(u_int core_id) {
+  cpu_set_t cpuset;
+  int s;
+
+  CPU_ZERO(&cpuset);
+  CPU_SET(core_id, &cpuset);
+  if((s = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset)) != 0) {
+    printf("Error while binding to core %u: errno=%i\n", core_id, s);
+    return(-1);
+  } else {
+    return(0);
+  }
+}
+
+/* *************************************** */
+
 int main(int argc, char* argv[]) {
   char c;
-  int promisc, i, num = 1, verbose = 0;
+  int promisc, i, verbose = 0;
   char buffer[1500];
   int send_len = 256;
+  u_int32_t num_good_sent = 0;
+  u_int32_t num = 1; 
+  int bind_core = -1;
 
-  while((c = getopt(argc,argv,"hi:n:l:v:")) != -1) {
+  while((c = getopt(argc,argv,"hi:n:g:l:v:")) != -1) {
     switch(c) {
     case 'h':
       printHelp();      
@@ -119,6 +140,9 @@ int main(int argc, char* argv[]) {
       break;
     case 'n':
       num = atoi(optarg);
+      break;
+    case 'g':
+      bind_core = atoi(optarg);
       break;
     case 'l':
       send_len = atoi(optarg);
@@ -131,7 +155,7 @@ int main(int argc, char* argv[]) {
 
   if(in_dev == NULL)  printHelp();
 
-  printf("Capturing from %s\n", in_dev);
+  printf("Sending packets on %s\n", in_dev);
 
   /* hardcode: promisc=1, to_ms=500 */
   promisc = 1;
@@ -156,15 +180,31 @@ int main(int argc, char* argv[]) {
 
   for(i=0; i<send_len; i++) buffer[i] = i;
 
-  for(i=0; i<num; i++) {
-    int rc = pfring_send(pd, buffer, send_len);
+  if(bind_core >= 0)
+    bind2core(bind_core);
 
+  if(num == 0) num = (u_int32_t)-1;
+
+  for(i=0; i<num; i++) {
+    int rc;
+    
+  redo:
+    rc = pfring_send(pd, buffer, send_len);
 
     if(verbose) 
       printf("[%d] pfring_send returned %d\n", i, rc);
+   
+    if(rc == -1) {
+      // printf("[%d] pfring_send returned %d\n", i, rc);
+      usleep(1);
+      goto redo;
+    } else
+      num_good_sent++;   
   }
 
   pfring_close(pd);
+
+  printf("Sent %d packets\n", num_good_sent);
 
   return(0);
 }
