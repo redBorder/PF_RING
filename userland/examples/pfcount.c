@@ -763,6 +763,7 @@ int main(int argc, char* argv[]) {
   signal(SIGTERM, sigproc);
   signal(SIGINT, sigproc);
 
+
   if(!verbose) {
     signal(SIGALRM, my_sigalarm);
     alarm(ALARM_SLEEP);
@@ -822,9 +823,9 @@ int main(int argc, char* argv[]) {
   } else
     packet_consumer_thread(0);
 
+  alarm(0);
+  sleep(1);
   pfring_close(pd);
-
-  sleep(3);
 
   return(0);
 }

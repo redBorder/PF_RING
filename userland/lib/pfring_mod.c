@@ -488,7 +488,7 @@ int pfring_mod_recv(pfring *ring, u_char** buffer, u_int buffer_len,
     if(wait_for_incoming_packet) {
       rc = pfring_poll(ring, ring->poll_duration);
 
-      if(rc == -1)
+      if((rc == -1) && (errno != EINTR))
 	return(-1);
       else
 	goto do_pfring_recv;
