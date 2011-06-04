@@ -146,7 +146,14 @@ int main(int argc, char* argv[]) {
   signal(SIGINT, sigproc);
 
   for(i=0; i<send_len; i++) buffer[i] = i;
-  
+
+  buffer[6] = 0x0;
+  buffer[7] = 0xE0;
+  buffer[8] = 0xED;
+  buffer[9] = 0x1A;
+  buffer[10] = 0xB8;
+  buffer[11] = 0x5A;
+
   printf("pfring_send returned %d\n", pfring_send(pd, buffer, send_len));
 
   pfring_close(pd);
