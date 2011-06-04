@@ -119,6 +119,9 @@ inline int pfring_there_is_pkt_available(pfring *ring) {
 /* **************************************************** */
 
 int pfring_mod_open(pfring *ring) {
+  int rc;
+  u_int memSlotsLen;
+
   /* Setting pointers, we need these functions soon */
   ring->close = pfring_mod_close;
   ring->stats = pfring_mod_stats;
@@ -144,9 +147,6 @@ int pfring_mod_open(pfring *ring) {
 #ifdef RING_DEBUG
   printf("Open RING [fd=%d]\n", ring->fd);
 #endif
-
-  int rc;
-  u_int memSlotsLen;
 
   if(ring->caplen > MAX_CAPLEN) ring->caplen = MAX_CAPLEN;
   setsockopt(ring->fd, 0, SO_RING_BUCKET_LEN, &ring->caplen, sizeof(ring->caplen));

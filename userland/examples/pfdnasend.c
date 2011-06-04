@@ -97,7 +97,7 @@ void printHelp(void) {
   printf("pfdnasend -i in_dev\n");
   printf("-h              Print this help\n");
   printf("-i <device>     Device name. Use device\n");
-  printf("-v              Verbose\n");
+  printf("-n <num>        Num pkts to send\n");
   exit(0);
 }
 
@@ -105,17 +105,26 @@ void printHelp(void) {
 
 int main(int argc, char* argv[]) {
   char c;
-  int promisc, i;
+  int promisc, i, num = 1, verbose = 0;
   char buffer[1500];
   int send_len = 256;
 
-  while((c = getopt(argc,argv,"hi:")) != -1) {
+  while((c = getopt(argc,argv,"hi:n:l:v:")) != -1) {
     switch(c) {
     case 'h':
       printHelp();      
       break;
     case 'i':
       in_dev = strdup(optarg);
+      break;
+    case 'n':
+      num = atoi(optarg);
+      break;
+    case 'l':
+      send_len = atoi(optarg);
+      break;
+    case 'v':
+      verbose = 1;
       break;
     }
   }
@@ -147,14 +156,13 @@ int main(int argc, char* argv[]) {
 
   for(i=0; i<send_len; i++) buffer[i] = i;
 
-  buffer[6] = 0x0;
-  buffer[7] = 0xE0;
-  buffer[8] = 0xED;
-  buffer[9] = 0x1A;
-  buffer[10] = 0xB8;
-  buffer[11] = 0x5A;
+  for(i=0; i<num; i++) {
+    int rc = pfring_send(pd, buffer, send_len);
 
-  printf("pfring_send returned %d\n", pfring_send(pd, buffer, send_len));
+
+    if(verbose) 
+      printf("[%d] pfring_send returned %d\n", i, rc);
+  }
 
   pfring_close(pd);
 

@@ -3842,21 +3842,31 @@ static int ring_mmap(struct file *file,
 
     switch(count) {
     case 0:
-      if((rc = do_memory_mmap(vma, size,
-			      (void *)pfr->dna_device->packet_memory, VM_LOCKED, 1)) < 0)
+      /* DNA: RX packet memory */
+      if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->rx_packet_memory, VM_LOCKED, 1)) < 0)
 	return(rc);
       break;
 
     case 1:
-      /* DNA: packet descriptors */
-      if((rc = do_memory_mmap(vma, size,
-			      (void *)pfr->dna_device->descr_packet_memory, VM_LOCKED, 1)) < 0)
+      /* DNA: RX packet descriptors */
+      if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->rx_descr_packet_memory, VM_LOCKED, 1)) < 0)
 	return(rc);
       break;
 
     case 2:
-      if((rc = do_memory_mmap(vma, size,
-			      (void *)pfr->dna_device->phys_card_memory, (VM_RESERVED | VM_IO), 2)) < 0)
+      if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->phys_card_memory, (VM_RESERVED | VM_IO), 2)) < 0)
+	return(rc);
+      break;
+
+    case 3:
+      /* DNA: TX packet memory */
+      if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->tx_packet_memory, VM_LOCKED, 1)) < 0)
+	return(rc);
+      break;
+
+    case 4:
+      /* DNA: TX packet descriptors */
+      if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->tx_descr_packet_memory, VM_LOCKED, 1)) < 0)
 	return(rc);
       break;
 
@@ -5620,7 +5630,7 @@ static int ring_getsockopt(struct socket *sock,
 /* ************************************* */
 
 void dna_device_handler(dna_device_operation operation,
-			unsigned long packet_memory,
+			unsigned long rx_packet_memory,
 			u_int packet_memory_num_slots,
 			u_int packet_memory_slot_len,
 			u_int packet_memory_tot_len,
@@ -5653,16 +5663,17 @@ void dna_device_handler(dna_device_operation operation,
     next = kmalloc(sizeof(dna_device_list), GFP_ATOMIC);
     if(next != NULL) {
       next->in_use = 0;
-      next->dev.packet_memory = packet_memory;
+      next->dev.rx_packet_memory = rx_packet_memory;
       next->dev.packet_memory_num_slots = packet_memory_num_slots;
       next->dev.packet_memory_slot_len = packet_memory_slot_len;
       next->dev.packet_memory_tot_len = packet_memory_tot_len;
-      next->dev.descr_packet_memory = descr_packet_memory;
+      next->dev.rx_descr_packet_memory = descr_packet_memory;
       next->dev.descr_packet_memory_num_slots = descr_packet_memory_num_slots;
       next->dev.descr_packet_memory_slot_len  = descr_packet_memory_slot_len;
       next->dev.descr_packet_memory_tot_len   = descr_packet_memory_tot_len;
       next->dev.phys_card_memory = phys_card_memory;
       next->dev.phys_card_memory_len = phys_card_memory_len;
+      /* TX */
       next->dev.tx_packet_memory = tx_packet_memory;
       next->dev.tx_descr_packet_memory = tx_descr_packet_memory;
       next->dev.channel_id = channel_id;
