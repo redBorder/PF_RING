@@ -1759,7 +1759,7 @@ pcap_inject_linux(pcap_t *handle, const void *buf, size_t size)
 
 #ifdef HAVE_PF_RING
 	if(handle->ring != NULL)
-	  return(pfring_send(handle->ring, (char*)buf, size));
+	  return(pfring_send(handle->ring, (char*)buf, size, 0));
 #endif
 
 	ret = send(handle->fd, buf, size, 0);

@@ -136,9 +136,9 @@ void sigproc(int sig) {
 /* *************************************** */
 
 void printHelp(void) {
-  printf("pfdnasend\n(C) 2011 Deri Luca <deri@ntop.org>\n\n");
+  printf("pfsend\n(C) 2011 Deri Luca <deri@ntop.org>\n\n");
 
-  printf("pfdnasend -i in_dev\n");
+  printf("pfsend -i out_dev\n");
   printf("-h              Print this help\n");
   printf("-i <device>     Device name. Use device\n");
   printf("-n <num>        Num pkts to send. use 0 for infinite\n");
@@ -187,8 +187,9 @@ int main(int argc, char* argv[]) {
   u_int32_t num = 1;
   int bind_core = -1;
   u_int16_t cpu_percentage = 0;
-  double gbit_s = 0, td;
+  double gbit_s = 0, td, pps;
   ticks tick_start = 0, tick_delta = 0;
+  ticks hz = 0;
   struct packet *tosend;
 
   while((c = getopt(argc,argv,"hi:n:g:l:ab:f:r:v")) != -1) {
@@ -251,13 +252,28 @@ int main(int argc, char* argv[]) {
   signal(SIGTERM, sigproc);
   signal(SIGINT, sigproc);
 
+  if (send_len < 60)
+    send_len = 60;
+
   if(gbit_s > 0) {
+    /* cumputing usleep delay */
     tick_start = getticks();
-    //time = (unsigned)((tick)/2533000);
-    td = (double)(672 /* nSec */ * 3.20 /*GHz*/)/gbit_s;
+    usleep(1);
+    tick_delta = getticks() - tick_start;
+    
+    /* cumputing CPU freq */
+    tick_start = getticks();
+    usleep(1001);
+    hz = (getticks() - tick_start - tick_delta);
+    printf("Estimated CPU freq: %llu Hz\n", hz);
+
+    /* computing max rate */
+    pps = ((gbit_s * 1000000) / 8 /*byte*/) / (8 /*Preamble*/ + send_len + 4 /*CRC*/ + 12 /*IFG*/);
+
+    td = (double)(hz / pps);
     tick_delta = (ticks)td;
-    printf("tick delta is %llu\n", tick_delta);
-    printf("send_len: %d\n", send_len);
+
+    printf("Number of %d-byte Packet Per Second at %f Gbit/s: %f\n", (send_len + 4 /*CRC*/), gbit_s, pps);
   }
 
 
@@ -344,6 +360,9 @@ int main(int argc, char* argv[]) {
   if(num == 0) num = (u_int32_t)-1;
 
   gettimeofday(&startTime, NULL);
+
+  if (gbit_s > 0)
+    tick_start = getticks();
 
   tosend = pkt_head;
   for(i=0; i<num; i++) {
