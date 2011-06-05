@@ -139,12 +139,17 @@ void printHelp(void) {
   printf("pfsend\n(C) 2011 Deri Luca <deri@ntop.org>\n\n");
 
   printf("pfsend -i out_dev\n");
+
+  printf("-a              Active send re-try\n");
+  printf("-b <cpu %%>      CPU pergentage priority (0-99)\n");
+  printf("-f <.pcap file> Send packets as read from a pcap file\n");
+  printf("-g <core_id>    Bind this app to a code (only with -n 0)\n");
   printf("-h              Print this help\n");
   printf("-i <device>     Device name. Use device\n");
-  printf("-n <num>        Num pkts to send. use 0 for infinite\n");
   printf("-l <length>     Packet length to send. Ignored with -f\n");
-  printf("-r <rate>       Rate to send (example -r 2.5 sends 2.5 Gbit/sec in terms of pps not Gbit)\n");
-  printf("-f <.pcap file> Send packets as read from a pcap file\n");
+  printf("-n <num>        Num pkts to send. use 0 for infinite\n");
+  printf("-r <rate>       Rate to send (example -r 2.5 sends 2.5 Gbit/sec)\n");
+  printf("-v              Verbose\n");
   exit(0);
 }
 
