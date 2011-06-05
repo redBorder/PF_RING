@@ -96,14 +96,14 @@ void print_stats() {
   deltaMillisec = delta_time(&now, &lastTime);
   currentThpt = (double)((num_pkt_good_sent-last_num_pkt_good_sent) * 1000)/deltaMillisec;
   currentThptBytes = (double)((num_bytes_good_sent-last_num_bytes_good_sent) * 1000)/deltaMillisec;
-  currentThptBytes /= (1024*1024)/8;
+  currentThptBytes /= (1000*1000*1000)/8;
 
   deltaMillisec = delta_time(&now, &startTime);
   avgThpt = (double)(num_pkt_good_sent * 1000)/deltaMillisec;
   avgThptBytes = (double)(num_bytes_good_sent * 1000)/deltaMillisec;
-  avgThptBytes /= (1024*1024)/8;
+  avgThptBytes /= (1000*1000*1000)/8;
 
-  fprintf(stderr, "TX rate: [current %.2f pps/%.2f Mbps][average %.2f pps/%.2f Mbps]\n", 
+  fprintf(stderr, "TX rate: [current %.0f pps/%.3f Gbps][average %.0f pps/%.3f Gbps]\n", 
 	  currentThpt, currentThptBytes, avgThpt, avgThptBytes);
 
   memcpy(&lastTime, &now, sizeof(now));
@@ -396,7 +396,7 @@ int main(int argc, char* argv[]) {
 
       goto redo;
     } else
-      num_pkt_good_sent++, num_bytes_good_sent += tosend->len+12 /* IFG */, tosend = tosend->next;
+      num_pkt_good_sent++, num_bytes_good_sent += tosend->len+24 /* 8 Preamble + 4 CRC + 12 IFG */, tosend = tosend->next;
   } /* for */
 
   pfring_close(pd);
