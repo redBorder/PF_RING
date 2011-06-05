@@ -40,17 +40,28 @@
 #include <time.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <pcap.h>
 
 #include "pfring.h"
 
+struct packet {
+  u_int16_t len;
+  char *pkt;
+  struct packet *next;
+};
+
+struct packet *pkt_head = NULL;
 pfring  *pd;
 pfring_stat pfringStats;
 char *in_dev = NULL;
 u_int8_t wait_for_packet = 1, do_shutdown = 0;
-u_int64_t num_good_sent = 0, last_num_good_sent = 0;
+u_int64_t num_pkt_good_sent = 0, last_num_pkt_good_sent = 0;
+u_int64_t num_bytes_good_sent = 0, last_num_bytes_good_sent = 0;
 struct timeval lastTime, startTime;
 
 #define DEFAULT_DEVICE     "eth0"
+
+typedef unsigned long long ticks;
 
 /* *************************************** */
 /*
@@ -78,20 +89,25 @@ double delta_time (struct timeval * now,
 /* *************************************** */
 
 void print_stats() {
-  double deltaMillisec, currentThpt, avgThpt;
+  double deltaMillisec, currentThpt, avgThpt, currentThptBytes, avgThptBytes;
   struct timeval now;
 
   gettimeofday(&now, NULL);
   deltaMillisec = delta_time(&now, &lastTime);
-  currentThpt = (double)((num_good_sent-last_num_good_sent) * 1000)/deltaMillisec;
+  currentThpt = (double)((num_pkt_good_sent-last_num_pkt_good_sent) * 1000)/deltaMillisec;
+  currentThptBytes = (double)((num_bytes_good_sent-last_num_bytes_good_sent) * 1000)/deltaMillisec;
+  currentThptBytes /= (1024*1024)/8;
 
   deltaMillisec = delta_time(&now, &startTime);
-  avgThpt = (double)(num_good_sent * 1000)/deltaMillisec;
+  avgThpt = (double)(num_pkt_good_sent * 1000)/deltaMillisec;
+  avgThptBytes = (double)(num_bytes_good_sent * 1000)/deltaMillisec;
+  avgThptBytes /= (1024*1024)/8;
 
-  fprintf(stderr, "TX rate: [current %.2f pps][average %.2f pps]\n", currentThpt, avgThpt);
+  fprintf(stderr, "TX rate: [current %.2f pps/%.2f Mbps][average %.2f pps/%.2f Mbps]\n", 
+	  currentThpt, currentThptBytes, avgThpt, avgThptBytes);
 
   memcpy(&lastTime, &now, sizeof(now));
-  last_num_good_sent = num_good_sent;
+  last_num_pkt_good_sent = num_pkt_good_sent, last_num_bytes_good_sent = num_bytes_good_sent;
 }
 
 /* ******************************** */
@@ -111,7 +127,7 @@ void sigproc(int sig) {
   if(called) return; else called = 1;
   do_shutdown = 1;
   print_stats();
-  printf("Sent %llu packets\n", (long long unsigned int)num_good_sent);
+  printf("Sent %llu packets\n", (long long unsigned int)num_pkt_good_sent);
   pfring_close(pd);
 
   exit(0);
@@ -125,7 +141,10 @@ void printHelp(void) {
   printf("pfdnasend -i in_dev\n");
   printf("-h              Print this help\n");
   printf("-i <device>     Device name. Use device\n");
-  printf("-n <num>        Num pkts to send\n");
+  printf("-n <num>        Num pkts to send. use 0 for infinite\n");
+  printf("-l <length>     Packet length to send. Ignored with -f\n");
+  printf("-r <rate>       Rate to send (example -r 2.5 sends 2.5 Gbit/sec in terms of pps not Gbit)\n");
+  printf("-f <.pcap file> Send packets as read from a pcap file\n");
   exit(0);
 }
 
@@ -149,22 +168,39 @@ int bind2core(u_int core_id) {
 
 /* *************************************** */
 
+static __inline__ ticks getticks(void)
+{
+  unsigned a, d;
+  asm("cpuid");
+  asm volatile("rdtsc" : "=a" (a), "=d" (d));
+
+  return (((ticks)a) | (((ticks)d) << 32));
+}
+
+/* *************************************** */
+
 int main(int argc, char* argv[]) {
-  char c;
+  char c, *pcap_in = NULL;
   int promisc, i, verbose = 0, active_poll = 0;
   char buffer[1500];
   int send_len = 256;
   u_int32_t num = 1;
   int bind_core = -1;
   u_int16_t cpu_percentage = 0;
+  double gbit_s = 0, td;
+  ticks tick_start = 0, tick_delta = 0;
+  struct packet *tosend;
 
-  while((c = getopt(argc,argv,"hi:n:g:l:v:ab:")) != -1) {
+  while((c = getopt(argc,argv,"hi:n:g:l:ab:f:r:v")) != -1) {
     switch(c) {
     case 'h':
       printHelp();
       break;
     case 'i':
       in_dev = strdup(optarg);
+      break;
+    case 'f':
+      pcap_in = strdup(optarg);
       break;
     case 'n':
       num = atoi(optarg);
@@ -180,6 +216,9 @@ int main(int argc, char* argv[]) {
       break;
     case 'a':
       active_poll = 1;
+      break;
+    case 'r':
+      sscanf(optarg, "%lf", &gbit_s);
       break;
     case 'b':
       cpu_percentage = atoi(optarg);
@@ -212,7 +251,82 @@ int main(int argc, char* argv[]) {
   signal(SIGTERM, sigproc);
   signal(SIGINT, sigproc);
 
-  for(i=0; i<send_len; i++) buffer[i] = i;
+  if(gbit_s > 0) {
+    tick_start = getticks();
+    //time = (unsigned)((tick)/2533000);
+    td = (double)(672 /* nSec */ * 3.20 /*GHz*/)/gbit_s;
+    tick_delta = (ticks)td;
+    printf("tick delta is %llu\n", tick_delta);
+    printf("send_len: %d\n", send_len);
+  }
+
+
+  if(pcap_in) {
+    char ebuf[256];
+    u_char *pkt;
+    struct pcap_pkthdr *h;
+    pcap_t *pt = pcap_open_offline(pcap_in, ebuf);
+
+    num = 0;
+
+    if(pt) {
+      struct packet *last = NULL;
+
+      while(1) {
+	struct packet *p;
+	int rc = pcap_next_ex(pt, &h, (const u_char**)&pkt);
+
+	if(rc <= 0) break;
+
+	p = (struct packet*)malloc(sizeof(struct packet));
+	if(p) {
+	  p->len = h->caplen;
+	  p->next = NULL;
+	  p->pkt = (char*)malloc(p->len);
+
+	  if(p->pkt == NULL) {
+	    printf("Not enough memory\n");
+	    break;
+	  } else
+	    memcpy(p->pkt, pkt, p->len);
+
+	  if(last) {
+	    last->next = p;
+	    last = p;
+	  } else
+	    pkt_head = p, last = p;
+	} else {
+	  printf("Not enough memory\n");
+	  break;
+	}
+
+	if(verbose) printf("Read %d bytes packet\n", p->len);
+	num++;
+      } /* while */
+
+      pcap_close(pt);
+      printf("Read %d packets\n", num);
+      last->next = pkt_head; /* Loop */
+      num = 0;
+    } else {
+      printf("Unable to open file %s\n", pcap_in);
+      pfring_close(pd);
+      return(-1);
+    }
+  } else {
+    struct packet *p;
+
+    for(i=0; i<send_len; i++) buffer[i] = i;
+
+    p = (struct packet*)malloc(sizeof(struct packet));
+    if(p) {
+      p->len = send_len;
+      p->next = p; /* Loop */
+      p->pkt = (char*)malloc(p->len);
+      memcpy(p->pkt, buffer, send_len);
+      pkt_head = p;
+    }
+  }
 
   if(bind_core >= 0)
     bind2core(bind_core);
@@ -231,29 +345,35 @@ int main(int argc, char* argv[]) {
 
   gettimeofday(&startTime, NULL);
 
+  tosend = pkt_head;
   for(i=0; i<num; i++) {
     int rc;
 
   redo:
-    rc = pfring_send(pd, buffer, send_len, 0 /* Don't flush (it does PF_RING automatically) */);
+    rc = pfring_send(pd, tosend->pkt, tosend->len, 0 /* Don't flush (it does PF_RING automatically) */);
 
     if(verbose)
-      printf("[%d] pfring_send returned %d\n", i, rc);
+      printf("[%d] pfring_send(%d) returned %d\n", i, tosend->len, rc);
 
     if(rc == -1) {
       /* Not enough space in buffer */
 
-      if(!active_poll) {
-	if(bind_core >= 0)
-	  usleep(1);
-	else
-	  pfring_poll(pd, 0);	
+      if(gbit_s == 0) {
+	if(!active_poll) {
+	  if(bind_core >= 0)
+	    usleep(1);
+	  else
+	    pfring_poll(pd, 0);
+	}
+      } else {
+	/* Just waste some time */
+	while((getticks() - tick_start) < (i * tick_delta)) ;
       }
 
       goto redo;
     } else
-      num_good_sent++;
-  }
+      num_pkt_good_sent++, num_bytes_good_sent += tosend->len+12 /* IFG */, tosend = tosend->next;
+  } /* for */
 
   pfring_close(pd);
 
