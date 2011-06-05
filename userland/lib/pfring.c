@@ -211,9 +211,9 @@ void pfring_close(pfring *ring) {
 
 /* **************************************************** */
 
-int  pfring_send(pfring *ring, char *pkt, u_int pkt_len) {
+int pfring_send(pfring *ring, char *pkt, u_int pkt_len, u_int8_t flush_packet) {
   if (ring && ring->send)
-    return ring->send(ring, pkt, pkt_len);
+    return ring->send(ring, pkt, pkt_len, flush_packet);
 
   return -1;
 }

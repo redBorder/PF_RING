@@ -22,7 +22,7 @@ DNA_DEFINE = #-DENABLE_DNA_SUPPORT
 #
 # PF_RING aware libpcap
 #
-O_FLAG     = #-O2
+O_FLAG     = -O2
 EXTRA_LIBS = #-ldag
 PCAPDIR    = ../libpcap-1.1.1-ring
 LIBPCAP    = ${PCAPDIR}/libpcap.a  ${EXTRA_LIBS}
@@ -58,7 +58,7 @@ LIBS       = ${LIBPFRING} -lpthread
 #
 PFPROGS   = ringc rings ringm pcaps pfcount pfcount_multichannel pftwin ptwin preflect pfbounce pfmap \
 	    forwarder alldevs dummy_plugin_pfcount pcap2nspcap pfcount_dummy_plugin pffilter_test \
-	    pfcount_bundle pfcount_82599 vdevice_simulator pfsystest pfdnasend
+	    pfcount_bundle pfcount_82599 vdevice_simulator pfsystest pfsend
 
 PCAPPROGS = pcount pwrite
 TARGETS   = ${PFPROGS} ${PCAPPROGS}
@@ -112,8 +112,8 @@ preflect: preflect.o ${LIBPFRING}
 pfbounce: pfbounce.o ${LIBPFRING}
 	${CC} pfbounce.o ${LIBPCAP} ${LIBS} -o $@
 
-pfdnasend: pfdnasend.o ${LIBPFRING}
-	${CC} pfdnasend.o ${LIBPCAP} ${LIBS} -o $@
+pfsend: pfsend.o ${LIBPFRING}
+	${CC} pfsend.o ${LIBPCAP} ${LIBS} -o $@
 
 pftwin: pftwin.o ${LIBPFRING}
 	${CC} pftwin.o ${LIBS} -o $@

@@ -120,7 +120,7 @@ extern "C" {
     /* TODO these fields should be moved in ->priv_data */
     /* DNA (Direct NIC Access) */
     u_char dna_mapped_device;    
-    u_int16_t num_pkts_before_dns_sync, dna_sync_watermark;
+    u_int16_t num_rx_pkts_before_dns_sync, num_tx_pkts_before_dns_sync, dna_sync_watermark;
     u_int32_t tot_dna_read_pkts, rx_reg, tx_reg, last_rx_slot_read;
     dna_device dna_dev;    
     u_int32_t *rx_reg_ptr, *tx_reg_ptr;
@@ -137,7 +137,7 @@ extern "C" {
     int      (*set_channel_id)       (pfring *, u_int32_t);
     int      (*set_application_name) (pfring *, char *);
     int      (*bind)                 (pfring *, char *);
-    int      (*send)                 (pfring *, char *, u_int);
+    int      (*send)                 (pfring *, char *, u_int, u_int8_t);
     u_int8_t (*get_num_rx_channels)  (pfring *);
     int      (*set_sampling_rate)    (pfring *, u_int32_t);
     int      (*get_selectable_fd)    (pfring *);
@@ -188,7 +188,7 @@ extern "C" {
   int pfring_set_channel_id(pfring *ring, u_int32_t channel_id);
   int pfring_set_application_name(pfring *ring, char *name);
   int pfring_bind(pfring *ring, char *device_name);
-  int pfring_send(pfring *ring, char *pkt, u_int pkt_len);
+  int pfring_send(pfring *ring, char *pkt, u_int pkt_len, u_int8_t flush_packet);
   u_int8_t pfring_get_num_rx_channels(pfring *ring);
   int pfring_set_sampling_rate(pfring *ring, u_int32_t rate /* 1 = no sampling */);
   int pfring_get_selectable_fd(pfring *ring);

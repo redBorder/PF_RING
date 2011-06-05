@@ -47,6 +47,8 @@ pfring  *pd;
 pfring_stat pfringStats;
 char *in_dev = NULL;
 u_int8_t wait_for_packet = 1, do_shutdown = 0;
+u_int64_t num_good_sent = 0, last_num_good_sent = 0;
+struct timeval lastTime, startTime;
 
 #define DEFAULT_DEVICE     "eth0"
 
@@ -73,7 +75,32 @@ double delta_time (struct timeval * now,
   return((double)(delta_seconds * 1000) + (double)delta_microseconds/1000);
 }
 
+/* *************************************** */
+
+void print_stats() {
+  double deltaMillisec, currentThpt, avgThpt;
+  struct timeval now;
+
+  gettimeofday(&now, NULL);
+  deltaMillisec = delta_time(&now, &lastTime);
+  currentThpt = (double)((num_good_sent-last_num_good_sent) * 1000)/deltaMillisec;
+
+  deltaMillisec = delta_time(&now, &startTime);
+  avgThpt = (double)(num_good_sent * 1000)/deltaMillisec;
+
+  fprintf(stderr, "TX rate: [current %.2f pps][average %.2f pps]\n", currentThpt, avgThpt);
+
+  memcpy(&lastTime, &now, sizeof(now));
+  last_num_good_sent = num_good_sent;
+}
+
 /* ******************************** */
+
+void my_sigalarm(int sig) {
+  print_stats();
+  alarm(1);
+  signal(SIGALRM, my_sigalarm);
+}
 
 /* ******************************** */
 
@@ -83,7 +110,8 @@ void sigproc(int sig) {
   fprintf(stderr, "Leaving...\n");
   if(called) return; else called = 1;
   do_shutdown = 1;
-
+  print_stats();
+  printf("Sent %llu packets\n", (long long unsigned int)num_good_sent);
   pfring_close(pd);
 
   exit(0);
@@ -123,17 +151,17 @@ int bind2core(u_int core_id) {
 
 int main(int argc, char* argv[]) {
   char c;
-  int promisc, i, verbose = 0;
+  int promisc, i, verbose = 0, active_poll = 0;
   char buffer[1500];
   int send_len = 256;
-  u_int32_t num_good_sent = 0;
-  u_int32_t num = 1; 
+  u_int32_t num = 1;
   int bind_core = -1;
+  u_int16_t cpu_percentage = 0;
 
-  while((c = getopt(argc,argv,"hi:n:g:l:v:")) != -1) {
+  while((c = getopt(argc,argv,"hi:n:g:l:v:ab:")) != -1) {
     switch(c) {
     case 'h':
-      printHelp();      
+      printHelp();
       break;
     case 'i':
       in_dev = strdup(optarg);
@@ -149,6 +177,12 @@ int main(int argc, char* argv[]) {
       break;
     case 'v':
       verbose = 1;
+      break;
+    case 'a':
+      active_poll = 1;
+      break;
+    case 'b':
+      cpu_percentage = atoi(optarg);
       break;
     }
   }
@@ -170,7 +204,7 @@ int main(int argc, char* argv[]) {
     pfring_set_application_name(pd, "pfdnasend");
     pfring_version(pd, &version);
 
-    printf("Using PF_RING v.%d.%d.%d\n", (version & 0xFFFF0000) >> 16, 
+    printf("Using PF_RING v.%d.%d.%d\n", (version & 0xFFFF0000) >> 16,
 	   (version & 0x0000FF00) >> 8, version & 0x000000FF);
   }
 
@@ -183,28 +217,45 @@ int main(int argc, char* argv[]) {
   if(bind_core >= 0)
     bind2core(bind_core);
 
+  if(wait_for_packet && (cpu_percentage > 0)) {
+    if(cpu_percentage > 99) cpu_percentage = 99;
+    pfring_config(cpu_percentage);
+  }
+
+  if(!verbose) {
+    signal(SIGALRM, my_sigalarm);
+    alarm(1);
+  }
+
   if(num == 0) num = (u_int32_t)-1;
+
+  gettimeofday(&startTime, NULL);
 
   for(i=0; i<num; i++) {
     int rc;
-    
-  redo:
-    rc = pfring_send(pd, buffer, send_len);
 
-    if(verbose) 
+  redo:
+    rc = pfring_send(pd, buffer, send_len, 0 /* Don't flush (it does PF_RING automatically) */);
+
+    if(verbose)
       printf("[%d] pfring_send returned %d\n", i, rc);
-   
+
     if(rc == -1) {
-      // printf("[%d] pfring_send returned %d\n", i, rc);
-      usleep(1);
+      /* Not enough space in buffer */
+
+      if(!active_poll) {
+	if(bind_core >= 0)
+	  usleep(1);
+	else
+	  pfring_poll(pd, 0);	
+      }
+
       goto redo;
     } else
-      num_good_sent++;   
+      num_good_sent++;
   }
 
   pfring_close(pd);
-
-  printf("Sent %d packets\n", num_good_sent);
 
   return(0);
 }
