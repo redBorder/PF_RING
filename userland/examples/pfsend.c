@@ -264,16 +264,16 @@ int main(int argc, char* argv[]) {
     /* cumputing CPU freq */
     tick_start = getticks();
     usleep(1001);
-    hz = (getticks() - tick_start - tick_delta);
+    hz = (getticks() - tick_start - tick_delta) * 1000 /*kHz -> Hz*/;
     printf("Estimated CPU freq: %llu Hz\n", hz);
 
     /* computing max rate */
-    pps = ((gbit_s * 1000000) / 8 /*byte*/) / (8 /*Preamble*/ + send_len + 4 /*CRC*/ + 12 /*IFG*/);
+    pps = ((gbit_s * 1000000000) / 8 /*byte*/) / (8 /*Preamble*/ + send_len + 4 /*CRC*/ + 12 /*IFG*/);
 
     td = (double)(hz / pps);
     tick_delta = (ticks)td;
 
-    printf("Number of %d-byte Packet Per Second at %f Gbit/s: %f\n", (send_len + 4 /*CRC*/), gbit_s, pps);
+    printf("Number of %d-byte Packet Per Second at %.2f Gbit/s: %.2f\n", (send_len + 4 /*CRC*/), gbit_s, pps);
   }
 
 
