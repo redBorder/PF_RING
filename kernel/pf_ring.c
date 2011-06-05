@@ -3782,6 +3782,7 @@ static int ring_mmap(struct file *file,
   struct sock *sk = sock->sk;
   struct pf_ring_socket *pfr = ring_sk(sk);
   int rc;
+  unsigned long mem_id = 0;
   unsigned long size = (unsigned long)(vma->vm_end - vma->vm_start);
 
   if(enable_debug)
@@ -3803,7 +3804,11 @@ static int ring_mmap(struct file *file,
     printk("[PF_RING] ring_mmap() called, size: %ld bytes [bucket_len=%d]\n",
 	   size, pfr->bucket_len);
 
-  if((pfr->dna_device == NULL) && (pfr->ring_memory == NULL)) {
+  /* using vm_pgoff as memory id */
+  mem_id = vma->vm_pgoff;
+
+  if( (mem_id == 0 && pfr->ring_memory == NULL) ||
+      (mem_id  > 0 && pfr->dna_device  == NULL)) {
 
     if(enable_debug)
       printk("[PF_RING] ring_mmap() failed: "
@@ -3812,59 +3817,54 @@ static int ring_mmap(struct file *file,
     return -EINVAL;
   }
 
-  if(pfr->dna_device == NULL) {
-    /* if userspace tries to mmap beyond end of our buffer, fail */
-    if(size > pfr->slots_info->tot_mem) {
+  switch(mem_id) {
+    /* RING */
+    case 0:
+ 
+      /* if userspace tries to mmap beyond end of our buffer, fail */
+      if(size > pfr->slots_info->tot_mem) {
+        if(enable_debug)
+	  printk("[PF_RING] ring_mmap() failed: "
+	         "area too large [%ld > %d]\n",
+	         size, pfr->slots_info->tot_mem);
+        return(-EINVAL);
+      }
 
       if(enable_debug)
-	printk("[PF_RING] ring_mmap() failed: "
-	       "area too large [%ld > %d]\n",
-	       size, pfr->slots_info->tot_mem);
+        printk("[PF_RING] mmap [slot_len=%d]"
+	       "[tot_slots=%d] for ring on device %s\n",
+	       pfr->slots_info->slot_len, pfr->slots_info->min_num_slots,
+	       pfr->ring_netdev->dev->name);
 
-      return(-EINVAL);
-    }
+      if((rc = do_memory_mmap(vma, size, pfr->ring_memory, VM_LOCKED, 0)) < 0)
+        return(rc);
+      break;
 
-    if(enable_debug)
-      printk("[PF_RING] mmap [slot_len=%d]"
-	     "[tot_slots=%d] for ring on device %s\n",
-	     pfr->slots_info->slot_len, pfr->slots_info->min_num_slots,
-	     pfr->ring_netdev->dev->name);
-
-    if((rc = do_memory_mmap(vma, size, pfr->ring_memory, VM_LOCKED, 0)) < 0)
-      return(rc);
-  } else {
-    int count = pfr->mmap_count;
     /* DNA Device */
-
-    /* printk("[PF_RING] mmap count(%d)\n", count); */
-
-    pfr->mmap_count++;
-
-    switch(count) {
-    case 0:
+    case 1:
       /* DNA: RX packet memory */
       if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->rx_packet_memory, VM_LOCKED, 1)) < 0)
 	return(rc);
       break;
 
-    case 1:
+    case 2:
       /* DNA: RX packet descriptors */
       if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->rx_descr_packet_memory, VM_LOCKED, 1)) < 0)
 	return(rc);
       break;
 
-    case 2:
+    case 3:
       if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->phys_card_memory, (VM_RESERVED | VM_IO), 2)) < 0)
 	return(rc);
       break;
 
-    case 3:
+    case 4:
       /* DNA: TX packet memory */
       if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->tx_packet_memory, VM_LOCKED, 1)) < 0)
 	return(rc);
       break;
 
-    case 4:
+    case 5:
       /* DNA: TX packet descriptors */
       if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->tx_descr_packet_memory, VM_LOCKED, 1)) < 0)
 	return(rc);
@@ -3872,7 +3872,6 @@ static int ring_mmap(struct file *file,
 
     default:
       return(-EAGAIN);
-    }
   }
 
   if(enable_debug)
