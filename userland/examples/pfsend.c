@@ -362,15 +362,15 @@ int main(int argc, char* argv[]) {
     alarm(1);
   }
 
-  if(num == 0) num = (u_int32_t)-1;
-
   gettimeofday(&startTime, NULL);
 
   if (gbit_s > 0)
     tick_start = getticks();
 
   tosend = pkt_head;
-  for(i=0; i<num; i++) {
+  i = 0;
+
+  while(i <= num) {
     int rc;
 
   redo:
@@ -397,8 +397,11 @@ int main(int argc, char* argv[]) {
       goto redo;
     } else
       num_pkt_good_sent++, num_bytes_good_sent += tosend->len+24 /* 8 Preamble + 4 CRC + 12 IFG */, tosend = tosend->next;
+
+    if(num > 0) i++;
   } /* for */
 
+  print_stats(0);
   pfring_close(pd);
 
   return(0);
