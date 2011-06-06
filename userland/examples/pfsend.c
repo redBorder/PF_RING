@@ -391,7 +391,7 @@ int main(int argc, char* argv[]) {
 	}
       } else {
 	/* Just waste some time */
-	while((getticks() - tick_start) < (i * tick_delta)) ;
+	while((getticks() - tick_start) < (num_pkt_good_sent * tick_delta)) ;
       }
 
       goto redo;
