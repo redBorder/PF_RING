@@ -707,7 +707,6 @@ struct pf_ring_socket {
   struct pf_ring_socket *master_ring;
 
   /* Direct NIC Access */
-  u_int8_t mmap_count;
   dna_device *dna_device;
   dna_device_list *dna_device_entry;
 

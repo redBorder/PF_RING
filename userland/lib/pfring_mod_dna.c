@@ -52,9 +52,7 @@ static int pfring_map_dna_device(pfring *ring,
 
 /* **************************************************** */
 
-void pfring_dna_close(pfring *ring) {
-  if(ring->dna_term)
-    ring->dna_term(ring);
+void pfring_dna_unmap(pfring *ring) {
 
   if(ring->dna_dev.rx_packet_memory != 0)
     munmap((void*)ring->dna_dev.rx_packet_memory,
@@ -81,6 +79,15 @@ void pfring_dna_close(pfring *ring) {
     set_if_promisc(ring->device_name, 0);
 
   close(ring->fd);
+}
+
+/* **************************************************** */
+
+void pfring_dna_close(pfring *ring) {
+  if(ring->dna_term)
+    ring->dna_term(ring);
+
+  pfring_dna_unmap(ring);
 }
 
 /* **************************************************** */
@@ -156,19 +163,17 @@ static void pfring_dump_dna_stats(pfring* ring) {
 
 /* **************************************************** */
 
-int pfring_dna_open(pfring *ring) {
+int pfring_dna_map(pfring *ring) {
   int   channel_id = 0;
   int   rc;
   char *at;
 
-  ring->close = pfring_dna_close;
-  ring->stats = pfring_dna_stats;
-  ring->recv = pfring_dna_recv;
+  ring->close = pfring_dna_unmap;
   ring->get_num_rx_channels = pfring_mod_get_num_rx_channels;
   ring->set_poll_duration = pfring_dna_set_poll_duration;
-  ring->send = NULL; /* Set by the dna library */
-  ring->last_dna_operation = remove_device_mapping;
   ring->set_poll_watermark = pfring_mod_set_poll_watermark;
+
+  ring->last_dna_operation = remove_device_mapping;
   ring->fd = socket(PF_RING, SOCK_RAW, htons(ETH_P_ALL));
 
 #ifdef DEBUG
@@ -266,12 +271,13 @@ int pfring_dna_open(pfring *ring) {
     }
   }
 
+
   /* ***************************************** */
 
   if (ring->dna_dev.packet_memory_tot_len > 0){
     ring->dna_dev.tx_packet_memory =
-	(unsigned long)mmap(NULL, ring->dna_dev.packet_memory_tot_len,
-			    PROT_READ|PROT_WRITE, MAP_SHARED, ring->fd, 4*getpagesize());
+        (unsigned long)mmap(NULL, ring->dna_dev.packet_memory_tot_len,
+                            PROT_READ|PROT_WRITE, MAP_SHARED, ring->fd, 4*getpagesize());
 
     if(ring->dna_dev.tx_packet_memory == (unsigned long)MAP_FAILED) {
       printf("mmap(4) failed");
@@ -285,7 +291,7 @@ int pfring_dna_open(pfring *ring) {
   if (ring->dna_dev.descr_packet_memory_tot_len > 0){
     ring->dna_dev.tx_descr_packet_memory =
         (void*)mmap(NULL, ring->dna_dev.descr_packet_memory_tot_len,
-		    PROT_READ|PROT_WRITE, MAP_SHARED, ring->fd, 5*getpagesize());
+                    PROT_READ|PROT_WRITE, MAP_SHARED, ring->fd, 5*getpagesize());
 
     if(ring->dna_dev.tx_descr_packet_memory == MAP_FAILED) {
       printf("mmap(5) failed");
@@ -296,15 +302,32 @@ int pfring_dna_open(pfring *ring) {
 
   /* ***************************************** */
 
+  if(ring->promisc) {
+    if(set_if_promisc(ring->device_name, 1) == 0)
+      ring->clear_promisc = 1;
+  }
+
+  return 0;
+}
+
+/* **************************************************** */
+
+int pfring_dna_open(pfring *ring) {
+
+  int rc;
+
+  if ( (rc = pfring_dna_map(ring)) < 0)
+    return rc;
+
+  ring->close = pfring_dna_close;
+  ring->stats = pfring_dna_stats;
+  ring->recv  = pfring_dna_recv;
+  ring->send = NULL; /* Set by the dna library */
+
   if(dna_init(ring, sizeof(pfring)) == -1) {
     printf("dna_init() failed\n");
     close(ring->fd);
     return -1;
-  }
-
-  if(ring->promisc) {
-    if(set_if_promisc(ring->device_name, 1) == 0)
-      ring->clear_promisc = 1;
   }
 
 #ifdef DEBUG

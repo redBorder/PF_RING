@@ -46,6 +46,11 @@ static pfring_module_info pfring_module_list[] = {
     .name = "dna",
     .open = pfring_dna_open,
   },
+  {
+    /* used by vPF_RING (host) */
+    .name = "vhdna", 
+    .open = pfring_dna_map,
+  },
 #endif
 #ifdef HAVE_VIRTUAL
   {

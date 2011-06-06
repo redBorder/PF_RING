@@ -238,6 +238,7 @@ extern "C" {
   int pfring_poll(pfring *ring, u_int wait_duration);
   int pfring_version(pfring *ring, u_int32_t *version);
   int pfring_get_bound_device_address(pfring *ring, u_char mac_address[6]);
+  u_int16_t pfring_get_slot_header_len(pfring *ring);
 
   /* PF_RING Socket bundle */
   void init_pfring_bundle(pfring_bundle *bundle, bundle_read_policy p);

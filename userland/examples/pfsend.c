@@ -188,7 +188,7 @@ int main(int argc, char* argv[]) {
   char c, *pcap_in = NULL;
   int promisc, i, verbose = 0, active_poll = 0;
   char buffer[1500];
-  int send_len = 256;
+  int send_len = 60;
   u_int32_t num = 1;
   int bind_core = -1;
   u_int16_t cpu_percentage = 0;

@@ -93,18 +93,17 @@ int pfring_enable_hw_timestamp(pfring* ring, char *device_name) {
 
 /* **************************************************** */
 
-static u_int16_t pfring_get_slot_header_len(pfring *ring) {
-  if(ring == NULL)
-    return(1);
-  else {
-    u_int16_t hlen;
-    socklen_t len = sizeof(hlen);
-    int ret, rc = getsockopt(ring->fd, 0, SO_GET_PKT_HEADER_LEN, &hlen, &len);
+u_int16_t pfring_get_slot_header_len(pfring *ring) {
+  if(! ring)
+    return 1;
 
-    ret = (rc == 0) ? hlen : -1;
+  u_int16_t hlen;
+  socklen_t len = sizeof(hlen);
+  int ret, rc = getsockopt(ring->fd, 0, SO_GET_PKT_HEADER_LEN, &hlen, &len);
 
-    return(ret);
-  }
+  ret = (rc == 0) ? hlen : -1;
+
+  return(ret);
 }
 
 /* **************************************************** */
@@ -362,7 +361,7 @@ void pfring_mod_close(pfring *ring) {
 
 /* **************************************************** */
 
-int  pfring_mod_send(pfring *ring, char *pkt, u_int pkt_len) {
+int  pfring_mod_send(pfring *ring, char *pkt, u_int pkt_len, u_int8_t flush_packet) {
   return(sendto(ring->fd, pkt, pkt_len, 0, (struct sockaddr *)&ring->sock_tx, sizeof(ring->sock_tx)));
 }
 

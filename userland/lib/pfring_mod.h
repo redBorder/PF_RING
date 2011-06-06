@@ -26,7 +26,7 @@ int      pfring_mod_remove_hw_rule(pfring *ring, u_int16_t rule_id);
 int      pfring_mod_set_channel_id(pfring *ring, u_int32_t channel_id);
 int      pfring_mod_set_application_name(pfring *ring, char *name);
 int      pfring_mod_bind(pfring *ring, char *device_name);
-int      pfring_mod_send(pfring *ring, char *pkt, u_int pkt_len);
+int      pfring_mod_send(pfring *ring, char *pkt, u_int pkt_len, u_int8_t flush_packet);
 u_int8_t pfring_mod_get_num_rx_channels(pfring *ring);
 int      pfring_mod_set_sampling_rate(pfring *ring, u_int32_t rate);
 int      pfring_mod_get_selectable_fd(pfring *ring);
