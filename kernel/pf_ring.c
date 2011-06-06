@@ -103,7 +103,7 @@
 #include <net/ip.h>
 #include <net/ipv6.h>
 
-#if(LINUX_VERSION_CODE > KERNEL_VERSION(2,6,22))
+#if(LINUX_VERSION_CODE > KERNEL_VERSION(2,6,26))
 #include <linux/eventfd.h>
 #define VPFRING_SUPPORT
 #endif
