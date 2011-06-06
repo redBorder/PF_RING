@@ -19,8 +19,11 @@ void pfring_dna_close(pfring *ring);
 int  pfring_dna_stats(pfring *ring, pfring_stat *stats);
 int  pfring_dna_recv (pfring *ring, u_char** buffer, u_int buffer_len, 
 		      struct pfring_pkthdr *hdr, u_int8_t wait_for_incoming_packet);
-int  pfring_dna_set_poll_duration(pfring *ring, u_int duration);
 int  pfring_dna_send(pfring *ring, char *pkt, u_int pkt_len);
+
+/* used by Virtual PF_RING host-side */
+int  pfring_dna_map  (pfring *ring);
+void pfring_dna_unmap(pfring *ring);
 
 /* DNA */
 extern int dna_init(pfring* ring, u_short len);
@@ -33,10 +36,5 @@ extern char* dna_get_next_packet(pfring* ring,
 				 struct pfring_pkthdr *hdr);
 extern void dna_dump_stats(pfring* ring);
 extern int dna_send_packet(pfring* ring, char* buffer, u_int buffer_len);
-
-/* used by Virtual PF_RING host-side */
-
-int  pfring_dna_map  (pfring *ring);
-void pfring_dna_unmap(pfring *ring);
 
 #endif /* _PFRING_DNA_H_ */

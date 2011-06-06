@@ -169,9 +169,45 @@ int pfring_dna_map(pfring *ring) {
   char *at;
 
   ring->close = pfring_dna_unmap;
-  ring->get_num_rx_channels = pfring_mod_get_num_rx_channels;
-  ring->set_poll_duration = pfring_dna_set_poll_duration;
+
+  ring->stats = NULL;
+  ring->recv  = NULL;
   ring->set_poll_watermark = pfring_mod_set_poll_watermark;
+  ring->set_poll_duration = pfring_mod_set_poll_duration;
+  ring->add_hw_rule = pfring_mod_add_hw_rule;
+  ring->remove_hw_rule = pfring_mod_remove_hw_rule;
+  ring->set_channel_id = pfring_mod_set_channel_id;
+  ring->set_application_name = pfring_mod_set_application_name;
+  ring->bind = pfring_mod_bind;
+  ring->send = NULL;
+  ring->get_num_rx_channels = pfring_mod_get_num_rx_channels;
+  ring->set_sampling_rate = pfring_mod_set_sampling_rate;
+  ring->get_selectable_fd = pfring_mod_get_selectable_fd;
+  ring->set_direction = pfring_mod_set_direction;
+  ring->set_cluster = pfring_mod_set_cluster;
+  ring->remove_from_cluster = pfring_mod_remove_from_cluster;
+  ring->set_master_id = pfring_mod_set_master_id;
+  ring->set_master = pfring_mod_set_master;
+  ring->get_ring_id = pfring_mod_get_ring_id;
+  ring->get_num_queued_pkts = pfring_mod_get_num_queued_pkts;
+  ring->get_packet_consumer_mode = pfring_mod_get_packet_consumer_mode;
+  ring->set_packet_consumer_mode = pfring_mod_set_packet_consumer_mode;
+  ring->get_hash_filtering_rule_stats = pfring_mod_get_hash_filtering_rule_stats;
+  ring->handle_hash_filtering_rule = pfring_mod_handle_hash_filtering_rule;
+  ring->purge_idle_hash_rules = pfring_mod_purge_idle_hash_rules;
+  ring->add_filtering_rule = pfring_mod_add_filtering_rule;
+  ring->remove_filtering_rule = pfring_mod_remove_filtering_rule;
+  ring->get_filtering_rule_stats = pfring_mod_get_filtering_rule_stats;
+  ring->toggle_filtering_policy = pfring_mod_toggle_filtering_policy;
+  ring->enable_rss_rehash = pfring_mod_enable_rss_rehash;
+  ring->poll = pfring_mod_poll;
+  ring->version = pfring_mod_version;
+  ring->get_bound_device_address = pfring_mod_get_bound_device_address;
+  ring->get_slot_header_len = pfring_mod_get_slot_header_len;
+  ring->set_virtual_device = pfring_mod_set_virtual_device;
+  ring->loopback_test = pfring_mod_loopback_test;
+  ring->enable_ring = pfring_mod_enable_ring;
+  ring->disable_ring = pfring_mod_disable_ring;
 
   ring->last_dna_operation = remove_device_mapping;
   ring->fd = socket(PF_RING, SOCK_RAW, htons(ETH_P_ALL));
@@ -338,9 +374,4 @@ int pfring_dna_open(pfring *ring) {
 }
 
 /* *********************************** */
-
-int pfring_dna_set_poll_duration(pfring *ring, u_int duration) {
-  return pfring_mod_set_poll_duration(ring, duration);
-}
-
 
