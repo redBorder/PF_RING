@@ -482,8 +482,6 @@ static inline int check_and_init_free_slot(struct pf_ring_socket *pfr, int off)
 {
   // smp_rmb();
 
-  /* Old version, ok with old recv prototype (non zero-copy) */
-
   if(pfr->slots_info->insert_off == pfr->slots_info->remove_off) {
     /*
       Both insert and remove offset are set on the same slot.
