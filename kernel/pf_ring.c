@@ -482,6 +482,8 @@ static inline int check_and_init_free_slot(struct pf_ring_socket *pfr, int off)
 {
   // smp_rmb();
 
+  /* Old version, ok with old recv prototype (non zero-copy) */
+
   if(pfr->slots_info->insert_off == pfr->slots_info->remove_off) {
     /*
       Both insert and remove offset are set on the same slot.
@@ -494,13 +496,24 @@ static inline int check_and_init_free_slot(struct pf_ring_socket *pfr, int off)
     /* There are packets in the ring. We have to check whether we have enough to accommodate a new packet */
 
     if(pfr->slots_info->insert_off < pfr->slots_info->remove_off) {
-      if((pfr->slots_info->remove_off - pfr->slots_info->insert_off) < pfr->slots_info->slot_len)
+
+#if 1 /* Zero-copy recv: this prevents from overwriting packets while apps are processing them */ 
+      if((pfr->slots_info->remove_off - pfr->slots_info->insert_off) < (2 * pfr->slots_info->slot_len))
+#else
+      if((pfr->slots_info->remove_off - pfr->slots_info->insert_off) <      pfr->slots_info->slot_len )
+#endif
 	return(0);
     } else {
       /* We have enough room for the incoming packet as after we insert a packet, the insert_off
 	 offset is wrapped to the beginning in case the space remaining is less than slot_len
 	 (i.e. the memory needed to accommodate a packet)
       */
+
+#if 1 /* Zero-copy recv: this prevents from overwriting packets while apps are processing them */
+      if ((pfr->slots_info->tot_mem - sizeof(FlowSlotInfo) - pfr->slots_info->insert_off) < (2 * pfr->slots_info->slot_len) &&
+          pfr->slots_info->remove_off == 0)
+	return(0);
+#endif
     }
   }
 
