@@ -2631,7 +2631,8 @@ inline int is_valid_skb_direction(packet_direction direction, u_char recv_packet
 
 static struct sk_buff* defrag_skb(struct sk_buff *skb,
 				  u_int16_t displ,
-				  struct pfring_pkthdr *hdr) {
+				  struct pfring_pkthdr *hdr,
+				  int *defragmented_skb) {
   struct sk_buff *cloned = NULL;
   struct iphdr *iphdr = NULL;
   struct sk_buff *skk = NULL;
@@ -2671,6 +2672,7 @@ static struct sk_buff* defrag_skb(struct sk_buff *skb,
 		   skb_shinfo(skk)->frag_list);
 
 	  skb = skk;
+	  *defragmented_skb = 1;
 	  hdr->len = hdr->caplen = skb->len + displ;
 	  parse_pkt(skb, displ, hdr, 1);
 	} else {
@@ -2753,6 +2755,7 @@ static int skb_ring_handler(struct sk_buff *skb,
   struct list_head *ptr;
   struct pfring_pkthdr hdr;
   int displ;
+  int defragmented_skb = 0;
   struct sk_buff *skk = NULL;
   struct sk_buff *orig_skb = skb;
 
@@ -2824,7 +2827,7 @@ static int skb_ring_handler(struct sk_buff *skb,
 	 && is_ip_pkt
 	 && recv_packet
 	 && (ring_table_size > 0)) {
-	skb = skk = defrag_skb(skb, displ, &hdr);
+	skb = skk = defrag_skb(skb, displ, &hdr, &defragmented_skb);
 
 	if(skb == NULL)
 	  return(0);
@@ -2951,7 +2954,7 @@ static int skb_ring_handler(struct sk_buff *skb,
 #endif
 
     /* Fragment handling */
-    if(skk != NULL)
+    if(skk != NULL && defragmented_skb)
       kfree_skb(skk);
   }
 
