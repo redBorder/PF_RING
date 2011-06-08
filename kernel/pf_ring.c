@@ -2824,7 +2824,7 @@ static int skb_ring_handler(struct sk_buff *skb,
 	 && is_ip_pkt
 	 && recv_packet
 	 && (ring_table_size > 0)) {
-	skb = defrag_skb(skb, displ, &hdr);
+	skb = skk = defrag_skb(skb, displ, &hdr);
 
 	if(skb == NULL)
 	  return(0);
