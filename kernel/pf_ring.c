@@ -1260,7 +1260,7 @@ static int parse_raw_pkt(char *data, u_int data_len,
     hdr->extended_hdr.parsed_pkt.vlan_id = 0;	/* Any VLAN */
   }
 
-  if(enable_debug)
+  if(unlikely(enable_debug))
     printk("[PF_RING] [eth_type=%04X]\n", hdr->extended_hdr.parsed_pkt.eth_type);
 
   if(hdr->extended_hdr.parsed_pkt.eth_type == 0x0800 /* IPv4 */ ) {
@@ -1335,7 +1335,7 @@ static int parse_raw_pkt(char *data, u_int data_len,
     return(0); /* No IP */
   }
 
-  if(enable_debug)
+  if(unlikely(enable_debug))
     printk("[PF_RING] [l3_proto=%d]\n", hdr->extended_hdr.parsed_pkt.l3_proto);
 
   if((hdr->extended_hdr.parsed_pkt.l3_proto == IPPROTO_TCP) || (hdr->extended_hdr.parsed_pkt.l3_proto == IPPROTO_UDP)) {
@@ -1366,7 +1366,7 @@ static int parse_raw_pkt(char *data, u_int data_len,
     } else
       hdr->extended_hdr.parsed_pkt.offset.payload_offset = hdr->extended_hdr.parsed_pkt.offset.l4_offset;
 
-    if(enable_debug)
+    if(unlikely(enable_debug))
       printk("[PF_RING] [l4_offset=%d][l4_src_port/l4_dst_port=%d/%d]\n",
 	     hdr->extended_hdr.parsed_pkt.offset.l4_offset,
 	     hdr->extended_hdr.parsed_pkt.l4_src_port,
@@ -2643,33 +2643,64 @@ static struct sk_buff* defrag_skb(struct sk_buff *skb,
   iphdr = ip_hdr(skb);
 
   if(iphdr && (iphdr->version == 4)) {
-    if(enable_debug)
+    if(unlikely(enable_debug))
       printk("[PF_RING] [version=%d] %X -> %X\n",
 	     iphdr->version, iphdr->saddr, iphdr->daddr);
 
     if(iphdr->frag_off & htons(IP_MF | IP_OFFSET)) {
       if((cloned = skb_clone(skb, GFP_ATOMIC)) != NULL) {
-	if(enable_debug) {
+
+        if (displ && (hdr->extended_hdr.parsed_pkt.offset.l3_offset - displ) /*VLAN*/){
+          skb_pull(cloned, 4);
+          displ += 4;
+	}
+
+	skb_set_network_header(cloned, hdr->extended_hdr.parsed_pkt.offset.l3_offset - displ);
+	skb_reset_transport_header(cloned);
+        iphdr = ip_hdr(cloned);
+
+	if(unlikely(enable_debug)) {
+	  int ihl, end;
 	  int offset = ntohs(iphdr->frag_off);
 	  offset &= IP_OFFSET;
 	  offset <<= 3;
+	  ihl = iphdr->ihl * 4;
+          end = offset + cloned->len - ihl;
 
 	  printk("[PF_RING] There is a fragment to handle [proto=%d][frag_off=%u]"
-		 "[ip_id=%u][network_header=%d][displ=%d]\n",
+		 "[ip_id=%u][ip_hdr_len=%d][end=%d][network_header=%d][displ=%d]\n",
 		 iphdr->protocol, offset,
 		 ntohs(iphdr->id),
+		 ihl, end,
 		 hdr->extended_hdr.parsed_pkt.offset.l3_offset - displ, displ);
 	}
 	skk = ring_gather_frags(cloned);
 
 	if(skk != NULL) {
-	  if(enable_debug)
+	  if(unlikely(enable_debug)) {
+	    unsigned char *c;
 	    printk("[PF_RING] IP reasm on new skb [skb_len=%d]"
 		   "[head_len=%d][nr_frags=%d][frag_list=%p]\n",
 		   (int)skk->len,
 		   skb_headlen(skk),
 		   skb_shinfo(skk)->nr_frags,
 		   skb_shinfo(skk)->frag_list);
+	    c = skb_network_header(skk);
+	    printk("[PF_RING] IP header "
+	           "%X %X %X %X %X %X %X %X %X %X %X %X %X %X %X %X %X %X %X %X\n",
+		   c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9],
+		   c[10], c[11], c[12], c[13], c[14], c[15], c[16], c[17], c[18], c[19]);
+	    c -= displ;
+	    printk("[PF_RING] L2 header "
+	           "%X %X %X %X %X %X %X %X %X %X %X %X %X %X %X %X %X %X\n",
+		   c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9],
+		   c[10], c[11], c[12], c[13], c[14], c[15], c[16], c[17]);
+          }
+	  
+	  if (displ && (hdr->extended_hdr.parsed_pkt.offset.l3_offset - displ) /*VLAN*/){
+	    skb_push(skk, 4);
+	    displ -= 4;
+	  }
 
 	  skb = skk;
 	  *defragmented_skb = 1;
@@ -2681,7 +2712,7 @@ static struct sk_buff* defrag_skb(struct sk_buff *skb,
 	}
       }
     } else {
-      if(enable_debug)
+      if(unlikely(enable_debug))
 	printk("[PF_RING] Do not seems to be a fragmented ip_pkt[iphdr=%p]\n",
 	       iphdr);
     }
@@ -2689,7 +2720,7 @@ static struct sk_buff* defrag_skb(struct sk_buff *skb,
     /* Re-assembling fragmented IPv6 packets has not been
        implemented. Probability of observing fragmented IPv6
        packets is extremely low. */
-    if(enable_debug)
+    if(unlikely(enable_debug))
       printk("[PF_RING] Re-assembling fragmented IPv6 packet hs not been implemented\n");
   }
 
