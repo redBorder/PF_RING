@@ -370,7 +370,7 @@ int main(int argc, char* argv[]) {
   tosend = pkt_head;
   i = 0;
 
-  while(i <= num) {
+  while(i < num) {
     int rc;
 
   redo:
