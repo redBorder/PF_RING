@@ -35,6 +35,11 @@ else
   AC_MSG_RESULT(no)
 fi
 
+AC_CHECK_LIB( [dag], 
+              [dag_attach_stream], 
+              [HAVE_DAG="-D HAVE_DAG"; DAG_OBJS="pfring_mod_dag.o"], 
+              [], [] )
+
 if test "x$ac_cv_header_linux_net_tstamp_h" = x""yes; then :
 CFLAGS="-DENABLE_HW_TIMESTAMP $CFLAGS"
 fi
@@ -54,6 +59,8 @@ AC_SUBST(HAVE_VIRTUAL)
 AC_SUBST(VIRTUAL_LIB)
 AC_SUBST(VIRTUAL_OBJS)
 AC_SUBST(VIRTUAL_DEP)
+AC_SUBST(HAVE_DAG)
+AC_SUBST(DAG_OBJS)
 AC_SUBST(INSTALL_PREFIX)
 
 AC_OUTPUT

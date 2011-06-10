@@ -27,7 +27,7 @@
 #include "pfring_mod.h"
 
 #ifdef HAVE_DAG
-#include "pfring_dag.h"
+#include "pfring_mod_dag.h"
 #endif
 
 #ifdef HAVE_DNA

@@ -25,9 +25,14 @@ DNA_OBJS  = @DNA_OBJS@
 VIRTUAL_OBJS = @VIRTUAL_OBJS@
 
 #
+# DAG
+#
+DAG_OBJS  = @DAG_OBJS@
+
+#
 # Object files
 #
-OBJS      = pfring.o pfring_mod.o pfring_mod_dna.o pfring_utils.o ${DNA_OBJS} ${VIRTUAL_OBJS}
+OBJS      = pfring.o pfring_mod.o pfring_mod_dna.o pfring_utils.o ${DNA_OBJS} ${VIRTUAL_OBJS} ${DAG_OBJS}
 
 #
 # C compiler and flags
@@ -36,7 +41,7 @@ OBJS      = pfring.o pfring_mod.o pfring_mod_dna.o pfring_utils.o ${DNA_OBJS} ${
 # CROSS_COMPILE=arm-mv5sft-linux-gnueabi-
 #
 CC        = ${CROSS_COMPILE}gcc
-CFLAGS    = -g  -Wall -fPIC ${INCLUDE} @HAVE_DNA@ @HAVE_VIRTUAL@ @CFLAGS@
+CFLAGS    = -g  -Wall -fPIC ${INCLUDE} @HAVE_DNA@ @HAVE_VIRTUAL@ @HAVE_DAG@ @CFLAGS@
 LDFLAGS   = -g -shared
 
 SYSLIBS   = -lpthread 
