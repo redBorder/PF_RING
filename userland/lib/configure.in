@@ -36,7 +36,7 @@ else
 fi
 
 AC_CHECK_LIB( [dag], 
-              [dag_attach_stream], 
+              [dag_get_stream_erf_types], 
               [HAVE_DAG="-D HAVE_DAG"; DAG_OBJS="pfring_mod_dag.o"], 
               [], [] )
 
