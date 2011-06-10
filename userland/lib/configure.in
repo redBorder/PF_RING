@@ -10,6 +10,8 @@ CFLAGS=""
 
 MACHINE=`uname -m`
 DNA_LIB="libpfring_dna_$MACHINE.a"
+VIRTUAL_LIB="libpfring_mod_virtual_$MACHINE.a"
+VIRTUAL_HDR="pfring_mod_virtual.h"
 
 AC_MSG_CHECKING([DNA support])
 if test -f $DNA_LIB; then
@@ -19,6 +21,17 @@ if test -f $DNA_LIB; then
   AC_MSG_RESULT(yes)
 else
   DNA_LIB=""
+  AC_MSG_RESULT(no)
+fi
+
+AC_MSG_CHECKING([Virtual support])
+if test -f $VIRTUAL_LIB && test -f $VIRTUAL_HDR; then
+  HAVE_VIRTUAL="-D HAVE_VIRTUAL"
+  VIRTUAL_OBJS=`ar t $VIRTUAL_LIB | tr '\n' ' '`
+  VIRTUAL_DEP="extract_virtual_lib"
+  AC_MSG_RESULT(yes)
+else
+  VIRTUAL_LIB=""
   AC_MSG_RESULT(no)
 fi
 
@@ -37,6 +50,10 @@ AC_SUBST(HAVE_DNA)
 AC_SUBST(DNA_LIB)
 AC_SUBST(DNA_OBJS)
 AC_SUBST(DNA_DEP)
+AC_SUBST(HAVE_VIRTUAL)
+AC_SUBST(VIRTUAL_LIB)
+AC_SUBST(VIRTUAL_OBJS)
+AC_SUBST(VIRTUAL_DEP)
 AC_SUBST(INSTALL_PREFIX)
 
 AC_OUTPUT
