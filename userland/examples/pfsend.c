@@ -91,6 +91,7 @@ double delta_time (struct timeval * now,
 void print_stats() {
   double deltaMillisec, currentThpt, avgThpt, currentThptBytes, avgThptBytes;
   struct timeval now;
+  char buf1[64], buf2[64], buf3[64], buf4[64];
 
   gettimeofday(&now, NULL);
   deltaMillisec = delta_time(&now, &lastTime);
@@ -103,8 +104,11 @@ void print_stats() {
   avgThptBytes = (double)(num_bytes_good_sent * 1000)/deltaMillisec;
   avgThptBytes /= (1000*1000*1000)/8;
 
-  fprintf(stderr, "TX rate: [current %.0f pps/%.3f Gbps][average %.0f pps/%.3f Gbps]\n", 
-	  currentThpt, currentThptBytes, avgThpt, avgThptBytes);
+  fprintf(stderr, "TX rate: [current %s pps/%s Gbps][average %s pps/%s Gbps]\n", 
+	  format_numbers(currentThpt, buf1, sizeof(buf1), 1),
+	  format_numbers(currentThptBytes, buf2, sizeof(buf2), 1),
+	  format_numbers(avgThpt, buf3, sizeof(buf3), 1),
+	  format_numbers(avgThptBytes,  buf4, sizeof(buf4), 1));
 
   memcpy(&lastTime, &now, sizeof(now));
   last_num_pkt_good_sent = num_pkt_good_sent, last_num_bytes_good_sent = num_bytes_good_sent;
@@ -141,7 +145,9 @@ void printHelp(void) {
   printf("pfsend -i out_dev\n");
 
   printf("-a              Active send re-try\n");
+#if 0
   printf("-b <cpu %%>      CPU pergentage priority (0-99)\n");
+#endif
   printf("-f <.pcap file> Send packets as read from a pcap file\n");
   printf("-g <core_id>    Bind this app to a code (only with -n 0)\n");
   printf("-h              Print this help\n");
@@ -197,7 +203,11 @@ int main(int argc, char* argv[]) {
   ticks hz = 0;
   struct packet *tosend;
 
-  while((c = getopt(argc,argv,"hi:n:g:l:ab:f:r:v")) != -1) {
+  while((c = getopt(argc,argv,"hi:n:g:l:af:r:v"
+#if 0
+		    "b:"
+#endif
+		    )) != -1) {
     switch(c) {
     case 'h':
       printHelp();
@@ -226,8 +236,10 @@ int main(int argc, char* argv[]) {
     case 'r':
       sscanf(optarg, "%lf", &gbit_s);
       break;
+#if 0
     case 'b':
       cpu_percentage = atoi(optarg);
+#endif
       break;
     }
   }

@@ -4327,11 +4327,12 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
   struct list_head *ptr, *tmp_ptr;
   dna_device_list *entry;
 
-  printk("[PF_RING] ring_map_dna_device(%s@%d): %s\n",
-	 mapping->device_name,
-	 mapping->channel_id,
-	 (mapping->operation == remove_device_mapping) ? "remove" : "add");
-	 
+  if(enable_debug)
+    printk("[PF_RING] ring_map_dna_device(%s@%d): %s\n",
+	   mapping->device_name,
+	   mapping->channel_id,
+	   (mapping->operation == remove_device_mapping) ? "remove" : "add");
+  
   if(mapping->operation == remove_device_mapping) {
     /* Unlock driver */
     u8 found = 0;
@@ -4347,8 +4348,6 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
       }
     }
 
-    if(!found) return(-1);
-
     if(pfr->dna_device != NULL)
       pfr->dna_device->usage_notification(pfr->dna_device->adapter_ptr, 0 /* unlock */);
 
@@ -4356,7 +4355,8 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
     if(enable_debug)
       printk("[PF_RING] ring_map_dna_device(%s): removed mapping\n",
 	     mapping->device_name);
-    return(0);
+    
+    if(!found) return(-1); else return(0);
   } else {
     ring_proc_remove(pfr);
 

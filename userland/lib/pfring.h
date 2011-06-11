@@ -268,7 +268,8 @@ extern "C" {
   /* Utils (defined in pfring_utils.c) */
   int parse_pkt(u_char *pkt, struct pfring_pkthdr *hdr);
   int set_if_promisc(const char *device, int set_promisc);
-  
+  char* format_numbers(double val, char *buf, u_int buf_len, u_int8_t add_decimals);
+
   /* ********************************* */
 
   typedef struct {

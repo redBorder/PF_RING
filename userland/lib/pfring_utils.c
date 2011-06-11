@@ -113,4 +113,40 @@ int set_if_promisc(const char *device, int set_promisc) {
   return(ret);
 }
 
+/* *************************************** */
 
+char* format_numbers(double val, char *buf, u_int buf_len, u_int8_t add_decimals) {
+  u_int a1 = ((u_long)val / 1000000000) % 1000;
+  u_int a = ((u_long)val / 1000000) % 1000;
+  u_int b = ((u_long)val / 1000) % 1000;
+  u_int c = (u_long)val % 1000;
+  u_int d = (u_int)((val - (u_long)val)*100) % 100;  
+
+  if(add_decimals) {
+    if(val >= 1000000000) {
+      snprintf(buf, buf_len, "%u'%03u'%03u'%03u.%02d", a1, a, b, c, d);
+    } else if(val >= 1000000) {
+      snprintf(buf, buf_len, "%u'%03u'%03u.%02d", a, b, c, d);
+    } else if(val >= 100000) {
+      snprintf(buf, buf_len, "%u'%03u.%02d", b, c, d);
+    } else if(val >= 1000) {
+      snprintf(buf, buf_len, "%u'%03u.%02d", b, c, d);
+    } else
+      snprintf(buf, buf_len, "%.2f", val);
+  } else {
+    if(val >= 1000000000) {
+      snprintf(buf, buf_len, "%u'%03u'%03u'%03u", a1, a, b, c);
+    } else if(val >= 1000000) {
+      snprintf(buf, buf_len, "%u'%03u'%03u", a, b, c);
+    } else if(val >= 100000) {
+      snprintf(buf, buf_len, "%u'%03u", b, c);
+    } else if(val >= 1000) {
+      snprintf(buf, buf_len, "%u'%03u", b, c);
+    } else
+      snprintf(buf, buf_len, "%u", (unsigned int)val);
+  }
+
+  return(buf);
+}
+
+/* *************************************** */

@@ -1377,13 +1377,18 @@ pcap_read_packet(pcap_t *handle, pcap_handler callback, u_char *userdata)
 				     handle->bufsize,
 				     &pcap_header,
 				     1 /* wait_for_incoming_packet */);
-	    if (packet_len > 0) {
+
+	    if((packet_len == 0) && (errno == EINTR)) {
+	      continue;
+	    } else if (packet_len > 0) {
 	      bp = handle->buffer;
 	      pcap_header.caplen = min(pcap_header.caplen, handle->bufsize);
 	      caplen = pcap_header.caplen, packet_len = pcap_header.len;
-	      goto pfring_pcap_read_packet;
+	      break;
 	    }
 	  } while (packet_len == -1 && (errno == EINTR || errno == ENETDOWN));
+
+	  goto pfring_pcap_read_packet;	  
 	}
 #endif
 
@@ -5068,5 +5073,9 @@ int pcap_set_master_id(pcap_t *handle, u_int32_t master_id) {
 
 int pcap_set_master(pcap_t *handle, pcap_t *master) {
     return(pfring_set_master(handle->ring, master->ring));
+}
+
+int pcap_set_application_name(pcap_t *handle, char *name) {
+    return(pfring_set_application_name(handle->ring, name));
 }
 #endif

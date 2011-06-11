@@ -41,6 +41,8 @@
 #include <time.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <monetary.h>
+#include <locale.h>
 
 #include "pfring.h"
 
@@ -90,6 +92,7 @@ void print_stats() {
   static u_int64_t lastPkts = 0;
   u_int64_t diff;
   static struct timeval lastTime;
+  char buf1[64], buf2[64];
 
   if(startTime.tv_sec == 0) {
     gettimeofday(&startTime, NULL);
@@ -119,11 +122,14 @@ void print_stats() {
 	    (unsigned int)(pfringStat.recv+pfringStat.drop),
 	    pfringStat.recv == 0 ? 0 :
 	    (double)(pfringStat.drop*100)/(double)(pfringStat.recv+pfringStat.drop));
-    fprintf(stderr, "%llu pkts - %llu bytes", nPkts, nBytes);
+    fprintf(stderr, "%s pkts - %s bytes", 
+	    format_numbers((double)nPkts, buf1, sizeof(buf1), 0),
+	    format_numbers((double)nBytes, buf2, sizeof(buf2), 0));
 
     if(print_all)
-      fprintf(stderr, " [%.1f pkt/sec - %.2f Mbit/sec]\n",
-	      (double)(nPkts*1000)/deltaMillisec, thpt);
+      fprintf(stderr, " [%s pkt/sec - %s Mbit/sec]\n",
+	      format_numbers((double)(nPkts*1000)/deltaMillisec, buf1, sizeof(buf1), 1),
+	      format_numbers(thpt, buf2, sizeof(buf2), 1));
     else
       fprintf(stderr, "\n");
 
@@ -131,9 +137,10 @@ void print_stats() {
       deltaMillisec = delta_time(&endTime, &lastTime);
       diff = nPkts-lastPkts;
       fprintf(stderr, "=========================\n"
-	      "Actual Stats: %llu pkts [%.1f ms][%.1f pkt/sec]\n",
+	      "Actual Stats: %llu pkts [%s ms][%s pkt/sec]\n",
 	      (long long unsigned int)diff,
-	      deltaMillisec, ((double)diff/(double)(deltaMillisec/1000)));
+	      format_numbers(deltaMillisec, buf1, sizeof(buf1), 1),
+	      format_numbers(((double)diff/(double)(deltaMillisec/1000)),  buf2, sizeof(buf2), 1));
     }
 
     lastPkts = nPkts;

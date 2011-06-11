@@ -39,7 +39,8 @@ unsigned long long numPkts = 0, numBytes = 0;
 
 
 int pcap_set_cluster(pcap_t *ring, u_int clusterId);
-
+int pcap_set_application_name(pcap_t *handle, char *name);
+char* format_numbers(double val, char *buf, u_int buf_len, u_int8_t add_decimals);
 
 /* *************************************** */
 /*
@@ -73,6 +74,7 @@ void print_stats() {
   static u_int64_t lastPkts = 0;
   u_int64_t diff;
   static struct timeval lastTime;
+  char buf1[64], buf2[64];
 
   if(startTime.tv_sec == 0) {
     lastTime.tv_sec = 0;
@@ -97,9 +99,9 @@ void print_stats() {
       deltaSec = (double)delta_time(&endTime, &lastTime)/1000000;
       diff = numPkts-lastPkts;
       fprintf(stderr, "=========================\n"
-	      "Actual Stats: %llu pkts [%.1f ms][%.1f pkt/sec]\n",
-	      (long long unsigned int)diff, deltaSec*1000, 
-	      ((double)diff/(double)(deltaSec)));
+	      "Actual Stats: %s pkts [%.1f ms][%s pkt/sec]\n",
+	      format_numbers(diff, buf1, sizeof(buf1), 0), deltaSec*1000, 
+	      format_numbers(((double)diff/(double)(deltaSec)), buf2, sizeof(buf2), 1));
       lastPkts = numPkts;
     }
 
@@ -422,6 +424,8 @@ int main(int argc, char* argv[]) {
       }
     }
   }
+
+  pcap_set_application_name(pd, "pcount");
 
   signal(SIGINT, sigproc);
 
