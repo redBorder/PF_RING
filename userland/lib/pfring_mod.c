@@ -157,7 +157,12 @@ int pfring_mod_open(pfring *ring) {
 #endif
 
   if(ring->caplen > MAX_CAPLEN) ring->caplen = MAX_CAPLEN;
-  setsockopt(ring->fd, 0, SO_RING_BUCKET_LEN, &ring->caplen, sizeof(ring->caplen));
+  rc = setsockopt(ring->fd, 0, SO_RING_BUCKET_LEN, &ring->caplen, sizeof(ring->caplen));
+  
+  if (rc < 0) {
+    close(ring->fd);
+    return -1;
+  }
 
   /* printf("channel_id=%d\n", channel_id); */
 
@@ -168,8 +173,8 @@ int pfring_mod_open(pfring *ring) {
     rc = pfring_bind(ring, ring->device_name);
 
   if(rc < 0) {
-     close(ring->fd);
-     return -1;
+    close(ring->fd);
+    return -1;
   }
 
   ring->kernel_packet_consumer = 0;
