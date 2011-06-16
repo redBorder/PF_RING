@@ -38,10 +38,6 @@
 #include "pfring_mod_virtual.h"
 #endif
 
-#ifdef HAVE_VIRTUAL_DNA
-#include "pfring_mod_virtual_dna.h"
-#endif
-
 static pfring_module_info pfring_module_list[] = {
 #ifdef HAVE_DAG
   {
