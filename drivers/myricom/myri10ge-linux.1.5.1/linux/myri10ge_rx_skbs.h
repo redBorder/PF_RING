@@ -321,7 +321,7 @@ myri10ge_rx_done_skb(struct myri10ge_slice_state *ss,
 	    if(*hook->transparent_mode != standard_linux_path) {
 	      rc = hook->ring_handler(skb, 1, 1, ss - &mgp->ss[0]);
 	      
-	      if(rc == 1 /* Packet handled by PF_RING */) {
+	      if(rc >= 1 /* Packet handled by PF_RING */) {
 		if(*hook->transparent_mode == driver2pf_ring_non_transparent) {
 		  /* PF_RING has already freed the memory */
 		  return 0;

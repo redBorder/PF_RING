@@ -1610,7 +1610,7 @@ static void bnx2x_tpa_stop(struct bnx2x *bp, struct bnx2x_fastpath *fp,
 			  
 		    if(*hook->transparent_mode != standard_linux_path) {
 		      rc = hook->ring_handler(skb, 1, 1, queue, BNX2X_NUM_QUEUES(bp));
-		      if(rc == 1 /* Packet handled by PF_RING */) {
+		      if(rc >= 1 /* Packet handled by PF_RING */) {
 			if(*hook->transparent_mode == driver2pf_ring_non_transparent) {
 			  /* PF_RING has already freed the memory */
 			  goto next_pkt;

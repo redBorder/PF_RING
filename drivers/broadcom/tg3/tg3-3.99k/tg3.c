@@ -4821,7 +4821,7 @@ static int tg3_rx(struct tg3_napi *tnapi, int budget)
 				
 				if(*hook->transparent_mode != standard_linux_path) {
 					rc = hook->ring_handler(skb, 1, 1, -1, 1);
-					if(rc == 1 /* Packet handled by PF_RING */) {
+					if(rc >= 1 /* Packet handled by PF_RING */) {
 						if(*hook->transparent_mode == driver2pf_ring_non_transparent) {
 							/* PF_RING has already freed the memory */
 							goto next_pkt;

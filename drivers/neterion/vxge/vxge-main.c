@@ -1423,7 +1423,7 @@ vxge_rx_complete(struct vxge_ring *ring, struct sk_buff *skb, u16 vlan,
 			 * handled by PF_RING and transparent_mode is
 			 * set to driver2pf_ring_non_transparent
 			 */
-			if (rc == 1) {
+			if (rc >= 1) {
 				if (*hook->transparent_mode ==
 					driver2pf_ring_non_transparent) {
 					/* PF_RING has already freed

@@ -2104,7 +2104,7 @@ myri10ge_rx_done(struct myri10ge_slice_state *ss, struct myri10ge_rx_buf *rx,
 	    if(*hook->transparent_mode != standard_linux_path) {
 		    rc = hook->ring_handler(skb, 1, 0, ss - &mgp->ss[0], mgp->num_slices);
 	      
-	      if(rc == 1 /* Packet handled by PF_RING */) {
+	      if(rc >= 1 /* Packet handled by PF_RING */) {
 	      }
 	    } else {
 	      if(debug) printk(KERN_INFO "[PF_RING] not present on %s\n", 
@@ -2178,7 +2178,7 @@ myri10ge_rx_done(struct myri10ge_slice_state *ss, struct myri10ge_rx_buf *rx,
 	    if(*hook->transparent_mode != standard_linux_path) {
   	      rc = hook->ring_handler(skb, 1, 1, ss - &mgp->ss[0], mgp->num_slices);
 	      
-	      if(rc == 1 /* Packet handled by PF_RING */) {
+	      if(rc >= 1 /* Packet handled by PF_RING */) {
 		if(*hook->transparent_mode == driver2pf_ring_non_transparent) {
 		  /* PF_RING has already freed the memory */
 		  return 0;
