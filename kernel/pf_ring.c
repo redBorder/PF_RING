@@ -1384,7 +1384,7 @@ static int parse_pkt(struct sk_buff *skb,
 		     struct pfring_pkthdr *hdr,
 		     u_int8_t reset_all)
 {
-  char pkt_header[72] = { 0 };
+  char pkt_header[78] = { 0 };
   int rc, len = sizeof(pkt_header);
 
   if(len > (skb->len + skb_displ))
