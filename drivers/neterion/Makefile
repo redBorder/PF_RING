@@ -1,2 +1,0 @@
-all:
-	cd vxge; make
