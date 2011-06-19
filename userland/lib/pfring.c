@@ -39,6 +39,12 @@
 #endif
 
 static pfring_module_info pfring_module_list[] = {
+#ifdef HAVE_VIRTUAL
+  { /* vPF_RING (guest-side) */
+    .name = "host",
+    .open = pfring_virtual_open,
+  },
+#endif
 #ifdef HAVE_DAG
   {
     .name = "dag",
@@ -53,12 +59,6 @@ static pfring_module_info pfring_module_list[] = {
   { /* vPF_RING (host-side, private purpose) */
     .name = "vna", 
     .open = pfring_dna_map,
-  },
-#endif
-#ifdef HAVE_VIRTUAL
-  { /* vPF_RING (guest-side) */
-    .name = "host",
-    .open = pfring_virtual_open,
   },
 #endif
   {0}
