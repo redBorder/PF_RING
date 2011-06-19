@@ -9,8 +9,8 @@ AC_CHECK_HEADERS([linux/net_tstamp.h])
 CFLAGS=""
 
 MACHINE=`uname -m`
-DNA_LIB="libpfring_dna_$MACHINE.a"
-VIRTUAL_LIB="libpfring_mod_virtual_$MACHINE.a"
+DNA_LIB="libs/libpfring_dna_$MACHINE.a"
+VIRTUAL_LIB="libs/libpfring_mod_virtual_$MACHINE.a"
 VIRTUAL_HDR="pfring_mod_virtual.h"
 
 AC_MSG_CHECKING([DNA support])
