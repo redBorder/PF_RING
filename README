@@ -22,4 +22,4 @@ a patched kernel, please revert the patch otherwise you will capture the same
 packet twice
 
 ------------
-(C) Luca Deri 2004-10
+(C) Luca Deri 2004-11
