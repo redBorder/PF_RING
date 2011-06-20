@@ -159,7 +159,7 @@ int pthread_attr_setaffinity_np (pthread_attr_t *__attr,
 }
 
 extern int pthread_setaffinity_np (pthread_t __th, size_t __cpusetsize,
-				   cpu_set_t *__cpuset)
+				   cpu_set_t *__cpuset) {
   return(0);
 }
 
