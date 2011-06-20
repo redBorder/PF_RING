@@ -150,3 +150,11 @@ char* format_numbers(double val, char *buf, u_int buf_len, u_int8_t add_decimals
 }
 
 /* *************************************** */
+
+#ifndef HAVE_PTHREAD_SET_AFFINITY
+int pthread_attr_setaffinity_np (pthread_attr_t *__attr,
+				 size_t cpusetsize,
+				 cpu_set_t *__cpuset) {
+  return(0);
+}
+#endif
