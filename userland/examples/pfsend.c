@@ -91,7 +91,7 @@ double delta_time (struct timeval * now,
 void print_stats() {
   double deltaMillisec, currentThpt, avgThpt, currentThptBytes, avgThptBytes;
   struct timeval now;
-  char buf1[64], buf2[64], buf3[64], buf4[64];
+  char buf1[64], buf2[64], buf3[64], buf4[64], buf5[64];
 
   gettimeofday(&now, NULL);
   deltaMillisec = delta_time(&now, &lastTime);
@@ -104,11 +104,12 @@ void print_stats() {
   avgThptBytes = (double)(num_bytes_good_sent * 1000)/deltaMillisec;
   avgThptBytes /= (1000*1000*1000)/8;
 
-  fprintf(stderr, "TX rate: [current %s pps/%s Gbps][average %s pps/%s Gbps]\n", 
+  fprintf(stderr, "TX rate: [current %s pps/%s Gbps][average %s pps/%s Gbps][total %s pkts]\n", 
 	  format_numbers(currentThpt, buf1, sizeof(buf1), 1),
 	  format_numbers(currentThptBytes, buf2, sizeof(buf2), 1),
 	  format_numbers(avgThpt, buf3, sizeof(buf3), 1),
-	  format_numbers(avgThptBytes,  buf4, sizeof(buf4), 1));
+	  format_numbers(avgThptBytes,  buf4, sizeof(buf4), 1),
+	  format_numbers(num_pkt_good_sent, buf5, sizeof(buf5), 1));
 
   memcpy(&lastTime, &now, sizeof(now));
   last_num_pkt_good_sent = num_pkt_good_sent, last_num_bytes_good_sent = num_bytes_good_sent;
@@ -140,11 +141,11 @@ void sigproc(int sig) {
 /* *************************************** */
 
 void printHelp(void) {
-  printf("pfsend\n(C) 2011 Deri Luca <deri@ntop.org>\n\n");
+  printf("pfsend - (C) 2011 Deri Luca <deri@ntop.org>\n\n");
 
   printf("pfsend -i out_dev\n");
 
-  printf("-a              Active send re-try\n");
+  printf("-a              Active send retry\n");
 #if 0
   printf("-b <cpu %%>      CPU pergentage priority (0-99)\n");
 #endif
@@ -153,7 +154,8 @@ void printHelp(void) {
   printf("-h              Print this help\n");
   printf("-i <device>     Device name. Use device\n");
   printf("-l <length>     Packet length to send. Ignored with -f\n");
-  printf("-n <num>        Num pkts to send. use 0 for infinite\n");
+  printf("-n <num>        Num pkts to send (use 0 for infinite). With -f it\n"
+	 "                specifies the number of times the file will be sent\n");
   printf("-r <rate>       Rate to send (example -r 2.5 sends 2.5 Gbit/sec)\n");
   printf("-m <dst MAC>    Reforge destination MAC (format AA:BB:CC:DD:EE:FF)\n");
   printf("-v              Verbose\n");
@@ -311,8 +313,7 @@ int main(int argc, char* argv[]) {
     u_char *pkt;
     struct pcap_pkthdr *h;
     pcap_t *pt = pcap_open_offline(pcap_in, ebuf);
-
-    num = 0;
+    u_int num_pcap_pkts = 0;
 
     if(pt) {
       struct packet *last = NULL;
@@ -347,14 +348,17 @@ int main(int argc, char* argv[]) {
 	  break;
 	}
 
-	if(verbose) printf("Read %d bytes packet\n", p->len);
-	num++;
+	if(verbose) 
+	  printf("Read %d bytes packet from pcap file %s\n", 
+		 p->len, pcap_in);
+	num_pcap_pkts++;
       } /* while */
 
       pcap_close(pt);
-      printf("Read %d packets\n", num);
+      printf("Read %d packets from pcap file %s\n", 
+	     num_pcap_pkts, pcap_in);
       last->next = pkt_head; /* Loop */
-      num = 0;
+      num *= num_pcap_pkts;
     } else {
       printf("Unable to open file %s\n", pcap_in);
       pfring_close(pd);
