@@ -182,6 +182,9 @@ static u_short max_registered_plugin_id = 0;
 u_int32_t loobpack_test_buffer_len = 4*1024*1024;
 u_char *loobpack_test_buffer = NULL;
 
+/* Lock/unlock around ip_defrag() */
+static spinlock_t ip_defrag_lock = SPIN_LOCK_UNLOCKED;
+
 /* ********************************** */
 
 /* /proc entry for ring module */
@@ -525,17 +528,30 @@ static inline int check_and_init_free_slot(struct pf_ring_socket *pfr, int off)
 /* Returns new sk_buff, or NULL  */
 static struct sk_buff *ring_gather_frags(struct sk_buff *skb)
 {
-#if(LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,23))
-  skb = ip_defrag(skb, IP_DEFRAG_RING);
+#if(LINUX_VERSION_CODE > KERNEL_VERSION(2,6,23))
+  int status;
+#endif
+  unsigned long flags;
 
-  if(skb)
-    ip_send_check(ip_hdr(skb));
+  spin_lock_irqsave(&ip_defrag_lock, flags);
+#if(LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,23))
+  skb
 #else
-  if(ip_defrag(skb, IP_DEFRAG_RING))
+  status
+#endif
+  = ip_defrag(skb, IP_DEFRAG_RING);
+  spin_unlock_irqrestore(&ip_defrag_lock, flags);
+
+  if(
+#if(LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,23))
+  skb == NULL
+#else
+  status
+#endif
+  )
     skb = NULL;
   else
     ip_send_check(ip_hdr(skb));
-#endif
 
   return(skb);
 }
@@ -2850,27 +2866,6 @@ static int skb_ring_handler(struct sk_buff *skb,
 
   hdr.len = hdr.caplen = skb->len + displ;
 
-  if(!quick_mode) {
-    is_ip_pkt = parse_pkt(skb, displ, &hdr, 1);
-
-    if(enable_ip_defrag) {
-      if(real_skb
-	 && is_ip_pkt
-	 && recv_packet
-	 && (ring_table_size > 0)) {
-	skb = skk = defrag_skb(skb, displ, &hdr, &defragmented_skb);
-
-	if(skb == NULL)
-	  return(0);
-      }
-    }
-
-    if(skb->dev)
-      hdr.extended_hdr.if_index = skb->dev->ifindex;
-    else
-      hdr.extended_hdr.if_index = -1;
-  }
-
   if(quick_mode) {
     struct pf_ring_socket *pfr = device_rings[skb->dev->ifindex][channel_id];
 
@@ -2892,6 +2887,25 @@ static int skb_ring_handler(struct sk_buff *skb,
       room_available |= copy_data_to_ring(skb, pfr, &hdr, displ, 0, NULL, NULL, 0);
     }
   } else {
+
+    is_ip_pkt = parse_pkt(skb, displ, &hdr, 1);
+
+    if(enable_ip_defrag) {
+      if(real_skb
+	 && is_ip_pkt
+	 && recv_packet) {
+	skb = skk = defrag_skb(skb, displ, &hdr, &defragmented_skb);
+
+	if(skb == NULL)
+	  return(0);
+      }
+    }
+
+    if(skb->dev)
+      hdr.extended_hdr.if_index = skb->dev->ifindex;
+    else
+      hdr.extended_hdr.if_index = -1;
+
     /* Avoid the ring to be manipulated while playing with it */
     ring_read_lock();
 
