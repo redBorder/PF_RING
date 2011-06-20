@@ -155,6 +155,7 @@ void printHelp(void) {
   printf("-l <length>     Packet length to send. Ignored with -f\n");
   printf("-n <num>        Num pkts to send. use 0 for infinite\n");
   printf("-r <rate>       Rate to send (example -r 2.5 sends 2.5 Gbit/sec)\n");
+  printf("-m <dst MAC>    Reforge destination MAC (format AA:BB:CC:DD:EE:FF)\n");
   printf("-v              Verbose\n");
   exit(0);
 }
@@ -191,8 +192,9 @@ static __inline__ ticks getticks(void)
 /* *************************************** */
 
 int main(int argc, char* argv[]) {
-  char c, *pcap_in = NULL;
-  int promisc, i, verbose = 0, active_poll = 0;
+  char c, *pcap_in = NULL, mac_address[6];
+  int promisc, i, verbose = 0, active_poll = 0, reforge_mac = 0;
+  u_int mac_a, mac_b, mac_c, mac_d, mac_e, mac_f;
   char buffer[1500];
   int send_len = 60;
   u_int32_t num = 1;
@@ -203,7 +205,7 @@ int main(int argc, char* argv[]) {
   ticks hz = 0;
   struct packet *tosend;
 
-  while((c = getopt(argc,argv,"hi:n:g:l:af:r:v"
+  while((c = getopt(argc,argv,"hi:n:g:l:af:r:vm:"
 #if 0
 		    "b:"
 #endif
@@ -240,6 +242,17 @@ int main(int argc, char* argv[]) {
     case 'b':
       cpu_percentage = atoi(optarg);
 #endif
+      break;
+
+    case 'm':
+      if(sscanf(optarg, "%02X:%02X:%02X:%02X:%02X:%02X", &mac_a, &mac_b, &mac_c, &mac_d, &mac_e, &mac_f) != 6) {
+	printf("Invalid MAC address format (XX:XX:XX:XX:XX:XX)\n");
+	return(0);
+      } else {
+	reforge_mac = 1;
+	mac_address[0] = mac_a, mac_address[1] = mac_b, mac_address[2] = mac_c;
+	mac_address[3] = mac_d, mac_address[4] = mac_e, mac_address[5] = mac_f;
+      }
       break;
     }
   }
@@ -293,7 +306,6 @@ int main(int argc, char* argv[]) {
     printf("Number of %d-byte Packet Per Second at %.2f Gbit/s: %.2f\n", (send_len + 4 /*CRC*/), gbit_s, pps);
   }
 
-
   if(pcap_in) {
     char ebuf[256];
     u_char *pkt;
@@ -320,8 +332,10 @@ int main(int argc, char* argv[]) {
 	  if(p->pkt == NULL) {
 	    printf("Not enough memory\n");
 	    break;
-	  } else
+	  } else {
 	    memcpy(p->pkt, pkt, p->len);
+	    if(reforge_mac) memcpy(p->pkt, mac_address, 6);
+	  }
 
 	  if(last) {
 	    last->next = p;
@@ -350,6 +364,8 @@ int main(int argc, char* argv[]) {
     struct packet *p;
 
     for(i=0; i<send_len; i++) buffer[i] = i;
+
+    if(reforge_mac) memcpy(buffer, mac_address, 6);
 
     p = (struct packet*)malloc(sizeof(struct packet));
     if(p) {
