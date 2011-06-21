@@ -333,19 +333,26 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u
     char buf1[32], buf2[32];
     struct ip ip;
     int s;
-    uint nsec;
+    uint usec;
+    uint nsec=0;
 
     if(h->ts.tv_sec == 0) {
       gettimeofday((struct timeval*)&h->ts, NULL);
       parse_pkt((u_char*)p, (struct pfring_pkthdr*)h);
     }
+ 
+    if(h->extended_hdr.timestamp_ns) {
+      s = ((h->extended_hdr.timestamp_ns / 1000000000) + thiszone) % 86400;
+      usec = (h->extended_hdr.timestamp_ns / 1000) % 1000000;
+      nsec = h->extended_hdr.timestamp_ns % 1000;
+    } else {
+      s = (h->ts.tv_sec + thiszone) % 86400;
+      usec = h->ts.tv_usec;
+    }
 
-    s = (h->ts.tv_sec + thiszone) % 86400;
-    nsec = h->extended_hdr.timestamp_ns % 1000;
-    
     printf("%02d:%02d:%02d.%06u%03u ",
 	   s / 3600, (s % 3600) / 60, s % 60,
-	   (unsigned)h->ts.tv_usec, nsec);
+	   usec, nsec);
 
 #if 0
     for(i=0; i<32; i++) printf("%02X ", p[i]);
