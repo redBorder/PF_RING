@@ -1247,9 +1247,9 @@ static int parse_raw_pkt(char *data, u_int data_len,
   u_int16_t displ, ip_len;
 
   if(reset_all)
-    memset(&hdr->extended_hdr, 0, sizeof(hdr->extended_hdr));
+    memset(&hdr->extended_hdr.parsed_pkt, 0, sizeof(hdr->extended_hdr.parsed_pkt));
   else
-    memset(&hdr->extended_hdr, 0, sizeof(hdr->extended_hdr)-sizeof(packet_user_detail) /* Preserve user data */);
+    memset(&hdr->extended_hdr.parsed_pkt, 0, sizeof(hdr->extended_hdr.parsed_pkt)-sizeof(packet_user_detail) /* Preserve user data */);
 
   if(data_len < sizeof(struct ethhdr)) return(0);
 
@@ -2862,6 +2862,8 @@ static int skb_ring_handler(struct sk_buff *skb,
   rdt1 = _rdtsc();
 #endif
 
+  memset(&hdr, 0, sizeof(hdr));
+
   set_skb_time(skb, &hdr);
 
   hdr.len = hdr.caplen = skb->len + displ;
@@ -2904,7 +2906,7 @@ static int skb_ring_handler(struct sk_buff *skb,
     if(skb->dev)
       hdr.extended_hdr.if_index = skb->dev->ifindex;
     else
-      hdr.extended_hdr.if_index = -1;
+      hdr.extended_hdr.if_index = UNKNOWN_INTERFACE;
 
     /* Avoid the ring to be manipulated while playing with it */
     ring_read_lock();
