@@ -1100,7 +1100,7 @@ static int ring_alloc_mem(struct sock *sk)
    * ********************************************** */
 
   if(quick_mode)
-    pfr->slot_header_len = sizeof(struct timeval) + 8 /* ts+caplen+len */;
+    pfr->slot_header_len = sizeof(struct timeval) + sizeof(u_int32_t) + sizeof(u_int32_t) + sizeof(u_int64_t) /* ts+caplen+len+timestamp_ns */;
   else
     pfr->slot_header_len = sizeof(struct pfring_pkthdr);
 
