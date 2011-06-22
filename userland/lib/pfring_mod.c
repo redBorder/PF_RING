@@ -318,6 +318,7 @@ int pfring_mod_bind(pfring *ring, char *device_name) {
   ring->sock_tx.sll_family = PF_PACKET;
   ring->sock_tx.sll_protocol = htons(ETH_P_ALL);
 
+  memset(&sa, 0, sizeof(sa));
   sa.sa_family = PF_RING;
   snprintf(sa.sa_data, sizeof(sa.sa_data), "%s", device_name);
 
