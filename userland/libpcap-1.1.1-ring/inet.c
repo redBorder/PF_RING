@@ -413,6 +413,9 @@ add_addr_to_iflist(pcap_if_t **alldevs, const char *name, u_int flags,
 	pcap_if_t *curdev;
 	char *description = NULL;
 	pcap_addr_t *curaddr, *prevaddr, *nextaddr;
+#ifdef HAVE_PF_RING
+	char dummydev[64];
+#endif /* HAVE_PF_RING*/
 #ifdef SIOCGIFDESCR
 	int s;
 	struct ifreq ifrdesc;
@@ -459,6 +462,12 @@ add_addr_to_iflist(pcap_if_t **alldevs, const char *name, u_int flags,
 	}
 #endif /* SIOCGIFDESCR */
 
+#ifdef HAVE_PF_RING
+	/* Check for DNA devices */	
+	snprintf(dummydev, sizeof(dummydev), "dna:%s", name);
+			
+	if (add_or_find_if(&curdev, alldevs, dummydev, flags, description, errbuf) == -1) {
+#endif
 	if (add_or_find_if(&curdev, alldevs, name, flags, description,
 	    errbuf) == -1) {
 		free(description);
@@ -467,6 +476,9 @@ add_addr_to_iflist(pcap_if_t **alldevs, const char *name, u_int flags,
 		 */
 		return (-1);
 	}
+#ifdef HAVE_PF_RING
+	}
+#endif
 	free(description);
 	if (curdev == NULL) {
 		/*

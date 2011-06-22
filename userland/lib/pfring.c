@@ -72,9 +72,27 @@ pfring* pfring_open(char *device_name, u_int8_t promisc,
   int mod_found = 0;
   int ret;
   char *str;
+  pfring *ring;
+  
+  /*
+    Check if this is a DNA adapter and for some
+    reason the user forgot to add dna:ethX
+  */
+  if(device_name && strncmp(device_name, "dna:", 4)) {
+    char name[64];
+    pfring *ret;
+    
+    snprintf(name, sizeof(name), "dna:%s", device_name);
+    ret = pfring_open(name, promisc, caplen, _reentrant);
+    if(ret != NULL)
+      return(ret);
+  }
 
-  pfring *ring = (pfring*)malloc(sizeof(pfring));
+#ifdef RING_DEBUG
+  printf("[PF_RING] Attempting to pfring_open(%s)\n", device_name);
+#endif
 
+  ring = (pfring*)malloc(sizeof(pfring));
   if(ring == NULL)
     return NULL;
   
@@ -123,6 +141,9 @@ pfring* pfring_open(char *device_name, u_int8_t promisc,
 
   ring->initialized = 1;
 
+#ifdef RING_DEBUG
+  printf("[PF_RING] Successfully open pfring_open(%s)\n", device_name);
+#endif
   return ring;
 }
 

@@ -321,6 +321,8 @@ int32_t gmt2local(time_t t) {
 /* *************************************** */
 
 void printHelp(void) {
+  char errbuf[PCAP_ERRBUF_SIZE];
+  pcap_if_t *devpointer;
 
   printf("pcount\n(C) 2003-11 Deri Luca <deri@ntop.org>\n");
   printf("-h              [Print help]\n");
@@ -328,6 +330,16 @@ void printHelp(void) {
   printf("-f <filter>     [pcap filter]\n");
   printf("-l <len>        [Capture length]\n");
   printf("-v              [Verbose]\n");
+
+  if(pcap_findalldevs(&devpointer, errbuf) == 0) {
+    int i = 0;
+    
+    printf("\nAvailable devices (-i):\n");
+    while(devpointer) {
+      printf(" %d. %s\n", i++, devpointer->name);
+      devpointer = devpointer->next;
+    }
+  }
 }
 
 /* *************************************** */

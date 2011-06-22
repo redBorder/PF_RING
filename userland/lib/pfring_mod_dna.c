@@ -234,8 +234,10 @@ int pfring_dna_map(pfring *ring) {
 			     ring->device_name, channel_id);
 
   if(rc < 0) {
+#if 0
     printf("pfring_map_dna_device() failed [rc=%d]: device already in use, channel not existing or non-DNA driver?\n", rc);
     printf("Make sure that you load the DNA-driver *after* you loaded the PF_RING kernel module\n");
+#endif
     close(ring->fd);
     return -1;
   }
