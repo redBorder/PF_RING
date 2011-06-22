@@ -2665,10 +2665,12 @@ static struct sk_buff* defrag_skb(struct sk_buff *skb,
 
     if(iphdr->frag_off & htons(IP_MF | IP_OFFSET)) {
       if((cloned = skb_clone(skb, GFP_ATOMIC)) != NULL) {
+        int vlan_offset = 0;
 
         if (displ && (hdr->extended_hdr.parsed_pkt.offset.l3_offset - displ) /*VLAN*/){
-          skb_pull(cloned, 4);
-          displ += 4;
+	  vlan_offset = 4;
+          skb_pull(cloned, vlan_offset);
+          displ += vlan_offset;
 	}
 
 	skb_set_network_header(cloned, hdr->extended_hdr.parsed_pkt.offset.l3_offset - displ);
@@ -2713,9 +2715,9 @@ static struct sk_buff* defrag_skb(struct sk_buff *skb,
 		   c[10], c[11], c[12], c[13], c[14], c[15], c[16], c[17]);
           }
 	  
-	  if (displ && (hdr->extended_hdr.parsed_pkt.offset.l3_offset - displ) /*VLAN*/){
-	    skb_push(skk, 4);
-	    displ -= 4;
+	  if (vlan_offset > 0){
+	    skb_push(skk, vlan_offset);
+	    displ -= vlan_offset;
 	  }
 
 	  skb = skk;
