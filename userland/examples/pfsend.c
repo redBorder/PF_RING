@@ -284,7 +284,7 @@ int main(int argc, char* argv[]) {
   signal(SIGTERM, sigproc);
   signal(SIGINT, sigproc);
 
-  if (send_len < 60)
+  if(send_len < 60)
     send_len = 60;
 
   if(gbit_s > 0) {
@@ -396,11 +396,19 @@ int main(int argc, char* argv[]) {
 
   gettimeofday(&startTime, NULL);
 
-  if (gbit_s > 0)
+  if(gbit_s > 0)
     tick_start = getticks();
 
   tosend = pkt_head;
   i = 0;
+
+  pfring_set_direction(pd, tx_only_direction);
+
+  if(pfring_enable_ring(pd) != 0) {
+    printf("Unable to enable ring :-(\n");
+    pfring_close(pd);
+    return(-1);
+  }
 
   while(!num || i < num) {
     int rc;

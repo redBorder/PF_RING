@@ -89,7 +89,7 @@ extern "C" {
 
   /* ********************************* */
 
-  typedef struct __pfring pfring;
+  typedef struct __pfring pfring; /* Forward declaration */
 
   /* ********************************* */
 
@@ -115,7 +115,8 @@ extern "C" {
   /* ********************************* */
 
   struct __pfring {
-    u_int8_t initialized;
+    u_int8_t initialized, enabled;
+    packet_direction direction; /* Specify the capture direction for packets */
 
     /* TODO these fields should be moved in ->priv_data */
     /* DNA (Direct NIC Access) */

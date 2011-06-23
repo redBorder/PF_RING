@@ -29,14 +29,13 @@
 
 static int pfring_map_dna_device(pfring *ring,
 				 dna_device_operation operation,
-				 char *device_name,
-				 int32_t channel_id) {
+				 char *device_name) {
   dna_device_mapping mapping;
 
   if(ring->last_dna_operation == operation) {
     fprintf(stderr, "%s(): operation (%s) already performed\n",
 	    __FUNCTION__, operation == remove_device_mapping ?
-	    "remove_device_mapping":"add_device_mapping");
+	    "remove_device_mapping" : "add_device_mapping");
     return (-1);
   } else
     ring->last_dna_operation = operation;
@@ -44,7 +43,7 @@ static int pfring_map_dna_device(pfring *ring,
   mapping.operation = operation;
   snprintf(mapping.device_name, sizeof(mapping.device_name),
 	   "%s", device_name);
-  mapping.channel_id = channel_id;
+  mapping.channel_id = ring->dna_dev.channel_id;
 
   return(ring ? setsockopt(ring->fd, 0, SO_MAP_DNA_DEVICE,
 			   &mapping, sizeof(mapping)): -1);
@@ -72,8 +71,7 @@ void pfring_dna_unmap(pfring *ring) {
     munmap(ring->dna_dev.phys_card_memory,
            ring->dna_dev.phys_card_memory_len);
 
-  pfring_map_dna_device(ring, remove_device_mapping,
-                        "", ring->dna_dev.channel_id);
+  pfring_map_dna_device(ring, remove_device_mapping, "");
 
   if(ring->clear_promisc)
     set_if_promisc(ring->device_name, 0);
@@ -223,22 +221,23 @@ int pfring_dna_map(pfring *ring) {
   if(at != NULL) {
     at[0] = '\0';
 
-    /* Syntax
+    /* 
+       Syntax
        ethX@1      channel 1
-     */
-
+    */
+    
     channel_id = atoi(&at[1]);
   }
-  /* printf("channel_id=%d\n", channel_id); */
-  rc = pfring_map_dna_device(ring, add_device_mapping,
-			     ring->device_name, channel_id);
+
+  ring->dna_dev.channel_id = channel_id;
+
+  rc = pfring_map_dna_device(ring, add_device_mapping, ring->device_name);
 
   if(rc < 0) {
 #if 0
     printf("pfring_map_dna_device() failed [rc=%d]: device already in use, channel not existing or non-DNA driver?\n", rc);
     printf("Make sure that you load the DNA-driver *after* you loaded the PF_RING kernel module\n");
 #endif
-    close(ring->fd);
     return -1;
   }
 
@@ -246,8 +245,7 @@ int pfring_dna_map(pfring *ring) {
 
   if (rc < 0) {
       printf("pfring_get_mapped_dna_device() failed [rc=%d]\n", rc);
-      pfring_map_dna_device(ring, remove_device_mapping,
-			  ring->device_name, channel_id);
+      pfring_map_dna_device(ring, remove_device_mapping, ring->device_name);
       close(ring->fd);
       return -1;
   }
@@ -354,7 +352,7 @@ int pfring_dna_open(pfring *ring) {
 
   int rc;
 
-  if ( (rc = pfring_dna_map(ring)) < 0)
+  if((rc = pfring_dna_map(ring)) < 0)
     return rc;
 
   ring->close = pfring_dna_close;

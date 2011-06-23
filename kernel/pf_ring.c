@@ -498,7 +498,7 @@ static inline int check_and_init_free_slot(struct pf_ring_socket *pfr, int off)
 
     if(pfr->slots_info->insert_off < pfr->slots_info->remove_off) {
 
-#if 1 /* Zero-copy recv: this prevents from overwriting packets while apps are processing them */ 
+#if 1 /* Zero-copy recv: this prevents from overwriting packets while apps are processing them */
       if((pfr->slots_info->remove_off - pfr->slots_info->insert_off) < (2 * pfr->slots_info->slot_len))
 #else
       if((pfr->slots_info->remove_off - pfr->slots_info->insert_off) <      pfr->slots_info->slot_len )
@@ -909,6 +909,18 @@ static int ring_proc_dev_rule_write(struct file *file,
 
 /* ********************************** */
 
+static char* direction2string(packet_direction d) {
+  switch(d) {
+  case rx_and_tx_direction: return("RX+TX");
+  case rx_only_direction:   return("RX only");
+  case tx_only_direction:   return("TX only");
+  }
+
+  return("???");
+}
+
+/* ********************************** */
+
 static int ring_proc_get_info(char *buf, char **start, off_t offset,
 			      int len, int *unused, void *data)
 {
@@ -940,7 +952,9 @@ static int ring_proc_get_info(char *buf, char **start, off_t offset,
 	rlen = sprintf(buf,         "Bound Device       : %s\n", pfr->ring_netdev->dev->name);
 	rlen += sprintf(buf + rlen, "Slot Version       : %d [%s]\n", fsi->version, RING_VERSION);
 	rlen += sprintf(buf + rlen, "Active             : %d\n", pfr->ring_active);
+	rlen += sprintf(buf + rlen, "Breed              : %s\n", (pfr->dna_device_entry != NULL) ? "DNA" : "Non-DNA");
 	rlen += sprintf(buf + rlen, "Sampling Rate      : %d\n", pfr->sample_rate);
+	rlen += sprintf(buf + rlen, "Capture Direction  : %s\n", direction2string(pfr->direction));
 	rlen += sprintf(buf + rlen, "Appl. Name         : %s\n", pfr->appl_name ? pfr->appl_name : "<unknown>");
 	rlen += sprintf(buf + rlen, "IP Defragment      : %s\n", enable_ip_defrag ? "Yes" : "No");
 	rlen += sprintf(buf + rlen, "BPF Filtering      : %s\n", pfr->bpfFilter ? "Enabled" : "Disabled");
@@ -1924,7 +1938,7 @@ inline int copy_data_to_ring(struct sk_buff *skb,
     wake_up_interruptible(&pfr->ring_slots_waitqueue);
 
 #ifdef VPFRING_SUPPORT
-  if (pfr->vpfring_host_eventfd_ctx && !(pfr->slots_info->vpfring_guest_flags & VPFRING_GUEST_NO_INTERRUPT)) 
+  if (pfr->vpfring_host_eventfd_ctx && !(pfr->slots_info->vpfring_guest_flags & VPFRING_GUEST_NO_INTERRUPT))
      eventfd_signal(pfr->vpfring_host_eventfd_ctx, 1);
 #endif //VPFRING_SUPPORT
 
@@ -2714,7 +2728,7 @@ static struct sk_buff* defrag_skb(struct sk_buff *skb,
 		   c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8], c[9],
 		   c[10], c[11], c[12], c[13], c[14], c[15], c[16], c[17]);
           }
-	  
+
 	  if (vlan_offset > 0){
 	    skb_push(skk, vlan_offset);
 	    displ -= vlan_offset;
@@ -3883,7 +3897,7 @@ static int ring_mmap(struct file *file,
   switch(mem_id) {
     /* RING */
     case 0:
- 
+
       /* if userspace tries to mmap beyond end of our buffer, fail */
       if(size > pfr->slots_info->tot_mem) {
         if(enable_debug)
@@ -4350,7 +4364,7 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 	   mapping->device_name,
 	   mapping->channel_id,
 	   (mapping->operation == remove_device_mapping) ? "remove" : "add");
-  
+
   if(mapping->operation == remove_device_mapping) {
     /* Unlock driver */
     u8 found = 0;
@@ -4360,8 +4374,16 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 
       if((!strcmp(entry->dev.netdev->name, mapping->device_name))
 	 && (entry->dev.channel_id == mapping->channel_id)
-	 && (entry->in_use)) {
-	entry->in_use = 0, found = 1;
+	 && entry->in_use) {
+	if(entry->sock_a == pfr)      entry->sock_a = NULL;
+	else if(entry->sock_b == pfr) entry->sock_b = NULL;
+	else {
+	  printk("[PF_RING] ring_map_dna_device(%s, %u): something got wrong 1\n",
+                 mapping->device_name, mapping->channel_id);
+	  return(-1); /* Something got wrong */
+	}
+
+	entry->in_use--, found = 1;
 	break;
       }
     }
@@ -4373,7 +4395,7 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
     if(enable_debug)
       printk("[PF_RING] ring_map_dna_device(%s): removed mapping\n",
 	     mapping->device_name);
-    
+
     if(!found) return(-1); else return(0);
   } else {
     ring_proc_remove(pfr);
@@ -4386,15 +4408,20 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 
 	if(enable_debug)
 	  printk("[PF_RING] ==>> %s@%d [in_use=%d][%p]\n",
-		 entry->dev.netdev->name, 
+		 entry->dev.netdev->name,
 		 mapping->channel_id,
 		 entry->in_use, entry);
 
-	if(entry->in_use)
-	  return(-1);
-	else
-	  entry->in_use = 1, pfr->dna_device_entry = entry;
-	
+	if(entry->sock_a == NULL)      entry->sock_a = pfr;
+	else if(entry->sock_b == NULL) entry->sock_b = pfr;
+	else {
+	  printk("[PF_RING] ring_map_dna_device(%s, %u): something got wrong 2\n",
+                 mapping->device_name, mapping->channel_id);
+	  return(-1); /* Something got wrong: too many mappings */
+	}
+
+	entry->in_use++, pfr->dna_device_entry = entry;
+
 	pfr->dna_device = &entry->dev, pfr->ring_netdev->dev = entry->dev.netdev /* Default */;
 
 	if(enable_debug)
@@ -5095,14 +5122,33 @@ static int ring_setsockopt(struct socket *sock,
     if(optlen != sizeof(pfr->sample_rate))
       return -EINVAL;
 
-    if(copy_from_user
-       (&pfr->sample_rate, optval, sizeof(pfr->sample_rate)))
+    if(copy_from_user(&pfr->sample_rate, optval, sizeof(pfr->sample_rate)))
       return -EFAULT;
     break;
 
   case SO_ACTIVATE_RING:
     if(enable_debug)
       printk("[PF_RING] * SO_ACTIVATE_RING *\n");
+
+    if(pfr->dna_device_entry != NULL) {
+      struct pf_ring_socket *other = NULL;
+
+      /* This is a DNA ring */
+      if(pfr->dna_device_entry->sock_a == pfr)
+	other = pfr->dna_device_entry->sock_b;
+      else if(pfr->dna_device_entry->sock_b == pfr)
+	other = pfr->dna_device_entry->sock_a;
+
+      if(other && other->ring_active) {
+	/* We need to check if the other socket is not using our direction */
+	if((other->direction == pfr->direction)
+	   || (other->direction == rx_and_tx_direction)) {
+	  printk("[PF_RING] SO_ACTIVATE_RING on DNA error\n");
+	  return -EFAULT; /* No way: we can't have two sockets that are doing the same thing with DNA */
+	}
+      }
+    }
+
     found = 1, pfr->ring_active = 1;
     break;
 
@@ -5333,19 +5379,19 @@ static int ring_setsockopt(struct socket *sock,
   case SO_SET_VPFRING_HOST_EVENTFD:
     if(optlen != sizeof(eventfd_i))
       return -EINVAL;
-    
+
     if(copy_from_user(&eventfd_i, optval, sizeof(eventfd_i)))
        return -EFAULT;
-    
+
     if (IS_ERR(eventfp = eventfd_fget(eventfd_i.fd)))
       return -EFAULT;
-   
+
       /* We don't need to check the id (we have only one event)
        * eventfd_i.id == VPFRING_HOST_EVENT_RX_INT */
 
     pfr->vpfring_host_eventfd_ctx = eventfd_ctx_fileget(eventfp);
     break;
- 
+
   case SO_SET_VPFRING_GUEST_EVENTFD:
     return -EINVAL; /* (unused) */
     break;
@@ -5700,7 +5746,7 @@ void dna_device_handler(dna_device_operation operation,
 			u_int descr_packet_memory_num_slots,
 			u_int descr_packet_memory_slot_len,
 			u_int descr_packet_memory_tot_len,
-			unsigned long tx_packet_memory,					
+			unsigned long tx_packet_memory,
 			void *tx_descr_packet_memory,
 			u_int channel_id,
 			void *phys_card_memory,
@@ -5724,6 +5770,8 @@ void dna_device_handler(dna_device_operation operation,
 
     next = kmalloc(sizeof(dna_device_list), GFP_ATOMIC);
     if(next != NULL) {
+      memset(next, 0, sizeof(dna_device_list));
+
       next->in_use = 0;
       next->dev.rx_packet_memory = rx_packet_memory;
       next->dev.packet_memory_num_slots = packet_memory_num_slots;

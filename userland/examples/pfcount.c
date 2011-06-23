@@ -711,6 +711,8 @@ int main(int argc, char* argv[]) {
 
   if((rc = pfring_set_direction(pd, direction)) != 0)
     printf("pfring_set_direction returned [rc=%d][direction=%d]\n", rc, direction);
+  else
+    pfring_set_direction(pd, rx_only_direction);
 
   if(watermark > 0) {
     if((rc = pfring_set_poll_watermark(pd, watermark)) != 0)

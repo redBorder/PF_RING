@@ -617,6 +617,13 @@ typedef struct {
   u8 in_use;
   dna_device dev;
   struct list_head list;
+  /*
+    In the DNA world only one application can open the device@channel
+    per direction. The two variables below are used to keep
+    pointers to the max two sockets (one for RX and one for TX) that can open
+    the DNA socket
+  */
+  struct pf_ring_socket *sock_a, *sock_b;
 } dna_device_list;
 
 #define MAX_NUM_IFIDX                       1024
