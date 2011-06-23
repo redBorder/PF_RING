@@ -634,7 +634,7 @@ int pfring_mod_get_hash_filtering_rule_stats(pfring *ring,
 int pfring_mod_add_filtering_rule(pfring *ring, filtering_rule* rule_to_add) {
   int rc;
 
-  if(rule_to_add) 
+  if(!rule_to_add) 
     return(-1);
 
   /* Sanitize entry */
