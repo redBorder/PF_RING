@@ -212,6 +212,8 @@ void sigproc(int sig) {
 /* ******************************** */
 
 void my_sigalarm(int sig) {
+  if (do_shutdown)
+    return;
   print_stats();
   alarm(ALARM_SLEEP);
   signal(SIGALRM, my_sigalarm);
