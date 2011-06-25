@@ -475,7 +475,7 @@ int pfring_mod_recv(pfring *ring, u_char** buffer, u_int buffer_len,
 	goto do_pfring_recv;
     }
 
-  return(-1);
+  return(0); /* non-blocking, no packet */
 }
 
 /* ******************************* */
