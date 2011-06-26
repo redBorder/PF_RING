@@ -78,7 +78,12 @@ pfring* pfring_open(char *device_name, u_int8_t promisc,
     Check if this is a DNA adapter and for some
     reason the user forgot to add dna:ethX
   */
-  if(device_name && strncmp(device_name, "dna:", 4)) {
+  if(device_name 
+     // && (caplen != 68) /* Used for probing interfaces */
+     && strcmp(device_name, "any")
+     && strcmp(device_name, "lo")
+     && strncmp(device_name, "dna:", 4)
+     ) {
     char name[64];
     pfring *ret;
     

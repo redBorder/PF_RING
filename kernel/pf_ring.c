@@ -4377,6 +4377,7 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 	 && entry->in_use) {
 	if(entry->sock_a == pfr)      entry->sock_a = NULL;
 	else if(entry->sock_b == pfr) entry->sock_b = NULL;
+	else if(entry->sock_c == pfr) entry->sock_c = NULL;
 	else {
 	  printk("[PF_RING] ring_map_dna_device(%s, %u): something got wrong 1\n",
                  mapping->device_name, mapping->channel_id);
@@ -4414,9 +4415,10 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 
 	if(entry->sock_a == NULL)      entry->sock_a = pfr;
 	else if(entry->sock_b == NULL) entry->sock_b = pfr;
+	else if(entry->sock_c == NULL) entry->sock_c = pfr;
 	else {
-	  printk("[PF_RING] ring_map_dna_device(%s, %u): something got wrong 2\n",
-                 mapping->device_name, mapping->channel_id);
+	  printk("[PF_RING] ring_map_dna_device(%s, %u, %s): something got wrong (too many DNA devices open)\n",
+                 mapping->device_name, mapping->channel_id, direction2string(pfr->direction));
 	  return(-1); /* Something got wrong: too many mappings */
 	}
 
@@ -4974,8 +4976,8 @@ static int ring_setsockopt(struct socket *sock,
 
     pfr->direction = direction;
     if(enable_debug)
-      printk("[PF_RING] [pfr->direction=%d][direction=%d]\n",
-	     pfr->direction, direction);
+      printk("[PF_RING] SO_SET_PACKET_DIRECTION [pfr->direction=%s][direction=%s]\n",
+	     direction2string(pfr->direction), direction2string(direction));
 
     ret = 0;
     break;
@@ -5137,13 +5139,19 @@ static int ring_setsockopt(struct socket *sock,
       if(pfr->dna_device_entry->sock_a == pfr)
 	other = pfr->dna_device_entry->sock_b;
       else if(pfr->dna_device_entry->sock_b == pfr)
-	other = pfr->dna_device_entry->sock_a;
+	other = pfr->dna_device_entry->sock_b;
+      else if(pfr->dna_device_entry->sock_c == pfr)
+	other = pfr->dna_device_entry->sock_c;
 
       if(other && other->ring_active) {
 	/* We need to check if the other socket is not using our direction */
 	if((other->direction == pfr->direction)
 	   || (other->direction == rx_and_tx_direction)) {
-	  printk("[PF_RING] SO_ACTIVATE_RING on DNA error\n");
+	  printk("[PF_RING] Unable to activate two DNA sockets on the same interface %s (direction_a=%s, direction_b=%s)\n", 
+		 pfr->ring_netdev->dev->name, 
+		 direction2string(pfr->direction), 
+		 direction2string(other->direction));
+
 	  return -EFAULT; /* No way: we can't have two sockets that are doing the same thing with DNA */
 	}
       }

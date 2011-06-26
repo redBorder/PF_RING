@@ -270,8 +270,8 @@ typedef enum {
 } packet_direction;
 
 typedef enum {
-  standard_linux_path = 0, /* Business as usual */
-  driver2pf_ring_transparent = 1, /* Packets are still delivered to the kernel */
+  standard_linux_path = 0,           /* Business as usual */
+  driver2pf_ring_transparent = 1,    /* Packets are still delivered to the kernel */
   driver2pf_ring_non_transparent = 2 /* Packets not delivered to the kernel */
 } direct2pf_ring;
 
@@ -623,7 +623,7 @@ typedef struct {
     pointers to the max two sockets (one for RX and one for TX) that can open
     the DNA socket
   */
-  struct pf_ring_socket *sock_a, *sock_b;
+  struct pf_ring_socket *sock_a, *sock_b, *sock_c;
 } dna_device_list;
 
 #define MAX_NUM_IFIDX                       1024

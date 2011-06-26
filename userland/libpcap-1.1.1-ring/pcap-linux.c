@@ -1174,7 +1174,6 @@ pcap_activate_linux(pcap_t *handle)
 		  pfring_set_cluster(handle->ring, atoi(clusterId), cluster_round_robin);
 	    
 	    pfring_set_poll_watermark(handle->ring, 1 /* watermark */);
-	    pfring_enable_ring(handle->ring);
 	  } else
 	    handle->ring = NULL;
 	} else
@@ -1360,6 +1359,8 @@ pcap_read_packet(pcap_t *handle, pcap_handler callback, u_char *userdata)
 
 #ifdef HAVE_PF_RING
 	if(handle->ring) {
+	  if(!handle->ring->enabled) pfring_enable_ring(handle->ring);
+
 	  do {
 	    if (handle->break_loop) {
 	      /*
@@ -1763,8 +1764,10 @@ pcap_inject_linux(pcap_t *handle, const void *buf, size_t size)
 #endif
 
 #ifdef HAVE_PF_RING
-	if(handle->ring != NULL)
-	  return(pfring_send(handle->ring, (char*)buf, size, 0));
+	if(handle->ring != NULL) {
+	  if(!handle->ring->enabled) pfring_enable_ring(handle->ring);
+	  return(pfring_send(handle->ring, (char*)buf, size, 1 /* FIX: set it to 1 */));
+	}
 #endif
 
 	ret = send(handle->fd, buf, size, 0);
@@ -2422,6 +2425,21 @@ pcap_setfilter_linux(pcap_t *handle, struct bpf_program *filter)
 static int
 pcap_setdirection_linux(pcap_t *handle, pcap_direction_t d)
 {
+#ifdef HAVE_PF_RING
+	if(handle->ring != NULL) {
+	  packet_direction direction; 
+
+	  switch(d) {
+	  case PCAP_D_INOUT: direction = rx_and_tx_direction; break;
+	  case PCAP_D_IN:    direction = rx_only_direction; break;
+	  case PCAP_D_OUT:   direction = tx_only_direction; break;
+	  }
+
+	  pfring_set_direction(handle->ring, direction);
+	  return(0);
+	}
+#endif
+
 #ifdef HAVE_PF_PACKET_SOCKETS
 	if (!handle->md.sock_packet) {
 		handle->direction = d;
@@ -2434,6 +2452,7 @@ pcap_setdirection_linux(pcap_t *handle, pcap_direction_t d)
 	 */
 	snprintf(handle->errbuf, PCAP_ERRBUF_SIZE,
 	    "Setting direction is not supported on SOCK_PACKET sockets");
+
 	return -1;
 }
 
