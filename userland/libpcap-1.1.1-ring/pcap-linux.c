@@ -1375,7 +1375,7 @@ pcap_read_packet(pcap_t *handle, pcap_handler callback, u_char *userdata)
 	    }
 
 	    packet_len = pfring_recv(handle->ring, (u_char**)&handle->buffer,
-				     handle->bufsize,
+				     0 /* handle->bufsize - Pass packet reference */ ,
 				     &pcap_header,
 				     1 /* wait_for_incoming_packet */);
 
