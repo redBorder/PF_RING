@@ -5973,7 +5973,8 @@ void remove_device_from_ring_list(struct net_device *dev) {
 	struct ring_element   *entry = list_entry(ring_ptr, struct ring_element, list);
 	struct pf_ring_socket *pfr = ring_sk(entry->sk);
 
-	pfr->ring_netdev = &none_device_element; /* Unbinding socket */
+	if (pfr->ring_netdev == dev_ptr)
+	  pfr->ring_netdev = &none_device_element; /* Unbinding socket */
       }
 
       list_del(ptr);
