@@ -1359,6 +1359,8 @@ pcap_read_packet(pcap_t *handle, pcap_handler callback, u_char *userdata)
 
 #ifdef HAVE_PF_RING
 	if(handle->ring) {
+	  char *packet;
+	  
 	  if(!handle->ring->enabled) pfring_enable_ring(handle->ring);
 
 	  do {
@@ -1374,17 +1376,18 @@ pcap_read_packet(pcap_t *handle, pcap_handler callback, u_char *userdata)
 	      return -2;
 	    }
 
-	    packet_len = pfring_recv(handle->ring, (u_char**)&handle->buffer,
-				     0 /* handle->bufsize - Pass packet reference */ ,
-				     &pcap_header,
+	    pcap_header.ts.tv_sec = 0;
+	    packet_len = pfring_recv(handle->ring, (u_char**)&packet,
+				     0, &pcap_header,
 				     1 /* wait_for_incoming_packet */);
 
 	    if((packet_len == 0) && (errno == EINTR)) {
 	      continue;
 	    } else if (packet_len > 0) {
-	      bp = handle->buffer;
+	      bp = packet;
 	      pcap_header.caplen = min(pcap_header.caplen, handle->bufsize);
 	      caplen = pcap_header.caplen, packet_len = pcap_header.len;
+	      if(pcap_header.ts.tv_sec == 0) gettimeofday((struct timeval*)&pcap_header.ts, NULL);
 	      break;
 	    }
 	  } while (packet_len == -1 && (errno == EINTR || errno == ENETDOWN));
