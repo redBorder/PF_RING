@@ -182,9 +182,6 @@ static u_short max_registered_plugin_id = 0;
 u_int32_t loobpack_test_buffer_len = 4*1024*1024;
 u_char *loobpack_test_buffer = NULL;
 
-/* Lock/unlock around ip_defrag() */
-static spinlock_t ip_defrag_lock = SPIN_LOCK_UNLOCKED;
-
 /* ********************************** */
 
 /* /proc entry for ring module */
@@ -528,19 +525,12 @@ static inline int check_and_init_free_slot(struct pf_ring_socket *pfr, int off)
 /* Returns new sk_buff, or NULL  */
 static struct sk_buff *ring_gather_frags(struct sk_buff *skb)
 {
-#if(LINUX_VERSION_CODE > KERNEL_VERSION(2,6,23))
-  int status;
-#endif
-  unsigned long flags;
-
-  spin_lock_irqsave(&ip_defrag_lock, flags);
 #if(LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,23))
   skb
 #else
-  status
+  int status
 #endif
   = ip_defrag(skb, IP_DEFRAG_RING);
-  spin_unlock_irqrestore(&ip_defrag_lock, flags);
 
   if(
 #if(LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,23))
