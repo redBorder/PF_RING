@@ -56,10 +56,6 @@ static pfring_module_info pfring_module_list[] = {
     .name = "dna",
     .open = pfring_dna_open,
   },
-  { /* vPF_RING (host-side, private purpose) */
-    .name = "vna", 
-    .open = pfring_dna_map,
-  },
 #endif
   {0}
 };
@@ -85,12 +81,11 @@ pfring* pfring_open(char *device_name, u_int8_t promisc,
      && strncmp(device_name, "dna:", 4)
      ) {
     char name[64];
-    pfring *ret;
     
     snprintf(name, sizeof(name), "dna:%s", device_name);
-    ret = pfring_open(name, promisc, caplen, _reentrant);
-    if(ret != NULL)
-      return(ret);
+    ring = pfring_open(name, promisc, caplen, _reentrant);
+    if(ring != NULL)
+      return(ring);
   }
 
 #ifdef RING_DEBUG

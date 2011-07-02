@@ -51,7 +51,10 @@ static int pfring_map_dna_device(pfring *ring,
 
 /* **************************************************** */
 
-void pfring_dna_unmap(pfring *ring) {
+void pfring_dna_close(pfring *ring) {
+
+  if(ring->dna_term)
+    ring->dna_term(ring);
 
   if(ring->dna_dev.rx_packet_memory != 0)
     munmap((void*)ring->dna_dev.rx_packet_memory,
@@ -77,15 +80,6 @@ void pfring_dna_unmap(pfring *ring) {
     set_if_promisc(ring->device_name, 0);
 
   close(ring->fd);
-}
-
-/* **************************************************** */
-
-void pfring_dna_close(pfring *ring) {
-  if(ring->dna_term)
-    ring->dna_term(ring);
-
-  pfring_dna_unmap(ring);
 }
 
 /* **************************************************** */
@@ -161,15 +155,14 @@ static void pfring_dump_dna_stats(pfring* ring) {
 
 /* **************************************************** */
 
-int pfring_dna_map(pfring *ring) {
+int pfring_dna_open(pfring *ring) {
   int   channel_id = 0;
   int   rc;
   char *at;
 
-  ring->close = pfring_dna_unmap;
-
-  ring->stats = NULL;
-  ring->recv  = NULL;
+  ring->close = pfring_dna_close;
+  ring->stats = pfring_dna_stats;
+  ring->recv  = pfring_dna_recv;
   ring->set_poll_watermark = pfring_mod_set_poll_watermark;
   ring->set_poll_duration = pfring_mod_set_poll_duration;
   ring->add_hw_rule = pfring_mod_add_hw_rule;
@@ -177,7 +170,7 @@ int pfring_dna_map(pfring *ring) {
   ring->set_channel_id = pfring_mod_set_channel_id;
   ring->set_application_name = pfring_mod_set_application_name;
   ring->bind = pfring_mod_bind;
-  ring->send = NULL;
+  ring->send = NULL; /* Set by the dna library */
   ring->get_num_rx_channels = pfring_mod_get_num_rx_channels;
   ring->set_sampling_rate = pfring_mod_set_sampling_rate;
   ring->get_selectable_fd = pfring_mod_get_selectable_fd;
@@ -342,23 +335,6 @@ int pfring_dna_map(pfring *ring) {
     if(set_if_promisc(ring->device_name, 1) == 0)
       ring->clear_promisc = 1;
   }
-
-  return 0;
-}
-
-/* **************************************************** */
-
-int pfring_dna_open(pfring *ring) {
-
-  int rc;
-
-  if((rc = pfring_dna_map(ring)) < 0)
-    return rc;
-
-  ring->close = pfring_dna_close;
-  ring->stats = pfring_dna_stats;
-  ring->recv  = pfring_dna_recv;
-  ring->send = NULL; /* Set by the dna library */
 
   if(dna_init(ring, sizeof(pfring)) == -1) {
     printf("dna_init() failed\n");
