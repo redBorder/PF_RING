@@ -204,15 +204,19 @@ static int reflect_packet(struct sk_buff *skb,
 
 /* ********************************** */
 
-#if 0
+#if 1
 
 static rwlock_t ring_mgmt_lock;
 
 inline void init_ring_readers(void)      { ring_mgmt_lock = RW_LOCK_UNLOCKED; }
-inline void ring_write_lock(void)        { write_lock(&ring_mgmt_lock);    }
-inline void ring_write_unlock(void)      { write_unlock(&ring_mgmt_lock);  }
-inline void ring_read_lock(void)         { read_lock(&ring_mgmt_lock);     }
-inline void ring_read_unlock(void)       { read_unlock(&ring_mgmt_lock);   }
+inline void ring_write_lock(void)        { write_lock_bh(&ring_mgmt_lock);    }
+inline void ring_write_unlock(void)      { write_unlock_bh(&ring_mgmt_lock);  }
+/* use ring_read_lock/ring_read_unlock in process context (a bottom half may use write_lock) */
+inline void ring_read_lock(void)         { read_lock_bh(&ring_mgmt_lock);     }
+inline void ring_read_unlock(void)       { read_unlock_bh(&ring_mgmt_lock);   }
+/* use ring_read_lock_inbh/ring_read_unlock_inbh in bottom half contex */
+inline void ring_read_lock_inbh(void)    { read_lock(&ring_mgmt_lock);        }
+inline void ring_read_unlock_inbh(void)  { read_unlock(&ring_mgmt_lock);      }
 
 #else
 
@@ -5128,27 +5132,25 @@ static int ring_setsockopt(struct socket *sock,
       printk("[PF_RING] * SO_ACTIVATE_RING *\n");
 
     if(pfr->dna_device_entry != NULL) {
-      struct pf_ring_socket *other = NULL;
+      struct pf_ring_socket *other1 = NULL, *other2 = NULL;
 
       /* This is a DNA ring */
-      if(pfr->dna_device_entry->sock_a == pfr)
-	other = pfr->dna_device_entry->sock_b;
-      else if(pfr->dna_device_entry->sock_b == pfr)
-	other = pfr->dna_device_entry->sock_b;
+      other1=pfr->dna_device_entry->sock_b;
+      other2=pfr->dna_device_entry->sock_c;
+      if(pfr->dna_device_entry->sock_b == pfr)
+	other1 = pfr->dna_device_entry->sock_a;
       else if(pfr->dna_device_entry->sock_c == pfr)
-	other = pfr->dna_device_entry->sock_c;
+	other2 = pfr->dna_device_entry->sock_a;
 
-      if(other && other->ring_active) {
-	/* We need to check if the other socket is not using our direction */
-	if((other->direction == pfr->direction)
-	   || (other->direction == rx_and_tx_direction)) {
-	  printk("[PF_RING] Unable to activate two DNA sockets on the same interface %s (direction_a=%s, direction_b=%s)\n", 
-		 pfr->ring_netdev->dev->name, 
-		 direction2string(pfr->direction), 
-		 direction2string(other->direction));
+      /* We need to check if the other socket is not using our direction */
+      if((other1           && other1->ring_active && (other1->direction == pfr->direction || other1->direction == rx_and_tx_direction)) ||
+        ((other1 = other2) && other2->ring_active && (other2->direction == pfr->direction || other2->direction == rx_and_tx_direction))){
+	printk("[PF_RING] Unable to activate two DNA sockets on the same interface %s (direction_a=%s, direction_b=%s)\n", 
+	       pfr->ring_netdev->dev->name, 
+	       direction2string(pfr->direction), 
+	       direction2string(other1->direction));
 
-	  return -EFAULT; /* No way: we can't have two sockets that are doing the same thing with DNA */
-	}
+	return -EFAULT; /* No way: we can't have two sockets that are doing the same thing with DNA */
       }
     }
 
