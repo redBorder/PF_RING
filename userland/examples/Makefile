@@ -46,7 +46,7 @@ CFLAGS     = -g ${O_FLAG} -Wall ${INCLUDE} ${DNA_DEFINE} #-O
 #
 # User and System libraries
 #
-LIBS       = ${LIBPFRING} -lpthread
+LIBS       = ${LIBPFRING} -lpthread #-ldag
 
 # How to make an object file
 %.o: %.c

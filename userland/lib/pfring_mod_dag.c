@@ -30,6 +30,8 @@ int pfring_dag_open(pfring *ring) {
   ring->recv  = pfring_dag_recv;
   ring->set_poll_watermark = pfring_dag_set_poll_watermark;
   ring->set_poll_duration  = pfring_dag_set_poll_duration;
+  ring->set_direction      = pfring_dag_set_direction;
+  ring->enable_ring        = pfring_dag_enable_ring;
 
   ring->priv_data = malloc(sizeof(pfring_dag)); 
 
@@ -386,6 +388,24 @@ int pfring_dag_stats(pfring *ring, pfring_stat *stats) {
 
   stats->recv = d->stats_recv;
   stats->drop = d->stats_drop;
+  return 0;
+}
+
+/* **************************************************** */
+
+int pfring_dag_set_direction(pfring *ring, packet_direction direction) {
+
+  if (direction == rx_only_direction || direction == rx_and_tx_direction)
+    return 0;
+
+  return -1;
+}
+
+
+/* **************************************************** */
+
+int pfring_dag_enable_ring(pfring *ring) {
+  /* nothing to do */
   return 0;
 }
 

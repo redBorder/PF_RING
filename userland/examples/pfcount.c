@@ -699,7 +699,7 @@ int main(int argc, char* argv[]) {
   }
 
   if(pfring_get_bound_device_address(pd, mac_address) != 0)
-    printf("pfring_get_bound_device_address() failed\n");
+    printf("Impossible to know the device address\n");
   else
     printf("Capturing from %s [%s]\n", device, etheraddr_string(mac_address, buf));
 
