@@ -1184,6 +1184,8 @@ pcap_activate_linux(pcap_t *handle)
 	  handle->bufsize = handle->snapshot;
 	  handle->linktype = DLT_EN10MB;
 	  handle->offset = 2;
+	  handle->setnonblock_op = pcap_setnonblock_mmap;
+	  handle->getnonblock_op = pcap_getnonblock_mmap;
 
 	  /* printf("Open HAVE_PF_RING(%s)\n", device); */
 	} else {
@@ -1379,7 +1381,7 @@ pcap_read_packet(pcap_t *handle, pcap_handler callback, u_char *userdata)
 	    pcap_header.ts.tv_sec = 0;
 	    packet_len = pfring_recv(handle->ring, (u_char**)&packet,
 				     0, &pcap_header,
-				     1 /* wait_for_incoming_packet */);
+				     handle->md.timeout < 0 ? 0 : 1 /* wait_for_incoming_packet */);
 
 	    if((packet_len == 0) && (errno == EINTR)) {
 	      continue;
