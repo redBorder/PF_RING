@@ -590,7 +590,8 @@ int pfring_version(pfring *ring, u_int32_t *version) {
   if(ring && ring->version)
     return ring->version(ring, version);
 
-  return -1;
+  *version = RING_VERSION_NUM;
+  return 0;/*-1*/;
 }
 
 /* **************************************************** */

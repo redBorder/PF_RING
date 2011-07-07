@@ -268,7 +268,7 @@ check_and_poll:
       if (caplen > len) 
         caplen = len;
      
-      if(caplen > buffer_len) 
+      if((buffer_len > 0) && (caplen > buffer_len))
         caplen = buffer_len;
 
       payload += 2;
@@ -303,7 +303,7 @@ check_and_poll:
   }
 
 #ifdef PFRING_DAG_PARSE_PKT
-  parse_pkt(buffer, hdr);      
+  parse_pkt(*buffer, hdr);      
 #else
   hdr->extended_hdr.parsed_header_len = 0;
 #endif

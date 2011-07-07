@@ -18,7 +18,7 @@
 
 #include "dagapi.h"
 
-//#define PFRING_DAG_PARSE_PKT
+/* #define PFRING_DAG_PARSE_PKT */
 
 #define MAX_CARD_ERF_TYPES 255
 #define AVG_PACKET_SIZE    512
