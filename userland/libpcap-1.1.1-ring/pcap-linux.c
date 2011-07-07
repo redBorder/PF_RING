@@ -1362,6 +1362,7 @@ pcap_read_packet(pcap_t *handle, pcap_handler callback, u_char *userdata)
 #ifdef HAVE_PF_RING
 	if(handle->ring) {
 	  char *packet;
+	  int wait_for_incoming_packet = handle->md.timeout < 0 ? 0 : 1;
 	  
 	  if(!handle->ring->enabled) pfring_enable_ring(handle->ring);
 
@@ -1381,10 +1382,14 @@ pcap_read_packet(pcap_t *handle, pcap_handler callback, u_char *userdata)
 	    pcap_header.ts.tv_sec = 0;
 	    packet_len = pfring_recv(handle->ring, (u_char**)&packet,
 				     0, &pcap_header,
-				     handle->md.timeout < 0 ? 0 : 1 /* wait_for_incoming_packet */);
+				     wait_for_incoming_packet);
 
-	    if((packet_len == 0) && (errno == EINTR)) {
-	      continue;
+	    if(packet_len == 0) { 
+	      if (errno == EINTR)
+	        continue;
+
+	      if (!wait_for_incoming_packet) 
+	        return 0; /* non-blocking */
 	    } else if (packet_len > 0) {
 	      bp = packet;
 	      pcap_header.caplen = min(pcap_header.caplen, handle->bufsize);
