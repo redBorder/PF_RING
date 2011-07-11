@@ -105,12 +105,14 @@ pfring* pfring_open(char *device_name, u_int8_t promisc,
       ret = pfring_dna_open(ring);     
     }    
 
-    if(ret > 0) {
+    if(ret >= 0) {
       /* The DNA device exists */
       mod_found = 1;
     } else {
-      free(ring->device_name);
-      ring->device_name = NULL;
+      if (ring->device_name != NULL) {
+        free(ring->device_name);
+        ring->device_name = NULL;
+      }
 
       while (pfring_module_list[++i].name) {
 	if(!(str = strstr(device_name, pfring_module_list[i].name))) continue;
