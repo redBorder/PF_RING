@@ -70,24 +70,6 @@ pfring* pfring_open(char *device_name, u_int8_t promisc,
   char *str;
   pfring *ring;
   
-  /*
-    Check if this is a DNA adapter and for some
-    reason the user forgot to add dna:ethX
-  */
-  if(device_name 
-     // && (caplen != 68) /* Used for probing interfaces */
-     && strcmp(device_name, "any")
-     && strcmp(device_name, "lo")
-     && strncmp(device_name, "dna:", 4)
-     ) {
-    char name[64];
-    
-    snprintf(name, sizeof(name), "dna:%s", device_name);
-    ring = pfring_open(name, promisc, caplen, _reentrant);
-    if(ring != NULL)
-      return(ring);
-  }
-
 #ifdef RING_DEBUG
   printf("[PF_RING] Attempting to pfring_open(%s)\n", device_name);
 #endif
@@ -108,21 +90,44 @@ pfring* pfring_open(char *device_name, u_int8_t promisc,
 #endif
   /* modules */
 
-  if(device_name)
-    while (pfring_module_list[++i].name) {
-      if(!(str = strstr(device_name, pfring_module_list[i].name))) continue;
-      if(!(str = strchr(str, ':')))                                continue;
-      if(!pfring_module_list[i].open)                              continue;
+  if(device_name) {
+    ret = -1;
+    ring->device_name = NULL;
+
+    /*
+      Check if this is a DNA adapter and for some
+      reason the user forgot to add dna:ethX
+    */
+    if(strcmp(device_name, "any")
+       && strcmp(device_name, "lo")
+       && strncmp(device_name, "dna:", 4)) {
+      ring->device_name = strdup(device_name);
+      ret = pfring_dna_open(ring);     
+    }    
+
+    if(ret > 0) {
+      /* The DNA device exists */
+      mod_found = 1;
+    } else {
+      free(ring->device_name);
+      ring->device_name = NULL;
+
+      while (pfring_module_list[++i].name) {
+	if(!(str = strstr(device_name, pfring_module_list[i].name))) continue;
+	if(!(str = strchr(str, ':')))                                continue;
+	if(!pfring_module_list[i].open)                              continue;
 
 #ifdef RING_DEBUG
-      printf("pfring_open: found module %s\n", pfring_module_list[i].name);
+	printf("pfring_open: found module %s\n", pfring_module_list[i].name);
 #endif
 
-      mod_found = 1;
-      ring->device_name = strdup(++str);
-      ret = pfring_module_list[i].open(ring);
-      break;
+	mod_found = 1;
+	ring->device_name = strdup(++str);
+	ret = pfring_module_list[i].open(ring);
+	break;
+      }
     }
+  }
 
   /* default */
   if(!mod_found) {
@@ -132,7 +137,7 @@ pfring* pfring_open(char *device_name, u_int8_t promisc,
   }
 
   if(ret < 0) {
-    free(ring->device_name);
+    if(ring->device_name) free(ring->device_name);
     free(ring);
     return NULL;
   }
