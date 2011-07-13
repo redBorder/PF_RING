@@ -219,6 +219,11 @@ int wait_packet_function_ptr(void *data, int mode)
     /* Very important: update the value from the register set from userland */
     if(++i == rx_ring->count)
       i = 0;
+    /* here i is the last I've read (zero-copy implementation) */
+
+    if(++i == rx_ring->count)
+      i = 0;
+    /* here i is the next I have to read */
 
     rx_ring->next_to_clean = i;
 
@@ -251,6 +256,8 @@ int wait_packet_function_ptr(void *data, int mode)
 
       /* Refresh the value */
       staterr = le32_to_cpu(rx_desc->wb.upper.status_error);
+    } else {
+      rx_ring->dna.rx_tx.rx.interrupt_received = 1; 
     }
 
     if(unlikely(dna_debug))

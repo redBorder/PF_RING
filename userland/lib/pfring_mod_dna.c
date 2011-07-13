@@ -95,7 +95,7 @@ int pfring_dna_recv(pfring *ring, u_char** buffer, u_int buffer_len,
 		    struct pfring_pkthdr *hdr,
 		    u_int8_t wait_for_incoming_packet) {
   u_char *pkt = NULL;
-  int8_t status = 1;
+  int8_t status = 0;
 
   if(ring->is_shutting_down) return(-1);
 
@@ -123,10 +123,10 @@ int pfring_dna_recv(pfring *ring, u_char** buffer, u_int buffer_len,
 
     if(wait_for_incoming_packet) {
       status = ring->dna_check_packet_to_read(ring, wait_for_incoming_packet);
-    }
 
-    if(status > 0)
-      goto redo_pfring_recv;
+      if(status > 0)
+        goto redo_pfring_recv;
+    }
 
     if(ring->reentrant) pthread_spin_unlock(&ring->spinlock);
     return(0);

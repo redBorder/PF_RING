@@ -4168,16 +4168,12 @@ unsigned int ring_poll(struct file *file,
     if(enable_debug)
       printk("[PF_RING] wait_packet_function_ptr(0) returned %d\n", rc);
 
-    //*pfr->dna_device->interrupt_received = rc;
-    if(rc == 0)
-      rc = *pfr->dna_device->interrupt_received;
-
     if(enable_debug)
       printk("[PF_RING] poll %s return [%d]\n",
 	     pfr->ring_netdev->dev->name,
 	     *pfr->dna_device->interrupt_received);
 
-    if(rc) {
+    if(*pfr->dna_device->interrupt_received) {
       return(POLLIN | POLLRDNORM);
     } else {
       return(0);

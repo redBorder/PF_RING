@@ -1174,6 +1174,7 @@ pcap_activate_linux(pcap_t *handle)
 		  pfring_set_cluster(handle->ring, atoi(clusterId), cluster_round_robin);
 	    
 	    pfring_set_poll_watermark(handle->ring, 1 /* watermark */);
+	    handle->ring->dna_sync_watermark = 0; /* trick (otherwise tshark wouldn't work with DNA) */
 	  } else
 	    handle->ring = NULL;
 	} else
@@ -1363,6 +1364,7 @@ pcap_read_packet(pcap_t *handle, pcap_handler callback, u_char *userdata)
 	if(handle->ring) {
 	  char *packet;
 	  int wait_for_incoming_packet = handle->md.timeout < 0 ? 0 : 1;
+	  int ret = 0;
 	  
 	  if(!handle->ring->enabled) pfring_enable_ring(handle->ring);
 
@@ -1380,24 +1382,34 @@ pcap_read_packet(pcap_t *handle, pcap_handler callback, u_char *userdata)
 	    }
 
 	    pcap_header.ts.tv_sec = 0;
-	    packet_len = pfring_recv(handle->ring, (u_char**)&packet,
-				     0, &pcap_header,
-				     wait_for_incoming_packet);
 
-	    if(packet_len == 0) { 
+	    ret = pfring_recv(handle->ring, (u_char**)&packet,
+			      0, &pcap_header,
+			      wait_for_incoming_packet);
+
+	    if(ret == 0) { 
 	      if (errno == EINTR)
 	        continue;
 
-	      if (!wait_for_incoming_packet) 
+	      if (wait_for_incoming_packet) 
+	        continue;
+	      else
 	        return 0; /* non-blocking */
-	    } else if (packet_len > 0) {
+
+	    } else if (ret > 0) {
 	      bp = packet;
 	      pcap_header.caplen = min(pcap_header.caplen, handle->bufsize);
 	      caplen = pcap_header.caplen, packet_len = pcap_header.len;
 	      if(pcap_header.ts.tv_sec == 0) gettimeofday((struct timeval*)&pcap_header.ts, NULL);
 	      break;
+
+	    } else {
+	      if (errno == EINTR || errno == ENETDOWN)
+	        continue;
+	      else
+	        return -1;
 	    }
-	  } while (packet_len == -1 && (errno == EINTR || errno == ENETDOWN));
+	  } while (1);
 
 	  goto pfring_pcap_read_packet;	  
 	}
