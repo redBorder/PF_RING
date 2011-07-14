@@ -156,7 +156,13 @@ static struct list_head device_ring_list[MAX_NUM_DEVICES];
 
 /* List of virtual filtering devices */
 static struct list_head virtual_filtering_devices_list;
-static rwlock_t virtual_filtering_lock = RW_LOCK_UNLOCKED;
+static rwlock_t virtual_filtering_lock = 
+#if(LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39))
+  RW_LOCK_UNLOCKED
+#else
+  __RW_LOCK_UNLOCKED(virtual_filtering_lock)
+#endif
+;
 
 /* List of all clusters */
 static struct list_head ring_cluster_list;
@@ -208,7 +214,13 @@ static int reflect_packet(struct sk_buff *skb,
 
 static rwlock_t ring_mgmt_lock;
 
-inline void init_ring_readers(void)      { ring_mgmt_lock = RW_LOCK_UNLOCKED; }
+inline void init_ring_readers(void)      { ring_mgmt_lock = 
+#if(LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39))
+  RW_LOCK_UNLOCKED
+#else
+  __RW_LOCK_UNLOCKED(ring_mgmt_lock)
+#endif
+; }
 inline void ring_write_lock(void)        { write_lock_bh(&ring_mgmt_lock);    }
 inline void ring_write_unlock(void)      { write_unlock_bh(&ring_mgmt_lock);  }
 /* use ring_read_lock/ring_read_unlock in process context (a bottom half may use write_lock) */
