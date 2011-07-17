@@ -368,6 +368,7 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
   u16			 cache_line_size;
   struct ixgbe_ring     *tx_ring = adapter->tx_ring[rx_ring->queue_index];
   struct pfring_hooks *hook = (struct pfring_hooks*)rx_ring->netdev->pfring_ptr;
+  dna_device_model	 model;
 
   /* Check if the memory has been already allocated */
   if(rx_ring->dna.rx_tx.rx.packet_memory != 0) return;
@@ -481,6 +482,17 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
   tx_ring->dna.mem_order = rx_ring->dna.mem_order;
   dna_ixgbe_alloc_tx_buffers(tx_ring, hook);
 
+  switch (hw->mac.type) {
+    case ixgbe_mac_82598EB:
+      model = intel_ixgbe_82598;
+      break;
+    case ixgbe_mac_82599EB:
+      model = intel_ixgbe_82599;
+      break;
+    default:
+      model = intel_ixgbe;
+  }
+
   hook->ring_dna_device_handler(add_device_mapping,
 				/* RX */
 				rx_ring->dna.rx_tx.rx.packet_memory,
@@ -499,7 +511,7 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
 				(void*)rx_ring->netdev->mem_start,
 				rx_ring->netdev->mem_end - rx_ring->netdev->mem_start,
 				rx_ring->netdev,
-				intel_ixgbe,
+				model,
 				rx_ring->netdev->dev_addr, /* 6 bytes MAC address */
 				&rx_ring->dna.rx_tx.rx.packet_waitqueue,
 				&rx_ring->dna.rx_tx.rx.interrupt_received,

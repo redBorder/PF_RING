@@ -516,7 +516,9 @@ typedef enum {
 typedef enum {
   intel_e1000e = 0, 
   intel_igb, 
-  intel_ixgbe
+  intel_ixgbe,
+  intel_ixgbe_82598,
+  intel_ixgbe_82599
 } dna_device_model;
 
 typedef struct {

@@ -641,6 +641,12 @@ static int ring_proc_dev_get_info(char *buf, char **start, off_t offset,
       case intel_ixgbe:
 	dev_family = "Intel ixgbe"; break;
 	break;
+      case intel_ixgbe_82598:
+	dev_family = "Intel ixgbe 82598"; break;
+	break;
+      case intel_ixgbe_82599:
+	dev_family = "Intel ixgbe 82599"; break;
+	break;
       }
     } else {
       switch(dev_ptr->device_type) {
@@ -4457,7 +4463,7 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
     }
   }
 
-  printk("[PF_RING] ring_map_dna_device(%s, %u): mapping failed\n",
+  printk("[PF_RING] ring_map_dna_device(%s, %u): mapping failed or not a dna device\n",
 	 mapping->device_name, mapping->channel_id);
 
   return(-1);
