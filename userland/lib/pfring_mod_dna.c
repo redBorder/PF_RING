@@ -336,10 +336,12 @@ int pfring_dna_open(pfring *ring) {
       ring->clear_promisc = 1;
   }
 
-  if(dna_init(ring, sizeof(pfring)) == -1) {
+  rc = dna_init(ring, sizeof(pfring));
+
+  if (rc < 0) {
     printf("dna_init() failed\n");
     close(ring->fd);
-    return -1;
+    return rc;
   }
 
 #ifdef DEBUG
