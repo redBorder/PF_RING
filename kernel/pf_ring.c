@@ -1264,6 +1264,35 @@ static inline void ring_remove(struct sock *sk)
     printk("[PF_RING] leaving ring_remove()\n");
 }
 
+/* ********************************** */
+
+inline u_int32_t hash_pkt(u_int16_t vlan_id, u_int8_t proto,
+			  ip_addr host_peer_a, ip_addr host_peer_b,
+			  u_int16_t port_peer_a, u_int16_t port_peer_b)
+{
+  return(vlan_id+proto+
+	 host_peer_a.v6.s6_addr32[0]+host_peer_a.v6.s6_addr32[1]+
+	 host_peer_a.v6.s6_addr32[2]+host_peer_a.v6.s6_addr32[3]+
+	 host_peer_b.v6.s6_addr32[0]+host_peer_b.v6.s6_addr32[1]+
+	 host_peer_b.v6.s6_addr32[2]+host_peer_b.v6.s6_addr32[3]+
+	 port_peer_a+port_peer_b);
+}
+
+/* ********************************** */
+
+inline u_int32_t hash_pkt_header(struct pfring_pkthdr * hdr, u_char mask_src, u_char mask_dst)
+{
+  if(hdr->extended_hdr.pkt_hash == 0)
+    hdr->extended_hdr.pkt_hash = hash_pkt(hdr->extended_hdr.parsed_pkt.vlan_id,
+					  hdr->extended_hdr.parsed_pkt.l3_proto,
+					  mask_src ? ip_zero : hdr->extended_hdr.parsed_pkt.ip_src,
+					  mask_dst ? ip_zero : hdr->extended_hdr.parsed_pkt.ip_dst,
+					  mask_src ? 0 : hdr->extended_hdr.parsed_pkt.l4_src_port,
+					  mask_dst ? 0 : hdr->extended_hdr.parsed_pkt.l4_dst_port);
+
+  return(hdr->extended_hdr.pkt_hash);
+}
+
 /* ******************************************************* */
 
 static int parse_raw_pkt(char *data, u_int data_len,
@@ -1416,6 +1445,8 @@ static int parse_raw_pkt(char *data, u_int data_len,
   } else
     hdr->extended_hdr.parsed_pkt.l4_src_port = hdr->extended_hdr.parsed_pkt.l4_dst_port = 0;
 
+  hash_pkt_header(hdr, 0, 0);
+
   return(1); /* IP */
 }
 
@@ -1438,33 +1469,6 @@ static int parse_pkt(struct sk_buff *skb,
   hdr->extended_hdr.parsed_pkt.offset.eth_offset = -skb_displ;
 
   return(rc);
-}
-
-/* ********************************** */
-
-inline u_int32_t hash_pkt(u_int16_t vlan_id, u_int8_t proto,
-			  ip_addr host_peer_a, ip_addr host_peer_b,
-			  u_int16_t port_peer_a, u_int16_t port_peer_b)
-{
-  return(vlan_id+proto+
-	 host_peer_a.v6.s6_addr32[0]+host_peer_a.v6.s6_addr32[1]+
-	 host_peer_a.v6.s6_addr32[2]+host_peer_a.v6.s6_addr32[3]+
-	 host_peer_b.v6.s6_addr32[0]+host_peer_b.v6.s6_addr32[1]+
-	 host_peer_b.v6.s6_addr32[2]+host_peer_b.v6.s6_addr32[3]+
-	 port_peer_a+port_peer_b);
-}
-
-/* ********************************** */
-
-inline u_int32_t hash_pkt_header(struct pfring_pkthdr * hdr, u_char mask_src,
-				 u_char mask_dst)
-{
-  return(hash_pkt(hdr->extended_hdr.parsed_pkt.vlan_id,
-		  hdr->extended_hdr.parsed_pkt.l3_proto,
-		  mask_src ? ip_zero : hdr->extended_hdr.parsed_pkt.ip_src,
-		  mask_dst ? ip_zero : hdr->extended_hdr.parsed_pkt.ip_dst,
-		  mask_src ? 0 : hdr->extended_hdr.parsed_pkt.l4_src_port,
-		  mask_dst ? 0 : hdr->extended_hdr.parsed_pkt.l4_dst_port));
 }
 
 /* ********************************** */
@@ -1695,8 +1699,8 @@ static int match_filtering_rule(struct pf_ring_socket *pfr,
   }
 
   if(rule->rule.balance_pool > 0) {
-    u_int32_t balance_hash =
-      hash_pkt_header(hdr, 0, 0) % rule->rule.balance_pool;
+    u_int32_t balance_hash = hash_pkt_header(hdr, 0, 0) % rule->rule.balance_pool;
+
     if(balance_hash != rule->rule.balance_id)
       return(0);
   }
@@ -2407,7 +2411,7 @@ static int add_skb_to_ring(struct sk_buff *skb,
   u_int8_t hash_found = 0;
 
   if(pfr && pfr->rehash_rss && skb->dev)
-    channel_id = hash_pkt_header(hdr, 0, 0) % get_num_rx_queues(skb->dev);
+    channel_id = hash_pkt_header(hdr, 0, 0) % get_num_rx_queues(skb->dev);  
 
   /* This is a memory holder for storing parsed packet information
      that will then be freed when the packet has been handled

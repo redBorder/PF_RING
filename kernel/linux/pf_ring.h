@@ -180,6 +180,7 @@ struct pfring_extended_pkthdr {
 			     hardware timestamp, this is the place to read timestamp from */
   int if_index;           /* index of the interface on which the packet has been received. 
                              It can be also used to report other information */
+  u_int32_t pkt_hash;     /* Hash based on the packet header */
   u_int16_t parsed_header_len; /* Extra parsing data before packet */
 
   /* NOTE: leave it as last field of the memset on parse_pkt() will fail */

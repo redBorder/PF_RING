@@ -398,8 +398,9 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u
       printf("[%s:%d ", intoa(ntohl(ip.ip_src.s_addr)), h->extended_hdr.parsed_pkt.l4_src_port);
       printf("-> %s:%d] ", intoa(ntohl(ip.ip_dst.s_addr)), h->extended_hdr.parsed_pkt.l4_dst_port);
 
-      printf("[tos=%d][tcp_seq_num=%u][caplen=%d][len=%d][parsed_header_len=%d]"
+      printf("[hash=%u][tos=%d][tcp_seq_num=%u][caplen=%d][len=%d][parsed_header_len=%d]"
 	     "[eth_offset=%d][l3_offset=%d][l4_offset=%d][payload_offset=%d]\n",
+	     h->extended_hdr.pkt_hash,
 	     h->extended_hdr.parsed_pkt.ipv4_tos, h->extended_hdr.parsed_pkt.tcp.seq_num,
 	     h->caplen, h->len, h->extended_hdr.parsed_header_len,
 	     h->extended_hdr.parsed_pkt.offset.eth_offset,
