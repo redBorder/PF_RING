@@ -838,7 +838,7 @@ int main(int argc, char* argv[]) {
     bind2core(bind_core);
 
   if(1) {
-    pfring_loop(pd, dummyProcesssPacket, (u_char*)NULL);
+    pfring_loop(pd, dummyProcesssPacket, (u_char*)NULL, wait_for_packet);
   } else
     packet_consumer_thread(0);
 

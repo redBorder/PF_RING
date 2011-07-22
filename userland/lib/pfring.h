@@ -212,7 +212,8 @@ extern "C" {
 
   void pfring_shutdown(pfring *ring);
   void pfring_config(u_short cpu_percentage);
-  int  pfring_loop(pfring *ring, pfringProcesssPacket looper, const u_char *user_bytes);
+  int  pfring_loop(pfring *ring, pfringProcesssPacket looper, 
+		   const u_char *user_bytes, u_int8_t wait_for_packet);
   void pfring_breakloop(pfring *);
   
   void pfring_close(pfring *ring);

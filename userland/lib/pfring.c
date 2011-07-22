@@ -268,7 +268,8 @@ void pfring_config(u_short cpu_percentage) {
 
 /* **************************************************** */
 
-int pfring_loop(pfring *ring, pfringProcesssPacket looper, const u_char *user_bytes) {
+int pfring_loop(pfring *ring, pfringProcesssPacket looper, 
+		const u_char *user_bytes, u_int8_t wait_for_packet) {
   u_char *buffer = NULL;
   struct pfring_pkthdr hdr;
   int rc = 0;
@@ -279,11 +280,14 @@ int pfring_loop(pfring *ring, pfringProcesssPacket looper, const u_char *user_by
   ring->break_recv_loop = 0;
 
   while(!ring->break_recv_loop) {
-    rc = pfring_recv(ring, &buffer, 0, &hdr, 1);
+    rc = pfring_recv(ring, &buffer, 0, &hdr, wait_for_packet);
     if(rc < 0)
       break;
     else if(rc > 0)
       looper(&hdr, buffer, user_bytes);
+    else {
+      if(!wait_for_packet) usleep(1);
+    }
   }
 
   return(rc);
