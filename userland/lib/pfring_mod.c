@@ -99,7 +99,7 @@ inline int pfring_there_is_pkt_available(pfring *ring) {
 
 /* **************************************************** */
 
-int pfring_is_pkt_available(pfring *ring) {
+int pfring_mod_is_pkt_available(pfring *ring) {
   return(pfring_there_is_pkt_available(ring));
 }
 
@@ -151,7 +151,7 @@ int pfring_mod_open(pfring *ring) {
   ring->loopback_test = pfring_mod_loopback_test;
   ring->enable_ring = pfring_mod_enable_ring;
   ring->disable_ring = pfring_mod_disable_ring;
-  ring->is_pkt_available = pfring_is_pkt_available;
+  ring->is_pkt_available = pfring_mod_is_pkt_available;
 
   ring->poll_duration = DEFAULT_POLL_DURATION;
   ring->fd = socket(PF_RING, SOCK_RAW, htons(ETH_P_ALL));

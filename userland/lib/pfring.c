@@ -671,3 +671,13 @@ int pfring_disable_ring(pfring *ring) {
 
 /* **************************************************** */
 
+int pfring_is_pkt_available(pfring *ring){
+  if(ring && ring->is_pkt_available) {
+    return ring->is_pkt_available(ring);
+  }
+
+  return -1;
+}
+
+
+

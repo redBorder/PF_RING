@@ -255,6 +255,7 @@ extern "C" {
   int pfring_toggle_filtering_policy(pfring *ring, u_int8_t rules_default_accept_policy);
   int pfring_enable_rss_rehash(pfring *ring);
   int pfring_poll(pfring *ring, u_int wait_duration);
+  int pfring_is_pkt_available(pfring *ring);
   int pfring_version(pfring *ring, u_int32_t *version);
   int pfring_get_bound_device_address(pfring *ring, u_char mac_address[6]);
   u_int16_t pfring_get_slot_header_len(pfring *ring);
