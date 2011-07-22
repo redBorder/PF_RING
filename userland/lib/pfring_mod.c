@@ -98,6 +98,12 @@ inline int pfring_there_is_pkt_available(pfring *ring) {
 }
 
 /* **************************************************** */
+
+int pfring_is_pkt_available(pfring *ring) {
+  return(pfring_there_is_pkt_available(ring));
+}
+
+/* **************************************************** */
 /*     Functions part of the "specialized" subset       */
 /* **************************************************** */
 
@@ -145,6 +151,7 @@ int pfring_mod_open(pfring *ring) {
   ring->loopback_test = pfring_mod_loopback_test;
   ring->enable_ring = pfring_mod_enable_ring;
   ring->disable_ring = pfring_mod_disable_ring;
+  ring->is_pkt_available = pfring_is_pkt_available;
 
   ring->poll_duration = DEFAULT_POLL_DURATION;
   ring->fd = socket(PF_RING, SOCK_RAW, htons(ETH_P_ALL));
@@ -549,19 +556,23 @@ int pfring_mod_enable_rss_rehash(pfring *ring) {
 /* **************************************************** */
 
 int pfring_mod_poll(pfring *ring, u_int wait_duration) {
-  struct pollfd pfd;
-  int rc;
-
-  /* Sleep when nothing is happening */
-  pfd.fd      = ring->fd;
-  pfd.events  = POLLIN /* | POLLERR */;
-  pfd.revents = 0;
-  errno       = 0;
-
-  rc = poll(&pfd, 1, wait_duration);
-  ring->num_poll_calls++;
-
-  return(rc);
+  if(wait_duration == 0)
+    return(pfring_there_is_pkt_available(ring));
+  else {
+    struct pollfd pfd;
+    int rc;
+    
+    /* Sleep when nothing is happening */
+    pfd.fd      = ring->fd;
+    pfd.events  = POLLIN /* | POLLERR */;
+    pfd.revents = 0;
+    errno       = 0;
+    
+    rc = poll(&pfd, 1, wait_duration);
+    ring->num_poll_calls++;
+    
+    return(rc);
+  }
 }
 
 /* **************************************************** */

@@ -167,6 +167,7 @@ extern "C" {
     int       (*toggle_filtering_policy)      (pfring *, u_int8_t);
     int       (*enable_rss_rehash)            (pfring *);
     int       (*poll)                         (pfring *, u_int);
+    int       (*is_pkt_available)             (pfring *);
     int       (*version)                      (pfring *, u_int32_t *);
     int       (*get_bound_device_address)     (pfring *, u_char [6]);
     u_int16_t (*get_slot_header_len)          (pfring *);
