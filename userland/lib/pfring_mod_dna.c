@@ -40,6 +40,7 @@ static int pfring_map_dna_device(pfring *ring,
   } else
     ring->last_dna_operation = operation;
 
+  memset(&mapping, 0, sizeof(mapping));
   mapping.operation = operation;
   snprintf(mapping.device_name, sizeof(mapping.device_name),
 	   "%s", device_name);

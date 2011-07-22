@@ -557,7 +557,7 @@ int pfring_mod_enable_rss_rehash(pfring *ring) {
 
 int pfring_mod_poll(pfring *ring, u_int wait_duration) {
   if(wait_duration == 0)
-    return(pfring_there_is_pkt_available(ring));
+    return(ring->is_pkt_available(ring));
   else {
     struct pollfd pfd;
     int rc;
@@ -666,7 +666,7 @@ int pfring_mod_add_filtering_rule(pfring *ring, filtering_rule* rule_to_add) {
 /* **************************************************** */
 
 int pfring_mod_enable_ring(pfring *ring) {
-  char dummy;
+  char dummy = 0;
 
   return(setsockopt(ring->fd, 0, SO_ACTIVATE_RING, &dummy, sizeof(dummy)));
 }
