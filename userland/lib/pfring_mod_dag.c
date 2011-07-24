@@ -25,11 +25,16 @@ int pfring_dag_open(pfring *ring) {
   uint8_t stream_erf_types[MAX_CARD_ERF_TYPES];
   uint8_t supported = 0;
 
-  ring->close = pfring_dag_close;
-  ring->stats = pfring_dag_stats;
-  ring->recv  = pfring_dag_recv;
+#ifdef DAG_DEBUG
+  printf("[PF_RING] DAG open\n");
+#endif
+
+  ring->close              = pfring_dag_close;
+  ring->stats              = pfring_dag_stats;
+  ring->recv               = pfring_dag_recv;
   ring->set_poll_watermark = pfring_dag_set_poll_watermark;
   ring->set_poll_duration  = pfring_dag_set_poll_duration;
+  ring->poll               = pfring_dag_poll;
   ring->set_direction      = pfring_dag_set_direction;
   ring->enable_ring        = pfring_dag_enable_ring;
 
@@ -149,11 +154,12 @@ ret_error:
 /* **************************************************** */
 
 void pfring_dag_close(pfring *ring) {
-
+  pfring_dag *d;
+ 
   if(ring->priv_data == NULL) 
     return;
 
-  pfring_dag *d = (pfring_dag *) ring->priv_data;
+  d = (pfring_dag *) ring->priv_data;
 
   dag_stop_stream(d->fd, d->stream_num);
   dag_detach_stream(d->fd, d->stream_num);
@@ -176,11 +182,16 @@ int pfring_dag_recv(pfring *ring, u_char** buffer, u_int buffer_len, struct pfri
   uint32_t len;
   unsigned long long ts;
   int retval = 0;
+  pfring_dag *d;
+
+#ifdef DAG_DEBUG
+  printf("[PF_RING] DAG recv\n");
+#endif
 
   if(ring->priv_data == NULL) 
     return -1;
 
-  pfring_dag *d = (pfring_dag *) ring->priv_data;
+  d = (pfring_dag *) ring->priv_data;
 
   if(ring->reentrant)
     pthread_spin_lock(&ring->spinlock);
@@ -334,11 +345,12 @@ int pfring_dag_set_poll_watermark(pfring *ring, u_int16_t watermark) {
   uint32_t mindata;
   struct timeval maxwait;
   struct timeval poll;
+  pfring_dag *d;
 
   if(ring->priv_data == NULL) 
     return -1;
 
-  pfring_dag *d = (pfring_dag *) ring->priv_data;
+  d = (pfring_dag *) ring->priv_data;
 
   if (dag_get_stream_poll(d->fd, d->stream_num, &mindata, &maxwait, &poll) < 0) {
     fprintf(stderr, "Error getting poll info\n");
@@ -361,11 +373,12 @@ int pfring_dag_set_poll_duration(pfring *ring, u_int duration) {
   uint32_t mindata;
   struct timeval maxwait;
   struct timeval poll;
+  pfring_dag *d;
 
   if(ring->priv_data == NULL) 
     return -1;
 
-  pfring_dag *d = (pfring_dag *) ring->priv_data;
+  d = (pfring_dag *) ring->priv_data;
 
   if (dag_get_stream_poll(d->fd, d->stream_num, &mindata, &maxwait, &poll) < 0) {
     fprintf(stderr, "Error getting poll info\n");
@@ -388,11 +401,12 @@ int pfring_dag_set_poll_duration(pfring *ring, u_int duration) {
 /* **************************************************** */
 
 int pfring_dag_stats(pfring *ring, pfring_stat *stats) {
+  pfring_dag *d;
 
   if(ring->priv_data == NULL) 
     return -1;
 
-  pfring_dag *d = (pfring_dag *) ring->priv_data;
+  d = (pfring_dag *) ring->priv_data;
 
   stats->recv = d->stats_recv;
   stats->drop = d->stats_drop;
@@ -415,5 +429,27 @@ int pfring_dag_set_direction(pfring *ring, packet_direction direction) {
 int pfring_dag_enable_ring(pfring *ring) {
   /* nothing to do */
   return 0;
+}
+
+/* **************************************************** */
+
+int pfring_dag_poll(pfring *ring, u_int wait_duration) {
+  pfring_dag *d;
+
+  if(ring->priv_data == NULL)
+    return -1;
+
+  d = (pfring_dag *) ring->priv_data;
+  
+  if ((d->top - d->bottom) >= dag_record_size)
+  return 1;
+
+  if ( (d->top = dag_advance_stream(d->fd, d->stream_num, (void * /* but it is void** */) &d->bottom)) == NULL)
+    return -1;
+
+  if ( (d->top - d->bottom) < dag_record_size )
+    return 0;
+  
+  return 1;
 }
 

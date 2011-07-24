@@ -46,6 +46,7 @@ int  pfring_dag_stats(pfring *ring, pfring_stat *stats);
 int  pfring_dag_recv (pfring *ring, u_char** buffer, u_int buffer_len, struct pfring_pkthdr *hdr, u_int8_t wait_for_incoming_packet);
 int  pfring_dag_set_poll_watermark(pfring *ring, u_int16_t watermark);
 int  pfring_dag_set_poll_duration(pfring *ring, u_int duration);
+int  pfring_dag_poll(pfring *ring, u_int wait_duration);
 int  pfring_dag_set_direction(pfring *ring, packet_direction direction);
 int  pfring_dag_enable_ring(pfring *ring);
 
