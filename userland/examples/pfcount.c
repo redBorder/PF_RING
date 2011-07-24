@@ -460,7 +460,7 @@ int32_t gmt2local(time_t t) {
 void printHelp(void) {
   printf("pfcount\n(C) 2005-11 Deri Luca <deri@ntop.org>\n\n");
   printf("-h              Print this help\n");
-  printf("-i <device>     Device name. Use device@channel for channels, and dna:ethX for DNA\n");
+  printf("-i <device>     Device name. Use ethX@Y for channels, dna:ethX for DNA, dag:dagX:Y for DAG cards\n");
   printf("-n <threads>    Number of polling threads (default %d)\n", num_threads);
 
   /* printf("-f <filter>     [pfring filter]\n"); */

@@ -302,6 +302,14 @@ check_and_poll:
     hdr->ts.tv_sec++;
   }
 
+  /* compute pf_ring timestamp_ns from ERF time stamp */
+  ts = erf_hdr->ts;
+  ts = (ts & 0xffffffffULL) * 1000000000;
+  ts += 0x80000000;
+  ts >>= 32;
+  ts += ((erf_hdr->ts >> 32) * 1000000000);
+  hdr->extended_hdr.timestamp_ns = ts;
+
 #ifdef PFRING_DAG_PARSE_PKT
   parse_pkt(*buffer, hdr);      
 #else
