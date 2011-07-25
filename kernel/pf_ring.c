@@ -597,8 +597,8 @@ static void ring_proc_add(struct pf_ring_socket *pfr)
 			   ring_proc_dir,
 			   ring_proc_get_info, pfr);
 
-    printk("[PF_RING] Added /proc/net/pf_ring/%s\n",
-	   pfr->sock_proc_name);
+    if(enable_debug)
+      printk("[PF_RING] Added /proc/net/pf_ring/%s\n", pfr->sock_proc_name);
   }
 }
 
@@ -608,7 +608,8 @@ static void ring_proc_remove(struct pf_ring_socket *pfr)
 {
   if((ring_proc_dir != NULL)
      && (pfr->sock_proc_name[0] != '\0')) {
-    printk("[PF_RING] Removing /proc/net/pf_ring/%s\n", pfr->sock_proc_name);
+    if(enable_debug)
+      printk("[PF_RING] Removing /proc/net/pf_ring/%s\n", pfr->sock_proc_name);
 
     remove_proc_entry(pfr->sock_proc_name, ring_proc_dir);
 
@@ -4467,8 +4468,9 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
     }
   }
 
-  printk("[PF_RING] ring_map_dna_device(%s, %u): mapping failed or not a dna device\n",
-	 mapping->device_name, mapping->channel_id);
+  if(enable_debug)
+    printk("[PF_RING] ring_map_dna_device(%s, %u): mapping failed or not a dna device\n",
+	   mapping->device_name, mapping->channel_id);
 
   return(-1);
 }
