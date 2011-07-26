@@ -32,7 +32,7 @@ DAG_OBJS  = @DAG_OBJS@
 #
 # Object files
 #
-OBJS      = pfring.o pfring_mod.o pfring_utils.o ${DNA_OBJS} ${VIRTUAL_OBJS} ${DAG_OBJS}
+OBJS      = pfring.o pfring_mod_multi.o pfring_mod.o pfring_utils.o ${DNA_OBJS} ${VIRTUAL_OBJS} ${DAG_OBJS}
 
 #
 # C compiler and flags

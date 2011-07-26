@@ -25,6 +25,7 @@
 /* ********************************* */
 
 #include "pfring_mod.h"
+#include "pfring_mod_multi.h"
 
 #ifdef HAVE_DAG
 #include "pfring_mod_dag.h"
@@ -39,6 +40,10 @@
 #endif
 
 static pfring_module_info pfring_module_list[] = {
+  { /* usually you don't need to specify this */
+    .name = "default",
+    .open = pfring_mod_open,
+  },
 #ifdef HAVE_VIRTUAL
   { /* vPF_RING (guest-side) */
     .name = "host",
@@ -57,6 +62,10 @@ static pfring_module_info pfring_module_list[] = {
     .open = pfring_dna_open,
   },
 #endif
+  {
+    .name = "multi",
+    .open = pfring_mod_multi_open,
+  },
   {0}
 };
 

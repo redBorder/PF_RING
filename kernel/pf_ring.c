@@ -5230,7 +5230,8 @@ static int ring_setsockopt(struct socket *sock,
 
   case SO_SET_MASTER_RING:
     /* Avoid using master sockets with bound rings */
-    if(pfr->ring_netdev == &none_device_element) return -EFAULT;
+    if(pfr->ring_netdev == &none_device_element) 
+      return -EFAULT;
 
     if(optlen != sizeof(ring_id))
       return -EINVAL;

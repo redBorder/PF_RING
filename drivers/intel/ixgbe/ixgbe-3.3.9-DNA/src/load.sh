@@ -14,6 +14,7 @@ insmod $HOME/PF_RING/kernel/pf_ring.ko
 # Set <id> as many times as the number of processors
 #insmod ./ixgbe.ko
 insmod ./ixgbe.ko MQ=0,0,0,0
+#insmod ./ixgbe.ko MQ=1,1 RSS=8,8 FdirMode=0,0
 sleep 1
 
 killall irqbalance 
@@ -25,6 +26,7 @@ do
   fi
   printf "Configuring %s\n" "${IF[index]}"
   ifconfig ${IF[index]} up
+  sleep 1
   bash ../scripts/set_irq_affinity.sh ${IF[index]}
   ethtool -A ${IF[index]} autoneg off
   ethtool -A ${IF[index]} rx off
