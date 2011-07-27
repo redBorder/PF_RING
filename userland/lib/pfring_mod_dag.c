@@ -239,6 +239,9 @@ check_and_poll:
           d->stats_drop += ntohs(erf_hdr->lctr);
       }
       break;
+    /* Note: 
+     * In TYPE_COLOR_HASH_ETH, TYPE_DSM_COLOR_ETH, TYPE_COLOR_ETH 
+     * the color value overwrites the lctr */
     default:
       break;
   }
@@ -262,6 +265,12 @@ check_and_poll:
     case TYPE_COLOR_HASH_ETH:
     case TYPE_DSM_COLOR_ETH:
     case TYPE_COLOR_ETH:
+#ifdef READ_DAG_STREAM_COLOR
+      /*Note:
+       * In TYPE_COLOR_HASH_ETH, TYPE_DSM_COLOR_ETH, TYPE_COLOR_ETH 
+       * the color value overwrites the lctr */
+      hdr->extended_hdr.pkt_hash /* 32bit */ =  erf_hdr->lctr /* 16bit */;
+#endif
     case TYPE_ETH:
 
       len = ntohs(erf_hdr->wlen);
