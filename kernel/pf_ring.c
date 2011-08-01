@@ -2423,8 +2423,20 @@ static int add_skb_to_ring(struct sk_buff *skb,
 	   hdr->len, channel_id, num_rx_channels,
 	   pfr->ring_active, pfr->ring_netdev->dev->name);
 
+  {
+    static int once = 0;
+    
+    while(once < 25) {
+      printk("[PF_RING] add_skb_to_ring on device index %d [active=%d]\n", 
+	     skb->dev->ifindex, pfr->ring_active);
+      once++;
+    }
+  }
+
   if((!pfring_enabled) || ((!pfr->ring_active) && (pfr->master_ring == NULL)))
     return(-1);
+
+  
 
   pfr->num_rx_channels = num_rx_channels; /* Constantly updated */
   hdr->extended_hdr.parsed_pkt.last_matched_rule_id = (u_int16_t)-1;
@@ -2860,6 +2872,15 @@ static int skb_ring_handler(struct sk_buff *skb,
 	     skb->dev->name, num_rings_per_device[skb->dev->ifindex], num_any_rings);
   }
 
+    if(skb->dev->ifindex != 10) {
+      static int once = 0;
+      
+      while(once < 25) {
+	printk("[PF_RING] Received pkt on device index %d\n", skb->dev->ifindex);
+	once++;
+      }
+    }
+
   if((num_any_rings == 0)
      && (skb->dev
 	 && (skb->dev->ifindex < MAX_NUM_IFIDX)
@@ -2913,6 +2934,7 @@ static int skb_ring_handler(struct sk_buff *skb,
 
     if(pfr && pfr->rehash_rss && skb->dev) {
       parse_pkt(skb, displ, &hdr, 1);
+
       channel_id = hash_pkt_header(&hdr, 0, 0) % get_num_rx_queues(skb->dev);
     }
 
@@ -2927,7 +2949,6 @@ static int skb_ring_handler(struct sk_buff *skb,
       room_available |= copy_data_to_ring(skb, pfr, &hdr, displ, 0, NULL, NULL, 0);
     }
   } else {
-
     is_ip_pkt = parse_pkt(skb, displ, &hdr, 1);
 
     if(enable_ip_defrag) {
@@ -2945,6 +2966,7 @@ static int skb_ring_handler(struct sk_buff *skb,
       hdr.extended_hdr.if_index = skb->dev->ifindex;
     else
       hdr.extended_hdr.if_index = UNKNOWN_INTERFACE;
+
 
     /* Avoid the ring to be manipulated while playing with it */
     ring_read_lock();
@@ -2970,6 +2992,7 @@ static int skb_ring_handler(struct sk_buff *skb,
 	 ) {
 	/* We've found the ring where the packet can be stored */
 	int old_caplen = hdr.caplen;  /* Keep old lenght */
+
 	hdr.caplen = min_val(hdr.caplen, pfr->bucket_len);
 	room_available |= add_skb_to_ring(skb, pfr, &hdr, is_ip_pkt,
 					  displ, channel_id, num_rx_channels);
