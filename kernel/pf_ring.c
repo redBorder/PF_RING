@@ -6213,6 +6213,7 @@ static void __exit ring_exit(void)
     kfree(entry);
   }
 
+  list_del(&any_device_element.device_list);
   list_for_each_safe(ptr, tmp_ptr, &ring_aware_device_list) {
     ring_device_element *dev_ptr;
 
