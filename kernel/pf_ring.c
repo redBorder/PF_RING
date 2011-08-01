@@ -379,6 +379,7 @@ u_int get_num_rx_queues(struct net_device *dev) {
   return(dev->real_num_rx_queues);
 #else
   return(dev->real_num_tx_queues);
+  // return(1);
 #endif
 #endif
 }
@@ -1071,11 +1072,10 @@ static void ring_proc_term(void)
 {
   if(ring_proc != NULL) {
     remove_proc_entry(PROC_INFO, ring_proc_dir);
-    printk("[PF_RING] removed /proc/net/pf_ring/%s\n", PROC_INFO);
+    if(enable_debug)  printk("[PF_RING] removed /proc/net/pf_ring/%s\n", PROC_INFO);
 
     remove_proc_entry(PROC_PLUGINS_INFO, ring_proc_dir);
-    printk("[PF_RING] removed /proc/net/pf_ring/%s\n",
-	   PROC_PLUGINS_INFO);
+    if(enable_debug) printk("[PF_RING] removed /proc/net/pf_ring/%s\n", PROC_PLUGINS_INFO);
 
     remove_proc_entry(PROC_DEV, ring_proc_dir);
 
@@ -1085,7 +1085,7 @@ static void ring_proc_term(void)
 			init_net.
 #endif
 			proc_net);
-      printk("[PF_RING] deregistered /proc/net/pf_ring\n");
+      if(enable_debug) printk("[PF_RING] deregistered /proc/net/pf_ring\n");
     }
   }
 }
@@ -6034,7 +6034,7 @@ int add_device_to_ring_list(struct net_device *dev) {
     if(enable_debug)
       printk("[PF_RING] set_eeprom returned %d\n", rc);
 
-    if(rc == 0) {
+    if(rc == RING_MAGIC_VALUE) {
       /* This device supports hardware filtering */
       dev_ptr->device_type = intel_82599_family;
 
@@ -6048,14 +6048,17 @@ int add_device_to_ring_list(struct net_device *dev) {
 				     ring_proc_dev_rule_read, dev_ptr);
       if(entry) {
 	entry->write_proc = ring_proc_dev_rule_write;
-	printk("[PF_RING] Device %s (Intel 82599) DOES support hardware packet filtering\n", dev->name);
-      } else
-	printk("[PF_RING] Error while creating /proc entry 'rules' for device %s\n", dev->name);
+	if(enable_debug) printk("[PF_RING] Device %s (Intel 82599) DOES support hardware packet filtering\n", dev->name);
+      } else {
+	if(enable_debug) printk("[PF_RING] Error while creating /proc entry 'rules' for device %s\n", dev->name);
+      }
 #endif
-    } else
-      printk("[PF_RING] Device %s does NOT support hardware packet filtering [1]\n", dev->name);
-  } else
-    printk("[PF_RING] Device %s does NOT support hardware packet filtering [2]\n", dev->name);
+    } else {
+      if(enable_debug) printk("[PF_RING] Device %s does NOT support hardware packet filtering [1]\n", dev->name);
+    }
+  } else {
+    if(enable_debug) printk("[PF_RING] Device %s does NOT support hardware packet filtering [2]\n", dev->name);
+  }
 #endif
 
   list_add(&dev_ptr->device_list, &ring_aware_device_list);
@@ -6226,7 +6229,7 @@ static void __exit ring_exit(void)
     remove_proc_entry(dev_ptr->dev->name, ring_proc_dev_dir);
 
     if(hook->magic == PF_RING) {
-      printk("[PF_RING] Unregister hook for %s\n", dev_ptr->dev->name);
+      if(enable_debug) printk("[PF_RING] Unregister hook for %s\n", dev_ptr->dev->name);
       dev_ptr->dev->pfring_ptr = NULL; /* Unhook PF_RING */
     }
 

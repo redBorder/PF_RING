@@ -962,7 +962,7 @@ static int ixgbe_set_eeprom(struct net_device *netdev,
 		We just want to check if this interface
 		supports hardware filtering
 	      */
-	      return(0);
+	      return(RING_MAGIC_VALUE);
 	    }
 
 	    if(bytes != NULL) {
