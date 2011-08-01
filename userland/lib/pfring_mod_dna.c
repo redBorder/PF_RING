@@ -61,18 +61,18 @@ void pfring_dna_close(pfring *ring) {
     munmap((void*)ring->dna_dev.rx_packet_memory,
 	     ring->dna_dev.packet_memory_tot_len);
 
-  if( ((void *) ring->dna_dev.rx_descr_packet_memory) != NULL)
-    munmap((void *) ring->dna_dev.rx_descr_packet_memory, ring->dna_dev.descr_packet_memory_tot_len);
+  if(ring->dna_dev.rx_descr_packet_memory != NULL)
+    munmap(ring->dna_dev.rx_descr_packet_memory, ring->dna_dev.descr_packet_memory_tot_len);
   
   if(ring->dna_dev.tx_packet_memory != 0)
     munmap((void*)ring->dna_dev.tx_packet_memory,
 	     ring->dna_dev.packet_memory_tot_len);
 
-  if( ((void *) ring->dna_dev.tx_descr_packet_memory) != NULL)
-    munmap((void *) ring->dna_dev.tx_descr_packet_memory, ring->dna_dev.descr_packet_memory_tot_len);
+  if(ring->dna_dev.tx_descr_packet_memory != NULL)
+    munmap(ring->dna_dev.tx_descr_packet_memory, ring->dna_dev.descr_packet_memory_tot_len);
 
-  if( ((char *) ring->dna_dev.phys_card_memory) != NULL)
-    munmap((void *) ring->dna_dev.phys_card_memory,
+  if(ring->dna_dev.phys_card_memory != NULL)
+    munmap(ring->dna_dev.phys_card_memory,
            ring->dna_dev.phys_card_memory_len);
 
   pfring_map_dna_device(ring, remove_device_mapping, "");
@@ -262,10 +262,10 @@ int pfring_dna_open(pfring *ring) {
 
   if (ring->dna_dev.packet_memory_tot_len > 0){
     ring->dna_dev.rx_packet_memory =
-	(u_int64_t)mmap(NULL, ring->dna_dev.packet_memory_tot_len,
+	(unsigned long)mmap(NULL, ring->dna_dev.packet_memory_tot_len,
 			    PROT_READ|PROT_WRITE, MAP_SHARED, ring->fd, 1*getpagesize());
 
-    if(ring->dna_dev.rx_packet_memory == (u_int64_t)MAP_FAILED) {
+    if(ring->dna_dev.rx_packet_memory == (unsigned long)MAP_FAILED) {
       printf("mmap(1) failed");
       close(ring->fd);
       return -1;
@@ -276,10 +276,10 @@ int pfring_dna_open(pfring *ring) {
 
   if (ring->dna_dev.descr_packet_memory_tot_len > 0){
     ring->dna_dev.rx_descr_packet_memory =
-        (u_int64_t)mmap(NULL, ring->dna_dev.descr_packet_memory_tot_len,
+        (void*)mmap(NULL, ring->dna_dev.descr_packet_memory_tot_len,
 		    PROT_READ|PROT_WRITE, MAP_SHARED, ring->fd, 2*getpagesize());
 
-    if(ring->dna_dev.rx_descr_packet_memory == (u_int64_t)MAP_FAILED) {
+    if(ring->dna_dev.rx_descr_packet_memory == MAP_FAILED) {
       printf("mmap(2) failed");
       close(ring->fd);
       return -1;
@@ -291,10 +291,10 @@ int pfring_dna_open(pfring *ring) {
   if (ring->dna_dev.phys_card_memory_len > 0) {
     /* some DNA drivers do not use this memory */
     ring->dna_dev.phys_card_memory =
-	  (u_int64_t)mmap(NULL, ring->dna_dev.phys_card_memory_len,
+	  (void*)mmap(NULL, ring->dna_dev.phys_card_memory_len,
 		      PROT_READ|PROT_WRITE, MAP_SHARED, ring->fd, 3*getpagesize());
 
-    if(ring->dna_dev.phys_card_memory == (u_int64_t)MAP_FAILED) {
+    if(ring->dna_dev.phys_card_memory == MAP_FAILED) {
       printf("mmap(3) failed");
       close(ring->fd);
       return -1;
@@ -306,10 +306,10 @@ int pfring_dna_open(pfring *ring) {
 
   if (ring->dna_dev.packet_memory_tot_len > 0){
     ring->dna_dev.tx_packet_memory =
-        (u_int64_t)mmap(NULL, ring->dna_dev.packet_memory_tot_len,
+        (unsigned long)mmap(NULL, ring->dna_dev.packet_memory_tot_len,
                             PROT_READ|PROT_WRITE, MAP_SHARED, ring->fd, 4*getpagesize());
 
-    if(ring->dna_dev.tx_packet_memory == (u_int64_t)MAP_FAILED) {
+    if(ring->dna_dev.tx_packet_memory == (unsigned long)MAP_FAILED) {
       printf("mmap(4) failed");
       close(ring->fd);
       return -1;
@@ -320,10 +320,10 @@ int pfring_dna_open(pfring *ring) {
 
   if (ring->dna_dev.descr_packet_memory_tot_len > 0){
     ring->dna_dev.tx_descr_packet_memory =
-        (u_int64_t)mmap(NULL, ring->dna_dev.descr_packet_memory_tot_len,
+        (void*)mmap(NULL, ring->dna_dev.descr_packet_memory_tot_len,
                     PROT_READ|PROT_WRITE, MAP_SHARED, ring->fd, 5*getpagesize());
 
-    if(ring->dna_dev.tx_descr_packet_memory == (u_int64_t)MAP_FAILED) {
+    if(ring->dna_dev.tx_descr_packet_memory == MAP_FAILED) {
       printf("mmap(5) failed");
       close(ring->fd);
       return -1;

@@ -3693,10 +3693,9 @@ static int ring_release(struct socket *sock)
 
   if(pfr->dna_device_entry != NULL) {
     dna_device_mapping mapping;
-    struct net_device *netdev = (struct net_device *) pfr->dna_device_entry->dev.netdev;
 
     mapping.operation = remove_device_mapping;
-    snprintf(mapping.device_name, sizeof(mapping.device_name), "%s", netdev->name);
+    snprintf(mapping.device_name, sizeof(mapping.device_name), "%s",  pfr->dna_device_entry->dev.netdev->name);
     mapping.channel_id = pfr->dna_device_entry->dev.channel_id;
     ring_map_dna_device(pfr, &mapping);
   }
@@ -4184,20 +4183,18 @@ unsigned int ring_poll(struct file *file,
     /* DNA mode */
     /* enable_debug = 1;  */
 
-    dna_wait_packet wait_packet_function_ptr = (dna_wait_packet) pfr->dna_device->wait_packet_function_ptr;
-    u_int8_t *interrupt_received = (u_int8_t *) pfr->dna_device->interrupt_received;
-
     if(enable_debug)
-      printk("[PF_RING] poll called on DNA device [%d]\n", *interrupt_received);
+      printk("[PF_RING] poll called on DNA device [%d]\n",
+	     *pfr->dna_device->interrupt_received);
 
-    if(wait_packet_function_ptr == NULL) {
+    if(pfr->dna_device->wait_packet_function_ptr == NULL) {
       if(enable_debug)
 	printk("[PF_RING] wait_packet_function_ptr is NULL: returning to caller\n");
 
       return(0);
     }
 
-    rc = wait_packet_function_ptr((void *) pfr->dna_device->adapter_ptr, 1);
+    rc = pfr->dna_device->wait_packet_function_ptr(pfr->dna_device->adapter_ptr, 1);
 
     if(enable_debug)
       printk("[PF_RING] wait_packet_function_ptr(1) returned %d\n", rc);
@@ -4207,12 +4204,12 @@ unsigned int ring_poll(struct file *file,
 	printk("[PF_RING] calling poll_wait()\n");
 
       /* No packet arrived yet */
-      poll_wait(file, (wait_queue_head_t *) pfr->dna_device->packet_waitqueue, wait);
+      poll_wait(file, pfr->dna_device->packet_waitqueue, wait);
 
       if(enable_debug)
 	printk("[PF_RING] poll_wait() just returned\n");
     } else
-      rc = wait_packet_function_ptr((void *) pfr->dna_device->adapter_ptr, 0);
+      rc = pfr->dna_device->wait_packet_function_ptr(pfr->dna_device->adapter_ptr, 0);
 
     if(enable_debug)
       printk("[PF_RING] wait_packet_function_ptr(0) returned %d\n", rc);
@@ -4220,9 +4217,9 @@ unsigned int ring_poll(struct file *file,
     if(enable_debug)
       printk("[PF_RING] poll %s return [%d]\n",
 	     pfr->ring_netdev->dev->name,
-	     *interrupt_received);
+	     *pfr->dna_device->interrupt_received);
 
-    if(*interrupt_received) {
+    if(*pfr->dna_device->interrupt_received) {
       return(POLLIN | POLLRDNORM);
     } else {
       return(0);
@@ -4402,7 +4399,6 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 {
   struct list_head *ptr, *tmp_ptr;
   dna_device_list *entry;
-  struct net_device *netdev;
 
   if(enable_debug)
     printk("[PF_RING] ring_map_dna_device(%s@%d): %s\n",
@@ -4416,9 +4412,8 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 
     list_for_each_safe(ptr, tmp_ptr, &ring_dna_devices_list) {
       entry = list_entry(ptr, dna_device_list, list);
-      netdev = (struct net_device *) entry->dev.netdev;
 
-      if((!strcmp(netdev->name, mapping->device_name))
+      if((!strcmp(entry->dev.netdev->name, mapping->device_name))
 	 && (entry->dev.channel_id == mapping->channel_id)
 	 && entry->in_use) {
 	if(entry->sock_a == pfr)      entry->sock_a = NULL;
@@ -4435,10 +4430,8 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
       }
     }
 
-    if(pfr->dna_device != NULL) {
-      dna_device_notify usage_notification = (dna_device_notify) pfr->dna_device->usage_notification;
-      usage_notification((void *) pfr->dna_device->adapter_ptr, 0 /* unlock */);
-    }
+    if(pfr->dna_device != NULL)
+      pfr->dna_device->usage_notification(pfr->dna_device->adapter_ptr, 0 /* unlock */);
 
     pfr->dna_device = NULL;
     if(enable_debug)
@@ -4450,17 +4443,14 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
     ring_proc_remove(pfr);
 
     list_for_each_safe(ptr, tmp_ptr, &ring_dna_devices_list) {
-      dna_device_notify usage_notification;
-      struct net_device *netdev;
       entry = list_entry(ptr, dna_device_list, list);
-      netdev = (struct net_device *) entry->dev.netdev;
 
-      if((!strcmp(netdev->name, mapping->device_name))
+      if((!strcmp(entry->dev.netdev->name, mapping->device_name))
 	 && (entry->dev.channel_id == mapping->channel_id)) {
 
 	if(enable_debug)
 	  printk("[PF_RING] ==>> %s@%d [in_use=%d][%p]\n",
-		 netdev->name,
+		 entry->dev.netdev->name,
 		 mapping->channel_id,
 		 entry->in_use, entry);
 
@@ -4475,7 +4465,7 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 
 	entry->in_use++, pfr->dna_device_entry = entry;
 
-	pfr->dna_device = &entry->dev, pfr->ring_netdev->dev = netdev /* Default */;
+	pfr->dna_device = &entry->dev, pfr->ring_netdev->dev = entry->dev.netdev /* Default */;
 
 	if(enable_debug)
 	  printk("[PF_RING] ring_map_dna_device(%s, %u): added mapping\n",
@@ -4494,8 +4484,7 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 	}
 
 	/* Lock driver */
-	usage_notification = (dna_device_notify) pfr->dna_device->usage_notification;
-	usage_notification((void *) pfr->dna_device->adapter_ptr, 1 /* lock */);
+	pfr->dna_device->usage_notification(pfr->dna_device->adapter_ptr, 1 /* lock */);
 	ring_proc_add(pfr);
 	return(0);
       }
@@ -5833,28 +5822,28 @@ void dna_device_handler(dna_device_operation operation,
       memset(next, 0, sizeof(dna_device_list));
 
       next->in_use = 0;
-      next->dev.rx_packet_memory = (u_int64_t) rx_packet_memory;
+      next->dev.rx_packet_memory = rx_packet_memory;
       next->dev.packet_memory_num_slots = packet_memory_num_slots;
       next->dev.packet_memory_slot_len = packet_memory_slot_len;
       next->dev.packet_memory_tot_len = packet_memory_tot_len;
-      next->dev.rx_descr_packet_memory = (u_int64_t) descr_packet_memory;
+      next->dev.rx_descr_packet_memory = descr_packet_memory;
       next->dev.descr_packet_memory_num_slots = descr_packet_memory_num_slots;
       next->dev.descr_packet_memory_slot_len  = descr_packet_memory_slot_len;
       next->dev.descr_packet_memory_tot_len   = descr_packet_memory_tot_len;
-      next->dev.phys_card_memory = (u_int64_t) phys_card_memory;
+      next->dev.phys_card_memory = phys_card_memory;
       next->dev.phys_card_memory_len = phys_card_memory_len;
       /* TX */
-      next->dev.tx_packet_memory = (u_int64_t) tx_packet_memory;
-      next->dev.tx_descr_packet_memory = (u_int64_t) tx_descr_packet_memory;
+      next->dev.tx_packet_memory = tx_packet_memory;
+      next->dev.tx_descr_packet_memory = tx_descr_packet_memory;
       next->dev.channel_id = channel_id;
-      next->dev.netdev = (u_int64_t) netdev;
+      next->dev.netdev = netdev;
       next->dev.device_model = device_model;
       memcpy(next->dev.device_address, device_address, 6);
-      next->dev.packet_waitqueue = (u_int64_t) packet_waitqueue;
-      next->dev.interrupt_received = (u_int64_t) interrupt_received;
-      next->dev.adapter_ptr = (u_int64_t) adapter_ptr;
-      next->dev.wait_packet_function_ptr = (u_int64_t) wait_packet_function_ptr;
-      next->dev.usage_notification = (u_int64_t) dev_notify_function_ptr;
+      next->dev.packet_waitqueue = packet_waitqueue;
+      next->dev.interrupt_received = interrupt_received;
+      next->dev.adapter_ptr = adapter_ptr;
+      next->dev.wait_packet_function_ptr = wait_packet_function_ptr;
+      next->dev.usage_notification = dev_notify_function_ptr;
       list_add(&next->list, &ring_dna_devices_list);
       dna_devices_list_size++;
       /* Increment usage count to avoid unloading it while DNA modules are in use */
@@ -5884,13 +5873,11 @@ void dna_device_handler(dna_device_operation operation,
   } else {
     struct list_head *ptr, *tmp_ptr;
     dna_device_list *entry;
-    struct net_device *e_netdev;
 
     list_for_each_safe(ptr, tmp_ptr, &ring_dna_devices_list) {
       entry = list_entry(ptr, dna_device_list, list);
-      e_netdev = (struct net_device *) entry->dev.netdev;
 
-      if((e_netdev == netdev)
+      if((entry->dev.netdev == netdev)
 	 && (entry->dev.channel_id == channel_id)) {
 	list_del(ptr);
 	kfree(entry);

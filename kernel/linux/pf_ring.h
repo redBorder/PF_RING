@@ -523,37 +523,36 @@ typedef enum {
 } dna_device_model;
 
 typedef struct {
-  u_int64_t rx_packet_memory;                   /* Invalid in userland */
-  u_int64_t /* void* */ rx_descr_packet_memory; /* Invalid in userland */
-  u_int64_t tx_packet_memory;                   /* Invalid in userland */
-  u_int64_t /* void* */ tx_descr_packet_memory; /* Invalid in userland */
-  u_int32_t packet_memory_num_slots;
-  u_int32_t packet_memory_slot_len;
-  u_int32_t packet_memory_tot_len;
-  u_int32_t descr_packet_memory_num_slots;
-  u_int32_t descr_packet_memory_slot_len;
-  u_int32_t descr_packet_memory_tot_len;
-  u_int32_t channel_id;
-  u_int32_t phys_card_memory_len;
-  u_int64_t /* char* */ phys_card_memory;       /* Invalid in userland */
-  u_int64_t /* struct net_device* */ netdev;    /* Invalid in userland */
-  u_int32_t /* dna_device_model */ device_model;
-  u_char    device_address[6];
-  u_int16_t in_use;
-  u_int64_t /* u_int8_t* */interrupt_received;
+  unsigned long rx_packet_memory;  /* Invalid in userland */
+  void *rx_descr_packet_memory;    /* Invalid in userland */
+  unsigned long tx_packet_memory;  /* Invalid in userland */
+  void *tx_descr_packet_memory;    /* Invalid in userland */
+  u_int packet_memory_num_slots;
+  u_int packet_memory_slot_len;
+  u_int packet_memory_tot_len;
+  u_int descr_packet_memory_num_slots;
+  u_int descr_packet_memory_slot_len;
+  u_int descr_packet_memory_tot_len;
+  u_int channel_id;
+  char *phys_card_memory; /* Invalid in userland */
+  u_int phys_card_memory_len;
+  struct net_device *netdev; /* Invalid in userland */
+  dna_device_model device_model;
+  u_char device_address[6];
 #ifdef __KERNEL__
-  u_int64_t /* wait_queue_head_t* */ packet_waitqueue;
+  wait_queue_head_t *packet_waitqueue;
 #else
-  u_int64_t /* void* */ packet_waitqueue;
+  void *packet_waitqueue;
 #endif
-  u_int64_t /* void* */ adapter_ptr;
-  u_int64_t /* dna_wait_packet */ wait_packet_function_ptr;
-  u_int64_t /* dna_device_notify */ usage_notification;
+  u_int8_t *interrupt_received, in_use;
+  void *adapter_ptr;
+  dna_wait_packet wait_packet_function_ptr;
+  dna_device_notify usage_notification;
 } dna_device;
 
 typedef struct {
+  dna_device_operation operation;
   char device_name[8];
-  u_int32_t /* dna_device_operation */ operation;
   int32_t channel_id;
 } dna_device_mapping;
 
