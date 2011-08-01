@@ -6304,6 +6304,9 @@ static int __init ring_init(void)
   memset(&any_device_element, 0, sizeof(any_device_element));
   any_device_element.dev = &any_dev, any_device_element.device_type = standard_nic_family;
 
+  INIT_LIST_HEAD(&any_device_element.device_list);
+  list_add(&any_device_element.device_list, &ring_aware_device_list);
+
   memset(&none_dev, 0, sizeof(none_dev));
   strcpy(none_dev.name, "none");
   none_dev.ifindex = MAX_NUM_IFIDX-2;
