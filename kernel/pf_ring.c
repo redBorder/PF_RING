@@ -600,6 +600,8 @@ static void ring_proc_add(struct pf_ring_socket *pfr)
 
     if(enable_debug)
       printk("[PF_RING] Added /proc/net/pf_ring/%s\n", pfr->sock_proc_name);
+
+    ring_table_size++;
   }
 }
 
@@ -618,6 +620,7 @@ static void ring_proc_remove(struct pf_ring_socket *pfr)
       printk("[PF_RING] Removed /proc/net/pf_ring/%s\n", pfr->sock_proc_name);
 
     pfr->sock_proc_name[0] = '\0';
+    ring_table_size--;
   }
 }
 
@@ -1208,8 +1211,6 @@ static inline void ring_insert(struct sock *sk)
       printk("[PF_RING] net_ratelimit() failure\n");
   }
 
-  ring_table_size++;
-
   pfr = (struct pf_ring_socket *)ring_sk(sk);
   pfr->ring_pid = current->pid;
 }
@@ -1253,7 +1254,7 @@ static inline void ring_remove(struct sock *sk)
 
       list_del(ptr);
       to_delete = entry;
-      ring_table_size--, socket_found = 1;
+      socket_found = 1;
     }
 
     if(master_found && socket_found) break;
