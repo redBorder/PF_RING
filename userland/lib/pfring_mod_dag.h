@@ -15,10 +15,12 @@
 #define _PFRING_MOD_DAG_H_
 
 #include "pfring.h"
-
 #include "dagapi.h"
+#include <limits.h>
 
 /* #define PFRING_DAG_PARSE_PKT */
+
+#define READ_DAG_STREAM_COLOR
 
 #define MAX_CARD_ERF_TYPES 255
 #define AVG_PACKET_SIZE    512

@@ -13,6 +13,7 @@
 
 #include "pfring_mod_dag.h"
 
+
 //#define DAG_DEBUG
 
 int pfring_dag_open(pfring *ring) {

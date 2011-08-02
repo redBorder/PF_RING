@@ -5827,18 +5827,19 @@ void dna_device_handler(dna_device_operation operation,
       next->dev.mem_info.packet_memory_num_slots = packet_memory_num_slots;
       next->dev.mem_info.packet_memory_slot_len = packet_memory_slot_len;
       next->dev.mem_info.packet_memory_tot_len = packet_memory_tot_len;
+      next->dev.mem_info.device_model = device_model;
       next->dev.rx_descr_packet_memory = descr_packet_memory;
       next->dev.mem_info.descr_packet_memory_num_slots = descr_packet_memory_num_slots;
       next->dev.mem_info.descr_packet_memory_slot_len  = descr_packet_memory_slot_len;
       next->dev.mem_info.descr_packet_memory_tot_len   = descr_packet_memory_tot_len;
       next->dev.phys_card_memory = phys_card_memory;
-      next->dev.phys_card_memory_len = phys_card_memory_len;
+      next->dev.mem_info.phys_card_memory_len = phys_card_memory_len;
       /* TX */
       next->dev.tx_packet_memory = tx_packet_memory;
       next->dev.tx_descr_packet_memory = tx_descr_packet_memory;
       next->dev.channel_id = channel_id;
       next->dev.netdev = netdev;
-      next->dev.device_model = device_model;
+      next->dev.mem_info.device_model = device_model;
       memcpy(next->dev.device_address, device_address, 6);
       next->dev.packet_waitqueue = packet_waitqueue;
       next->dev.interrupt_received = interrupt_received;

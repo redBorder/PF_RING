@@ -38,7 +38,7 @@ fi
 
 AC_CHECK_LIB( [dag], 
               [dag_get_stream_erf_types], 
-              [HAVE_DAG="-D HAVE_DAG"; DAG_OBJS="pfring_mod_dag.o"], 
+              [HAVE_DAG="-D HAVE_DAG"; DAG_OBJS="pfring_mod_dag.o"; DAG_LIB="-L/usr/local/lib -ldag"], 
               [], [] )
 
 if test "x$ac_cv_header_linux_net_tstamp_h" = x""yes; then :
@@ -56,6 +56,7 @@ AC_SUBST(HAVE_DNA)
 AC_SUBST(DNA_LIB)
 AC_SUBST(DNA_OBJS)
 AC_SUBST(DNA_DEP)
+AC_SUBST(DAG_LIB)
 AC_SUBST(HAVE_VIRTUAL)
 AC_SUBST(VIRTUAL_LIB)
 AC_SUBST(VIRTUAL_OBJS)
@@ -63,5 +64,8 @@ AC_SUBST(VIRTUAL_DEP)
 AC_SUBST(HAVE_DAG)
 AC_SUBST(DAG_OBJS)
 AC_SUBST(INSTALL_PREFIX)
+
+dnl>AC_CONFIG_FILES([Makefile])
+AC_CONFIG_FILES([../examples/Makefile])
 
 AC_OUTPUT

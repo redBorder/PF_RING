@@ -74,7 +74,7 @@ void pfring_dna_close(pfring *ring) {
 
   if(ring->dna_dev.phys_card_memory != NULL)
     munmap(ring->dna_dev.phys_card_memory,
-           ring->dna_dev.phys_card_memory_len);
+           ring->dna_dev.mem_info.phys_card_memory_len);
 
   pfring_map_dna_device(ring, remove_device_mapping, "");
 
@@ -239,7 +239,7 @@ int pfring_dna_open(pfring *ring) {
 
   rc = pfring_get_mapped_dna_device(ring, &ring->dna_dev);
 
-  if (rc < 0) {
+  if(rc < 0) {
       printf("pfring_get_mapped_dna_device() failed [rc=%d]\n", rc);
       pfring_map_dna_device(ring, remove_device_mapping, ring->device_name);
       close(ring->fd);
@@ -262,7 +262,7 @@ int pfring_dna_open(pfring *ring) {
 
   /* ***************************************** */
 
-  if (ring->dna_dev.mem_info.packet_memory_tot_len > 0) {
+  if(ring->dna_dev.mem_info.packet_memory_tot_len > 0) {
     ring->dna_dev.rx_packet_memory =
 	(unsigned long)mmap(NULL, ring->dna_dev.mem_info.packet_memory_tot_len,
 			    PROT_READ|PROT_WRITE, MAP_SHARED, ring->fd, 1*getpagesize());
@@ -276,7 +276,7 @@ int pfring_dna_open(pfring *ring) {
 
   /* ***************************************** */
 
-  if (ring->dna_dev.mem_info.descr_packet_memory_tot_len > 0) {
+  if(ring->dna_dev.mem_info.descr_packet_memory_tot_len > 0) {
     ring->dna_dev.rx_descr_packet_memory =
         (void*)mmap(NULL, ring->dna_dev.mem_info.descr_packet_memory_tot_len,
 		    PROT_READ|PROT_WRITE, MAP_SHARED, ring->fd, 2*getpagesize());
@@ -290,10 +290,10 @@ int pfring_dna_open(pfring *ring) {
 
   /* ***************************************** */
 
-  if (ring->dna_dev.phys_card_memory_len > 0) {
+  if(ring->dna_dev.mem_info.phys_card_memory_len > 0) {
     /* some DNA drivers do not use this memory */
     ring->dna_dev.phys_card_memory =
-	  (void*)mmap(NULL, ring->dna_dev.phys_card_memory_len,
+	  (void*)mmap(NULL, ring->dna_dev.mem_info.phys_card_memory_len,
 		      PROT_READ|PROT_WRITE, MAP_SHARED, ring->fd, 3*getpagesize());
 
     if(ring->dna_dev.phys_card_memory == MAP_FAILED) {
@@ -303,10 +303,9 @@ int pfring_dna_open(pfring *ring) {
     }
   }
 
-
   /* ***************************************** */
 
-  if (ring->dna_dev.mem_info.packet_memory_tot_len > 0) {
+  if(ring->dna_dev.mem_info.packet_memory_tot_len > 0) {
     ring->dna_dev.tx_packet_memory =
         (unsigned long)mmap(NULL, ring->dna_dev.mem_info.packet_memory_tot_len,
                             PROT_READ|PROT_WRITE, MAP_SHARED, ring->fd, 4*getpagesize());
@@ -320,7 +319,7 @@ int pfring_dna_open(pfring *ring) {
 
   /* ***************************************** */
 
-  if (ring->dna_dev.mem_info.descr_packet_memory_tot_len > 0) {
+  if(ring->dna_dev.mem_info.descr_packet_memory_tot_len > 0) {
     ring->dna_dev.tx_descr_packet_memory =
         (void*)mmap(NULL, ring->dna_dev.mem_info.descr_packet_memory_tot_len,
                     PROT_READ|PROT_WRITE, MAP_SHARED, ring->fd, 5*getpagesize());
@@ -341,7 +340,7 @@ int pfring_dna_open(pfring *ring) {
 
   rc = dna_init(ring, sizeof(pfring));
 
-  if (rc < 0) {
+  if(rc < 0) {
     printf("dna_init() failed\n");
     close(ring->fd);
     return rc;

@@ -529,6 +529,8 @@ typedef struct {
   u_int32_t descr_packet_memory_num_slots;
   u_int32_t descr_packet_memory_slot_len;
   u_int32_t descr_packet_memory_tot_len;
+  u_int32_t phys_card_memory_len;
+  dna_device_model device_model;
 } dna_memory_slots;
 
 typedef struct {
@@ -539,9 +541,7 @@ typedef struct {
   unsigned long tx_packet_memory;  /* Invalid in userland */
   void *tx_descr_packet_memory;    /* Invalid in userland */
   char *phys_card_memory; /* Invalid in userland */
-  u_int32_t phys_card_memory_len;
   struct net_device *netdev; /* Invalid in userland */
-  dna_device_model device_model;
   u_char device_address[6];
 #ifdef __KERNEL__
   wait_queue_head_t *packet_waitqueue;
