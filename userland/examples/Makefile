@@ -56,7 +56,7 @@ LIBS       = ${LIBPFRING} -lpthread #-ldag
 #
 # Main targets
 #
-PFPROGS   = ringc rings ringm pcaps pfcount pfcount_multichannel pftwin ptwin preflect pfbounce pfmap \
+PFPROGS   = pfcount pfcount_multichannel preflect pfbounce pfmap \
 	    forwarder alldevs dummy_plugin_pfcount pcap2nspcap pfcount_dummy_plugin pffilter_test \
 	    pfcount_bundle pfcount_82599 vdevice_simulator pfsystest pfsend
 
