@@ -142,7 +142,8 @@ static int pfring_get_mapped_dna_device(pfring *ring, dna_device *dev) {
   if(dev == NULL)
     return(-1);
   else
-    return(getsockopt(ring->fd, 0, SO_GET_MAPPED_DNA_DEVICE, dev, &len));
+    return(getsockopt(ring->fd, 0, SO_GET_MAPPED_DNA_DEVICE,
+		      &dev->mem_info, &len));
 }
 
 /* **************************************************** */
