@@ -523,17 +523,21 @@ typedef enum {
 } dna_device_model;
 
 typedef struct {
+    u_int packet_memory_num_slots;
+    u_int packet_memory_slot_len;
+    u_int packet_memory_tot_len;
+    u_int descr_packet_memory_num_slots;
+    u_int descr_packet_memory_slot_len;
+    u_int descr_packet_memory_tot_len;
+} dna_memory_slots;
+
+typedef struct {
+  dna_memory_slots mem_info;
+  u_int channel_id;
   unsigned long rx_packet_memory;  /* Invalid in userland */
   void *rx_descr_packet_memory;    /* Invalid in userland */
   unsigned long tx_packet_memory;  /* Invalid in userland */
   void *tx_descr_packet_memory;    /* Invalid in userland */
-  u_int packet_memory_num_slots;
-  u_int packet_memory_slot_len;
-  u_int packet_memory_tot_len;
-  u_int descr_packet_memory_num_slots;
-  u_int descr_packet_memory_slot_len;
-  u_int descr_packet_memory_tot_len;
-  u_int channel_id;
   char *phys_card_memory; /* Invalid in userland */
   u_int phys_card_memory_len;
   struct net_device *netdev; /* Invalid in userland */
