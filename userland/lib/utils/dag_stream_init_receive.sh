@@ -2,6 +2,8 @@
 
 echo "Loading the DAG module"
 
+rmmod dag
+rmmod dagmem
 modprobe dagmem dsize=512M
 
 sleep 1
@@ -10,7 +12,7 @@ dagload
 
 sleep 1
 
-echo "Configuring the DAG card"
+echo "Configuring the DAG card (multiple queues)"
 
 dagconfig -d0 default
 
