@@ -115,7 +115,7 @@ int pfring_dag_open(pfring *ring) {
   }
 
   while (stream_erf_types[i] && i<MAX_CARD_ERF_TYPES)
-  switch(stream_erf_types[i++] & 0x7f) {
+    switch(stream_erf_types[i++] & 0x7f) {
     case TYPE_ETH:
     case TYPE_COLOR_ETH:
     case TYPE_DSM_COLOR_ETH:
@@ -124,31 +124,31 @@ int pfring_dag_open(pfring *ring) {
       break;
     default:
       break;
-  }
+    }
   
   if (!supported){
-      fprintf(stderr, "Error: stream type not supported\n");
-      goto dag_stop;
+    fprintf(stderr, "Error: stream type not supported\n");
+    goto dag_stop;
   }
 
   return 0;
 
-dag_stop:
+ dag_stop:
   dag_stop_stream(d->fd, d->stream_num);
 	
-dag_detach:
+ dag_detach:
   dag_detach_stream(d->fd, d->stream_num);
 
-dag_close:
+ dag_close:
   dag_close(ring->fd);
 
-free_device_name:
+ free_device_name:
   free(d->device_name);
 
-free_private:
+ free_private:
   free(ring->priv_data);
 
-ret_error:
+ ret_error:
   return -1;
 }
 
@@ -197,7 +197,7 @@ int pfring_dag_recv(pfring *ring, u_char** buffer, u_int buffer_len, struct pfri
   if(ring->reentrant)
     pthread_spin_lock(&ring->spinlock);
 
-check_and_poll:
+ check_and_poll:
 
   if (ring->break_recv_loop)
     goto exit; /* retval = 0 */
@@ -229,22 +229,22 @@ check_and_poll:
 
   skip = 0;    
   switch((erf_hdr->type & 0x7f)) {
-    case TYPE_PAD:
-      skip = 1;
-    case TYPE_ETH:
-      /* stats update */
-      if (erf_hdr->lctr) {
-        if (d->stats_drop > (UINT_MAX - ntohs(erf_hdr->lctr))) 
-          d->stats_drop = UINT_MAX;
-        else
-          d->stats_drop += ntohs(erf_hdr->lctr);
-      }
-      break;
+  case TYPE_PAD:
+    skip = 1;
+  case TYPE_ETH:
+    /* stats update */
+    if (erf_hdr->lctr) {
+      if (d->stats_drop > (UINT_MAX - ntohs(erf_hdr->lctr))) 
+	d->stats_drop = UINT_MAX;
+      else
+	d->stats_drop += ntohs(erf_hdr->lctr);
+    }
+    break;
     /* Note: 
      * In TYPE_COLOR_HASH_ETH, TYPE_DSM_COLOR_ETH, TYPE_COLOR_ETH 
      * the color value overwrites the lctr */
-    default:
-      break;
+  default:
+    break;
   }
 		
   if (skip)
@@ -261,45 +261,46 @@ check_and_poll:
     ext_hdr_num++;
   }
   payload += 8 * ext_hdr_num;
-
+  
   switch((erf_hdr->type & 0x7f)) {
-    case TYPE_COLOR_HASH_ETH:
-    case TYPE_DSM_COLOR_ETH:
-    case TYPE_COLOR_ETH:
-#ifdef READ_DAG_STREAM_COLOR
-      /*Note:
-       * In TYPE_COLOR_HASH_ETH, TYPE_DSM_COLOR_ETH, TYPE_COLOR_ETH 
-       * the color value overwrites the lctr */
-      hdr->extended_hdr.pkt_hash /* 32bit */ =  erf_hdr->lctr /* 16bit */;
-#endif
-    case TYPE_ETH:
+  case TYPE_COLOR_HASH_ETH:
+  case TYPE_DSM_COLOR_ETH:
+  case TYPE_COLOR_ETH:
+    /*
+     * Note:
+     * In TYPE_COLOR_HASH_ETH, TYPE_DSM_COLOR_ETH, TYPE_COLOR_ETH 
+     * the color value overwrites the lctr
+     */
+    hdr->extended_hdr.pkt_hash /* 32bit */ =  erf_hdr->lctr /* 16bit */;
 
-      len = ntohs(erf_hdr->wlen);
-      if (d->strip_crc)
-        len -= 4;
+  case TYPE_ETH:
 
-      caplen  = rlen;
-      caplen -= dag_record_size;
-      caplen -= (8 * ext_hdr_num);
-      caplen -= 2;
+    len = ntohs(erf_hdr->wlen);
+    if (d->strip_crc)
+      len -= 4;
 
-      if (caplen > ring->caplen)
-        caplen = ring->caplen;
+    caplen  = rlen;
+    caplen -= dag_record_size;
+    caplen -= (8 * ext_hdr_num);
+    caplen -= 2;
 
-      if (caplen > len) 
-        caplen = len;
+    if (caplen > ring->caplen)
+      caplen = ring->caplen;
+
+    if (caplen > len) 
+      caplen = len;
      
-      if((buffer_len > 0) && (caplen > buffer_len))
-        caplen = buffer_len;
+    if((buffer_len > 0) && (caplen > buffer_len))
+      caplen = buffer_len;
 
-      payload += 2;
+    payload += 2;
 
-      break;
-    default:
+    break;
+  default:
 #ifdef DAG_DEBUG
-      printf("Warning: unhandled ERF type\n");
+    printf("Warning: unhandled ERF type\n");
 #endif
-      goto check_and_poll;
+    goto check_and_poll;
   }
 
   if (buffer_len > 0){
@@ -341,7 +342,7 @@ check_and_poll:
 	
   retval = 1;
            
-exit:
+ exit:
 
   if(ring->reentrant) 
     pthread_spin_unlock(&ring->spinlock);
@@ -452,7 +453,7 @@ int pfring_dag_poll(pfring *ring, u_int wait_duration) {
   d = (pfring_dag *) ring->priv_data;
   
   if ((d->top - d->bottom) >= dag_record_size)
-  return 1;
+    return 1;
 
   if ( (d->top = dag_advance_stream(d->fd, d->stream_num, (void * /* but it is void** */) &d->bottom)) == NULL)
     return -1;
