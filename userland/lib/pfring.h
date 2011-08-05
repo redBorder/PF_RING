@@ -178,7 +178,8 @@ extern "C" {
 
     /* DNA only */
     int      (*dna_init)             (pfring *);
-    void     (*dna_term)             (pfring *);    
+    void     (*dna_term)             (pfring *);   
+    int      (*dna_enable)           (pfring *);
     u_int8_t (*dna_check_packet_to_read) (pfring *, u_int8_t);
     u_char*  (*dna_next_packet)      (pfring *, u_char **, u_int, struct pfring_pkthdr *);
 

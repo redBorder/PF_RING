@@ -355,3 +355,15 @@ int pfring_dna_open(pfring *ring) {
 
 /* *********************************** */
 
+int pfring_dna_enable_ring(pfring *ring) {
+  int rc = pfring_mod_enable_ring(ring);
+
+  if (rc < 0)
+    return rc;
+
+  if (ring->dna_enable)
+    rc = ring->dna_enable(ring);
+
+  return rc;
+}
+

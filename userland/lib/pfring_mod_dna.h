@@ -20,17 +20,9 @@ int  pfring_dna_stats(pfring *ring, pfring_stat *stats);
 int  pfring_dna_recv (pfring *ring, u_char** buffer, u_int buffer_len, 
 		      struct pfring_pkthdr *hdr, u_int8_t wait_for_incoming_packet);
 int  pfring_dna_send(pfring *ring, char *pkt, u_int pkt_len);
+int  pfring_dna_enable_ring(pfring *ring);
 
 /* DNA */
 extern int dna_init(pfring* ring, u_short len);
-extern void dna_term(pfring* ring);
-
-extern int8_t dna_there_is_a_packet_to_read(pfring* ring,
-					    u_int8_t wait_for_incoming_packet);
-extern char* dna_get_next_packet(pfring* ring,
-				 u_char** buffer, u_int buffer_len,
-				 struct pfring_pkthdr *hdr);
-extern void dna_dump_stats(pfring* ring);
-extern int dna_send_packet(pfring* ring, char* buffer, u_int buffer_len);
 
 #endif /* _PFRING_DNA_H_ */
