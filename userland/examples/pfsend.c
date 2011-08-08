@@ -103,14 +103,14 @@ void print_stats() {
   avgThpt = (double)(num_pkt_good_sent * 1000)/deltaMillisec;
   avgThptBytes = (double)(num_bytes_good_sent * 1000)/deltaMillisec;
   avgThptBytes /= (1000*1000*1000)/8;
-
+  
   fprintf(stderr, "TX rate: [current %s pps/%s Gbps][average %s pps/%s Gbps][total %s pkts]\n", 
 	  format_numbers(currentThpt, buf1, sizeof(buf1), 1),
 	  format_numbers(currentThptBytes, buf2, sizeof(buf2), 1),
 	  format_numbers(avgThpt, buf3, sizeof(buf3), 1),
 	  format_numbers(avgThptBytes,  buf4, sizeof(buf4), 1),
 	  format_numbers(num_pkt_good_sent, buf5, sizeof(buf5), 1));
-
+  
   memcpy(&lastTime, &now, sizeof(now));
   last_num_pkt_good_sent = num_pkt_good_sent, last_num_bytes_good_sent = num_bytes_good_sent;
 }

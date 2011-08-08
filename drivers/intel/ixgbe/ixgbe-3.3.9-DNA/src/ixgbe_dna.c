@@ -21,8 +21,6 @@
 
 *******************************************************************************/
 
-#include "../../../../../kernel/linux/pf_ring.h"
-
 static u_int8_t dna_debug = 0;
 
 /* Forward */
@@ -290,7 +288,7 @@ void dna_ixgbe_alloc_tx_buffers(struct ixgbe_ring *tx_ring, struct pfring_hooks 
   // struct ixgbe_adapter 	*adapter = netdev_priv(tx_ring->netdev);
 
   /* Check if the memory has been already allocated */
-  if(tx_ring->dna.rx_tx.tx.packet_memory != 0) return;
+  if(tx_ring->dna.rx_tx.tx.packet_memory[0] != 0) return;
 
   /* nothing to do or no valid netdev defined */
   if (!netdev_ring(tx_ring))
@@ -302,29 +300,32 @@ void dna_ixgbe_alloc_tx_buffers(struct ixgbe_ring *tx_ring, struct pfring_hooks 
     printk("%s(): tx_ring->dna.rx_tx.tx.tot_packet_memory=%d\n",
 	   __FUNCTION__, tx_ring->dna.tot_packet_memory);
 
-  tx_ring->dna.rx_tx.tx.packet_memory  =
-    alloc_contiguous_memory(&tx_ring->dna.tot_packet_memory,
-			    &tx_ring->dna.mem_order);
+  for(i=0; i<tx_ring->dna.num_memory_pages; i++) {
+    tx_ring->dna.rx_tx.tx.packet_memory[i] =
+      alloc_contiguous_memory(&tx_ring->dna.tot_packet_memory,
+			      &tx_ring->dna.mem_order);
+    
+    if (tx_ring->dna.rx_tx.tx.packet_memory[i] == 0) {
+      printk("\n\n%s() ERROR: not enough memory for TX DMA ring!!\n\n\n",
+	     __FUNCTION__);
+      return;
+    }
 
-  if (tx_ring->dna.rx_tx.tx.packet_memory == 0) {
-    printk("\n\n%s() ERROR: not enough memory for TX DMA ring!!\n\n\n",
-	   __FUNCTION__);
-    return;
+    if(unlikely(dna_debug))
+      printk("[DNA] %s(): Successfully allocated TX %u@%u bytes at "
+	     "0x%08lx [slot_len=%d]\n",__FUNCTION__,
+	     tx_ring->dna.tot_packet_memory, i,
+	     tx_ring->dna.rx_tx.tx.packet_memory[i],
+	     tx_ring->dna.packet_slot_len);    
   }
 
-  if(unlikely(dna_debug))
-    printk("[DNA] %s(): Successfully allocated TX %u bytes at "
-	   "0x%08lx [slot_len=%d]\n",__FUNCTION__,
-	   tx_ring->dna.tot_packet_memory,
-	   tx_ring->dna.rx_tx.tx.packet_memory,
-	   tx_ring->dna.packet_slot_len);
-
   for(i=0; i < tx_ring->count; i++) {
-    u_int offset;
+    u_int offset, page_index;
     char *pkt;
 
-    offset = i * tx_ring->dna.packet_slot_len;
-    pkt = (char *)(tx_ring->dna.rx_tx.tx.packet_memory + offset);
+    page_index = i / MAX_NUM_DNA_SLOTS_PER_PAGE;
+    offset = (i % MAX_NUM_DNA_SLOTS_PER_PAGE) * tx_ring->dna.packet_slot_len;
+    pkt = (char *)(tx_ring->dna.rx_tx.tx.packet_memory[page_index] + offset);
 
     bi      = &tx_ring->tx_buffer_info[i];
     bi->skb = NULL;
@@ -371,7 +372,7 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
   dna_device_model	 model;
 
   /* Check if the memory has been already allocated */
-  if(rx_ring->dna.rx_tx.rx.packet_memory != 0) return;
+  if(rx_ring->dna.rx_tx.rx.packet_memory[0] != 0) return;
 
   /* nothing to do or no valid netdev defined */
   if (!netdev_ring(rx_ring))
@@ -389,6 +390,11 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
   rx_ring->dna.packet_slot_len  = ALIGN(rx_ring->rx_buf_len, cache_line_size);
   rx_ring->dna.packet_num_slots = rx_ring->count;
 
+  /* Align the slots to MAX_NUM_DNA_SLOTS_PER_PAGE */
+  rx_ring->dna.packet_num_slots += (rx_ring->dna.packet_num_slots % MAX_NUM_DNA_SLOTS_PER_PAGE);
+
+  rx_ring->dna.num_memory_pages = rx_ring->dna.packet_num_slots / MAX_NUM_DNA_SLOTS_PER_PAGE;
+
   if (ring_is_ps_enabled(rx_ring)) {
     /* data will be put in this buffer */
     /* Original fuction allocate PAGE_SIZE/2 for this buffer*/
@@ -399,35 +405,41 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
     printk("%s(): rx_ring->dna.packet_slot_len=%d\n",__FUNCTION__,
 	   rx_ring->dna.packet_slot_len);
 
-  rx_ring->dna.tot_packet_memory = rx_ring->dna.packet_slot_len * rx_ring->dna.packet_num_slots;
+  rx_ring->dna.tot_packet_memory = rx_ring->dna.packet_slot_len * MAX_NUM_DNA_SLOTS_PER_PAGE;
 
   if(unlikely(dna_debug))
     printk("%s(): rx_ring->dna.tot_packet_memory=%d\n",
-	   __FUNCTION__, rx_ring->dna.tot_packet_memory);
+	   __FUNCTION__, rx_ring->dna.tot_packet_memory); 
 
-  rx_ring->dna.rx_tx.rx.packet_memory  =
-    alloc_contiguous_memory(&rx_ring->dna.tot_packet_memory,
-			    &rx_ring->dna.mem_order);
+  for(i=0; i<rx_ring->dna.num_memory_pages; i++) {
+    rx_ring->dna.rx_tx.rx.packet_memory[i] =
+      alloc_contiguous_memory(&rx_ring->dna.tot_packet_memory, &rx_ring->dna.mem_order);
+  
+    if (rx_ring->dna.rx_tx.rx.packet_memory[i] == 0) {
+      printk("\n\n%s() ERROR: not enough memory for RX DMA ring!!\n\n\n",
+	     __FUNCTION__);
+      return;
+    }
 
-  if (rx_ring->dna.rx_tx.rx.packet_memory == 0) {
-    printk("\n\n%s() ERROR: not enough memory for RX DMA ring!!\n\n\n",
-	   __FUNCTION__);
-    return;
+    if(unlikely(dna_debug))
+      printk("[DNA] %s(): Successfully allocated RX %u@%u bytes at 0x%08lx [slot_len=%d]\n",
+	     __FUNCTION__, rx_ring->dna.tot_packet_memory, i,
+	     rx_ring->dna.rx_tx.rx.packet_memory[i], rx_ring->dna.packet_slot_len);
   }
 
-  if(unlikely(dna_debug))
-    printk("[DNA] %s(): Successfully allocated RX %u bytes at "
-	   "0x%08lx [slot_len=%d]\n",__FUNCTION__,
-	   rx_ring->dna.tot_packet_memory,
-	   rx_ring->dna.rx_tx.rx.packet_memory,
-	   rx_ring->dna.packet_slot_len);
-
   for(i=0; i < rx_ring->count; i++) {
-    u_int offset;
+    u_int offset, page_index;
     char *pkt;
+    
+    page_index = i / MAX_NUM_DNA_SLOTS_PER_PAGE;
+    offset = (i % MAX_NUM_DNA_SLOTS_PER_PAGE) * rx_ring->dna.packet_slot_len;
+    pkt = (char *)(rx_ring->dna.rx_tx.rx.packet_memory[page_index] + offset);
 
-    offset = i * rx_ring->dna.packet_slot_len;
-    pkt = (char *)(rx_ring->dna.rx_tx.rx.packet_memory + offset);
+    if(unlikely(dna_debug))
+      printk("[DNA] %s(): Successfully allocated RX %u@%u bytes at 0x%08lx [slot_len=%d][page_index=%u][offset=%u]\n",
+	     __FUNCTION__, rx_ring->dna.tot_packet_memory, i,
+	     rx_ring->dna.rx_tx.rx.packet_memory[i],
+	     rx_ring->dna.packet_slot_len, page_index, offset);
 
     bi      = &rx_ring->rx_buffer_info[i];
     bi->skb = NULL;
@@ -462,6 +474,7 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
       print_adv_rx_descr(rx_desc);
       print_adv_rx_descr(shadow_rx_desc);
     }
+
     ixgbe_release_rx_desc(rx_ring, i);
   } /* for */
 
@@ -519,9 +532,9 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
 				wait_packet_function_ptr,
 				notify_function_ptr);
 
-  printk("[DNA] ixgbe: %s: Enabled DNA on queue %d [size=%u][count=%d]\n",
-	 rx_ring->netdev->name, rx_ring->queue_index, rx_ring->size, rx_ring->count);
-
+  if(unlikely(dna_debug))
+    printk("[DNA] ixgbe: %s: Enabled DNA on queue %d [size=%u][count=%d]\n",
+	   rx_ring->netdev->name, rx_ring->queue_index, rx_ring->size, rx_ring->count);  
 #if 0
   if(adapter->hw.mac.type != ixgbe_mac_82598EB)
     ixgbe_irq_disable_queues(rx_ring->q_vector->adapter, ((u64)1 << rx_ring->queue_index));

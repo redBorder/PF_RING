@@ -165,7 +165,7 @@ struct pkt_parsing_info {
   u_int16_t last_matched_plugin_id; /* If > 0 identifies a plugin to that matched the packet */
   u_int16_t last_matched_rule_id; /* If > 0 identifies a rule that matched the packet */
   struct pkt_offset offset; /* Offsets of L3/L4/payload elements */
-  
+
   /* Leave it at the end of the structure */
   packet_user_detail pkt_detail;
 };
@@ -173,12 +173,12 @@ struct pkt_parsing_info {
 #define UNKNOWN_INTERFACE          -1
 #define FAKE_PACKET                -2 /* It indicates that the returned packet
 					 is faked, and that the info is basically
-					 a message from PF_RING 
+					 a message from PF_RING
 				      */
 struct pfring_extended_pkthdr {
   u_int64_t timestamp_ns; /* Packet timestamp at ns precision. Note that if your NIC supports
 			     hardware timestamp, this is the place to read timestamp from */
-  int if_index;           /* index of the interface on which the packet has been received. 
+  int if_index;           /* index of the interface on which the packet has been received.
                              It can be also used to report other information */
   u_int32_t pkt_hash;     /* Hash based on the packet header */
   u_int16_t parsed_header_len; /* Extra parsing data before packet */
@@ -189,7 +189,7 @@ struct pfring_extended_pkthdr {
 
 /* NOTE
 
-   Keep 'struct pfring_pkthdr' in sync with 'struct pcap_pkthdr'   
+   Keep 'struct pfring_pkthdr' in sync with 'struct pcap_pkthdr'
 */
 
 struct pfring_pkthdr {
@@ -256,7 +256,7 @@ typedef enum {
   reflect_packet_and_stop_rule_evaluation,
   reflect_packet_and_continue_rule_evaluation,
   bounce_packet_and_stop_rule_evaluation,
-  bounce_packet_and_continue_rule_evaluation 
+  bounce_packet_and_continue_rule_evaluation
 } rule_action_behaviour;
 
 typedef enum {
@@ -325,15 +325,15 @@ typedef struct {
          1   +--------------+   3   +--------------+
 
   Drop Rule
-  Discard incoming packets matching the filter 
+  Discard incoming packets matching the filter
   on 'rule_port'
 
   Redirect Rule
-  Divert incoming packets matching the filter 
+  Divert incoming packets matching the filter
   on 'rule_port' to 'rule_target_port'.
 
   Mirror Rule
-  Copy incoming packets matching the filter 
+  Copy incoming packets matching the filter
   on 'rule_port' to 'rule_target_port'. The original
   packet will continue its journey (i.e. packet are
   actually duplicated)
@@ -387,13 +387,13 @@ extern struct pf_ring_socket *pfr; /* Forward */
 
 /* *********************************** */
 
-typedef int (*five_tuple_rule_handler)(struct pf_ring_socket *pfr, 
+typedef int (*five_tuple_rule_handler)(struct pf_ring_socket *pfr,
 				       hw_filtering_rule *rule,
 				       hw_filtering_rule_command request);
-typedef int (*perfect_filter_hw_rule_handler)(struct pf_ring_socket *pfr, 
-					      hw_filtering_rule *rule, 
+typedef int (*perfect_filter_hw_rule_handler)(struct pf_ring_socket *pfr,
+					      hw_filtering_rule *rule,
 					      hw_filtering_rule_command request);
-typedef int (*silicom_redirector_hw_rule_handler)(struct pf_ring_socket *pfr, 
+typedef int (*silicom_redirector_hw_rule_handler)(struct pf_ring_socket *pfr,
 						  hw_filtering_rule *rule,
 						  hw_filtering_rule_command request);
 
@@ -461,17 +461,23 @@ typedef struct flowSlotInfo {
   u_int64_t tot_fwd_ok, tot_fwd_notok;
   /* <-- 64 bytes here, should be enough to avoid some L1 VIVT coherence issues (32 ~ 64bytes lines) */
   char padding[128];
-  /* <-- 128 bytes here, should be enough to avoid false sharing in most L2 (64 ~ 128bytes lines) */  
+  /* <-- 128 bytes here, should be enough to avoid false sharing in most L2 (64 ~ 128bytes lines) */
   char k_padding[3904];
   /* <-- 4096 bytes here, to get a page aligned block writable by kernel side only */
-  
+
   /* second page, managed by userland */
   u_int64_t tot_read;
-  u_int32_t remove_off /* managed by userland */;  
+  u_int32_t remove_off /* managed by userland */;
   u_int32_t vpfring_guest_flags; /* used by vPFRing */
   char u_padding[4080];
   /* <-- 8192 bytes here, to get a page aligned block writable by userland only */
 } FlowSlotInfo;
+
+/* **************************************** */
+
+#define DNA_SHIFT                      6
+#define MAX_NUM_DNA_SLOTS_PER_PAGE     (1 << DNA_SHIFT) /* 64 - it MUST be a power of 2 */
+#define MAX_NUM_DNA_PAGES              64               /* IXGBE_MAX_RXD / MAX_NUM_SLOTS_PER_PAGE = 64 */
 
 /* *********************************** */
 
@@ -515,8 +521,8 @@ typedef enum {
 } dna_device_operation;
 
 typedef enum {
-  intel_e1000e = 0, 
-  intel_igb, 
+  intel_e1000e = 0,
+  intel_igb,
   intel_ixgbe,
   intel_ixgbe_82598,
   intel_ixgbe_82599
@@ -536,9 +542,9 @@ typedef struct {
 typedef struct {
   dna_memory_slots mem_info;
   u_int16_t channel_id;
-  unsigned long rx_packet_memory;  /* Invalid in userland */
+  unsigned long rx_packet_memory[MAX_NUM_DNA_PAGES];  /* Invalid in userland */
   void *rx_descr_packet_memory;    /* Invalid in userland */
-  unsigned long tx_packet_memory;  /* Invalid in userland */
+  unsigned long tx_packet_memory[MAX_NUM_DNA_PAGES];  /* Invalid in userland */
   void *tx_descr_packet_memory;    /* Invalid in userland */
   char *phys_card_memory; /* Invalid in userland */
   struct net_device *netdev; /* Invalid in userland */
@@ -587,10 +593,10 @@ typedef enum {
 
 typedef struct {
   char device_name[16];
-  pfring_device_type device_type;  
+  pfring_device_type device_type;
 
   /* Entry in the /proc filesystem */
-  struct proc_dir_entry *proc_entry; 
+  struct proc_dir_entry *proc_entry;
 } virtual_filtering_device_info;
 
 #ifdef __KERNEL__
@@ -654,7 +660,7 @@ typedef struct {
 
   /*
     NOTE
-     
+
     Some device types (e.g. redirector) might NOT
     have a net_device handler but a dummy pointer
   */
@@ -688,12 +694,12 @@ typedef int (*do_handle_sw_filtering_hash_bucket)(struct pf_ring_socket *pfr,
 					       sw_filtering_hash_bucket* rule,
 					       u_char add_rule);
 
-typedef int (*do_add_packet_to_ring)(struct pf_ring_socket *pfr, 
+typedef int (*do_add_packet_to_ring)(struct pf_ring_socket *pfr,
 				     struct pfring_pkthdr *hdr, struct sk_buff *skb,
 				     int displ, u_int8_t parse_pkt_first);
 
-typedef int (*do_add_raw_packet_to_ring)(struct pf_ring_socket *pfr, 
-					 struct pfring_pkthdr *hdr, 
+typedef int (*do_add_raw_packet_to_ring)(struct pf_ring_socket *pfr,
+					 struct pfring_pkthdr *hdr,
 					 char *data, u_int data_len,
 					 u_int8_t parse_pkt_first);
 
@@ -740,7 +746,7 @@ struct pf_ring_socket {
 
   /* Packet Sampling */
   u_int32_t pktToSample, sample_rate;
-  
+
   /* Virtual Filtering Device */
   virtual_filtering_device_element *v_filtering_dev;
 
@@ -756,7 +762,7 @@ struct pf_ring_socket {
   /* Hw Filtering Rules */
   u_int16_t num_hw_filtering_rules;
   struct list_head hw_filtering_rules;
-  
+
   /* Locks */
   atomic_t num_ring_users;
   wait_queue_head_t ring_slots_waitqueue;
@@ -775,8 +781,8 @@ struct pf_ring_socket {
   char *kernel_consumer_options, *kernel_consumer_private;
 
 #ifdef VPFRING_SUPPORT
-  struct eventfd_ctx *vpfring_host_eventfd_ctx;   /* host  -> guest     */
-#endif //VPFRING_SUPPORT
+  struct eventfd_ctx *vpfring_host_eventfd_ctx;   /* host  -> guest */
+#endif /* VPFRING_SUPPORT */
 };
 
 /* **************************************** */
@@ -856,7 +862,7 @@ typedef int (*copy_raw_data_2ring)(struct pf_ring_socket *pfr,
 /* Kernel packet poller */
 typedef int (*kernel_packet_start)(struct pf_ring_socket *pfr, copy_raw_data_2ring raw_copier);
 typedef void (*kernel_packet_term)(struct pf_ring_socket *pfr);
-typedef void (*kernel_packet_reader)(struct pf_ring_socket *pfr, struct sk_buff *skb, 
+typedef void (*kernel_packet_reader)(struct pf_ring_socket *pfr, struct sk_buff *skb,
 				     u_int8_t channel_id, struct pfring_pkthdr *hdr, int displ);
 
 struct pfring_plugin_registration {
@@ -883,15 +889,15 @@ typedef int   (*register_pfring_plugin)(struct pfring_plugin_registration
 typedef int   (*unregister_pfring_plugin)(u_int16_t pfring_plugin_id);
 typedef u_int (*read_device_pfring_free_slots)(int ifindex);
 typedef void  (*handle_ring_dna_device)(dna_device_operation operation,
-					unsigned long packet_memory,
+					unsigned long packet_memory[MAX_NUM_DNA_PAGES],
 					u_int packet_memory_num_slots,
 					u_int packet_memory_slot_len,
 					u_int packet_memory_tot_len,
-					void *descr_packet_memory,
+					void *rx_descr_packet_memory,
 					u_int descr_packet_memory_num_slots,
 					u_int descr_packet_memory_slot_len,
 					u_int descr_packet_memory_tot_len,
-					unsigned long tx_packet_memory,					
+					unsigned long tx_packet_memory[MAX_NUM_DNA_PAGES],
 					void *tx_descr_packet_memory,
 					u_int channel_id,
 					void *phys_card_memory,
@@ -921,15 +927,15 @@ extern handle_ring_dna_device get_ring_dna_device_handler(void);
 extern void set_ring_dna_device_handler(handle_ring_dna_device
 					the_dna_device_handler);
 extern void do_ring_dna_device_handler(dna_device_operation operation,
-				       unsigned long packet_memory,
+				       unsigned long packet_memory[MAX_NUM_DNA_PAGES],
 				       u_int packet_memory_num_slots,
 				       u_int packet_memory_slot_len,
 				       u_int packet_memory_tot_len,
-				       void *descr_packet_memory,
+				       void *rx_descr_packet_memory,
 				       u_int descr_packet_memory_num_slots,
 				       u_int descr_packet_memory_slot_len,
 				       u_int descr_packet_memory_tot_len,
-				       unsigned long tx_packet_memory,					
+				       unsigned long tx_packet_memory[MAX_NUM_DNA_PAGES],
 				       void *tx_descr_packet_memory,
 				       u_int channel_id,
 				       void *phys_card_memory,
@@ -948,7 +954,7 @@ typedef int (*handle_ring_skb)(struct sk_buff *skb, u_char recv_packet,
 typedef int (*handle_ring_buffer)(struct net_device *dev,
 				  char *data, int len);
 typedef int (*handle_add_hdr_to_ring)(struct pf_ring_socket *pfr,
-				      struct pfring_pkthdr *hdr);				      
+				      struct pfring_pkthdr *hdr);
 
 /* Hack to jump from a device directly to PF_RING */
 struct pfring_hooks {
@@ -1053,7 +1059,7 @@ static void register_plugin(struct pfring_plugin_registration *reg_info) {
 
 static void unregister_plugin(int pfring_plugin_id) {
   struct list_head *ptr, *tmp_ptr;
-  
+
   /*
     Trick to push the kernel to call the above ring_plugin_notifier()
     and this to register the plugin in PF_RING
@@ -1107,7 +1113,7 @@ struct pcaplike_pkthdr {
 
 struct vpfring_eventfd_info {
   u_int32_t id; /* an id (unused now, but maybe useful in future) */
-  int32_t fd; 
+  int32_t fd;
 };
 
 /* Values for the FlowSlotInfo.vpfring_guest_flags bitmap */

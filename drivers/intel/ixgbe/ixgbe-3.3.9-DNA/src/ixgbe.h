@@ -64,6 +64,8 @@
 
 #include "ixgbe_api.h"
 
+#include "../../../../../kernel/linux/pf_ring.h"
+
 #define PFX "ixgbe: "
 #define DPRINTK(nlevel, klevel, fmt, args...) \
 	((void)((NETIF_MSG_##nlevel & adapter->msg_enable) && \
@@ -80,11 +82,11 @@
 #define IXGBE_MIN_RXD			     64
 
 #ifdef ENABLE_DNA
-#define DNA_DEFAULT                       512
+#define DNA_DEFAULT                        1024
 #undef IXGBE_DEFAULT_RXD
-#define IXGBE_DEFAULT_RXD          DNA_DEFAULT
+#define IXGBE_DEFAULT_RXD           DNA_DEFAULT
 #undef IXGBE_DEFAULT_TXD
-#define IXGBE_DEFAULT_TXD          DNA_DEFAULT
+#define IXGBE_DEFAULT_TXD           DNA_DEFAULT
 #endif
 
 
@@ -368,7 +370,7 @@ struct ixgbe_ring {
 
 #ifdef ENABLE_DNA
   struct {
-    u_int8_t queue_in_use;
+    u_int8_t queue_in_use, num_memory_pages;
     u_int tot_packet_memory, packet_slot_len, packet_num_slots, mem_order;
 
     union {
@@ -378,12 +380,12 @@ struct ixgbe_ring {
 	u_int8_t            interrupt_enabled;
 	
 	/* Pointer to the slots where packets will be hosted */
-	unsigned long       packet_memory;
+	unsigned long       packet_memory[MAX_NUM_DNA_PAGES];
       } rx;
       
       struct {
 	/* Pointer to the slots where packets will be hosted */
-	unsigned long       packet_memory;
+	unsigned long       packet_memory[MAX_NUM_DNA_PAGES];
       } tx;
     } rx_tx;
   } dna;

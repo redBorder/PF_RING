@@ -3945,11 +3945,32 @@ static int ring_mmap(struct file *file,
     return -EINVAL;
   }
 
+  /* Tricks for DNA */
+  if((mem_id >= 100) && (mem_id < 200)) {
+    /* DNA; RX packet memory */
+
+    mem_id -= 100;
+    if(mem_id >= MAX_NUM_DNA_PAGES) return -EINVAL;
+
+    if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->rx_packet_memory[mem_id], VM_LOCKED, 1)) < 0)
+      return(rc);
+    
+    return(0);
+  } else if((mem_id >= 200) && (mem_id < 300)) {
+    mem_id -= 200;
+    if(mem_id >= MAX_NUM_DNA_PAGES) return -EINVAL;
+
+    /* DNA: TX packet memory */
+    if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->tx_packet_memory[mem_id], VM_LOCKED, 1)) < 0)
+      return(rc);
+
+    return(0);
+  }
+  
   switch(mem_id) {
     /* RING */
     case 0:
-
-      /* if userspace tries to mmap beyond end of our buffer, fail */
+      /* If userspace tries to mmap beyond end of our buffer, then fail */
       if(size > pfr->slots_info->tot_mem) {
         if(enable_debug)
 	  printk("[PF_RING] ring_mmap() failed: "
@@ -3968,31 +3989,18 @@ static int ring_mmap(struct file *file,
         return(rc);
       break;
 
-    /* DNA Device */
     case 1:
-      /* DNA: RX packet memory */
-      if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->rx_packet_memory, VM_LOCKED, 1)) < 0)
-	return(rc);
-      break;
-
-    case 2:
       /* DNA: RX packet descriptors */
       if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->rx_descr_packet_memory, VM_LOCKED, 1)) < 0)
 	return(rc);
       break;
 
-    case 3:
+    case 2:
       if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->phys_card_memory, (VM_RESERVED | VM_IO), 2)) < 0)
 	return(rc);
       break;
 
-    case 4:
-      /* DNA: TX packet memory */
-      if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->tx_packet_memory, VM_LOCKED, 1)) < 0)
-	return(rc);
-      break;
-
-    case 5:
+    case 3:
       /* DNA: TX packet descriptors */
       if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->tx_descr_packet_memory, VM_LOCKED, 1)) < 0)
 	return(rc);
@@ -5793,15 +5801,15 @@ static int ring_getsockopt(struct socket *sock,
 /* ************************************* */
 
 void dna_device_handler(dna_device_operation operation,
-			unsigned long rx_packet_memory,
+			unsigned long *rx_packet_memory[MAX_NUM_DNA_PAGES],
 			u_int packet_memory_num_slots,
 			u_int packet_memory_slot_len,
 			u_int packet_memory_tot_len,
-			void *descr_packet_memory,
+			void *rx_descr_packet_memory,
 			u_int descr_packet_memory_num_slots,
 			u_int descr_packet_memory_slot_len,
 			u_int descr_packet_memory_tot_len,
-			unsigned long tx_packet_memory,
+			unsigned long *tx_packet_memory[MAX_NUM_DNA_PAGES],
 			void *tx_descr_packet_memory,
 			u_int channel_id,
 			void *phys_card_memory,
@@ -5828,19 +5836,19 @@ void dna_device_handler(dna_device_operation operation,
       memset(next, 0, sizeof(dna_device_list));
 
       next->in_use = 0;
-      next->dev.rx_packet_memory = rx_packet_memory;
+      memcpy(&next->dev.rx_packet_memory, rx_packet_memory, sizeof(next->dev.rx_packet_memory));
       next->dev.mem_info.packet_memory_num_slots = packet_memory_num_slots;
       next->dev.mem_info.packet_memory_slot_len = packet_memory_slot_len;
       next->dev.mem_info.packet_memory_tot_len = packet_memory_tot_len;
       next->dev.mem_info.device_model = device_model;
-      next->dev.rx_descr_packet_memory = descr_packet_memory;
+      next->dev.rx_descr_packet_memory = rx_descr_packet_memory;
       next->dev.mem_info.descr_packet_memory_num_slots = descr_packet_memory_num_slots;
       next->dev.mem_info.descr_packet_memory_slot_len  = descr_packet_memory_slot_len;
       next->dev.mem_info.descr_packet_memory_tot_len   = descr_packet_memory_tot_len;
       next->dev.phys_card_memory = phys_card_memory;
       next->dev.mem_info.phys_card_memory_len = phys_card_memory_len;
       /* TX */
-      next->dev.tx_packet_memory = tx_packet_memory;
+      memcpy(&next->dev.tx_packet_memory, tx_packet_memory, sizeof(next->dev.rx_packet_memory));
       next->dev.tx_descr_packet_memory = tx_descr_packet_memory;
       next->dev.channel_id = channel_id;
       next->dev.netdev = netdev;
