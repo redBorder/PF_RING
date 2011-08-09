@@ -2873,15 +2873,6 @@ static int skb_ring_handler(struct sk_buff *skb,
 	     skb->dev->name, num_rings_per_device[skb->dev->ifindex], num_any_rings);
   }
 
-    if(skb->dev->ifindex != 10) {
-      static int once = 0;
-      
-      while(once < 25) {
-	printk("[PF_RING] Received pkt on device index %d\n", skb->dev->ifindex);
-	once++;
-      }
-    }
-
   if((num_any_rings == 0)
      && (skb->dev
 	 && (skb->dev->ifindex < MAX_NUM_IFIDX)
@@ -5801,7 +5792,7 @@ static int ring_getsockopt(struct socket *sock,
 /* ************************************* */
 
 void dna_device_handler(dna_device_operation operation,
-			unsigned long *rx_packet_memory[MAX_NUM_DNA_PAGES],
+			unsigned long rx_packet_memory[MAX_NUM_DNA_PAGES],
 			u_int packet_memory_num_slots,
 			u_int packet_memory_slot_len,
 			u_int packet_memory_tot_len,
@@ -5809,7 +5800,7 @@ void dna_device_handler(dna_device_operation operation,
 			u_int descr_packet_memory_num_slots,
 			u_int descr_packet_memory_slot_len,
 			u_int descr_packet_memory_tot_len,
-			unsigned long *tx_packet_memory[MAX_NUM_DNA_PAGES],
+			unsigned long tx_packet_memory[MAX_NUM_DNA_PAGES],
 			void *tx_descr_packet_memory,
 			u_int channel_id,
 			void *phys_card_memory,
@@ -5848,7 +5839,8 @@ void dna_device_handler(dna_device_operation operation,
       next->dev.phys_card_memory = phys_card_memory;
       next->dev.mem_info.phys_card_memory_len = phys_card_memory_len;
       /* TX */
-      memcpy(&next->dev.tx_packet_memory, tx_packet_memory, sizeof(next->dev.rx_packet_memory));
+      if(tx_packet_memory != NULL)
+	memcpy(&next->dev.tx_packet_memory, tx_packet_memory, sizeof(next->dev.rx_packet_memory));
       next->dev.tx_descr_packet_memory = tx_descr_packet_memory;
       next->dev.channel_id = channel_id;
       next->dev.netdev = netdev;

@@ -927,7 +927,7 @@ extern handle_ring_dna_device get_ring_dna_device_handler(void);
 extern void set_ring_dna_device_handler(handle_ring_dna_device
 					the_dna_device_handler);
 extern void do_ring_dna_device_handler(dna_device_operation operation,
-				       unsigned long packet_memory[MAX_NUM_DNA_PAGES],
+				       unsigned long rx_packet_memory[MAX_NUM_DNA_PAGES],
 				       u_int packet_memory_num_slots,
 				       u_int packet_memory_slot_len,
 				       u_int packet_memory_tot_len,
