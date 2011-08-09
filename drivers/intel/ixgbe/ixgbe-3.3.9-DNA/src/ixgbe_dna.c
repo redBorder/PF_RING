@@ -297,8 +297,8 @@ void dna_ixgbe_alloc_tx_buffers(struct ixgbe_ring *tx_ring, struct pfring_hooks 
   /* We suppose that RX and TX are in sync */
 
   if(unlikely(dna_debug))
-    printk("%s(): tx_ring->dna.rx_tx.tx.tot_packet_memory=%d\n",
-	   __FUNCTION__, tx_ring->dna.tot_packet_memory);
+    printk("%s(): tx_ring->dna.rx_tx.tx.tot_packet_memory=%d dna.num_memory_pages=%d\n",
+	   __FUNCTION__, tx_ring->dna.tot_packet_memory, tx_ring->dna.num_memory_pages);
 
   for(i=0; i<tx_ring->dna.num_memory_pages; i++) {
     tx_ring->dna.rx_tx.tx.packet_memory[i] =
@@ -493,6 +493,7 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
   tx_ring->dna.packet_slot_len = rx_ring->dna.packet_slot_len;
   tx_ring->dna.packet_num_slots = rx_ring->dna.packet_num_slots;
   tx_ring->dna.mem_order = rx_ring->dna.mem_order;
+  tx_ring->dna.num_memory_pages = rx_ring->dna.num_memory_pages;
   dna_ixgbe_alloc_tx_buffers(tx_ring, hook);
 
   switch (hw->mac.type) {
