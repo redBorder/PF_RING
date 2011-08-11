@@ -1857,6 +1857,42 @@ static int match_filtering_rule(struct pf_ring_socket *pfr,
 
 /* ********************************** */
 
+static inline void set_skb_time(struct sk_buff *skb, struct pfring_pkthdr *hdr) {
+  /* BD - API changed for time keeping */
+#if(LINUX_VERSION_CODE < KERNEL_VERSION(2,6,14))
+  if(skb->stamp.tv_sec == 0)
+    do_gettimeofday(&skb->stamp);  /* If timestamp is missing add it */
+  hdr->ts.tv_sec = skb->stamp.tv_sec, hdr->ts.tv_usec = skb->stamp.tv_usec;
+  hdr->extended_hdr.timestamp_ns = 0; /* No nsec for old kernels */
+#elif(LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22))
+  if(skb->tstamp.off_sec == 0)
+    __net_timestamp(skb); /* If timestamp is missing add it */
+  hdr->ts.tv_sec = skb->tstamp.off_sec, hdr->ts.tv_usec = skb->tstamp.off_usec;
+  hdr->extended_hdr.timestamp_ns = 0; /* No nsec for old kernels */
+#else /* 2.6.22 and above */
+  if(skb->tstamp.tv64 == 0)
+    __net_timestamp(skb); /* If timestamp is missing add it */
+
+  hdr->ts = ktime_to_timeval(skb->tstamp);
+
+#if(LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,30))
+  {
+    /* Use hardware timestamps when present. If not, just use software timestamps */
+    hdr->extended_hdr.timestamp_ns = ktime_to_ns(skb_hwtstamps(skb)->hwtstamp);
+
+    if(enable_debug)
+      printk("[PF_RING] hwts=%llu/dev=%s\n",
+	     hdr->extended_hdr.timestamp_ns,
+	     skb->dev ? skb->dev->name : "???");
+  }
+#endif
+  if(hdr->extended_hdr.timestamp_ns == 0)
+    hdr->extended_hdr.timestamp_ns = ktime_to_ns(skb->tstamp);
+#endif
+}
+
+/* ********************************** */
+
 /*
   Generic function for copying either a skb or a raw
   memory block to the ring buffer
@@ -1879,6 +1915,9 @@ inline int copy_data_to_ring(struct sk_buff *skb,
   if(pfr->ring_slots == NULL) return(0);
 
   /* We need to lock as two ksoftirqd might put data onto the same ring */
+
+  if(hdr->ts.tv_sec == 0)
+    set_skb_time(skb, hdr);
 
   if(do_lock) write_lock(&pfr->ring_index_lock);
   // smp_rmb();
@@ -2437,8 +2476,6 @@ static int add_skb_to_ring(struct sk_buff *skb,
   if((!pfring_enabled) || ((!pfr->ring_active) && (pfr->master_ring == NULL)))
     return(-1);
 
-  
-
   pfr->num_rx_channels = num_rx_channels; /* Constantly updated */
   hdr->extended_hdr.parsed_pkt.last_matched_rule_id = (u_int16_t)-1;
 
@@ -2791,42 +2828,6 @@ static struct sk_buff* defrag_skb(struct sk_buff *skb,
 
 /* ********************************** */
 
-static inline void set_skb_time(struct sk_buff *skb, struct pfring_pkthdr *hdr) {
-  /* BD - API changed for time keeping */
-#if(LINUX_VERSION_CODE < KERNEL_VERSION(2,6,14))
-  if(skb->stamp.tv_sec == 0)
-    do_gettimeofday(&skb->stamp);  /* If timestamp is missing add it */
-  hdr->ts.tv_sec = skb->stamp.tv_sec, hdr->ts.tv_usec = skb->stamp.tv_usec;
-  hdr->extended_hdr.timestamp_ns = 0; /* No nsec for old kernels */
-#elif(LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22))
-  if(skb->tstamp.off_sec == 0)
-    __net_timestamp(skb); /* If timestamp is missing add it */
-  hdr->ts.tv_sec = skb->tstamp.off_sec, hdr->ts.tv_usec = skb->tstamp.off_usec;
-  hdr->extended_hdr.timestamp_ns = 0; /* No nsec for old kernels */
-#else /* 2.6.22 and above */
-  if(skb->tstamp.tv64 == 0)
-    __net_timestamp(skb); /* If timestamp is missing add it */
-
-  hdr->ts = ktime_to_timeval(skb->tstamp);
-
-#if(LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,30))
-  {
-    /* Use hardware timestamps when present. If not, just use software timestamps */
-    hdr->extended_hdr.timestamp_ns = ktime_to_ns(skb_hwtstamps(skb)->hwtstamp);
-
-    if(enable_debug)
-      printk("[PF_RING] hwts=%llu/dev=%s\n",
-	     hdr->extended_hdr.timestamp_ns,
-	     skb->dev ? skb->dev->name : "???");
-  }
-#endif
-  if(hdr->extended_hdr.timestamp_ns == 0)
-    hdr->extended_hdr.timestamp_ns = ktime_to_ns(skb->tstamp);
-#endif
-}
-
-/* ********************************** */
-
 /*
   PF_RING main entry point
 
@@ -2915,8 +2916,7 @@ static int skb_ring_handler(struct sk_buff *skb,
 
   memset(&hdr, 0, sizeof(hdr));
 
-  set_skb_time(skb, &hdr);
-
+  hdr.ts.tv_sec = 0;
   hdr.len = hdr.caplen = skb->len + displ;
 
   if(quick_mode) {
