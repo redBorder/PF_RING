@@ -2845,7 +2845,7 @@ static int skb_ring_handler(struct sk_buff *skb,
 {
   struct sock *skElement;
   int rc = 0, is_ip_pkt = 0, room_available = 0;
-  struct list_head *ptr;
+  struct list_head *ptr, *tmp_ptr;
   struct pfring_pkthdr hdr;
   int displ;
   int defragmented_skb = 0;
@@ -2959,12 +2959,11 @@ static int skb_ring_handler(struct sk_buff *skb,
     else
       hdr.extended_hdr.if_index = UNKNOWN_INTERFACE;
 
-
     /* Avoid the ring to be manipulated while playing with it */
     ring_read_lock();
 
     /* [1] Check unclustered sockets */
-    list_for_each(ptr, &ring_table) {
+    list_for_each_safe(ptr, tmp_ptr, &ring_table) {
       struct pf_ring_socket *pfr;
       struct ring_element *entry;
 
@@ -4304,7 +4303,7 @@ static int set_master_ring(struct sock *sock,
 			   u_int32_t master_socket_id)
 {
   int rc = -1;
-  struct list_head *ptr;
+  struct list_head *ptr, *tmp_ptr;
 
   if(enable_debug)
     printk("[PF_RING] set_master_ring(%s=%d)\n",
@@ -4314,7 +4313,7 @@ static int set_master_ring(struct sock *sock,
   /* Avoid the ring to be manipulated while playing with it */
   ring_read_lock();
 
-  list_for_each(ptr, &ring_table) {
+  list_for_each_safe(ptr, tmp_ptr, &ring_table) {
     struct pf_ring_socket *sk_pfr;
     struct ring_element *entry;
     struct sock *skElement;

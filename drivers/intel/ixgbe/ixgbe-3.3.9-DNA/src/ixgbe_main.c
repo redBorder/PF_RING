@@ -898,14 +898,8 @@ void ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring, u16 cleaned_count)
 	u16 i = rx_ring->next_to_use;
 
 #ifdef ENABLE_DNA
-	if(unlikely(dna_debug)) 
-	  printk("%s(): allocating memory [%lu]\n", __FUNCTION__, rx_ring->dna.rx_tx.rx.packet_memory[0]);
-	    
 	if(!rx_ring->netdev) return;
-
-	if(rx_ring->dna.rx_tx.rx.packet_memory[0] == 0)
-	  dna_ixgbe_alloc_rx_buffers(rx_ring);
-
+	dna_ixgbe_alloc_rx_buffers(rx_ring);
 	return;
 #endif
 
@@ -4679,6 +4673,7 @@ void ixgbe_clean_rx_ring(struct ixgbe_ring *rx_ring)
 	    if(unlikely(dna_debug)) 
 	      printk("%s(): Deallocating TX DMA memory\n", __FUNCTION__);
 
+	    tx_ring->dna.memory_allocated = 0;
 	    for(i=0; i<tx_ring->dna.num_memory_pages; i++) {
 	      free_contiguous_memory(tx_ring->dna.rx_tx.tx.packet_memory[i],
 				     tx_ring->dna.tot_packet_memory,
@@ -4687,6 +4682,7 @@ void ixgbe_clean_rx_ring(struct ixgbe_ring *rx_ring)
 	    }
 	  }
 
+	  rx_ring->dna.memory_allocated = 0;
 	  if(rx_ring->dna.rx_tx.rx.packet_memory[0] != 0) {
 	    if(unlikely(dna_debug)) 
 	      printk("%s(): Deallocating RX DMA memory\n", __FUNCTION__);

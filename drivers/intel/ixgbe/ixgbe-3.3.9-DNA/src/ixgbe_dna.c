@@ -21,7 +21,7 @@
 
 *******************************************************************************/
 
-static u_int8_t dna_debug = 0;
+static u_int8_t dna_debug = 1;
 
 /* Forward */
 static inline void ixgbe_irq_disable(struct ixgbe_adapter *adapter);
@@ -208,6 +208,8 @@ int wait_packet_function_ptr(void *data, int mode)
 	   __FUNCTION__, mode, mode == 1 ? "enable int" : "disable int",
 	   rx_ring->queue_index, rx_ring->next_to_clean, rx_ring->next_to_use);
 
+  if(!rx_ring->dna.memory_allocated) return(0);
+
   if(mode == 1 /* Enable interrupt */) {
     union ixgbe_adv_rx_desc *rx_desc;
     u32	staterr;
@@ -272,6 +274,7 @@ int wait_packet_function_ptr(void *data, int mode)
 
     if(unlikely(dna_debug))
       printk("%s(): Disabled interrupts, queue = %d\n", __FUNCTION__, q_vector->v_idx);
+
     return(0);
   }
 }
@@ -540,6 +543,8 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
   if(adapter->hw.mac.type != ixgbe_mac_82598EB)
     ixgbe_irq_disable_queues(rx_ring->q_vector->adapter, ((u64)1 << rx_ring->queue_index));
 #endif
+
+  rx_ring->dna.memory_allocated = 1;
 }
 
 #undef IXGBE_PCI_DEVICE_CACHE_LINE_SIZE

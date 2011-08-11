@@ -370,7 +370,7 @@ struct ixgbe_ring {
 
 #ifdef ENABLE_DNA
   struct {
-    u_int8_t queue_in_use, num_memory_pages;
+    u_int8_t queue_in_use, num_memory_pages, memory_allocated;
     u_int tot_packet_memory, packet_slot_len, packet_num_slots, mem_order;
 
     union {
