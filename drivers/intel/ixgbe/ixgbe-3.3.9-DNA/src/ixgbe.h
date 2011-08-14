@@ -82,7 +82,7 @@
 #define IXGBE_MIN_RXD			     64
 
 #ifdef ENABLE_DNA
-#define DNA_DEFAULT                        1024
+#define DNA_DEFAULT                        4096
 #undef IXGBE_DEFAULT_RXD
 #define IXGBE_DEFAULT_RXD           DNA_DEFAULT
 #undef IXGBE_DEFAULT_TXD

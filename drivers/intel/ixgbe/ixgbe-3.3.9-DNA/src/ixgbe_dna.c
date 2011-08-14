@@ -21,7 +21,7 @@
 
 *******************************************************************************/
 
-static u_int8_t dna_debug = 1;
+static u_int8_t dna_debug = 0;
 
 /* Forward */
 static inline void ixgbe_irq_disable(struct ixgbe_adapter *adapter);
@@ -291,7 +291,7 @@ void dna_ixgbe_alloc_tx_buffers(struct ixgbe_ring *tx_ring, struct pfring_hooks 
   // struct ixgbe_adapter 	*adapter = netdev_priv(tx_ring->netdev);
 
   /* Check if the memory has been already allocated */
-  if(tx_ring->dna.rx_tx.tx.packet_memory[0] != 0) return;
+  if(tx_ring->dna.memory_allocated) return;;
 
   /* nothing to do or no valid netdev defined */
   if (!netdev_ring(tx_ring))
@@ -375,7 +375,7 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
   dna_device_model	 model;
 
   /* Check if the memory has been already allocated */
-  if(rx_ring->dna.rx_tx.rx.packet_memory[0] != 0) return;
+  if(rx_ring->dna.memory_allocated) return;
 
   /* nothing to do or no valid netdev defined */
   if (!netdev_ring(rx_ring))

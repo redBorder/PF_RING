@@ -4665,7 +4665,7 @@ void ixgbe_clean_rx_ring(struct ixgbe_ring *rx_ring)
 	  struct pfring_hooks   *hook = (struct pfring_hooks*)rx_ring->netdev->pfring_ptr;
 	  u_int i;
 
-	  if(tx_ring->dna.rx_tx.tx.packet_memory[0] != 0) {
+	  if(tx_ring->dna.memory_allocated) {
 	    memset(tx_ring->desc, 0, tx_ring->size);
 	    tx_ring->next_to_clean = 0;
 	    tx_ring->next_to_use = 0;
@@ -4683,7 +4683,8 @@ void ixgbe_clean_rx_ring(struct ixgbe_ring *rx_ring)
 	  }
 
 	  rx_ring->dna.memory_allocated = 0;
-	  if(rx_ring->dna.rx_tx.rx.packet_memory[0] != 0) {
+
+	  if(rx_ring->dna.memory_allocated) {
 	    if(unlikely(dna_debug)) 
 	      printk("%s(): Deallocating RX DMA memory\n", __FUNCTION__);
 
