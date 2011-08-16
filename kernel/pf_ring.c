@@ -2463,16 +2463,6 @@ static int add_skb_to_ring(struct sk_buff *skb,
 	   hdr->len, channel_id, num_rx_channels,
 	   pfr->ring_active, pfr->ring_netdev->dev->name);
 
-  {
-    static int once = 0;
-    
-    while(once < 25) {
-      printk("[PF_RING] add_skb_to_ring on device index %d [active=%d]\n", 
-	     skb->dev->ifindex, pfr->ring_active);
-      once++;
-    }
-  }
-
   if((!pfring_enabled) || ((!pfr->ring_active) && (pfr->master_ring == NULL)))
     return(-1);
 
