@@ -134,6 +134,40 @@ add_or_find_if(pcap_if_t **curdev_ret, pcap_if_t **alldevs, const char *name,
 	pcap_if_t *curdev, *prevdev, *nextdev;
 	int this_instance;
 
+#ifdef HAVE_PF_RING
+	if(description == NULL) {
+	  char buf[256]; 
+	  struct stat st;
+	  
+	  snprintf(buf, sizeof(buf), "/proc/net/pf_ring/dev/%s/info", name);
+	  
+	  if(stat(buf, &st) == 0) {
+	    FILE *fd = fopen(buf, "r");
+
+	    snprintf(buf, sizeof(buf), "%s PF_RING", name);
+	    
+	    if(fd != NULL) {
+	      u_int dna_found = 0;
+	      char file_buf[255];
+
+	      while(fgets(file_buf, sizeof(file_buf), fd) != NULL) {
+		if(strstr(file_buf, "DNA")) {
+		  dna_found = 1;
+		  break;
+		}
+	      }
+
+	      fclose(fd);
+
+	      if(dna_found)
+		snprintf(buf, sizeof(buf), "%s PF_RING DNA", name);
+	    }
+
+	    description = strdup(buf);
+	  } /* stat() */	  
+	}
+#endif
+
 	/*
 	 * Is there already an entry in the list for this interface?
 	 */
