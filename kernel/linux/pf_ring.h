@@ -627,7 +627,7 @@ typedef struct {
 } ring_cluster_element;
 
 typedef struct {
-  u8 in_use;
+  u8 num_bound_sockets;
   dna_device dev;
   struct list_head list;
   /*

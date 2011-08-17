@@ -4396,9 +4396,8 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 			       dna_device_mapping *mapping)
 {
   struct list_head *ptr, *tmp_ptr;
-  dna_device_list *entry;
 
-  if(enable_debug)
+  if(1|| enable_debug)
     printk("[PF_RING] ring_map_dna_device(%s@%d): %s\n",
 	   mapping->device_name,
 	   mapping->channel_id,
@@ -4409,59 +4408,61 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
     u8 found = 0;
 
     list_for_each_safe(ptr, tmp_ptr, &ring_dna_devices_list) {
-      entry = list_entry(ptr, dna_device_list, list);
+      dna_device_list *entry = list_entry(ptr, dna_device_list, list);
 
       if((!strcmp(entry->dev.netdev->name, mapping->device_name))
 	 && (entry->dev.channel_id == mapping->channel_id)
-	 && entry->in_use) {
+	 && entry->num_bound_sockets) {
 	if(entry->sock_a == pfr)      entry->sock_a = NULL;
 	else if(entry->sock_b == pfr) entry->sock_b = NULL;
 	else if(entry->sock_c == pfr) entry->sock_c = NULL;
 	else {
-	  printk("[PF_RING] ring_map_dna_device(%s, %u): something got wrong 1\n",
+	  printk("[PF_RING] ring_map_dna_device(remove_device_mapping, %s, %u): something got wrong\n",
                  mapping->device_name, mapping->channel_id);
 	  return(-1); /* Something got wrong */
 	}
 
-	entry->in_use--, found = 1;
-	break;
+	entry->num_bound_sockets--, found = 1;
+
+	if(pfr->dna_device != NULL) {
+	  printk("[PF_RING] ===> ring_map_dna_device(%s): removed mapping [num_bound_sockets=%u]\n", 
+		 mapping->device_name, entry->num_bound_sockets);
+	  pfr->dna_device->usage_notification(pfr->dna_device->adapter_ptr, 0 /* unlock */);
+	  // pfr->dna_device = NULL;
+	}
+	/* Continue for all devices: no break */
       }
     }
 
-    if(pfr->dna_device != NULL)
-      pfr->dna_device->usage_notification(pfr->dna_device->adapter_ptr, 0 /* unlock */);
-
-    pfr->dna_device = NULL;
     if(enable_debug)
-      printk("[PF_RING] ring_map_dna_device(%s): removed mapping\n",
-	     mapping->device_name);
+      printk("[PF_RING] ring_map_dna_device(%s): removed mapping\n", mapping->device_name);
 
     if(!found) return(-1); else return(0);
   } else {
     ring_proc_remove(pfr);
 
     list_for_each_safe(ptr, tmp_ptr, &ring_dna_devices_list) {
-      entry = list_entry(ptr, dna_device_list, list);
+      dna_device_list *entry = list_entry(ptr, dna_device_list, list);
 
       if((!strcmp(entry->dev.netdev->name, mapping->device_name))
 	 && (entry->dev.channel_id == mapping->channel_id)) {
 
 	if(enable_debug)
-	  printk("[PF_RING] ==>> %s@%d [in_use=%d][%p]\n",
-		 entry->dev.netdev->name,
-		 mapping->channel_id,
-		 entry->in_use, entry);
+	  printk("[PF_RING] ==>> %s@%d [num_bound_sockets=%d][%p]\n",
+		 entry->dev.netdev->name, mapping->channel_id,
+		 entry->num_bound_sockets, entry);
 
 	if(entry->sock_a == NULL)      entry->sock_a = pfr;
 	else if(entry->sock_b == NULL) entry->sock_b = pfr;
 	else if(entry->sock_c == NULL) entry->sock_c = pfr;
 	else {
-	  printk("[PF_RING] ring_map_dna_device(%s, %u, %s): something got wrong (too many DNA devices open)\n",
+	  printk("[PF_RING] ring_map_dna_device(add_device_mapping, %s, %u, %s): something got wrong (too many DNA devices open)\n",
                  mapping->device_name, mapping->channel_id, direction2string(pfr->direction));
+
 	  return(-1); /* Something got wrong: too many mappings */
 	}
 
-	entry->in_use++, pfr->dna_device_entry = entry;
+	entry->num_bound_sockets++, pfr->dna_device_entry = entry;
 
 	pfr->dna_device = &entry->dev, pfr->ring_netdev->dev = entry->dev.netdev /* Default */;
 
@@ -4482,7 +4483,9 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 	}
 
 	/* Lock driver */
+	printk("[PF_RING] ===> ring_map_dna_device(%s): added mapping [num_bound_sockets=%u]\n", mapping->device_name, entry->num_bound_sockets);
 	pfr->dna_device->usage_notification(pfr->dna_device->adapter_ptr, 1 /* lock */);
+
 	ring_proc_add(pfr);
 	return(0);
       }
@@ -5819,7 +5822,7 @@ void dna_device_handler(dna_device_operation operation,
     if(next != NULL) {
       memset(next, 0, sizeof(dna_device_list));
 
-      next->in_use = 0;
+      next->num_bound_sockets = 0;
       memcpy(&next->dev.rx_packet_memory, rx_packet_memory, sizeof(next->dev.rx_packet_memory));
       next->dev.mem_info.packet_memory_num_slots = packet_memory_num_slots;
       next->dev.mem_info.packet_memory_slot_len = packet_memory_slot_len;
