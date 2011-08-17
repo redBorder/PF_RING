@@ -1814,7 +1814,7 @@ static int match_filtering_rule(struct pf_ring_socket *pfr,
     rc = plugin_registration[rule->rule.plugin_action.plugin_id]
       ->pfring_plugin_handle_skb(pfr, rule, NULL, hdr, skb, displ,
 				 rule->rule.extended_fields.filter_plugin_id,
-				 &parse_memory_buffer[rule->rule.extended_fields.filter_plugin_id],
+				 &parse_memory_buffer[rule->rule.plugin_action.plugin_id],
 				 behaviour);
     if(rc <= 0)
       return(0); /* No match */
