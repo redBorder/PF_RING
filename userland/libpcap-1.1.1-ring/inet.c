@@ -144,7 +144,7 @@ add_or_find_if(pcap_if_t **curdev_ret, pcap_if_t **alldevs, const char *name,
 	  if(stat(buf, &st) == 0) {
 	    FILE *fd = fopen(buf, "r");
 
-	    snprintf(buf, sizeof(buf), "%s PF_RING", name);
+	    snprintf(buf, sizeof(buf), "%s", "PF_RING");
 	    
 	    if(fd != NULL) {
 	      u_int dna_found = 0;
@@ -160,7 +160,7 @@ add_or_find_if(pcap_if_t **curdev_ret, pcap_if_t **alldevs, const char *name,
 	      fclose(fd);
 
 	      if(dna_found)
-		snprintf(buf, sizeof(buf), "%s PF_RING DNA", name);
+		snprintf(buf, sizeof(buf), "%s", "PF_RING DNA");
 	    }
 
 	    description = strdup(buf);

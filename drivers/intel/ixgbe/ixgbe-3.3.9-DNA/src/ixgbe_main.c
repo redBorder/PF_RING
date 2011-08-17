@@ -4682,8 +4682,6 @@ void ixgbe_clean_rx_ring(struct ixgbe_ring *rx_ring)
 	    }
 	  }
 
-	  rx_ring->dna.memory_allocated = 0;
-
 	  if(rx_ring->dna.memory_allocated) {
 	    if(unlikely(dna_debug)) 
 	      printk("%s(): Deallocating RX DMA memory\n", __FUNCTION__);
@@ -4692,31 +4690,33 @@ void ixgbe_clean_rx_ring(struct ixgbe_ring *rx_ring)
 	      free_contiguous_memory(rx_ring->dna.rx_tx.rx.packet_memory[i],
 				     rx_ring->dna.tot_packet_memory, rx_ring->dna.mem_order);
 	      rx_ring->dna.rx_tx.rx.packet_memory[i] = 0;
+	    
+	      /* De-register with PF_RING: one per channel  */
+	      hook->ring_dna_device_handler(remove_device_mapping,
+					    NULL,
+					    rx_ring->dna.packet_num_slots,
+					    rx_ring->dna.packet_slot_len,
+					    rx_ring->dna.tot_packet_memory,
+					    rx_ring->desc,
+					    rx_ring->count, /* # of items */
+					    sizeof(union ixgbe_adv_rx_desc),
+					    /* Double because of the shadow descriptors */
+					    2 * rx_ring->size, /* tot len (bytes) */
+					    0, NULL, /* TX */
+					    rx_ring->queue_index, /* Channel Id */
+					    (void*)rx_ring->netdev->mem_start,
+					    rx_ring->netdev->mem_end - rx_ring->netdev->mem_start,
+					    rx_ring->netdev,
+					    intel_ixgbe,
+					    rx_ring->netdev->dev_addr, /* 6 bytes MAC address */
+					    &rx_ring->dna.rx_tx.rx.packet_waitqueue,
+					    &rx_ring->dna.rx_tx.rx.interrupt_received,
+					    (void*)rx_ring,
+					    NULL,
+					    NULL);
 	    }
 
-	    /* De-register with PF_RING */
-	    hook->ring_dna_device_handler(remove_device_mapping,
-					  NULL,
-					  rx_ring->dna.packet_num_slots,
-					  rx_ring->dna.packet_slot_len,
-					  rx_ring->dna.tot_packet_memory,
-					  rx_ring->desc,
-					  rx_ring->count, /* # of items */
-					  sizeof(union ixgbe_adv_rx_desc),
-					  /* Double because of the shadow descriptors */
-					  2 * rx_ring->size, /* tot len (bytes) */
-					  0, NULL, /* TX */
-					  rx_ring->queue_index, /* Channel Id */
-					  (void*)rx_ring->netdev->mem_start,
-					  rx_ring->netdev->mem_end - rx_ring->netdev->mem_start,
-					  rx_ring->netdev,
-					  intel_ixgbe,
-					  rx_ring->netdev->dev_addr, /* 6 bytes MAC address */
-					  &rx_ring->dna.rx_tx.rx.packet_waitqueue,
-					  &rx_ring->dna.rx_tx.rx.interrupt_received,
-					  (void*)rx_ring,
-					  NULL,
-					  NULL);
+	    rx_ring->dna.memory_allocated = 0;
 	  }
 	}
 #endif
@@ -6615,6 +6615,7 @@ static struct net_device_stats *ixgbe_get_stats(struct net_device *netdev)
 {
 #ifdef HAVE_NETDEV_STATS_IN_NETDEV
 	/* only return the current stats */
+
 	return &netdev->stats;
 #else
 	struct ixgbe_adapter *adapter = netdev_priv(netdev);
@@ -6692,8 +6693,14 @@ void ixgbe_update_stats(struct ixgbe_adapter *adapter)
 	adapter->non_eop_descs = non_eop_descs;
 	adapter->alloc_rx_page_failed = alloc_rx_page_failed;
 	adapter->alloc_rx_buff_failed = alloc_rx_buff_failed;
+
+#ifdef ENABLE_DNA
+	/* Avoid that the stats updated by DNA are cleared with those (wrong) that are inside the driver */
+	net_stats->rx_bytes = hwstats->gorc, net_stats->rx_packets = hwstats->gprc;
+#else
 	net_stats->rx_bytes = bytes;
 	net_stats->rx_packets = packets;
+#endif
 
 	bytes = 0;
 	packets = 0;
@@ -6707,8 +6714,14 @@ void ixgbe_update_stats(struct ixgbe_adapter *adapter)
 	}
 	adapter->restart_queue = restart_queue;
 	adapter->tx_busy = tx_busy;
+
+#ifdef ENABLE_DNA
+	/* Avoid that the stats updated by DNA are cleared with those (wrong) that are inside the driver */
+	net_stats->tx_bytes = hwstats->gotc, net_stats->tx_packets = hwstats->gptc;
+#else
 	net_stats->tx_bytes = bytes;
 	net_stats->tx_packets = packets;
+#endif
 
 	hwstats->crcerrs += IXGBE_READ_REG(hw, IXGBE_CRCERRS);
 	for (i = 0; i < 8; i++) {
