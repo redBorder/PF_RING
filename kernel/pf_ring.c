@@ -4397,7 +4397,7 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 {
   struct list_head *ptr, *tmp_ptr;
 
-  if(1|| enable_debug)
+  if(enable_debug)
     printk("[PF_RING] ring_map_dna_device(%s@%d): %s\n",
 	   mapping->device_name,
 	   mapping->channel_id,
@@ -4413,20 +4413,28 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
       if((!strcmp(entry->dev.netdev->name, mapping->device_name))
 	 && (entry->dev.channel_id == mapping->channel_id)
 	 && entry->num_bound_sockets) {
-	if(entry->sock_a == pfr)      entry->sock_a = NULL;
-	else if(entry->sock_b == pfr) entry->sock_b = NULL;
-	else if(entry->sock_c == pfr) entry->sock_c = NULL;
-	else {
-	  printk("[PF_RING] ring_map_dna_device(remove_device_mapping, %s, %u): something got wrong\n",
-                 mapping->device_name, mapping->channel_id);
+	int i;
+
+	for(i=0; i<MAX_NUM_DNA_BOUND_SOCKETS; i++)
+	  if(entry->bound_sockets[i] == pfr) {
+	    entry->bound_sockets[i] = NULL;
+	    found = 1;
+	    break;
+	  }
+
+	if(!found) {
+	  if(enable_debug)
+	    printk("[PF_RING] ring_map_dna_device(remove_device_mapping, %s, %u): something got wrong\n",
+		   mapping->device_name, mapping->channel_id);
 	  return(-1); /* Something got wrong */
 	}
-
-	entry->num_bound_sockets--, found = 1;
+	
+	entry->num_bound_sockets--;
 
 	if(pfr->dna_device != NULL) {
-	  printk("[PF_RING] ===> ring_map_dna_device(%s): removed mapping [num_bound_sockets=%u]\n", 
-		 mapping->device_name, entry->num_bound_sockets);
+	  if(enable_debug)
+	    printk("[PF_RING] ring_map_dna_device(%s): removed mapping [num_bound_sockets=%u]\n", 
+		   mapping->device_name, entry->num_bound_sockets);
 	  pfr->dna_device->usage_notification(pfr->dna_device->adapter_ptr, 0 /* unlock */);
 	  // pfr->dna_device = NULL;
 	}
@@ -4437,7 +4445,7 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
     if(enable_debug)
       printk("[PF_RING] ring_map_dna_device(%s): removed mapping\n", mapping->device_name);
 
-    if(!found) return(-1); else return(0);
+    return(0);
   } else {
     ring_proc_remove(pfr);
 
@@ -4446,19 +4454,26 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 
       if((!strcmp(entry->dev.netdev->name, mapping->device_name))
 	 && (entry->dev.channel_id == mapping->channel_id)) {
+	int i, found = 0;
 
 	if(enable_debug)
 	  printk("[PF_RING] ==>> %s@%d [num_bound_sockets=%d][%p]\n",
 		 entry->dev.netdev->name, mapping->channel_id,
 		 entry->num_bound_sockets, entry);
 
-	if(entry->sock_a == NULL)      entry->sock_a = pfr;
-	else if(entry->sock_b == NULL) entry->sock_b = pfr;
-	else if(entry->sock_c == NULL) entry->sock_c = pfr;
-	else {
-	  printk("[PF_RING] ring_map_dna_device(add_device_mapping, %s, %u, %s): something got wrong (too many DNA devices open)\n",
-                 mapping->device_name, mapping->channel_id, direction2string(pfr->direction));
+	for(i=0; i<MAX_NUM_DNA_BOUND_SOCKETS; i++)
+	  if(entry->bound_sockets[i] == NULL) {
+	    entry->bound_sockets[i] = pfr;
+	    found = 1;
+	    break;
+	  }
 
+	if(!found) {
+	  if(enable_debug)
+	    printk("[PF_RING] ring_map_dna_device(add_device_mapping, %s, %u, %s): "
+		   "something got wrong (too many DNA devices open)\n",
+		   mapping->device_name, mapping->channel_id, direction2string(pfr->direction));
+	  
 	  return(-1); /* Something got wrong: too many mappings */
 	}
 
@@ -4483,7 +4498,9 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 	}
 
 	/* Lock driver */
-	printk("[PF_RING] ===> ring_map_dna_device(%s): added mapping [num_bound_sockets=%u]\n", mapping->device_name, entry->num_bound_sockets);
+	if(enable_debug)
+	  printk("[PF_RING] ===> ring_map_dna_device(%s): added mapping [num_bound_sockets=%u]\n", 
+		 mapping->device_name, entry->num_bound_sockets);
 	pfr->dna_device->usage_notification(pfr->dna_device->adapter_ptr, 1 /* lock */);
 
 	ring_proc_add(pfr);
@@ -5176,26 +5193,20 @@ static int ring_setsockopt(struct socket *sock,
       printk("[PF_RING] * SO_ACTIVATE_RING *\n");
 
     if(pfr->dna_device_entry != NULL) {
-      struct pf_ring_socket *other1 = NULL, *other2 = NULL;
-
-      /* This is a DNA ring */
-      other1=pfr->dna_device_entry->sock_b;
-      other2=pfr->dna_device_entry->sock_c;
-      if(pfr->dna_device_entry->sock_b == pfr)
-	other1 = pfr->dna_device_entry->sock_a;
-      else if(pfr->dna_device_entry->sock_c == pfr)
-	other2 = pfr->dna_device_entry->sock_a;
-
-      /* We need to check if the other socket is not using our direction */
-      if((other1           && other1->ring_active && (other1->direction == pfr->direction || other1->direction == rx_and_tx_direction)) ||
-        ((other1 = other2) && other2->ring_active && (other2->direction == pfr->direction || other2->direction == rx_and_tx_direction))){
-	printk("[PF_RING] Unable to activate two DNA sockets on the same interface %s (direction_a=%s, direction_b=%s)\n", 
-	       pfr->ring_netdev->dev->name, 
-	       direction2string(pfr->direction), 
-	       direction2string(other1->direction));
-
-	return -EFAULT; /* No way: we can't have two sockets that are doing the same thing with DNA */
-      }
+      int i;
+      
+      for(i=0; i<MAX_NUM_DNA_BOUND_SOCKETS; i++) {
+	if((pfr->dna_device_entry->bound_sockets[i] != NULL) 
+	   && pfr->dna_device_entry->bound_sockets[i]->ring_active) {
+	  if((pfr->dna_device_entry->bound_sockets[i]->direction == pfr->direction)
+	     || (pfr->dna_device_entry->bound_sockets[i]->direction == rx_and_tx_direction)) {
+	    printk("[PF_RING] Unable to activate two or more DNA sockets on the same interface %s/direction\n", 
+		   pfr->ring_netdev->dev->name);
+	    
+	    return -EFAULT; /* No way: we can't have two sockets that are doing the same thing with DNA */
+	  }	  
+	} /* if */
+      } /* for */
     }
 
     found = 1, pfr->ring_active = 1;

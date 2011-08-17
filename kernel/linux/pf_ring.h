@@ -626,6 +626,8 @@ typedef struct {
   struct list_head list;
 } ring_cluster_element;
 
+#define MAX_NUM_DNA_BOUND_SOCKETS  8
+
 typedef struct {
   u8 num_bound_sockets;
   dna_device dev;
@@ -636,7 +638,7 @@ typedef struct {
     pointers to the max two sockets (one for RX and one for TX) that can open
     the DNA socket
   */
-  struct pf_ring_socket *sock_a, *sock_b, *sock_c;
+  struct pf_ring_socket *bound_sockets[MAX_NUM_DNA_BOUND_SOCKETS];
 } dna_device_list;
 
 #define MAX_NUM_IFIDX                       1024
