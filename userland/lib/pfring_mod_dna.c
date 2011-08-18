@@ -278,10 +278,10 @@ int pfring_dna_open(pfring *ring) {
 
       ring->dna_dev.tx_packet_memory[i] =
 	(unsigned long)mmap(NULL, ring->dna_dev.mem_info.packet_memory_tot_len,
-                            PROT_READ|PROT_WRITE, MAP_SHARED, ring->fd, (200+i)*getpagesize());
+                            PROT_READ|PROT_WRITE, MAP_SHARED, ring->fd, (1124+i)*getpagesize());
 
       if(ring->dna_dev.tx_packet_memory[i] == (unsigned long)MAP_FAILED) {
-	printf("mmap(200/%d) failed", i);
+	printf("mmap(1124/%d) failed", i);
 	close(ring->fd);
 	return -1;
       }

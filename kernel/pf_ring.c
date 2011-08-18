@@ -3930,7 +3930,7 @@ static int ring_mmap(struct file *file,
   }
 
   /* Tricks for DNA */
-  if((mem_id >= 100) && (mem_id < 200)) {
+  if((mem_id >= 100) && (mem_id < 1124)) {
     /* DNA; RX packet memory */
 
     mem_id -= 100;
@@ -3940,8 +3940,8 @@ static int ring_mmap(struct file *file,
       return(rc);
     
     return(0);
-  } else if((mem_id >= 200) && (mem_id < 300)) {
-    mem_id -= 200;
+  } else if((mem_id >= 1124) && (mem_id < 2148)) {
+    mem_id -= 1124;
     if(mem_id >= MAX_NUM_DNA_PAGES) return -EINVAL;
 
     /* DNA: TX packet memory */

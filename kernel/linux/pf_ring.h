@@ -477,7 +477,7 @@ typedef struct flowSlotInfo {
 
 #define DNA_SHIFT                      6
 #define MAX_NUM_DNA_SLOTS_PER_PAGE     (1 << DNA_SHIFT) /* 64 - it MUST be a power of 2 */
-#define MAX_NUM_DNA_PAGES              64               /* IXGBE_MAX_RXD / MAX_NUM_SLOTS_PER_PAGE = 64 */
+#define MAX_NUM_DNA_PAGES             512               /* IXGBE_MAX_RXD / MAX_NUM_SLOTS_PER_PAGE = 64 */
 
 /* *********************************** */
 
