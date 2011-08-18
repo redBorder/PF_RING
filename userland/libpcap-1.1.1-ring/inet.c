@@ -76,6 +76,10 @@ struct rtentry;		/* declarations in <net/if.h> */
 #define INT_MAX		2147483647
 #endif
 
+#ifdef HAVE_PF_RING
+#include <sys/stat.h>
+#endif
+
 #include "pcap-int.h"
 
 #ifdef HAVE_OS_PROTO_H
