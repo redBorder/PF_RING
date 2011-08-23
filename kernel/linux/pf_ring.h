@@ -976,9 +976,9 @@ struct pfring_hooks {
 
 /* *************************************************************** */
 
-#ifdef PF_RING_PLUGIN
-
 extern void pf_ring_add_module_dependency(void);
+
+#ifdef PF_RING_PLUGIN
 static struct pfring_plugin_registration plugin_reg;
 static struct list_head plugin_registered_devices_list;
 static u_int16_t pfring_plugin_id = 0;

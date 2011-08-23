@@ -64,7 +64,9 @@
 
 #include "ixgbe_api.h"
 
+#ifdef ENABLE_DNA
 #include "../../../../../kernel/linux/pf_ring.h"
+#endif
 
 #define PFX "ixgbe: "
 #define DPRINTK(nlevel, klevel, fmt, args...) \
@@ -370,8 +372,8 @@ struct ixgbe_ring {
 
 #ifdef ENABLE_DNA
   struct {
-    u_int8_t queue_in_use, num_memory_pages, memory_allocated;
-    u_int tot_packet_memory, packet_slot_len, packet_num_slots, mem_order;
+    u_int8_t queue_in_use, memory_allocated;
+    u_int tot_packet_memory, num_memory_pages, packet_slot_len, packet_num_slots, mem_order;
 
     union {
       struct {

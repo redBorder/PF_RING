@@ -123,6 +123,13 @@ pfring* pfring_open(char *device_name, u_int8_t promisc,
         ring->device_name = NULL;
       }
 
+      if(ret == UNKNOWN_DNA_ADAPTER_MODEL) {
+	/* Invalid license found */
+	if(ring->device_name) free(ring->device_name);
+	free(ring);
+	return NULL;
+      }
+
       while (pfring_module_list[++i].name) {
 	if(!(str = strstr(device_name, pfring_module_list[i].name))) continue;
 	if(!(str = strchr(str, ':')))                                continue;

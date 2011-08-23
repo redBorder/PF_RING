@@ -290,10 +290,6 @@
  static inline void ixgbe_unmap_tx_resource(struct ixgbe_ring *ring,
 					    struct ixgbe_tx_buffer *tx_buffer)
  {
-#ifdef ENABLE_DNA
-   // printk("[DNA] ixgbe_unmap_tx_resource()\n");
-   return;
-#endif
 	 if(tx_buffer->dma) {
 		 if(tx_buffer->tx_flags & IXGBE_TX_FLAGS_MAPPED_AS_PAGE)
 			 dma_unmap_page(ring->dev,
@@ -312,11 +308,6 @@
  void ixgbe_unmap_and_free_tx_resource(struct ixgbe_ring *tx_ring,
 				       struct ixgbe_tx_buffer *tx_buffer_info)
  {
-#ifdef ENABLE_DNA
-   // printk("[DNA] ixgbe_unmap_and_free_tx_resource()\n");
-   return;
-#endif
-
 	 ixgbe_unmap_tx_resource(tx_ring, tx_buffer_info);
 	 if(tx_buffer_info->skb)
 		 dev_kfree_skb_any(tx_buffer_info->skb);
@@ -544,7 +535,6 @@
 	 unsigned int total_bytes = 0, total_packets = 0;
 	 u16 i = tx_ring->next_to_clean;
 #ifdef ENABLE_DNA
-	 // printk("[DNA] ixgbe_unmap_tx_resource()\n");
 	 return(budget);
 #endif
 
@@ -4665,32 +4655,34 @@ void ixgbe_clean_rx_ring(struct ixgbe_ring *rx_ring)
 	  struct pfring_hooks   *hook = (struct pfring_hooks*)rx_ring->netdev->pfring_ptr;
 	  u_int i;
 
-	  if(tx_ring->dna.memory_allocated) {
-	    memset(tx_ring->desc, 0, tx_ring->size);
-	    tx_ring->next_to_clean = 0;
-	    tx_ring->next_to_use = 0;
+	  if(hook) {
+	    if(tx_ring->dna.memory_allocated) {
+	      memset(tx_ring->desc, 0, tx_ring->size);
+	      tx_ring->next_to_clean = 0;
+	      tx_ring->next_to_use = 0;
 
-	    if(unlikely(dna_debug)) 
-	      printk("%s(): Deallocating TX DMA memory\n", __FUNCTION__);
+	      if(unlikely(dna_debug)) 
+		printk("%s(): Deallocating TX DMA memory\n", __FUNCTION__);
 
-	    tx_ring->dna.memory_allocated = 0;
-	    for(i=0; i<tx_ring->dna.num_memory_pages; i++) {
-	      free_contiguous_memory(tx_ring->dna.rx_tx.tx.packet_memory[i],
-				     tx_ring->dna.tot_packet_memory,
-				     tx_ring->dna.mem_order);
-	      tx_ring->dna.rx_tx.tx.packet_memory[i] = 0;
+	      tx_ring->dna.memory_allocated = 0;
+	      for(i=0; i<tx_ring->dna.num_memory_pages; i++) {
+		free_contiguous_memory(tx_ring->dna.rx_tx.tx.packet_memory[i],
+				       tx_ring->dna.tot_packet_memory,
+				       tx_ring->dna.mem_order);
+		tx_ring->dna.rx_tx.tx.packet_memory[i] = 0;
+	      }
 	    }
-	  }
 
-	  if(rx_ring->dna.memory_allocated) {
-	    if(unlikely(dna_debug)) 
-	      printk("%s(): Deallocating RX DMA memory\n", __FUNCTION__);
+	    if(rx_ring->dna.memory_allocated) {
+	      if(unlikely(dna_debug)) 
+		printk("%s(): Deallocating RX DMA memory\n", __FUNCTION__);
 
-	    for(i=0; i<rx_ring->dna.num_memory_pages; i++) {
-	      free_contiguous_memory(rx_ring->dna.rx_tx.rx.packet_memory[i],
-				     rx_ring->dna.tot_packet_memory, rx_ring->dna.mem_order);
-	      rx_ring->dna.rx_tx.rx.packet_memory[i] = 0;
-	    
+	      for(i=0; i<rx_ring->dna.num_memory_pages; i++) {
+		free_contiguous_memory(rx_ring->dna.rx_tx.rx.packet_memory[i],
+				       rx_ring->dna.tot_packet_memory, rx_ring->dna.mem_order);
+		rx_ring->dna.rx_tx.rx.packet_memory[i] = 0;
+	      }
+
 	      /* De-register with PF_RING: one per channel  */
 	      hook->ring_dna_device_handler(remove_device_mapping,
 					    NULL,
@@ -4713,10 +4705,10 @@ void ixgbe_clean_rx_ring(struct ixgbe_ring *rx_ring)
 					    &rx_ring->dna.rx_tx.rx.interrupt_received,
 					    (void*)rx_ring,
 					    NULL,
-					    NULL);
-	    }
+					    NULL);	    
 
-	    rx_ring->dna.memory_allocated = 0;
+	      rx_ring->dna.memory_allocated = 0;
+	    }
 	  }
 	}
 #endif
@@ -6695,8 +6687,12 @@ void ixgbe_update_stats(struct ixgbe_adapter *adapter)
 	adapter->alloc_rx_buff_failed = alloc_rx_buff_failed;
 
 #ifdef ENABLE_DNA
-	/* Avoid that the stats updated by DNA are cleared with those (wrong) that are inside the driver */
-	net_stats->rx_bytes = hwstats->gorc, net_stats->rx_packets = hwstats->gprc;
+	/* 
+	   Avoid that the stats updated by DNA are cleared 
+	   with those (wrong) that are inside the driver 
+	*/
+	net_stats->rx_bytes = hwstats->gorc, 
+	  net_stats->rx_packets = hwstats->gprc;
 #else
 	net_stats->rx_bytes = bytes;
 	net_stats->rx_packets = packets;
@@ -8407,7 +8403,7 @@ static int __devinit ixgbe_probe(struct pci_dev *pdev,
 	  unsigned long	mmio_start;
 	  int			mmio_len;
 
-	  adapter->hw.hw_addr =
+	  hw->hw_addr =
 	    ioremap((mmio_start = pci_resource_start(pdev, 0)),
 		    (mmio_len = pci_resource_len(pdev, 0)));
 
