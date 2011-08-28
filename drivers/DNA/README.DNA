@@ -20,7 +20,14 @@ Compilation and Installation
 3. load PF_RING and the DNA driver
 - (as root) run ./load_dna_driver.sh
 
-Note that you might need to change the interface names into your script
+Note that
+- you might need to change the interface names into your script
+- you can decide which adapters to enable as follows
+
+  insmod ./e1000e.ko adapters_to_enable=eth5,eth7
+
+  where adapters_to_enable contains the list of adapters to enable with DNA
+
 
 
 Testing DNA

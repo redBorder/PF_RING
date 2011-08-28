@@ -1503,6 +1503,10 @@ static void igb_configure(struct igb_adapter *adapter)
 		netdev->features &= ~NETIF_F_MULTI_QUEUE;
 #endif
 
+#ifdef ENABLE_DNA
+	dna_check_enable_adapter(adapter);
+#endif
+	
 	/* call igb_desc_unused which always leaves
 	 * at least 1 descriptor unused to make sure
 	 * next_to_use != next_to_clean */
@@ -3206,7 +3210,7 @@ void igb_configure_rx_ring(struct igb_adapter *adapter,
 	/* Set Drop Enable if we are supporting SR-IOV */
 #ifndef ENABLE_DNA
 	/* Enable the bit to drop packets when the queue is full */
-	if (adapter->vfs_allocated_count)
+	if (adapter->vfs_allocated_count && adapter->dna.dna_enabled)
 #endif
 		srrctl |= E1000_SRRCTL_DROP_EN;
 
@@ -4724,9 +4728,13 @@ static netdev_tx_t igb_xmit_frame(struct sk_buff *skb,
 	struct igb_adapter *adapter = netdev_priv(netdev);
 
 #ifdef ENABLE_DNA
-	/* We don't allow legacy send when in DNA */
-	dev_kfree_skb_any(skb);
-	return NETDEV_TX_OK;
+	struct pfring_hooks *hook = (struct pfring_hooks*)netdev->pfring_ptr;
+
+        if(hook && (hook->magic == PF_RING)) {
+	  /* We don't allow legacy send when in DNA */
+	  dev_kfree_skb_any(skb);
+	  return NETDEV_TX_OK;
+	}
 #endif
 
 	if (test_bit(__IGB_DOWN, &adapter->state)) {

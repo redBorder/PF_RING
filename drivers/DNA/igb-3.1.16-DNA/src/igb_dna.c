@@ -1,24 +1,30 @@
-/*******************************************************************************
+/*
+ *
+ * (C) 2008-11 - Luca Deri <deri@ntop.org>
+ *
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software Foundation,
+ * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ */
 
-   Copyright(c) 2008 - 2011 - Luca Deri <deri@ntop.org>
+#define MAX_NUM_ADAPTERS       8
 
-   This program is free software; you can redistribute it and/or modify it
-   under the terms and conditions of the GNU General Public License,
-   version 2, as published by the Free Software Foundation.
-
-   This program is distributed in the hope it will be useful, but WITHOUT
-   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
-   FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
-   more details.
-
-   You should have received a copy of the GNU General Public License along with
-   this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
-
-   The full GNU General Public License is included in this distribution in
-  the file called "COPYING".
-
-*******************************************************************************/
+char *adapters_to_enable[MAX_NUM_ADAPTERS] = { 0 };
+module_param_array(adapters_to_enable, charp, NULL, 0444);
+MODULE_PARM_DESC(adapters_to_enable,
+		 "Comma separated list of adapters where DNA "
+		 "will be enabled");
 
 static u_int8_t dna_debug = 0;
 
@@ -26,6 +32,33 @@ static u_int8_t dna_debug = 0;
 static void igb_irq_enable(struct igb_adapter *adapter);
 static void igb_irq_disable(struct igb_adapter *adapter);
 
+/* ****************************** */
+
+void dna_check_enable_adapter(struct igb_adapter *adapter) {
+  adapter->dna.dna_enabled = 0; /* Default */
+  
+  if(strcmp(adapter->netdev->name, "eth0") == 0)
+    return; /*
+	      We never enable DNA on eth0 as this might be
+	      the management interface
+	    */
+
+  if(adapters_to_enable[0] == NULL) {
+    /* We enable all the adapters */
+    adapter->dna.dna_enabled = 1;
+  } else {
+    int i = 0;
+
+    while((i < MAX_NUM_ADAPTERS) && (adapters_to_enable[i] != NULL)) {
+      if(!strcmp(adapters_to_enable[i], adapter->netdev->name)) {
+	adapter->dna.dna_enabled = 1;
+	break;
+      }
+      
+      i++;
+    } /* while */
+  }
+}
 /* ****************************** */
 
 void igb_irq_enable_queues(struct igb_adapter *adapter, u32 queue_id) {

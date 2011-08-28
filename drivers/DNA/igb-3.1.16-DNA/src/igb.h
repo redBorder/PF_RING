@@ -531,6 +531,12 @@ struct igb_adapter {
 	struct net_device *vmdq_netdev[IGB_MAX_VMDQ_QUEUES];
 #endif
 	int dmac;
+
+#ifdef ENABLE_DNA
+  struct {
+    u_int8_t dna_enabled;
+  } dna;
+#endif
 };
 
 #ifdef CONFIG_IGB_VMDQ_NETDEV
