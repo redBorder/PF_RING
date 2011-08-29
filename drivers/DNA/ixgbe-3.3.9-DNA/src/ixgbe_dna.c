@@ -21,7 +21,7 @@
 
 *******************************************************************************/
 
-static u_int8_t dna_debug = 1;
+static u_int8_t dna_debug = 0;
 
 /* Forward */
 static inline void ixgbe_irq_disable(struct ixgbe_adapter *adapter);
