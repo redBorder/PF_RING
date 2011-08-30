@@ -26,7 +26,9 @@ MODULE_PARM_DESC(adapters_to_enable,
 		 "Comma separated list of adapters where DNA "
 		 "will be enabled");
 
-static u_int8_t dna_debug = 0;
+static unsigned int enable_debug = 0;
+module_param(enable_debug, uint, 0644);
+MODULE_PARM_DESC(enable_debug, "Set to 1 to enable DNA debug tracing into the syslog");
 
 /* Forward */
 static void igb_irq_enable(struct igb_adapter *adapter);
@@ -79,7 +81,7 @@ void igb_irq_disable_queues(struct igb_adapter *adapter, u32 queue_id) {
 void reserve_memory(unsigned long base, unsigned long len) {
   struct page *page, *page_end;
 
-  // if(unlikely(dna_debug)) printk("[DNA] reserve_memory()\n");
+  // if(unlikely(enable_debug)) printk("[DNA] reserve_memory()\n");
 
   page_end = virt_to_page(base + len - 1);
   for(page = virt_to_page(base); page <= page_end; page++)
@@ -91,7 +93,7 @@ void reserve_memory(unsigned long base, unsigned long len) {
 void unreserve_memory(unsigned long base, unsigned long len) {
   struct page *page, *page_end;
 
-  // if(unlikely(dna_debug)) printk("[DNA] unreserve_memory()\n");
+  // if(unlikely(enable_debug)) printk("[DNA] unreserve_memory()\n");
 
   page_end = virt_to_page(base + len - 1);
   for(page = virt_to_page(base); page <= page_end; page++)
@@ -103,7 +105,7 @@ void unreserve_memory(unsigned long base, unsigned long len) {
 static unsigned long alloc_contiguous_memory(u_int *tot_mem_len, u_int *mem_order) {
   unsigned long mem;
 
-  if(unlikely(dna_debug)) printk("[DNA] alloc_contiguous_memory(%d)\n", *tot_mem_len);
+  if(unlikely(enable_debug)) printk("[DNA] alloc_contiguous_memory(%d)\n", *tot_mem_len);
 
   *mem_order = get_order(*tot_mem_len);
   *tot_mem_len = PAGE_SIZE << *mem_order;
@@ -111,12 +113,12 @@ static unsigned long alloc_contiguous_memory(u_int *tot_mem_len, u_int *mem_orde
   mem = __get_free_pages(GFP_ATOMIC, *mem_order);
 
   if(mem) {
-    if(unlikely(dna_debug))
+    if(unlikely(enable_debug))
       printk("[DNA] alloc_contiguous_memory: success (%d,0x%08lx,%d)\n",
 	     *tot_mem_len, mem, *mem_order);
     reserve_memory(mem, *tot_mem_len);
   } else {
-    if(unlikely(dna_debug))
+    if(unlikely(enable_debug))
       printk("[DNA] alloc_contiguous_memory: failure (len=%d,order=%d)\n",
 	     *tot_mem_len, *mem_order);
   }
@@ -128,7 +130,7 @@ static unsigned long alloc_contiguous_memory(u_int *tot_mem_len, u_int *mem_orde
 
 static void free_contiguous_memory(unsigned long mem,
 				   u_int tot_mem_len, u_int mem_order) {
-  if(unlikely(dna_debug))
+  if(unlikely(enable_debug))
     printk("[DNA] free_contiguous_memory(0x%08lx,%u,%d)\n",
 	   mem, tot_mem_len, mem_order);
 
@@ -141,7 +143,7 @@ static void free_contiguous_memory(unsigned long mem,
 /* ********************************** */
 
 static void print_adv_rx_descr(union e1000_adv_rx_desc	*descr) {
-  if(likely(!dna_debug)) return;
+  if(likely(!enable_debug)) return;
 
   return; // FIX
 
@@ -171,7 +173,7 @@ void dna_cleanup_rx_ring(struct igb_ring *rx_ring) {
   u32 tail = E1000_READ_REG(hw, E1000_RDT(rx_ring->reg_idx)), count = rx_ring->count;
   u32 head = E1000_READ_REG(hw, E1000_RDH(rx_ring->reg_idx));
   
-  if(unlikely(dna_debug))
+  if(unlikely(enable_debug))
     printk("[DNA] dna_cleanup_rx_ring(%d): [head=%u][tail=%u]\n", rx_ring->queue_index, head, tail);
 
   /* We now point to the next slot where packets will be received */
@@ -193,7 +195,7 @@ void dna_cleanup_rx_ring(struct igb_ring *rx_ring) {
     rx_desc->read.hdr_addr = shadow_rx_desc->read.hdr_addr, rx_desc->read.pkt_addr = shadow_rx_desc->read.pkt_addr;
     E1000_WRITE_REG(hw, E1000_RDT(rx_ring->reg_idx), tail);
 
-    if(unlikely(dna_debug))
+    if(unlikely(enable_debug))
       printk("[DNA] dna_cleanup_rx_ring(%d): idx=%d\n", rx_ring->queue_index, tail);
 
     if(++tail == rx_ring->count) tail = 0;
@@ -206,7 +208,7 @@ void notify_function_ptr(void *data, u_int8_t device_in_use) {
   struct igb_ring	*rx_ring = (struct igb_ring*)data;
   struct igb_adapter	*adapter = netdev_priv(rx_ring->netdev);
 
-  if(unlikely(dna_debug))
+  if(unlikely(enable_debug))
     printk("%s(): device_in_use = %d\n",__FUNCTION__, device_in_use);
 
   /* I need interrupts for purging buckets when queues are not in use */
@@ -217,7 +219,7 @@ void notify_function_ptr(void *data, u_int8_t device_in_use) {
     try_module_get(THIS_MODULE); /* ++ */
     rx_ring->dna.queue_in_use = 1;
 
-    if(unlikely(dna_debug))
+    if(unlikely(enable_debug))
       printk("[DNA] %s(): %s@%d is IN use\n", __FUNCTION__,
 	     rx_ring->netdev->name, rx_ring->queue_index);
 
@@ -233,7 +235,7 @@ void notify_function_ptr(void *data, u_int8_t device_in_use) {
 
     igb_irq_enable_queues(adapter, rx_ring->queue_index);
     
-    if(unlikely(dna_debug))
+    if(unlikely(enable_debug))
       printk("[DNA] %s(): %s@%d is NOT IN use\n", __FUNCTION__,
 	     rx_ring->netdev->name, rx_ring->queue_index);
   }
@@ -247,7 +249,7 @@ int wait_packet_function_ptr(void *data, int mode)
   struct igb_adapter	 *adapter = netdev_priv(rx_ring->netdev);
   struct e1000_hw	      *hw = &adapter->hw;
 
-  if(unlikely(dna_debug))
+  if(unlikely(enable_debug))
     printk("%s(): enter [mode=%d/%s][queueId=%d][next_to_clean=%u][next_to_use=%d]\n",
 	   __FUNCTION__, mode, mode == 1 ? "enable int" : "disable int",
 	   rx_ring->queue_index, rx_ring->next_to_clean, rx_ring->next_to_use);
@@ -276,7 +278,7 @@ int wait_packet_function_ptr(void *data, int mode)
     prefetch(rx_desc);
     staterr = le32_to_cpu(rx_desc->wb.upper.status_error);
 
-    if(unlikely(dna_debug)) {
+    if(unlikely(enable_debug)) {
       printk("%s(): Check if a packet is arrived [idx=%d][staterr=%d][len=%d]\n",
 	     __FUNCTION__, i, staterr, rx_desc->wb.upper.length);
 
@@ -289,12 +291,12 @@ int wait_packet_function_ptr(void *data, int mode)
       if(!rx_ring->dna.rx_tx.rx.interrupt_enabled) {
 	igb_irq_enable_queues(adapter, rx_ring->queue_index);
 
-	if(unlikely(dna_debug))
+	if(unlikely(enable_debug))
 	  printk("%s(): Enabled interrupts, queue = %d\n", __FUNCTION__, rx_ring->queue_index);
 
 	rx_ring->dna.rx_tx.rx.interrupt_enabled = 1;
 
-	if(unlikely(dna_debug))
+	if(unlikely(enable_debug))
 	  printk("%s(): Packet not arrived yet: enabling "
 		 "interrupts, queue=%d, i=%d\n",
 		 __FUNCTION__,rx_ring->queue_index, i);
@@ -306,7 +308,7 @@ int wait_packet_function_ptr(void *data, int mode)
       rx_ring->dna.rx_tx.rx.interrupt_received = 1; 
     }
 
-    if(unlikely(dna_debug))
+    if(unlikely(enable_debug))
       printk("%s(): Packet received: %d\n", __FUNCTION__, staterr & E1000_RXD_STAT_DD);
 
     return(staterr & E1000_RXD_STAT_DD);
@@ -317,7 +319,7 @@ int wait_packet_function_ptr(void *data, int mode)
 
     rx_ring->dna.rx_tx.rx.interrupt_enabled = 0;
 
-    if(unlikely(dna_debug))
+    if(unlikely(enable_debug))
       printk("%s(): Disabled interrupts, queue = %d\n", __FUNCTION__, rx_ring->queue_index);
 
     return(0);
@@ -343,7 +345,7 @@ void dna_igb_alloc_tx_buffers(struct igb_ring *tx_ring, struct pfring_hooks *hoo
 
   /* We suppose that RX and TX are in sync */
 
-  if(unlikely(dna_debug))
+  if(unlikely(enable_debug))
     printk("%s(): tx_ring->dna.rx_tx.tx.tot_packet_memory=%d dna.num_memory_pages=%d\n",
 	   __FUNCTION__, tx_ring->dna.tot_packet_memory, tx_ring->dna.num_memory_pages);
 
@@ -358,7 +360,7 @@ void dna_igb_alloc_tx_buffers(struct igb_ring *tx_ring, struct pfring_hooks *hoo
       return;
     }
 
-    if(unlikely(dna_debug))
+    if(unlikely(enable_debug))
       printk("[DNA] %s(): Successfully allocated TX %u@%u bytes at "
 	     "0x%08lx [slot_len=%d]\n",__FUNCTION__,
 	     tx_ring->dna.tot_packet_memory, i,
@@ -378,7 +380,7 @@ void dna_igb_alloc_tx_buffers(struct igb_ring *tx_ring, struct pfring_hooks *hoo
     bi->skb = NULL;
     tx_desc = IGB_TX_DESC(tx_ring, i);
 
-    if(unlikely(dna_debug))
+    if(unlikely(enable_debug))
       printk("%s(): [%s@%d] Mapping TX slot %d of %d [pktaddr=%p][tx_desc=%p][offset=%u]\n",
 	     __FUNCTION__, 
 	     tx_ring->netdev->name, tx_ring->queue_index,
@@ -456,7 +458,7 @@ void dna_igb_alloc_rx_buffers(struct igb_ring *rx_ring, struct pfring_hooks *hoo
   cache_line_size &= 0x00FF;
   cache_line_size *= PCI_DEVICE_CACHE_LINE_SIZE_BYTES;
 
-  if(unlikely(dna_debug))
+  if(unlikely(enable_debug))
     printk("%s(): pci cache line size %d\n",__FUNCTION__, cache_line_size);
 
   rx_ring->dna.packet_slot_len  = ALIGN(sizeof(union e1000_adv_rx_desc), cache_line_size);
@@ -466,13 +468,13 @@ void dna_igb_alloc_rx_buffers(struct igb_ring *rx_ring, struct pfring_hooks *hoo
   rx_ring->dna.packet_num_slots += (rx_ring->dna.packet_num_slots % MAX_NUM_DNA_SLOTS_PER_PAGE);
   rx_ring->dna.num_memory_pages = rx_ring->dna.packet_num_slots / MAX_NUM_DNA_SLOTS_PER_PAGE;
 
-  if(unlikely(dna_debug))
+  if(unlikely(enable_debug))
     printk("%s(): rx_ring->dna.packet_slot_len=%d\n", __FUNCTION__,
 	   rx_ring->dna.packet_slot_len);
 
   rx_ring->dna.tot_packet_memory = rx_ring->dna.packet_slot_len * MAX_NUM_DNA_SLOTS_PER_PAGE;
 
-  if(unlikely(dna_debug))
+  if(unlikely(enable_debug))
     printk("%s(): rx_ring->dna.tot_packet_memory=%d\n",
 	   __FUNCTION__, rx_ring->dna.tot_packet_memory); 
 
@@ -487,7 +489,7 @@ void dna_igb_alloc_rx_buffers(struct igb_ring *rx_ring, struct pfring_hooks *hoo
     }
 
     /*
-    if(unlikely(dna_debug))
+    if(unlikely(enable_debug))
       printk("[DNA] %s(): Successfully allocated RX %u@%u bytes at 0x%08lx [slot_len=%d]\n",
 	     __FUNCTION__, rx_ring->dna.tot_packet_memory, i,
 	     rx_ring->dna.rx_tx.rx.packet_memory[i], rx_ring->dna.packet_slot_len);
@@ -502,7 +504,7 @@ void dna_igb_alloc_rx_buffers(struct igb_ring *rx_ring, struct pfring_hooks *hoo
     offset = (i % MAX_NUM_DNA_SLOTS_PER_PAGE) * rx_ring->dna.packet_slot_len;
     pkt = (char *)(rx_ring->dna.rx_tx.rx.packet_memory[page_index] + offset);
 
-    if(unlikely(dna_debug))
+    if(unlikely(enable_debug))
       printk("[DNA] %s(): Successfully allocated RX %u@%u bytes at 0x%08lx [slot_len=%d][page_index=%u][offset=%u]\n",
 	     __FUNCTION__, rx_ring->dna.tot_packet_memory, i,
 	     rx_ring->dna.rx_tx.rx.packet_memory[i],
@@ -513,7 +515,7 @@ void dna_igb_alloc_rx_buffers(struct igb_ring *rx_ring, struct pfring_hooks *hoo
     rx_desc = IGB_RX_DESC(rx_ring, i);
 
     /*
-    if(unlikely(dna_debug))
+    if(unlikely(enable_debug))
       printk("%s(): [%s@%d] Mapping RX slot %d of %d [pktaddr=%p][rx_desc=%p][offset=%u]\n",
 	     __FUNCTION__, 
 	     rx_ring->netdev->name, rx_ring->queue_index,
@@ -533,7 +535,7 @@ void dna_igb_alloc_rx_buffers(struct igb_ring *rx_ring, struct pfring_hooks *hoo
     shadow_rx_desc = IGB_RX_DESC(rx_ring, i + rx_ring->count);
     memcpy(shadow_rx_desc, rx_desc, sizeof(union e1000_adv_rx_desc));
 
-    if(unlikely(dna_debug)) {
+    if(unlikely(enable_debug)) {
       print_adv_rx_descr(rx_desc);
       print_adv_rx_descr(shadow_rx_desc);
     }
@@ -547,7 +549,7 @@ void dna_igb_alloc_rx_buffers(struct igb_ring *rx_ring, struct pfring_hooks *hoo
   /* Register with PF_RING */
   dna_reset_rx_ring(rx_ring);
 
-  if(unlikely(dna_debug))
+  if(unlikely(enable_debug))
   printk("[DNA] next_to_clean=%u/next_to_use=%u [register=%d]\n",
 	 rx_ring->next_to_clean, rx_ring->next_to_use, 
 	 E1000_READ_REG(hw, E1000_RDT(rx_ring->reg_idx)));
@@ -586,7 +588,7 @@ void dna_igb_alloc_rx_buffers(struct igb_ring *rx_ring, struct pfring_hooks *hoo
 				wait_packet_function_ptr,
 				notify_function_ptr);
 
-  if(unlikely(dna_debug))
+  if(unlikely(enable_debug))
     printk("[DNA] igb: %s: Enabled DNA on queue %d [size=%u][count=%d]\n",
 	   rx_ring->netdev->name, rx_ring->queue_index, 
 	   rx_ring->size, rx_ring->count);  
@@ -624,14 +626,14 @@ static int dna_igb_clean_rx_irq(struct igb_q_vector *q_vector,
     */
 
     if(staterr & E1000_RXD_STAT_DD) {
-      if(unlikely(dna_debug))
+      if(unlikely(enable_debug))
 	printk(KERN_INFO "DNA: got a packet [index=%d]!\n", i);
 
       if(waitqueue_active(&rx_ring->dna.rx_tx.rx.packet_waitqueue)) {
 	wake_up_interruptible(&rx_ring->dna.rx_tx.rx.packet_waitqueue);
 	rx_ring->dna.rx_tx.rx.interrupt_received = 1;
 
-	if(unlikely(dna_debug))
+	if(unlikely(enable_debug))
 	  printk("%s(%s): woken up ring=%d, [slot=%d] XXX\n",
 		 __FUNCTION__, rx_ring->netdev->name,
 		 rx_ring->reg_idx, i);

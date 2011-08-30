@@ -21,11 +21,15 @@
 
 #define MAX_NUM_ADAPTERS       8
 
-char *adapters_to_enable[MAX_NUM_ADAPTERS] = { 0 };
+static char *adapters_to_enable[MAX_NUM_ADAPTERS] = { 0 };
 module_param_array(adapters_to_enable, charp, NULL, 0444);
 MODULE_PARM_DESC(adapters_to_enable,
 		 "Comma separated list of adapters where DNA "
 		 "will be enabled");
+
+static unsigned int enable_debug = 0;
+module_param(enable_debug, uint, 0644);
+MODULE_PARM_DESC(enable_debug, "Set to 1 to enable DNA debug tracing into the syslog");
 
 /* Forward */
 static void e1000_irq_enable(struct e1000_adapter *adapter);
@@ -84,9 +88,8 @@ void unreserve_memory(unsigned long base, unsigned long len) {
 static unsigned long alloc_contiguous_memory(u_int *tot_mem_len,
 					     u_int *mem_order) {
   unsigned long mem;
-  int debug = 0;
 
-  if(debug) printk("[DNA] alloc_contiguous_memory(%d)\n", *tot_mem_len);
+  if(unlikely(enable_debug)) printk("[DNA] alloc_contiguous_memory(%d)\n", *tot_mem_len);
 
   *mem_order = get_order(*tot_mem_len);
   *tot_mem_len = PAGE_SIZE << *mem_order;
@@ -94,12 +97,12 @@ static unsigned long alloc_contiguous_memory(u_int *tot_mem_len,
   mem = __get_free_pages(GFP_ATOMIC, *mem_order);
 
   if(mem) {
-    if(debug)
+    if(unlikely(enable_debug))
       printk("[DNA] alloc_contiguous_memory: success (%d,%lu,%d)\n",
 	     *tot_mem_len, mem, *mem_order);
     reserve_memory(mem, *tot_mem_len);
   } else {
-    if(debug)
+    if(unlikely(enable_debug))
       printk("[DNA] alloc_contiguous_memory: failure (len=%d,order=%d)\n",
 	     *tot_mem_len, *mem_order);
   }
@@ -112,9 +115,7 @@ static unsigned long alloc_contiguous_memory(u_int *tot_mem_len,
 static void free_contiguous_memory(unsigned long mem,
 				   u_int tot_mem_len,
 				   u_int mem_order) {
-  int debug = 0;
-
-  if(debug)
+  if(unlikely(enable_debug))
     printk("[DNA] free_contiguous_memory(%lu,%d,%d)\n",
 	   mem, tot_mem_len, mem_order);
 
@@ -143,9 +144,8 @@ void notify_function_ptr(void *data, u_int8_t device_in_use) {
 
 int wait_packet_function_ptr(void *data, int mode) {
   struct e1000_adapter *adapter = (struct e1000_adapter*)data;
-  int debug = 0;
 
-  if(debug) printk("[wait_packet_function_ptr] called [mode=%d]\n", mode);
+  if(unlikely(enable_debug)) printk("[wait_packet_function_ptr] called [mode=%d]\n", mode);
 
   if(mode == 1) {
     struct e1000_ring *rx_ring = adapter->rx_ring;
@@ -153,7 +153,7 @@ int wait_packet_function_ptr(void *data, int mode) {
 
     rx_ring->next_to_clean = E1000_READ_REG(&adapter->hw, E1000_RDT(0));
     rx_desc = E1000_RX_DESC(*rx_ring, rx_ring->next_to_clean);
-    if(debug) printk("[wait_packet_function_ptr] Check if a packet is arrived\n");
+    if(unlikely(enable_debug)) printk("[wait_packet_function_ptr] Check if a packet is arrived\n");
 
     prefetch(rx_desc);
 
@@ -163,7 +163,7 @@ int wait_packet_function_ptr(void *data, int mode) {
 #if 0
       if(!adapter->dna.interrupt_enabled) {
 	e1000_irq_enable(adapter), adapter->dna.interrupt_enabled = 1;
-	if(debug) printk("[wait_packet_function_ptr] Packet not arrived yet: enabling interrupts\n");
+	if(unlikely(enable_debug)) printk("[wait_packet_function_ptr] Packet not arrived yet: enabling interrupts\n");
       }
 #endif
     } else
@@ -174,7 +174,7 @@ int wait_packet_function_ptr(void *data, int mode) {
     if(adapter->dna.interrupt_enabled) {
       e1000_irq_disable(adapter);
       adapter->dna.interrupt_enabled = 0;
-      if(debug) printk("[wait_packet_function_ptr] Disabled interrupts\n");
+      if(unlikely(enable_debug)) printk("[wait_packet_function_ptr] Disabled interrupts\n");
     }
     return(0);
   }

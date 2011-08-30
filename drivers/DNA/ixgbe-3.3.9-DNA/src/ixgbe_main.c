@@ -4661,7 +4661,7 @@ void ixgbe_clean_rx_ring(struct ixgbe_ring *rx_ring)
 	      tx_ring->next_to_clean = 0;
 	      tx_ring->next_to_use = 0;
 
-	      if(unlikely(dna_debug)) 
+	      if(unlikely(enable_debug)) 
 		printk("%s(): Deallocating TX DMA memory\n", __FUNCTION__);
 
 	      tx_ring->dna.memory_allocated = 0;
@@ -4674,7 +4674,7 @@ void ixgbe_clean_rx_ring(struct ixgbe_ring *rx_ring)
 	    }
 
 	    if(rx_ring->dna.memory_allocated) {
-	      if(unlikely(dna_debug)) 
+	      if(unlikely(enable_debug)) 
 		printk("%s(): Deallocating RX DMA memory\n", __FUNCTION__);
 
 	      for(i=0; i<rx_ring->dna.num_memory_pages; i++) {
@@ -8411,7 +8411,7 @@ static int __devinit ixgbe_probe(struct pci_dev *pdev,
 	  netdev->mem_start = mmio_start;
 	  netdev->mem_end = mmio_start + mmio_len;
 
-	  if(dna_debug) {
+	  if(unlikely(enable_debug)) {
 	    printk("[mmio_start=0x%lx][mmio_len=0x%x]\n", mmio_start, mmio_len);
 	  }
 	}

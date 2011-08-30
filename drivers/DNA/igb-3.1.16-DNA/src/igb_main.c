@@ -2009,7 +2009,7 @@ static int __devinit igb_probe(struct pci_dev *pdev,
 	  netdev->mem_start = mmio_start;
 	  netdev->mem_end = mmio_start + mmio_len;
 
-	  if(dna_debug) {
+	  if(unlikely(enable_debug)) {
 	    printk("[mmio_start=0x%lx][mmio_len=0x%x]\n", mmio_start, mmio_len);
 	  }
 	}
@@ -3468,7 +3468,7 @@ void igb_clean_rx_ring(struct igb_ring *rx_ring)
 	      tx_ring->next_to_clean = 0;
 	      tx_ring->next_to_use = 0;
 
-	      if(unlikely(dna_debug))
+	      if(unlikely(enable_debug))
 		printk("%s(): [%s@%d] Deallocating TX DMA memory [%d pages]\n",
 		       __FUNCTION__, tx_ring->netdev->name, tx_ring->queue_index,
 		       tx_ring->dna.num_memory_pages);
@@ -3487,7 +3487,7 @@ void igb_clean_rx_ring(struct igb_ring *rx_ring)
 	    }
 
 	    if(rx_ring->dna.memory_allocated) {
-	      if(unlikely(dna_debug))
+	      if(unlikely(enable_debug))
 		printk("%s(): [%s@%d] Deallocating RX DMA memory [%d pages]\n",
 		       __FUNCTION__, rx_ring->netdev->name, rx_ring->queue_index,
 		       rx_ring->dna.num_memory_pages);
@@ -3524,7 +3524,7 @@ void igb_clean_rx_ring(struct igb_ring *rx_ring)
 
 	      rx_ring->dna.memory_allocated = 0;
 	    } else {
-	      if(unlikely(dna_debug))
+	      if(unlikely(enable_debug))
 		printk("%s(): [%s@%d] WARNING Not allocated RX DMA memory (twice free)\n",
 		       __FUNCTION__, tx_ring->netdev->name, tx_ring->queue_index);
 	    } /* if */
