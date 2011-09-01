@@ -290,7 +290,7 @@ void alloc_dna_memory(struct e1000_adapter *adapter) {
 	  adapter->dna.tx_packet_memory[i] =
 	    alloc_contiguous_memory(&adapter->dna.tot_packet_memory, &adapter->dna.mem_order);
 
-	  if(adapter->dna.rx_packet_memory[i] != 0) {
+	  if(adapter->dna.tx_packet_memory[i] != 0) {
 	    if(0)
 	      printk("[DNA] [TX] Successfully allocated %lu bytes at "
 		     "0x%08lx [slot_len=%d]\n",
