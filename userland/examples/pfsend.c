@@ -395,6 +395,7 @@ int main(int argc, char* argv[]) {
   }
 
   gettimeofday(&startTime, NULL);
+  memcpy(&lastTime, &startTime, sizeof(startTime)); 
 
   if(gbit_s > 0)
     tick_start = getticks();
