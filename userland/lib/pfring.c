@@ -302,7 +302,7 @@ int pfring_loop(pfring *ring, pfringProcesssPacket looper,
     else if(rc > 0)
       looper(&hdr, buffer, user_bytes);
     else {
-      if(!wait_for_packet) usleep(1);
+      /* if(!wait_for_packet) usleep(1); */
     }
   }
 
