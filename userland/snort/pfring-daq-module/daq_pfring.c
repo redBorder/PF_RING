@@ -588,7 +588,7 @@ static int pfring_daq_get_device_index(void *handle, const char *device)
 }
 
 #ifdef BUILDING_SO
-SO_PUBLIC const DAQ_Module_t DAQ_MODULE_DATA =
+DAQ_SO_PUBLIC const DAQ_Module_t DAQ_MODULE_DATA =
 #else
   const DAQ_Module_t pfring_daq_module_data =
 #endif
