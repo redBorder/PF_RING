@@ -9,7 +9,7 @@ Make sure you have installed:
    do that downloading snort and DAQ from http://www.snort.org/snort-downloads?
 - cd ~/PF_RING/kernel
   sudo make install
-
+- For best performance please use PF_RING DNA that supports both IPS and IDS mode
 
 Compilation
 -----------
@@ -20,7 +20,7 @@ Compilation
 Installation
 ------------
 You can do:
-# sudo cp .libs/daq_pfring.so into /usr/lib/daq/
+# sudo cp .libs/daq_pfring.so into /usr/local/lib/daq/
 or
 # sudo make install
 
@@ -29,8 +29,13 @@ if you want to run snort without installing it use "--daq-dir=./.libs"
 
 Running snort in IDS mode
 -------------------------
-# snort --daq-dir=/usr/lib/daq/ --daq pfring --daq-mode passive -i ethX -v -e
+# snort --daq-dir=/usr/local/lib/daq --daq pfring --daq-mode passive -i ethX -v -e
+
+
+Running snort in IPS mode
+-------------------------
+# snort --daq-dir=/usr/local/lib/daq --daq pfring  -i ethX:ethY -e -Q
 
 ----
-Luca Deri <deri@ntop.org> - July 2011
+Luca Deri <deri@ntop.org> - September 2011
 

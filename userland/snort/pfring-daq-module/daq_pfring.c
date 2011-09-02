@@ -78,11 +78,7 @@ static pfring* pfring_daq_open(Pfring_Context_t *context, char *device)
 
   if (device)
     {
-      context->pkt_buffer = (u_char*)malloc(context->snaplen+1);
-      if (context->pkt_buffer == NULL) {
-	DPE(context->errbuf, "pfring_daq_open(): unable to allocate enough memory for snaplen %d", context->snaplen);
-	return NULL;
-      }
+      context->pkt_buffer = NULL;
 
       ring_handle = pfring_open(device, context->promisc_flag ? 1 : 0,
 				context->snaplen, 1 /* reentrant */);
@@ -330,11 +326,26 @@ static int pfring_daq_start(void *handle)
   return DAQ_SUCCESS;
 }
 
+static int pfring_daq_send_packet(Pfring_Context_t *context, pfring *send_ring, u_int pkt_len) 
+{
+  if(send_ring == NULL) return(DAQ_SUCCESS);
+
+  if (pfring_send(send_ring, (char*)context->pkt_buffer, pkt_len, 1 /* flush packet */) < 0)
+    {
+      DPE(context->errbuf, "%s", "pfring_send() error");
+      return DAQ_ERROR;
+    }
+  
+  context->stats.packets_injected++;
+
+  return(DAQ_SUCCESS);
+}
+
 static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callback, void *user)
 {
   Pfring_Context_t *context = (Pfring_Context_t *) handle;
   int ret;
-  pfring *current_ring;
+  pfring *current_ring, *send_ring;
 
   context->analysis_func = callback;
   context->breakloop = 0;
@@ -350,12 +361,12 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
       DAQ_PktHdr_t hdr;
       DAQ_Verdict verdict;
 
-      ret = pfring_recv((current_ring = context->ring_handle), &context->pkt_buffer, context->snaplen, &phdr, 0 /* Dont't wait */);
+      ret = pfring_recv((current_ring = context->ring_handle), &context->pkt_buffer, 0, &phdr, 0 /* Dont't wait */);
 
-      if((ret == -1) && (context->twin_ring_handle != NULL))
-	ret = pfring_recv((current_ring = context->twin_ring_handle), &context->pkt_buffer, context->snaplen, &phdr, 0 /* Dont't wait */);      
+      if((ret <= 0) && (context->twin_ring_handle != NULL))
+	ret = pfring_recv((current_ring = context->twin_ring_handle), &context->pkt_buffer, 0, &phdr, 0 /* Dont't wait */);      
 
-      if(ret == -1) {
+      if(ret <= 0) {
 	/* No packet to read: let's poll */
 	struct pollfd pfd[2];
 	int num = 1, rc;
@@ -375,6 +386,9 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
 	  return DAQ_ERROR;
 	}
       } else {
+	hash_filtering_rule hash_rule;
+	int rc;
+	
 	hdr.caplen = phdr.caplen;
 	hdr.pktlen = phdr.len;
 	hdr.ts = phdr.ts;
@@ -386,37 +400,46 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
 	if (verdict >= MAX_DAQ_VERDICT)
 	  verdict = DAQ_VERDICT_PASS;
 
-	if(verdict == DAQ_VERDICT_BLACKLIST) {
-	  hash_filtering_rule hash_rule;
-	  int rc;
+	  switch(verdict) {
+	  case DAQ_VERDICT_BLACKLIST: /* Block the packet and block all future packets in the same flow systemwide. */
+	  case DAQ_VERDICT_WHITELIST: /* Pass the packet and fastpath all future packets in the same flow systemwide. */
+	  case DAQ_VERDICT_IGNORE:    /* Pass the packet and fastpath all future packets in the same flow for this application. */
 
-	  /* Block the packet and block all future packets in the same flow systemwide. */
+	    memset(&hash_rule, 0, sizeof(hash_rule));
+	    
+	    hash_rule.vlan_id     = phdr.extended_hdr.parsed_pkt.vlan_id;
+	    hash_rule.proto       = phdr.extended_hdr.parsed_pkt.l3_proto;
+	    memcpy(&hash_rule.host_peer_a, &phdr.extended_hdr.parsed_pkt.ipv4_src, sizeof(ip_addr));
+	    memcpy(&hash_rule.host_peer_b, &phdr.extended_hdr.parsed_pkt.ipv4_dst, sizeof(ip_addr));
+	    hash_rule.port_peer_a = phdr.extended_hdr.parsed_pkt.l4_src_port;
+	    hash_rule.port_peer_b = phdr.extended_hdr.parsed_pkt.l4_dst_port;
+	    hash_rule.rule_action = (verdict == DAQ_VERDICT_BLACKLIST) ? dont_forward_packet_and_stop_rule_evaluation : forward_packet_and_stop_rule_evaluation;
+	    hash_rule.plugin_action.plugin_id = NO_PLUGIN_ID;
+	    
+	    rc = pfring_handle_hash_filtering_rule(context->ring_handle, &hash_rule, 1 /* add_rule */);
+	    
+	    /* printf("Verdict=%d [pfring_handle_hash_filtering_rule=%d]\n", verdict, rc); */
 
-	  memset(&hash_rule, 0, sizeof(hash_rule));
-
-	  hash_rule.vlan_id     = phdr.extended_hdr.parsed_pkt.vlan_id;
-	  hash_rule.proto       = phdr.extended_hdr.parsed_pkt.l3_proto;
-	  memcpy(&hash_rule.host_peer_a, &phdr.extended_hdr.parsed_pkt.ipv4_src, sizeof(ip_addr));
-	  memcpy(&hash_rule.host_peer_b, &phdr.extended_hdr.parsed_pkt.ipv4_dst, sizeof(ip_addr));
-	  hash_rule.port_peer_a = phdr.extended_hdr.parsed_pkt.l4_src_port;
-	  hash_rule.port_peer_b = phdr.extended_hdr.parsed_pkt.l4_dst_port;
-	  hash_rule.rule_action = dont_forward_packet_and_stop_rule_evaluation;
-	  hash_rule.plugin_action.plugin_id = NO_PLUGIN_ID;
-
-	  rc = pfring_handle_hash_filtering_rule(context->ring_handle, &hash_rule, 1 /* add_rule */);
-
-	  /* printf("Verdict=%d [pfring_handle_hash_filtering_rule=%d]\n", verdict, rc); */
-	} else if((verdict == DAQ_VERDICT_PASS) && (context->twin_ring_handle /* DAQ_MODE_INLINE */)) {
-	  /* Userland PF_RING bridge */
-	  if (pfring_send((current_ring == context->ring_handle) ? context->twin_ring_handle : context->ring_handle,
-			  (char*)context->pkt_buffer, hdr.caplen, 1 /* flush packet */) < 0)
-	    {
-	      DPE(context->errbuf, "%s", "pfring_send() error");
-	      return DAQ_ERROR;
+	    if(verdict == DAQ_VERDICT_BLACKLIST) {
+	      break;
+	    } else {
+	      /* No break here ! as we need to forward the packet */
 	    }
 
-	  context->stats.packets_injected++;
-	}
+	  case DAQ_VERDICT_PASS:    /* Pass the packet */
+	  case DAQ_VERDICT_REPLACE: /* Pass a packet that has been modified in-place. (No resizing allowed!) */
+	    send_ring = (current_ring == context->ring_handle) ? context->twin_ring_handle : context->ring_handle;
+	    pfring_daq_send_packet(context, send_ring, hdr.caplen);
+	    break;
+
+	  case DAQ_VERDICT_BLOCK:   /* Block the packet. */
+	    /* Nothing to do really */
+	    break;
+
+	  case MAX_DAQ_VERDICT:
+	    /* No way we can reach this point */
+	    break;
+	  }
 
 	context->stats.verdicts[verdict]++;
 	if(cnt > 0) cnt--;
@@ -462,12 +485,6 @@ static int pfring_daq_stop(void *handle)
       update_hw_stats(context);
       pfring_close(context->ring_handle);
       context->ring_handle = NULL;
-
-      if (context->pkt_buffer)
-	{
-	  free(context->pkt_buffer);
-	  context->pkt_buffer = NULL;
-	}
     }
 
   context->state = DAQ_STATE_STOPPED;
@@ -490,9 +507,6 @@ static void pfring_daq_shutdown(void *handle)
 
   if (context->filter_string)
     free(context->filter_string);
-
-  if (context->pkt_buffer)
-    free(context->pkt_buffer);
 
   free(context);
 }
@@ -552,7 +566,7 @@ static int pfring_daq_get_snaplen(void *handle)
 
 static uint32_t pfring_daq_get_capabilities(void *handle)
 {
-  return DAQ_CAPA_INJECT | DAQ_CAPA_INJECT_RAW | DAQ_CAPA_BREAKLOOP | DAQ_CAPA_UNPRIV_START | DAQ_CAPA_BPF;
+  return DAQ_CAPA_BLOCK | DAQ_CAPA_REPLACE | DAQ_CAPA_INJECT | DAQ_CAPA_INJECT_RAW | DAQ_CAPA_BREAKLOOP | DAQ_CAPA_UNPRIV_START | DAQ_CAPA_BPF;
 }
 
 static int pfring_daq_get_datalink_type(void *handle)
