@@ -4814,6 +4814,9 @@ void e1000e_update_stats(struct e1000_adapter *adapter)
 #ifdef HAVE_PCI_ERS
 	struct pci_dev *pdev = adapter->pdev;
 #endif
+#ifdef ENABLE_DNA
+	struct pfring_hooks *hook = (struct pfring_hooks*)netdev->pfring_ptr;
+#endif
 
 	/*
 	 * Prevent stats update while adapter is being reset, or if the pci
@@ -4834,7 +4837,15 @@ void e1000e_update_stats(struct e1000_adapter *adapter)
 	adapter->stats.mprc += er32(MPRC);
 	adapter->stats.roc += er32(ROC);
 
+#ifdef ENABLE_DNA
+	if(hook && (hook->magic == PF_RING) && adapter->dna.dna_enabled) {
+	/* mpc stats are read from userpace in DNA mode */
+	} else {
+#endif
 	adapter->stats.mpc += er32(MPC);
+#ifdef ENABLE_DNA
+	}
+#endif
 
 	/* Half-duplex statistics */
 	if (adapter->link_duplex == HALF_DUPLEX) {
