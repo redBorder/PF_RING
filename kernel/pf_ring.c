@@ -3322,7 +3322,7 @@ static int ring_create(
 		       struct net *net,
 #endif
 		       struct socket *sock, int protocol
-#if((LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33)) || defined(REDHAT_PATCHED_KERNEL))
+#if((LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33)) || ((LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,32)) && defined(REDHAT_PATCHED_KERNEL)))
 		       , int kern
 #endif
 		       )
