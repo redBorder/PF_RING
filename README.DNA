@@ -4,13 +4,22 @@ before their name. Example "pfcount -i dna:eth1".
 With DNA you can dramatically increase the packet capture and transmission speed as the 
 kernel layer is bypassed and applications can communicate directly with drivers.
 
-In order to exploit DNA, you need a DNA-aware driver. Currently two drivers are available:
-- e1000e (RX only)
-  The driver can be downloaded from the http://shop.ntop.org/ site.
+In order to exploit DNA, you need a DNA-aware driver. Currently three driver families
+are currently available:
 
-- ixgbe/igb (RX and TX)
-  The driver can be found in drivers/DNA. Please refer to drivers/DNA/README.DNA 
-  for additional information about this matter.
+1 Gbit
+- e1000e (RX and TX)
+- ixgbe  (RX and TX)
+
+10 Gbit
+- ixgbe (RX and TX)
+
+These drivers can be found in drivers/DNA. Please refer to drivers/DNA/README.DNA 
+for additional information about this matter.
+
+If you own a Silicom adapter you can use the DNA drivers at no cost. If you own a non-Silicom
+NIC you need a license for the 1 Gbit DNA driver (per MAC address) that you can buy on
+http://shop.ntop.org/.
 
 With both drivers you can achieve wire rate at any packet size. You can test RX
 using the pfcount application, and TX using the pfsend application.
