@@ -2931,7 +2931,7 @@ static int skb_ring_handler(struct sk_buff *skb,
        ) {
       /* printk("==>>> [%d][%d]\n", skb->dev->ifindex, channel_id); */
 
-      rc = 1, hdr.len = skb->len, hdr.caplen = min_val(hdr.caplen, pfr->bucket_len);
+      rc = 1, hdr.caplen = min_val(hdr.caplen, pfr->bucket_len);
       room_available |= copy_data_to_ring(skb, pfr, &hdr, displ, 0, NULL, NULL, 0);
     }
   } else {
