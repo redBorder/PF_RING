@@ -2829,8 +2829,8 @@ static struct sk_buff* defrag_skb(struct sk_buff *skb,
 */
 
 static int skb_ring_handler(struct sk_buff *skb,
-			    u_char recv_packet,
-			    u_char real_skb /* 1=real skb, 0=faked skb */ ,
+			    u_int8_t recv_packet,
+			    u_int8_t real_skb /* 1=real skb, 0=faked skb */ ,
 			    u_int32_t channel_id,
 			    u_int32_t num_rx_channels)
 {
@@ -2952,6 +2952,8 @@ static int skb_ring_handler(struct sk_buff *skb,
       hdr.extended_hdr.if_index = skb->dev->ifindex;
     else
       hdr.extended_hdr.if_index = UNKNOWN_INTERFACE;
+
+    hdr.extended_hdr.rx_direction = recv_packet;
 
     /* Avoid the ring to be manipulated while playing with it */
     ring_read_lock();

@@ -362,7 +362,8 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u
 #endif
 
     if(h->extended_hdr.parsed_header_len > 0) {
-      printf("[eth_type=0x%04X]", h->extended_hdr.parsed_pkt.eth_type);
+      printf("[eth_type=0x%04X]", 
+	     h->extended_hdr.parsed_pkt.eth_type);
       printf("[l3_proto=%u]", (unsigned int)h->extended_hdr.parsed_pkt.l3_proto);
 
       printf("[%s:%d -> ", (h->extended_hdr.parsed_pkt.eth_type == 0x86DD) ?
@@ -380,7 +381,8 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u
     memcpy(&ehdr, p+h->extended_hdr.parsed_header_len, sizeof(struct ether_header));
     eth_type = ntohs(ehdr.ether_type);
 
-    printf("[%s -> %s][eth_type=0x%04X] ",
+    printf("[%s][%s -> %s][eth_type=0x%04X] ",
+	   h->extended_hdr.rx_direction ? "RX" : "TX",
 	   etheraddr_string(ehdr.ether_shost, buf1),
 	   etheraddr_string(ehdr.ether_dhost, buf2), eth_type);
 
@@ -714,8 +716,6 @@ int main(int argc, char* argv[]) {
 
   if((rc = pfring_set_direction(pd, direction)) != 0)
     printf("pfring_set_direction returned [rc=%d][direction=%d]\n", rc, direction);
-  else
-    pfring_set_direction(pd, rx_only_direction);
 
   if(watermark > 0) {
     if((rc = pfring_set_poll_watermark(pd, watermark)) != 0)

@@ -119,6 +119,8 @@ int pfring_dna_recv(pfring *ring, u_char** buffer, u_int buffer_len,
       else if(buffer_len > 0)
 	parse_pkt(*buffer, hdr);
 
+      hdr->extended_hdr.rx_direction = 1;
+
       if(ring->reentrant) pthread_spin_unlock(&ring->spinlock);
       return(1);
     }
