@@ -5,7 +5,7 @@ PF_RING support of snort DAQ for snort 2.9 (and later)
 Prerequisites
 -------------
 Make sure you have installed:
--  snort with DAQ include files/libraries. You can
+-  snort with DAQ include files/libraries (0.6.1 or above). You can
    do that downloading snort and DAQ from http://www.snort.org/snort-downloads?
 - cd ~/PF_RING/kernel
   sudo make install

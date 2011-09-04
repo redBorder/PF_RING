@@ -30,7 +30,6 @@ extern int pthread_spin_lock (pthread_spinlock_t *__lock) __THROW;
 extern int pthread_spin_unlock (pthread_spinlock_t *__lock) __THROW;
 #endif
 
-
 #include <stdio.h>
 #include <stdarg.h>
 #include <sys/types.h>
@@ -79,6 +78,11 @@ extern int pthread_spin_unlock (pthread_spinlock_t *__lock) __THROW;
 #define UNKNOWN_DNA_ADAPTER_TYPE    -11
 #define UNKNOWN_DNA_ADAPTER_MODEL   -12
 #define UNKNOWN_ERROR               -99
+
+/* ********************************* */
+
+#define likely(x)       __builtin_expect((x),1)
+#define unlikely(x)     __builtin_expect((x),0)
 
 /* ********************************* */
 

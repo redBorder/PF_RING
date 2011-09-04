@@ -56,7 +56,7 @@ LIBS       = ${LIBPFRING} @DAG_LIB@ -lpthread
 #
 # Main targets
 #
-PFPROGS   = pfcount pfcount_multichannel preflect pfbounce pfmap \
+PFPROGS   = pfcount pfcount_multichannel preflect pfbounce pfdnabounce pfmap \
 	    forwarder alldevs dummy_plugin_pfcount pcap2nspcap pfcount_dummy_plugin pffilter_test \
 	    pfcount_bundle pfcount_82599 vdevice_simulator pfsystest pfsend
 
@@ -111,6 +111,9 @@ preflect: preflect.o ${LIBPFRING}
 
 pfbounce: pfbounce.o ${LIBPFRING}
 	${CC} pfbounce.o ${LIBPCAP} ${LIBS} -o $@
+
+pfdnabounce: pfdnabounce.o ${LIBPFRING}
+	${CC} pfdnabounce.o ${LIBPCAP} ${LIBS} -o $@
 
 pfsend: pfsend.o ${LIBPFRING}
 	${CC} pfsend.o ${LIBPCAP} ${LIBS} -o $@
