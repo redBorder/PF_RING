@@ -4,6 +4,12 @@ The DNA driver allows you bypass the kernel and let your applications manipulate
 This means that as soon as you have installed this driver, only DNA-aware applications will be 
 able to play with the card. 
 
+Prerequisites
+-------------
+
+We support DNA on modern kernels that have full multi-queue support. Please use
+kernel 2.6.26 or newer (we suggest 2.6.32 or better). No support will be offered
+on older kernels.
 
 
 Compilation and Installation
