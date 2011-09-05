@@ -104,28 +104,6 @@ void printHelp(void) {
 
 /* *************************************** */
 
-void bouncer() {
-  filtering_rule rule;
-
-  /* Bounce all packets received on in_dev -> in_dev */
-  memset(&rule, 0, sizeof(rule));
-  rule.rule_id = 1;
-  rule.rule_action = bounce_packet_and_stop_rule_evaluation;
-  rule.core_fields.proto = 0; /* any */
-  snprintf(rule.reflector_device_name, REFLECTOR_NAME_LEN, "%s", in_dev);
-
-  if(pfring_add_filtering_rule(pd, &rule) < 0) {
-    printf("pfring_add_filtering_rule() failed\n");
-    pfring_close(pd);
-    exit(-1);
-  } else
-    printf("Bounceing packets received on %s to %s\n", in_dev, in_dev);
-
-  while(1) sleep(60);
-}
-
-/* *************************************** */
-
 void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u_char *user_bytes) {
   /* Bounce back */
   pfring_send(pd, (char*)p, h->caplen, 1 /* flush out */);
