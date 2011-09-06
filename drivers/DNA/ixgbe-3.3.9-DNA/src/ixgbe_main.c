@@ -4685,6 +4685,7 @@ void ixgbe_clean_rx_ring(struct ixgbe_ring *rx_ring)
 
 	      /* De-register with PF_RING: one per channel  */
 	      hook->ring_dna_device_handler(remove_device_mapping,
+					    rx_ring->dna.num_memory_pages,
 					    NULL,
 					    rx_ring->dna.packet_num_slots,
 					    rx_ring->dna.packet_slot_len,
@@ -4694,7 +4695,7 @@ void ixgbe_clean_rx_ring(struct ixgbe_ring *rx_ring)
 					    sizeof(union ixgbe_adv_rx_desc),
 					    /* Double because of the shadow descriptors */
 					    2 * rx_ring->size, /* tot len (bytes) */
-					    0, NULL, /* TX */
+					    tx_ring->dna.num_memory_pages, 0, NULL, /* TX */
 					    rx_ring->queue_index, /* Channel Id */
 					    (void*)rx_ring->netdev->mem_start,
 					    rx_ring->netdev->mem_end - rx_ring->netdev->mem_start,

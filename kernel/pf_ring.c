@@ -956,8 +956,12 @@ static int ring_proc_get_info(char *buf, char **start, off_t offset,
 	  /* DNA */
 	  rlen += sprintf(buf + rlen, "Channel Id         : %d\n", pfr->dna_device_entry->dev.channel_id);
           rlen += sprintf(buf + rlen, "Num Slots          : %d\n", pfr->dna_device_entry->dev.mem_info.packet_memory_num_slots);
-	  rlen += sprintf(buf + rlen, "Slot Len           : %d\n", pfr->dna_device_entry->dev.mem_info.packet_memory_slot_len);
-	  rlen += sprintf(buf + rlen, "Tot Memory         : %d\n", pfr->dna_device_entry->dev.mem_info.packet_memory_tot_len);
+	  rlen += sprintf(buf + rlen, "Tot Memory         : %u bytes\n", 
+			  pfr->dna_device_entry->dev.mem_info.packet_memory_tot_len *
+			  (pfr->dna_device_entry->dev.num_rx_pages + pfr->dna_device_entry->dev.num_tx_pages)
+			  +
+			  (pfr->dna_device_entry->dev.mem_info.packet_memory_num_slots *
+			   pfr->dna_device_entry->dev.mem_info.descr_packet_memory_slot_len));
 	} else {
 	  rlen += sprintf(buf + rlen, "Channel Id         : %d\n", pfr->channel_id);
 	  rlen += sprintf(buf + rlen, "Cluster Id         : %d\n", pfr->cluster_id);
@@ -5810,6 +5814,7 @@ static int ring_getsockopt(struct socket *sock,
 /* ************************************* */
 
 void dna_device_handler(dna_device_operation operation,
+			u_int num_rx_pages,
 			unsigned long rx_packet_memory[MAX_NUM_DNA_PAGES],
 			u_int packet_memory_num_slots,
 			u_int packet_memory_slot_len,
@@ -5818,6 +5823,7 @@ void dna_device_handler(dna_device_operation operation,
 			u_int descr_packet_memory_num_slots,
 			u_int descr_packet_memory_slot_len,
 			u_int descr_packet_memory_tot_len,
+			u_int num_tx_pages,
 			unsigned long tx_packet_memory[MAX_NUM_DNA_PAGES],
 			void *tx_descr_packet_memory,
 			u_int channel_id,
@@ -5832,10 +5838,12 @@ void dna_device_handler(dna_device_operation operation,
 			dna_wait_packet wait_packet_function_ptr,
 			dna_device_notify dev_notify_function_ptr)
 {
-  if(unlikely(enable_debug))
+  if(unlikely(enable_debug)) {
     printk("[PF_RING] dna_device_handler(%s@%u [operation=%s])\n",
 	   netdev->name, channel_id,
 	   operation == add_device_mapping ? "add_device_mapping" : "remove_device_mapping");
+    printk("[PF_RING] RX=%u/TX=%u\n", num_rx_pages, num_tx_pages);
+  }
 
   if(operation == add_device_mapping) {
     dna_device_list *next;
@@ -5846,6 +5854,10 @@ void dna_device_handler(dna_device_operation operation,
 
       next->num_bound_sockets = 0;
       memcpy(&next->dev.rx_packet_memory, rx_packet_memory, sizeof(next->dev.rx_packet_memory));
+
+      /* Number of mapped pages */
+      next->dev.num_rx_pages = num_rx_pages, next->dev.num_tx_pages = num_tx_pages;
+
       next->dev.mem_info.packet_memory_num_slots = packet_memory_num_slots;
       next->dev.mem_info.packet_memory_slot_len = packet_memory_slot_len;
       next->dev.mem_info.packet_memory_tot_len = packet_memory_tot_len;

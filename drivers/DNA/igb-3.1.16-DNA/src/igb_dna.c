@@ -564,6 +564,7 @@ void dna_igb_alloc_rx_buffers(struct igb_ring *rx_ring, struct pfring_hooks *hoo
 
   hook->ring_dna_device_handler(add_device_mapping,
 				/* RX */
+				rx_ring->dna.num_memory_pages,
 				rx_ring->dna.rx_tx.rx.packet_memory,
 				rx_ring->dna.packet_num_slots,
 				rx_ring->dna.packet_slot_len,
@@ -574,6 +575,7 @@ void dna_igb_alloc_rx_buffers(struct igb_ring *rx_ring, struct pfring_hooks *hoo
 				/* Double because of the shadow descriptors */
 				2 * rx_ring->size, /* tot len (bytes) */
 				/* TX */
+				tx_ring->dna.num_memory_pages,
 				tx_ring->dna.rx_tx.tx.packet_memory,
 				tx_ring->desc, /* Packet descriptors */
 				rx_ring->queue_index, /* Channel Id */

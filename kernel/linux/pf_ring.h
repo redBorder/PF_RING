@@ -529,7 +529,7 @@ typedef enum {
   intel_ixgbe_82599
 } dna_device_model;
 
-typedef struct {
+typedef struct {  
   u_int32_t packet_memory_num_slots;
   u_int32_t packet_memory_slot_len;
   u_int32_t packet_memory_tot_len;
@@ -542,7 +542,7 @@ typedef struct {
 
 typedef struct {
   dna_memory_slots mem_info;
-  u_int16_t channel_id;
+  u_int16_t channel_id, num_rx_pages, num_tx_pages;
   unsigned long rx_packet_memory[MAX_NUM_DNA_PAGES];  /* Invalid in userland */
   void *rx_descr_packet_memory;    /* Invalid in userland */
   unsigned long tx_packet_memory[MAX_NUM_DNA_PAGES];  /* Invalid in userland */
@@ -892,6 +892,7 @@ typedef int   (*register_pfring_plugin)(struct pfring_plugin_registration
 typedef int   (*unregister_pfring_plugin)(u_int16_t pfring_plugin_id);
 typedef u_int (*read_device_pfring_free_slots)(int ifindex);
 typedef void  (*handle_ring_dna_device)(dna_device_operation operation,
+					u_int num_rx_pages,
 					unsigned long packet_memory[MAX_NUM_DNA_PAGES],
 					u_int packet_memory_num_slots,
 					u_int packet_memory_slot_len,
@@ -900,6 +901,7 @@ typedef void  (*handle_ring_dna_device)(dna_device_operation operation,
 					u_int descr_packet_memory_num_slots,
 					u_int descr_packet_memory_slot_len,
 					u_int descr_packet_memory_tot_len,
+					u_int num_tx_pages,
 					unsigned long tx_packet_memory[MAX_NUM_DNA_PAGES],
 					void *tx_descr_packet_memory,
 					u_int channel_id,
@@ -930,6 +932,7 @@ extern handle_ring_dna_device get_ring_dna_device_handler(void);
 extern void set_ring_dna_device_handler(handle_ring_dna_device
 					the_dna_device_handler);
 extern void do_ring_dna_device_handler(dna_device_operation operation,
+				       u_int num_rx_pages,
 				       unsigned long rx_packet_memory[MAX_NUM_DNA_PAGES],
 				       u_int packet_memory_num_slots,
 				       u_int packet_memory_slot_len,
@@ -938,6 +941,7 @@ extern void do_ring_dna_device_handler(dna_device_operation operation,
 				       u_int descr_packet_memory_num_slots,
 				       u_int descr_packet_memory_slot_len,
 				       u_int descr_packet_memory_tot_len,
+				       u_int num_tx_pages,
 				       unsigned long tx_packet_memory[MAX_NUM_DNA_PAGES],
 				       void *tx_descr_packet_memory,
 				       u_int channel_id,

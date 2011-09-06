@@ -1956,6 +1956,7 @@ static void e1000_clean_rx_ring(struct e1000_adapter *adapter)
 
 	      /* De-register with PF_RING */
 	      hook->ring_dna_device_handler(remove_device_mapping,
+					    1,
 					    adapter->dna.rx_packet_memory,
 					    adapter->dna.packet_num_slots,
 					    adapter->dna.packet_slot_len,
@@ -1965,6 +1966,7 @@ static void e1000_clean_rx_ring(struct e1000_adapter *adapter)
 					    sizeof(struct e1000_buffer),
 					    rx_ring->size,
 					    /* TX */
+					    1,
 					    adapter->dna.tx_packet_memory,
 					    tx_ring->desc, /* Packet descriptors */
 					    0, /* Channel Id */

@@ -333,6 +333,7 @@ void alloc_dna_memory(struct e1000_adapter *adapter) {
 
       /* Register with PF_RING */
       hook->ring_dna_device_handler(add_device_mapping,
+				    1,
 				    adapter->dna.rx_packet_memory,
 				    adapter->dna.packet_num_slots,
 				    adapter->dna.packet_slot_len,
@@ -342,6 +343,7 @@ void alloc_dna_memory(struct e1000_adapter *adapter) {
 				    sizeof(struct e1000_rx_desc),
 				    rx_ring->size, /* tot len (bytes) */
 				    /* TX */
+				    1,
 				    adapter->dna.tx_packet_memory,
 				    tx_ring->desc, /* Packet descriptors */
 				    0, /* Channel Id */
