@@ -562,7 +562,7 @@ void* packet_consumer_thread(void* _id) {
 
 int main(int argc, char* argv[]) {
   char *device = NULL, c, *string = NULL, buf[32];
-  u_char mac_address[6];
+  u_char mac_address[6] = { 0 };
   int promisc, snaplen = DEFAULT_SNAPLEN, rc;
   u_int clusterId = 0;
   int bind_core = -1;
@@ -700,7 +700,7 @@ int main(int argc, char* argv[]) {
 	   (version & 0x0000FF00) >> 8,
 	   version & 0x000000FF);
   }
-
+  
   if(pfring_get_bound_device_address(pd, mac_address) != 0)
     printf("Impossible to know the device address\n");
   else

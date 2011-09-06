@@ -11,7 +11,7 @@ INSTDIR   = @INSTALL_PREFIX@
 #
 # Search directories
 #
-INCLUDE   = -I../../kernel
+INCLUDE   = -I../../kernel -I../../vPF_RING/guest/kernel
 
 #
 # DNA
