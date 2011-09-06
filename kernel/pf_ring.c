@@ -210,17 +210,17 @@ static int reflect_packet(struct sk_buff *skb,
 
 /* ********************************** */
 
-#if 1
-
 static rwlock_t ring_mgmt_lock;
 
-inline void init_ring_readers(void)      { ring_mgmt_lock = 
+inline void init_ring_readers(void)      {
+  ring_mgmt_lock = 
 #if(LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39))
-  RW_LOCK_UNLOCKED
+    RW_LOCK_UNLOCKED
 #else
-  __RW_LOCK_UNLOCKED(ring_mgmt_lock)
+    __RW_LOCK_UNLOCKED(ring_mgmt_lock)
 #endif
-; }
+    ;
+}
 inline void ring_write_lock(void)        { write_lock_bh(&ring_mgmt_lock);    }
 inline void ring_write_unlock(void)      { write_unlock_bh(&ring_mgmt_lock);  }
 /* use ring_read_lock/ring_read_unlock in process context (a bottom half may use write_lock) */
@@ -229,38 +229,6 @@ inline void ring_read_unlock(void)       { read_unlock_bh(&ring_mgmt_lock);   }
 /* use ring_read_lock_inbh/ring_read_unlock_inbh in bottom half contex */
 inline void ring_read_lock_inbh(void)    { read_lock(&ring_mgmt_lock);        }
 inline void ring_read_unlock_inbh(void)  { read_unlock(&ring_mgmt_lock);      }
-
-#else
-
-static atomic_t num_ring_readers, ring_stop;
-
-/* Do NOT call schedule() as this might cause crash when exiting */
-
-inline void init_ring_readers(void) {
-  atomic_set(&num_ring_readers, 0);
-  atomic_set(&ring_stop, 0);
-}
-
-inline void ring_write_lock(void) {
-  atomic_set(&ring_stop, 1);
-
-  while(atomic_read(&num_ring_readers) > 0) { /* schedule() */; }
-}
-
-inline void ring_write_unlock(void) {
-  atomic_set(&ring_stop, 0);
-}
-
-inline void ring_read_lock(void) {
-  while(atomic_read(&ring_stop) == 1) { /* schedule() */; }
-  atomic_inc(&num_ring_readers);
-}
-
-inline void ring_read_unlock(void) {
-  atomic_dec(&num_ring_readers);
-}
-
-#endif
 
 /* ********************************** */
 
@@ -663,6 +631,10 @@ static int ring_proc_dev_get_info(char *buf, char **start, off_t offset,
 
     rlen =  sprintf(buf,      "Name:              %s\n", dev->name);
     rlen += sprintf(buf+rlen, "Index:             %d\n", dev->ifindex);
+    rlen += sprintf(buf+rlen, "Address:           %02X:%02X:%02X:%02X:%02X:%02X\n", 
+		    dev->perm_addr[0], dev->perm_addr[1], dev->perm_addr[2],
+		    dev->perm_addr[3], dev->perm_addr[4], dev->perm_addr[5]);
+
     rlen += sprintf(buf+rlen, "Polling Mode:      %s\n", dev_ptr->is_dna_device ? "DNA" : "NAPI/TNAPI");
 
     switch(dev->type) {
@@ -676,7 +648,7 @@ static int ring_proc_dev_get_info(char *buf, char **start, off_t offset,
 
     if(!dev_ptr->is_dna_device) {
       if(dev->ifindex < MAX_NUM_IFIDX) {
-	rlen += sprintf(buf+rlen, "# bound sockets:   %d\n",
+	rlen += sprintf(buf+rlen, "# Bound Sockets:   %d\n",
 			num_rings_per_device[dev->ifindex]);
       }
     }
@@ -5738,15 +5710,42 @@ static int ring_getsockopt(struct socket *sock,
     break;
 
   case SO_GET_BOUND_DEVICE_ADDRESS:
-    if(len < 6) return -EINVAL;
+    if(len < ETH_ALEN) return -EINVAL;
 
     if(pfr->dna_device != NULL) {
       if(copy_to_user(optval, pfr->dna_device->device_address, 6))
 	return -EFAULT;
     } else if((pfr->ring_netdev != NULL)
 	      && (pfr->ring_netdev->dev != NULL)) {
-      if(copy_to_user(optval, pfr->ring_netdev->dev->dev_addr, 6))
+      char lowest_if_mac[ETH_ALEN] = { 0 };
+      char magic_if_mac[ETH_ALEN]  = { RING_MAGIC_VALUE };
+
+      /* Read input buffer */
+      if(copy_from_user(&lowest_if_mac, optval, ETH_ALEN))
 	return -EFAULT;
+      
+      if(!memcmp(lowest_if_mac, magic_if_mac, ETH_ALEN)) {
+	struct list_head *ptr, *tmp_ptr;
+	long lowest_id = -1;
+
+	/* Return the MAC address of the lowest X of ethX */
+	
+	list_for_each_safe(ptr, tmp_ptr, &ring_aware_device_list) {
+	  ring_device_element *entry = list_entry(ptr, ring_device_element, device_list);
+	  char *eptr;
+	  long id = simple_strtol(&entry->dev->name[3], &eptr, 10);
+
+	  if((lowest_id == -1) || (id < lowest_id)) {
+	    lowest_id = id, memcpy(lowest_if_mac, entry->dev->perm_addr, ETH_ALEN);
+	  }
+	}
+
+	if(copy_to_user(optval, lowest_if_mac, ETH_ALEN))
+	  return -EFAULT;
+      } else {
+	if(copy_to_user(optval, pfr->ring_netdev->dev->dev_addr, ETH_ALEN))
+	  return -EFAULT;
+      }
     } else
       return -EFAULT;
     break;
