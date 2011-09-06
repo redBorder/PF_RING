@@ -524,10 +524,17 @@ int vpfring_ctrl_message_rcv(void *message, uint32_t size, void *ret_message, ui
 		case VPFRING_CTRL_MSG_GET_BOUND_DEVICE_ADDRESS:
 			VPFRING_DEBUG_PRINTF("message VPFRING_CTRL_MSG_GET_BOUND_DEVICE_ADDRESS received\n");
 
+			if (msg->payload_len != sizeof(u_char) * 6){
+				VPFRING_DEBUG_PRINTF("skipping! device address with wrong size\n");
+				return -1;
+			}
+
 			if (ret_message == NULL || ret_size != (sizeof(u_char) * 6)){
 				VPFRING_DEBUG_PRINTF("skipping! return buffer with wrong size\n");
 				return -1;
 			}
+
+			memcpy(ret_message, msg->payload, sizeof(u_char) * 6);
 			
 			ret_val = pfring_get_bound_device_address(vpfri->ring, (u_char *) ret_message);
 
