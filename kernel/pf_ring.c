@@ -977,23 +977,33 @@ static int ring_proc_get_info(char *buf, char **start, off_t offset,
 	rlen += sprintf(buf + rlen, "BPF Filtering      : %s\n", pfr->bpfFilter ? "Enabled" : "Disabled");
 	rlen += sprintf(buf + rlen, "# Sw Filt. Rules   : %d\n", pfr->num_sw_filtering_rules);
 	rlen += sprintf(buf + rlen, "# Hw Filt. Rules   : %d\n", pfr->num_hw_filtering_rules);
-	rlen += sprintf(buf + rlen, "Cluster Id         : %d\n", pfr->cluster_id);
-	rlen += sprintf(buf + rlen, "Channel Id         : %d\n", pfr->channel_id);
-	rlen += sprintf(buf + rlen, "Min Num Slots      : %d\n", fsi->min_num_slots);
 	rlen += sprintf(buf + rlen, "Poll Pkt Watermark : %d\n", pfr->poll_num_pkts_watermark);
-	rlen += sprintf(buf + rlen, "Bucket Len         : %d\n", fsi->data_len);
-	rlen += sprintf(buf + rlen, "Slot Len           : %d [bucket+header]\n", fsi->slot_len);
-	rlen += sprintf(buf + rlen, "Tot Memory         : %d\n", fsi->tot_mem);
 	rlen += sprintf(buf + rlen, "Num Poll Calls     : %u\n", pfr->num_poll_calls);
-	rlen += sprintf(buf + rlen, "Tot Packets        : %lu\n", (unsigned long)fsi->tot_pkts);
-	rlen += sprintf(buf + rlen, "Tot Pkt Lost       : %lu\n", (unsigned long)fsi->tot_lost);
-	rlen += sprintf(buf + rlen, "Tot Insert         : %lu\n", (unsigned long)fsi->tot_insert);
-	rlen += sprintf(buf + rlen, "Tot Read           : %lu\n", (unsigned long)fsi->tot_read);
-	rlen += sprintf(buf + rlen, "Insert Offset      : %lu\n", (unsigned long)fsi->insert_off);
-	rlen += sprintf(buf + rlen, "Remove Offset      : %lu\n", (unsigned long)fsi->remove_off);
-	rlen += sprintf(buf + rlen, "Tot Fwd Ok         : %lu\n", (unsigned long)fsi->tot_fwd_ok);
-	rlen += sprintf(buf + rlen, "Tot Fwd Errors     : %lu\n", (unsigned long)fsi->tot_fwd_notok);
-	rlen += sprintf(buf + rlen, "Num Free Slots     : %u\n",  get_num_ring_free_slots(pfr));
+
+	if (pfr->dna_device_entry != NULL) { 
+	  /* DNA */
+	  rlen += sprintf(buf + rlen, "Channel Id         : %d\n", pfr->dna_device_entry->dev.channel_id);
+          rlen += sprintf(buf + rlen, "Num Slots          : %d\n", pfr->dna_device_entry->dev.mem_info.packet_memory_num_slots);
+	  rlen += sprintf(buf + rlen, "Slot Len           : %d\n", pfr->dna_device_entry->dev.mem_info.packet_memory_slot_len);
+	  rlen += sprintf(buf + rlen, "Tot Memory         : %d\n", pfr->dna_device_entry->dev.mem_info.packet_memory_tot_len);
+	} else {
+	  rlen += sprintf(buf + rlen, "Channel Id         : %d\n", pfr->channel_id);
+	  rlen += sprintf(buf + rlen, "Cluster Id         : %d\n", pfr->cluster_id);
+	  rlen += sprintf(buf + rlen, "Min Num Slots      : %d\n", fsi->min_num_slots);
+	  rlen += sprintf(buf + rlen, "Bucket Len         : %d\n", fsi->data_len);
+	  rlen += sprintf(buf + rlen, "Slot Len           : %d [bucket+header]\n", fsi->slot_len);
+	  rlen += sprintf(buf + rlen, "Tot Memory         : %d\n", fsi->tot_mem);
+	  rlen += sprintf(buf + rlen, "Tot Packets        : %lu\n", (unsigned long)fsi->tot_pkts);
+	  rlen += sprintf(buf + rlen, "Tot Pkt Lost       : %lu\n", (unsigned long)fsi->tot_lost);
+	  rlen += sprintf(buf + rlen, "Tot Insert         : %lu\n", (unsigned long)fsi->tot_insert);
+	  rlen += sprintf(buf + rlen, "Tot Read           : %lu\n", (unsigned long)fsi->tot_read);
+	  rlen += sprintf(buf + rlen, "Insert Offset      : %lu\n", (unsigned long)fsi->insert_off);
+	  rlen += sprintf(buf + rlen, "Remove Offset      : %lu\n", (unsigned long)fsi->remove_off);
+	  rlen += sprintf(buf + rlen, "Tot Fwd Ok         : %lu\n", (unsigned long)fsi->tot_fwd_ok);
+	  rlen += sprintf(buf + rlen, "Tot Fwd Errors     : %lu\n", (unsigned long)fsi->tot_fwd_notok);
+	  rlen += sprintf(buf + rlen, "Num Free Slots     : %u\n",  get_num_ring_free_slots(pfr));
+	}
+
       } else {
 	rlen = sprintf(buf, "WARNING ring not active (fsi == NULL)\n");
       }
