@@ -3482,8 +3482,9 @@ void igb_clean_rx_ring(struct igb_ring *rx_ring)
 		tx_ring->dna.rx_tx.tx.packet_memory[i] = 0;
 	      }
 	    } else {
-	      printk("%s(): [%s@%d] WARNING Not allocated TX DMA memory\n",
-		     __FUNCTION__, tx_ring->netdev->name, tx_ring->queue_index);
+	      if(unlikely(enable_debug))
+		printk("%s(): [%s@%d] WARNING Not allocated TX DMA memory\n",
+		       __FUNCTION__, tx_ring->netdev->name, tx_ring->queue_index);
 	    }
 
 	    if(rx_ring->dna.memory_allocated) {

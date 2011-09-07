@@ -2,7 +2,7 @@
 
 # Configure here the network interfaces to activate
 IF[0]=eth3
-IF[1]=eth5
+IF[1]=eth6
 IF[2]=
 IF[3]=
 
@@ -20,7 +20,10 @@ insmod ../../../../kernel/pf_ring.ko
 #insmod ./igb.ko
 
 # Disable multiqueue
-insmod ./igb.ko VMDQ=0,0,0,0
+#insmod ./igb.ko VMDQ=0,0,0,0
+
+# Enable multiqueue
+insmod ./igb.ko
 
 # Enable 8 queues (you need 8 or more CPU cores)
 #insmod ./igb.ko VMDQ=1,1 RSS=8,8 FdirMode=0,0
