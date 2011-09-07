@@ -13,6 +13,8 @@
 
 //#define VNPLUG_DEBUG
 
+#include <linux/version.h>
+
 static struct class 			*vnplug_class;
 static int 				 vnplug_major;
 static DEFINE_IDR(			 vnplug_idr );
@@ -75,15 +77,31 @@ static int32_t vnplug_ctrl_virtio_send_msg(struct vnplug_ctrl_info *vi, uint32_t
 	printk("[vNPlug-ctrl] sending msg on g2h vq [ type=%u, client id=%u, payload size=%u, ret payload size=%u ]\n", msg_hdr.type, msg_hdr.id, payload_size, ret_payload_size);
 #endif
 
-	BUG_ON(vi->g2h_vq->vq_ops->add_buf(vi->g2h_vq, sg, out, in, vi) < 0);
+	BUG_ON(
+#if(LINUX_VERSION_CODE < KERNEL_VERSION(2,6,36))
+	vi->g2h_vq->vq_ops->add_buf(vi->g2h_vq, sg, out, in, vi)
+#else
+	virtqueue_add_buf(vi->g2h_vq, sg, out, in, vi)
+#endif
+	< 0);
 
+#if(LINUX_VERSION_CODE < KERNEL_VERSION(2,6,36))
 	vi->g2h_vq->vq_ops->kick(vi->g2h_vq);
+#else
+	virtqueue_kick(vi->g2h_vq);
+#endif
 
 	/* We sent a in-stack buffer, so we have to spin for a response.
 	 * The kick causes an ioport write, trapping into the hypervisor, 
 	 * so the request should be handled immediately.
 	 */
-	while (!vi->g2h_vq->vq_ops->get_buf(vi->g2h_vq, &len)) //TODO maybe we should check for the tag
+	while (!
+#if(LINUX_VERSION_CODE < KERNEL_VERSION(2,6,36))	
+	vi->g2h_vq->vq_ops->get_buf(vi->g2h_vq, &len)
+#else
+	virtqueue_get_buf(vi->g2h_vq, &len)
+#endif
+	) //TODO maybe we should check for the tag
 		cpu_relax();
 
 	return status;
