@@ -5722,12 +5722,13 @@ static int ring_getsockopt(struct socket *sock,
     } else if((pfr->ring_netdev != NULL)
 	      && (pfr->ring_netdev->dev != NULL)) {
       char lowest_if_mac[ETH_ALEN] = { 0 };
-      char magic_if_mac[ETH_ALEN]  = { RING_MAGIC_VALUE };
+      char magic_if_mac[ETH_ALEN];
+      memset(magic_if_mac, RING_MAGIC_VALUE, sizeof(magic_if_mac));
 
       /* Read input buffer */
       if(copy_from_user(&lowest_if_mac, optval, ETH_ALEN))
 	return -EFAULT;
-      
+     
       if(!memcmp(lowest_if_mac, magic_if_mac, ETH_ALEN)) {
 	struct list_head *ptr, *tmp_ptr;
 	long lowest_id = -1;
