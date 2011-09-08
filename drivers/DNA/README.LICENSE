@@ -6,12 +6,13 @@ This directory contains the DNA drivers distributed in source format. The user-s
 library is distributed as binary library under PF_RING/userland/lib.
 
 As our work is self-funded, we need some income in order to continue with our research.
-Thus we decided to ask a little fee for using the DNA library (see http://shop.ntop.org).
 For this reason the library requires a per-MAC address unlock code. On the other hand you
 are free to test it: with no unlock-code the application can work for a few minutes in
 order to allow you to evaluate it.
 
 As usual, we give avay free unlock codes to universities and researchers.
+
+Please go to http://www.ntop.org/pf_ring/dna/ for all details.
 
 -------------
 

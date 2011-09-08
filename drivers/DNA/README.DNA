@@ -35,7 +35,6 @@ Note that
   where adapters_to_enable contains the list of adapters to enable with DNA
 
 
-
 Testing DNA
 -----------
 Supposing that you have cross-connected the DNA interfaces ethX and ethY, you can send packet 
