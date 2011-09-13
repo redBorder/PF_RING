@@ -44,7 +44,7 @@ CC        = ${CROSS_COMPILE}gcc
 CFLAGS    = -g  -Wall -fPIC ${INCLUDE} @HAVE_DNA@ @HAVE_VIRTUAL@ @HAVE_DAG@ @CFLAGS@
 LDFLAGS   = -g -shared
 
-SYSLIBS   = -lpthread 
+SYSLIBS   = -lpthread @SYSLIBS@
 
 # How to make an object file
 %.o: %.c %.h

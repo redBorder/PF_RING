@@ -7,6 +7,7 @@ AC_CONFIG_FILES(Makefile)
 AC_CHECK_HEADERS([linux/net_tstamp.h])
 
 CFLAGS=""
+SYS_LIBS=""
 
 MACHINE=`uname -m`
 DNA_LIB="libs/libpfring_dna_$MACHINE.a"
@@ -36,6 +37,8 @@ else
   AC_MSG_RESULT(no)
 fi
 
+AC_CHECK_LIB( [nl], [nl_handle_alloc], [SYSLIBS="$SYSLIBS -lnl"])
+
 AC_CHECK_LIB( [dag], 
               [dag_get_stream_erf_types], 
               [HAVE_DAG="-D HAVE_DAG"; DAG_OBJS="pfring_mod_dag.o"; DAG_LIB="-L/usr/local/lib -ldag"], 
@@ -63,9 +66,11 @@ AC_SUBST(VIRTUAL_OBJS)
 AC_SUBST(VIRTUAL_DEP)
 AC_SUBST(HAVE_DAG)
 AC_SUBST(DAG_OBJS)
+AC_SUBST(SYSLIBS)
 AC_SUBST(INSTALL_PREFIX)
 
-dnl>AC_CONFIG_FILES([Makefile])
+dnl> AC_CONFIG_FILES([Makefile])
 AC_CONFIG_FILES([../examples/Makefile])
+AC_CONFIG_FILES([../c++/Makefile])
 
 AC_OUTPUT

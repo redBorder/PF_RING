@@ -593,6 +593,7 @@ ac_includes_default="\
 ac_subst_vars='LTLIBOBJS
 LIBOBJS
 INSTALL_PREFIX
+SYSLIBS
 DAG_OBJS
 HAVE_DAG
 VIRTUAL_DEP
@@ -3201,6 +3202,7 @@ done
 
 
 CFLAGS=""
+SYS_LIBS=""
 
 MACHINE=`uname -m`
 DNA_LIB="libs/libpfring_dna_$MACHINE.a"
@@ -3235,6 +3237,47 @@ else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
 fi
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for nl_handle_alloc in -lnl" >&5
+$as_echo_n "checking for nl_handle_alloc in -lnl... " >&6; }
+if test "${ac_cv_lib_nl_nl_handle_alloc+set}" = set; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-lnl  $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char nl_handle_alloc ();
+int
+main ()
+{
+return nl_handle_alloc ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  ac_cv_lib_nl_nl_handle_alloc=yes
+else
+  ac_cv_lib_nl_nl_handle_alloc=no
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_nl_nl_handle_alloc" >&5
+$as_echo "$ac_cv_lib_nl_nl_handle_alloc" >&6; }
+if test "x$ac_cv_lib_nl_nl_handle_alloc" = x""yes; then :
+  SYSLIBS="$SYSLIBS -lnl"
+fi
+
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for dag_get_stream_erf_types in -ldag" >&5
 $as_echo_n "checking for dag_get_stream_erf_types in -ldag... " >&6; }
@@ -3301,7 +3344,10 @@ fi
 
 
 
+
 ac_config_files="$ac_config_files ../examples/Makefile"
+
+ac_config_files="$ac_config_files ../c++/Makefile"
 
 
 cat >confcache <<\_ACEOF
@@ -4011,6 +4057,7 @@ do
   case $ac_config_target in
     "Makefile") CONFIG_FILES="$CONFIG_FILES Makefile" ;;
     "../examples/Makefile") CONFIG_FILES="$CONFIG_FILES ../examples/Makefile" ;;
+    "../c++/Makefile") CONFIG_FILES="$CONFIG_FILES ../c++/Makefile" ;;
 
   *) as_fn_error $? "invalid argument: \`$ac_config_target'" "$LINENO" 5 ;;
   esac
