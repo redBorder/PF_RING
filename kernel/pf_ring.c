@@ -40,6 +40,7 @@
  * - Lior Okman <lior.okman@insightix.com>
  * - Fedor Sakharov <fedor.sakharov@gmail.com>
  * - Daniel Christopher <Chris.Daniel@visualnetworksystems.com>
+ * - Martin Holste <mcholste@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -6145,7 +6146,9 @@ static int ring_notifier(struct notifier_block *this, unsigned long msg, void *d
     if(unlikely(enable_debug)) printk("[PF_RING] packet_notifier(%lu)\n", msg);
 
     /* Skip non ethernet interfaces */
-    if(strncmp(dev->name, "eth", 3) && strncmp(dev->name, "lan", 3)) {
+    if(strncmp(dev->name, "eth", 3) 
+       && strncmp(dev->name, "lan", 3)
+       && strncmp(dev->name, "bond", 4)) {
       if(unlikely(enable_debug)) printk("[PF_RING] packet_notifier(%s): skipping non ethernet device\n", dev->name);
       return NOTIFY_DONE;
     }
