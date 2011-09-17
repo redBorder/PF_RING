@@ -396,6 +396,8 @@ int main(int argc, char* argv[]) {
     alarm(ALARM_SLEEP);
   }
 
+  pfring_enable_ring(pd);
+
   while(1) {
     u_char *buffer;
     struct pfring_pkthdr hdr;
