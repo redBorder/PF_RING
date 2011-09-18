@@ -334,7 +334,10 @@ int pfring_stats(pfring *ring, pfring_stat *stats) {
 int pfring_recv(pfring *ring, u_char** buffer, u_int buffer_len,
 		struct pfring_pkthdr *hdr,
 		u_int8_t wait_for_incoming_packet) {
-  if(likely((ring && ring->enabled && ring->recv && (ring->direction != tx_only_direction))))
+  if(likely((ring 
+	     && ring->enabled 
+	     && ring->recv
+	     && (ring->direction != tx_only_direction))))
     return ring->recv(ring, buffer, buffer_len, hdr, wait_for_incoming_packet);
 
   return -1;
@@ -700,6 +703,3 @@ int pfring_is_pkt_available(pfring *ring){
 
   return -1;
 }
-
-
-

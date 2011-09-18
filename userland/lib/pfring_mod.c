@@ -165,7 +165,7 @@ int pfring_mod_open(pfring *ring) {
 
   if(ring->caplen > MAX_CAPLEN) ring->caplen = MAX_CAPLEN;
   rc = setsockopt(ring->fd, 0, SO_RING_BUCKET_LEN, &ring->caplen, sizeof(ring->caplen));
-  
+
   if (rc < 0) {
     close(ring->fd);
     return -1;
@@ -223,7 +223,7 @@ int pfring_mod_open(pfring *ring) {
 
 #ifdef RING_DEBUG
   printf("RING (%s): tot_mem=%u/max_slot_len=%u/"
-	 "insert_off=%u/remove_off=%u/dropped=%lu\n", 
+	 "insert_off=%u/remove_off=%u/dropped=%lu\n",
 	 ring->device_name, ring->slots_info->tot_mem,
 	 ring->slots_info->slot_len,   ring->slots_info->insert_off,
 	 ring->slots_info->remove_off, ring->slots_info->tot_lost);
@@ -408,12 +408,10 @@ int pfring_mod_stats(pfring *ring, pfring_stat *stats) {
 int pfring_mod_recv(pfring *ring, u_char** buffer, u_int buffer_len,
 		    struct pfring_pkthdr *hdr,
 		    u_int8_t wait_for_incoming_packet) {
-
-  if(ring->is_shutting_down) return(-1);
-
   int rc = 0;
 
-  if(ring->buffer == NULL) return(-1);
+  if(ring->is_shutting_down || (ring->buffer == NULL))
+    return(-1);
 
   ring->break_recv_loop = 0;
 
@@ -444,7 +442,7 @@ int pfring_mod_recv(pfring *ring, u_char** buffer, u_int buffer_len,
       if(buffer_len == 0)
 	*buffer = (u_char*)&bucket[ring->slot_header_len];
       else
-	memcpy(*buffer, &bucket[ring->slot_header_len], bktLen);            
+	memcpy(*buffer, &bucket[ring->slot_header_len], bktLen);
 
       next_off = ring->slots_info->remove_off + real_slot_len;
       if((next_off + ring->slots_info->slot_len) > (ring->slots_info->tot_mem - sizeof(FlowSlotInfo))) {
@@ -561,16 +559,16 @@ int pfring_mod_poll(pfring *ring, u_int wait_duration) {
   else {
     struct pollfd pfd;
     int rc;
-    
+
     /* Sleep when nothing is happening */
     pfd.fd      = ring->fd;
     pfd.events  = POLLIN /* | POLLERR */;
     pfd.revents = 0;
     errno       = 0;
-    
+
     rc = poll(&pfd, 1, wait_duration);
     ring->num_poll_calls++;
-    
+
     return(rc);
   }
 }
@@ -611,7 +609,7 @@ int pfring_mod_get_filtering_rule_stats(pfring *ring, u_int16_t rule_id,
 				        char* stats, u_int *stats_len) {
   if(*stats_len < sizeof(u_int16_t))
     return(-1);
-  
+
   memcpy(stats, &rule_id, sizeof(u_int16_t));
   return(getsockopt(ring->fd, 0,
 		    SO_GET_FILTERING_RULE_STATS,
@@ -645,7 +643,7 @@ int pfring_mod_get_hash_filtering_rule_stats(pfring *ring,
 int pfring_mod_add_filtering_rule(pfring *ring, filtering_rule* rule_to_add) {
   int rc;
 
-  if(!rule_to_add) 
+  if(!rule_to_add)
     return(-1);
 
   /* Sanitize entry */
@@ -691,7 +689,7 @@ int pfring_mod_remove_filtering_rule(pfring *ring, u_int16_t rule_id) {
 int pfring_mod_handle_hash_filtering_rule(pfring *ring,
 				 	  hash_filtering_rule* rule_to_add,
 					  u_char add_rule) {
-  if(!rule_to_add) 
+  if(!rule_to_add)
     return(-1);
 
   return(setsockopt(ring->fd, 0, add_rule ? SO_ADD_FILTERING_RULE : SO_REMOVE_FILTERING_RULE,
@@ -736,7 +734,7 @@ int pfring_mod_set_virtual_device(pfring *ring, virtual_filtering_device_info *i
 
 int pfring_mod_loopback_test(pfring *ring, char *buffer, u_int buffer_len, u_int test_len) {
   socklen_t len;
-  
+
   if(test_len > buffer_len) test_len = buffer_len;
   len = test_len;
 
