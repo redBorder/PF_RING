@@ -1962,13 +1962,12 @@ static void e1000_clean_rx_ring(struct e1000_adapter *adapter)
 					    adapter->dna.packet_slot_len,
 					    adapter->dna.tot_packet_memory,
 					    rx_ring->desc,
-					    rx_ring->count,
-					    sizeof(struct e1000_buffer),
 					    rx_ring->size,
 					    /* TX */
 					    1,
 					    adapter->dna.tx_packet_memory,
 					    tx_ring->desc, /* Packet descriptors */
+					    adapter->dna.packet_num_slots,
 					    0, /* Channel Id */
 					    (void*)adapter->netdev->mem_start,
 					    adapter->netdev->mem_end-adapter->netdev->mem_start,

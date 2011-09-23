@@ -339,13 +339,12 @@ void alloc_dna_memory(struct e1000_adapter *adapter) {
 				    adapter->dna.packet_slot_len,
 				    adapter->dna.tot_packet_memory,
 				    rx_ring->desc,
-				    rx_ring->count, /* # of items */
-				    sizeof(struct e1000_rx_desc),
 				    rx_ring->size, /* tot len (bytes) */
 				    /* TX */
 				    1,
 				    adapter->dna.tx_packet_memory,
 				    tx_ring->desc, /* Packet descriptors */
+				    adapter->dna.packet_num_slots,
 				    0, /* Channel Id */
 				    (void*)netdev->mem_start,
 				    netdev->mem_end-netdev->mem_start,

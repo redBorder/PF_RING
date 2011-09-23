@@ -478,7 +478,7 @@ typedef struct flowSlotInfo {
 
 #define DNA_SHIFT                      6
 #define MAX_NUM_DNA_SLOTS_PER_PAGE     (1 << DNA_SHIFT) /* 64 - it MUST be a power of 2 */
-#define MAX_NUM_DNA_PAGES             512               /* IXGBE_MAX_RXD / MAX_NUM_SLOTS_PER_PAGE = 64 */
+#define MAX_NUM_DNA_PAGES             512
 
 /* *********************************** */
 
@@ -533,22 +533,31 @@ typedef struct {
   u_int32_t packet_memory_num_slots;
   u_int32_t packet_memory_slot_len;
   u_int32_t packet_memory_tot_len;
-  u_int32_t descr_packet_memory_num_slots;
-  u_int32_t descr_packet_memory_slot_len;
   u_int32_t descr_packet_memory_tot_len;
+  u_int32_t packet_memory_num_tx_slots;
   u_int32_t phys_card_memory_len;
   dna_device_model device_model;
 } dna_memory_slots;
 
 typedef struct {
+  u_int16_t rx_descr_head, rx_descr_tail, rx_descr_next;
+} dna_indexes;
+
+typedef struct {
+  u_int16_t pkt_len;  /* 0 = no packet received */
+  u_int32_t pkt_hash; /* RSS */
+  /* TODO We need to add the timestamp at some point */
+} dna_descriptor;
+
+typedef struct {
   dna_memory_slots mem_info;
   u_int16_t channel_id, num_rx_pages, num_tx_pages;
   unsigned long rx_packet_memory[MAX_NUM_DNA_PAGES];  /* Invalid in userland */
-  void *rx_descr_packet_memory;    /* Invalid in userland */
   unsigned long tx_packet_memory[MAX_NUM_DNA_PAGES];  /* Invalid in userland */
-  void *tx_descr_packet_memory;    /* Invalid in userland */
-  char *phys_card_memory; /* Invalid in userland */
-  struct net_device *netdev; /* Invalid in userland */
+  void *rx_descr_packet_memory; /* Invalid in userland */
+  void *tx_descr_packet_memory; /* Invalid in userland */
+  char *phys_card_memory;       /* Invalid in userland */
+  struct net_device *netdev;    /* Invalid in userland */
   u_char device_address[6];
 #ifdef __KERNEL__
   wait_queue_head_t *packet_waitqueue;
@@ -898,12 +907,11 @@ typedef void  (*handle_ring_dna_device)(dna_device_operation operation,
 					u_int packet_memory_slot_len,
 					u_int packet_memory_tot_len,
 					void *rx_descr_packet_memory,
-					u_int descr_packet_memory_num_slots,
-					u_int descr_packet_memory_slot_len,
 					u_int descr_packet_memory_tot_len,
 					u_int num_tx_pages,
 					unsigned long tx_packet_memory[MAX_NUM_DNA_PAGES],
 					void *tx_descr_packet_memory,
+					u_int num_tx_slots,
 					u_int channel_id,
 					void *phys_card_memory,
 					u_int phys_card_memory_len,
@@ -938,22 +946,22 @@ extern void do_ring_dna_device_handler(dna_device_operation operation,
 				       u_int packet_memory_slot_len,
 				       u_int packet_memory_tot_len,
 				       void *rx_descr_packet_memory,
-				       u_int descr_packet_memory_num_slots,
-				       u_int descr_packet_memory_slot_len,
 				       u_int descr_packet_memory_tot_len,
 				       u_int num_tx_pages,
 				       unsigned long tx_packet_memory[MAX_NUM_DNA_PAGES],
 				       void *tx_descr_packet_memory,
+				       u_int num_tx_slots,
 				       u_int channel_id,
 				       void *phys_card_memory,
 				       u_int phys_card_memory_len,
 				       struct net_device *netdev,
 				       dna_device_model device_model,
-				       char *device_address,
-				       wait_queue_head_t *packet_waitqueue,
-				       u_int8_t *interrupt_received,
+				       u_char *device_address,
+				       wait_queue_head_t * packet_waitqueue,
+				       u_int8_t * interrupt_received,
 				       void *adapter_ptr,
-				       dna_wait_packet wait_packet_function_ptr);
+				       dna_wait_packet wait_packet_function_ptr,
+				       dna_device_notify dev_notify_function_ptr);
 
 typedef int (*handle_ring_skb)(struct sk_buff *skb, u_char recv_packet,
 			       u_char real_skb, u_int32_t channel_id,

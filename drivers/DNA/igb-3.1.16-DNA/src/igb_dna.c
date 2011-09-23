@@ -570,14 +570,13 @@ void dna_igb_alloc_rx_buffers(struct igb_ring *rx_ring, struct pfring_hooks *hoo
 				rx_ring->dna.packet_slot_len,
 				rx_ring->dna.tot_packet_memory,
 				rx_ring->desc, /* Packet descriptors */
-				rx_ring->count, /* # of items */
-				sizeof(union e1000_adv_rx_desc),
 				/* Double because of the shadow descriptors */
 				2 * rx_ring->size, /* tot len (bytes) */
 				/* TX */
 				tx_ring->dna.num_memory_pages,
 				tx_ring->dna.rx_tx.tx.packet_memory,
 				tx_ring->desc, /* Packet descriptors */
+				tx_ring->dna.packet_num_slots,
 				rx_ring->queue_index, /* Channel Id */
 				(void*)rx_ring->netdev->mem_start,
 				rx_ring->netdev->mem_end - rx_ring->netdev->mem_start,

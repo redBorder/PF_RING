@@ -960,9 +960,7 @@ static int ring_proc_get_info(char *buf, char **start, off_t offset,
 	  rlen += sprintf(buf + rlen, "Tot Memory         : %u bytes\n", 
 			  pfr->dna_device_entry->dev.mem_info.packet_memory_tot_len *
 			  (pfr->dna_device_entry->dev.num_rx_pages + pfr->dna_device_entry->dev.num_tx_pages)
-			  +
-			  (pfr->dna_device_entry->dev.mem_info.packet_memory_num_slots *
-			   pfr->dna_device_entry->dev.mem_info.descr_packet_memory_slot_len));
+			  + pfr->dna_device_entry->dev.mem_info.descr_packet_memory_tot_len);
 	} else {
 	  rlen += sprintf(buf + rlen, "Channel Id         : %d\n", pfr->channel_id);
 	  rlen += sprintf(buf + rlen, "Cluster Id         : %d\n", pfr->cluster_id);
@@ -3969,6 +3967,7 @@ static int ring_mmap(struct file *file,
       break;
 
     case 2:
+      /* DNA: Physical card memory */
       if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->phys_card_memory, (VM_RESERVED | VM_IO), 2)) < 0)
 	return(rc);
       break;
@@ -5822,12 +5821,11 @@ void dna_device_handler(dna_device_operation operation,
 			u_int packet_memory_slot_len,
 			u_int packet_memory_tot_len,
 			void *rx_descr_packet_memory,
-			u_int descr_packet_memory_num_slots,
-			u_int descr_packet_memory_slot_len,
 			u_int descr_packet_memory_tot_len,
 			u_int num_tx_pages,
 			unsigned long tx_packet_memory[MAX_NUM_DNA_PAGES],
 			void *tx_descr_packet_memory,
+			u_int num_tx_slots,
 			u_int channel_id,
 			void *phys_card_memory,
 			u_int phys_card_memory_len,
@@ -5857,22 +5855,25 @@ void dna_device_handler(dna_device_operation operation,
       next->num_bound_sockets = 0;
       memcpy(&next->dev.rx_packet_memory, rx_packet_memory, sizeof(next->dev.rx_packet_memory));
 
+      //printk("[PF_RING] [rx_slots=%u/num_rx_pages=%u/memory_tot_len=%u]][tx_slots=%u/num_tx_pages=%u]\n", 
+      //       packet_memory_num_slots, num_rx_pages, packet_memory_tot_len,
+      //       num_tx_slots, num_tx_pages);
+
       /* Number of mapped pages */
       next->dev.num_rx_pages = num_rx_pages, next->dev.num_tx_pages = num_tx_pages;
-
+      
       next->dev.mem_info.packet_memory_num_slots = packet_memory_num_slots;
       next->dev.mem_info.packet_memory_slot_len = packet_memory_slot_len;
       next->dev.mem_info.packet_memory_tot_len = packet_memory_tot_len;
       next->dev.mem_info.device_model = device_model;
       next->dev.rx_descr_packet_memory = rx_descr_packet_memory;
-      next->dev.mem_info.descr_packet_memory_num_slots = descr_packet_memory_num_slots;
-      next->dev.mem_info.descr_packet_memory_slot_len  = descr_packet_memory_slot_len;
       next->dev.mem_info.descr_packet_memory_tot_len   = descr_packet_memory_tot_len;
       next->dev.phys_card_memory = phys_card_memory;
       next->dev.mem_info.phys_card_memory_len = phys_card_memory_len;
       /* TX */
       if(tx_packet_memory != NULL)
 	memcpy(&next->dev.tx_packet_memory, tx_packet_memory, sizeof(next->dev.rx_packet_memory));
+      next->dev.mem_info.packet_memory_num_tx_slots = num_tx_slots;
       next->dev.tx_descr_packet_memory = tx_descr_packet_memory;
       next->dev.channel_id = channel_id;
       next->dev.netdev = netdev;

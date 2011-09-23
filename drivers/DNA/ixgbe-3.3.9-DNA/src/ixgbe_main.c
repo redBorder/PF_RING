@@ -4691,11 +4691,11 @@ void ixgbe_clean_rx_ring(struct ixgbe_ring *rx_ring)
 					    rx_ring->dna.packet_slot_len,
 					    rx_ring->dna.tot_packet_memory,
 					    rx_ring->desc,
-					    rx_ring->count, /* # of items */
-					    sizeof(union ixgbe_adv_rx_desc),
 					    /* Double because of the shadow descriptors */
 					    2 * rx_ring->size, /* tot len (bytes) */
-					    tx_ring->dna.num_memory_pages, 0, NULL, /* TX */
+					    /* TX */
+					    tx_ring->dna.num_memory_pages, 0, NULL,
+					    tx_ring->dna.packet_num_slots,
 					    rx_ring->queue_index, /* Channel Id */
 					    (void*)rx_ring->netdev->mem_start,
 					    rx_ring->netdev->mem_end - rx_ring->netdev->mem_start,
