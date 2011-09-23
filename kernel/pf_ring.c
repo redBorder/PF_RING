@@ -3924,7 +3924,6 @@ static int ring_mmap(struct file *file,
   if(mem_id >= 100){
     mem_id -= 100;
   
-  
     if (mem_id < pfr->dna_device->mem_info.rx.packet_memory_num_chunks) {
       /* DNA; RX packet memory */
 
@@ -3933,12 +3932,13 @@ static int ring_mmap(struct file *file,
     
       return(0);
     } else {
+      /* DNA: TX packet memory */
+
       mem_id -= pfr->dna_device->mem_info.rx.packet_memory_num_chunks;
 
       if(mem_id >= pfr->dna_device->mem_info.tx.packet_memory_num_chunks) 
         return -EINVAL;
 
-      /* DNA: TX packet memory */
       if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->tx_packet_memory[mem_id], VM_LOCKED, 1)) < 0)
         return(rc);
 
@@ -3970,18 +3970,21 @@ static int ring_mmap(struct file *file,
 
     case 1:
       /* DNA: RX packet descriptors */
+
       if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->rx_descr_packet_memory, VM_LOCKED, 1)) < 0)
 	return(rc);
       break;
 
     case 2:
       /* DNA: Physical card memory */
+
       if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->phys_card_memory, (VM_RESERVED | VM_IO), 2)) < 0)
 	return(rc);
       break;
 
     case 3:
       /* DNA: TX packet descriptors */
+
       if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->tx_descr_packet_memory, VM_LOCKED, 1)) < 0)
 	return(rc);
       break;
