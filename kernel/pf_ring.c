@@ -3921,25 +3921,29 @@ static int ring_mmap(struct file *file,
   }
 
   /* Tricks for DNA */
-  if((mem_id >= 100) && (mem_id < 1124)) {
-    /* DNA; RX packet memory */
-
+  if(mem_id >= 100){
     mem_id -= 100;
-    if(mem_id >= MAX_NUM_DNA_PAGES) return -EINVAL;
+  
+  
+    if (mem_id < pfr->dna_device->mem_info.rx.packet_memory_num_chunks) {
+      /* DNA; RX packet memory */
 
-    if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->rx_packet_memory[mem_id], VM_LOCKED, 1)) < 0)
-      return(rc);
+      if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->rx_packet_memory[mem_id], VM_LOCKED, 1)) < 0)
+        return(rc);
     
-    return(0);
-  } else if((mem_id >= 1124) && (mem_id < 2148)) {
-    mem_id -= 1124;
-    if(mem_id >= MAX_NUM_DNA_PAGES) return -EINVAL;
+      return(0);
+    } else {
+      mem_id -= pfr->dna_device->mem_info.rx.packet_memory_num_chunks;
 
-    /* DNA: TX packet memory */
-    if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->tx_packet_memory[mem_id], VM_LOCKED, 1)) < 0)
-      return(rc);
+      if(mem_id >= pfr->dna_device->mem_info.tx.packet_memory_num_chunks) 
+        return -EINVAL;
 
-    return(0);
+      /* DNA: TX packet memory */
+      if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->tx_packet_memory[mem_id], VM_LOCKED, 1)) < 0)
+        return(rc);
+
+      return(0);
+    }
   }
   
   switch(mem_id) {

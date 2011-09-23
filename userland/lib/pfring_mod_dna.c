@@ -270,7 +270,8 @@ int pfring_dna_open(pfring *ring) {
   for(i=0; i<ring->dna_dev.mem_info.rx.packet_memory_num_chunks; i++) {
     ring->dna_dev.rx_packet_memory[i] =
 	(unsigned long)mmap(NULL, ring->dna_dev.mem_info.rx.packet_memory_chunk_len,
-			    PROT_READ|PROT_WRITE, MAP_SHARED, ring->fd, (100+i)*getpagesize());
+			    PROT_READ|PROT_WRITE, MAP_SHARED, ring->fd, 
+			    (100+i)*getpagesize());
       
     if(ring->dna_dev.rx_packet_memory[i] == (unsigned long)MAP_FAILED) {
       printf("mmap(100/%d) failed", i);
@@ -284,7 +285,8 @@ int pfring_dna_open(pfring *ring) {
   for(i=0; i<ring->dna_dev.mem_info.tx.packet_memory_num_chunks; i++) {
     ring->dna_dev.tx_packet_memory[i] =
 	(unsigned long)mmap(NULL, ring->dna_dev.mem_info.tx.packet_memory_chunk_len,
-			    PROT_READ|PROT_WRITE, MAP_SHARED, ring->fd, (1124+i)*getpagesize());
+			    PROT_READ|PROT_WRITE, MAP_SHARED, ring->fd, 
+			    (ring->dna_dev.mem_info.rx.packet_memory_num_chunks+i)*getpagesize());
       
     if(ring->dna_dev.tx_packet_memory[i] == (unsigned long)MAP_FAILED) {
       printf("mmap(100/%d) failed", i);
