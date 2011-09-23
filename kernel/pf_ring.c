@@ -5870,7 +5870,7 @@ void dna_device_handler(dna_device_operation operation,
 
       /* TX */
       if (tx_info != NULL)
-        memcpy(&next->dev.mem_info.tx, rx_info, sizeof(next->dev.mem_info.tx));
+        memcpy(&next->dev.mem_info.tx, tx_info, sizeof(next->dev.mem_info.tx));
       if(tx_packet_memory != NULL)
 	memcpy(&next->dev.tx_packet_memory, tx_packet_memory, sizeof(next->dev.tx_packet_memory));
       next->dev.tx_descr_packet_memory = tx_descr_packet_memory;
