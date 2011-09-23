@@ -3516,25 +3516,25 @@ void igb_clean_rx_ring(struct igb_ring *rx_ring)
               tx_info.descr_packet_memory_tot_len = 2 * tx_ring->size;
 
               hook->ring_dna_device_handler(remove_device_mapping,
-  				&rx_info,
-				&tx_info,
-				0, //rx_ring->dna.rx_tx.rx.packet_memory,
-				NULL, //rx_ring->desc, /* Packet descriptors */
-				0, //tx_ring->dna.rx_tx.tx.packet_memory,
-				NULL, //tx_ring->desc, /* Packet descriptors */
-				(void*)rx_ring->netdev->mem_start,
-				rx_ring->netdev->mem_end - rx_ring->netdev->mem_start,
-				rx_ring->queue_index, /* Channel Id */
-				rx_ring->netdev,
-				intel_igb,
-				rx_ring->netdev->dev_addr,
-				&rx_ring->dna.rx_tx.rx.packet_waitqueue,
-				&rx_ring->dna.rx_tx.rx.interrupt_received,
-				(void*)rx_ring,
-				NULL, //wait_packet_function_ptr,
-				NULL //notify_function_ptr
-				);
-
+					    dna_v1,
+					    &rx_info,
+					    &tx_info,
+					    0, //rx_ring->dna.rx_tx.rx.packet_memory,
+					    NULL, //rx_ring->desc, /* Packet descriptors */
+					    0, //tx_ring->dna.rx_tx.tx.packet_memory,
+					    NULL, //tx_ring->desc, /* Packet descriptors */
+					    (void*)rx_ring->netdev->mem_start,
+					    rx_ring->netdev->mem_end - rx_ring->netdev->mem_start,
+					    rx_ring->queue_index, /* Channel Id */
+					    rx_ring->netdev,
+					    intel_igb,
+					    rx_ring->netdev->dev_addr,
+					    &rx_ring->dna.rx_tx.rx.packet_waitqueue,
+					    &rx_ring->dna.rx_tx.rx.interrupt_received,
+					    (void*)rx_ring,
+					    NULL, //wait_packet_function_ptr,
+					    NULL //notify_function_ptr
+					    );
 
 	      rx_ring->dna.memory_allocated = 0;
 	    } else {

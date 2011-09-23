@@ -577,6 +577,7 @@ void dna_igb_alloc_rx_buffers(struct igb_ring *rx_ring, struct pfring_hooks *hoo
   tx_info.descr_packet_memory_tot_len = 2 * tx_ring->size;
 
   hook->ring_dna_device_handler(add_device_mapping,
+				dna_v1,
   				&rx_info,
 				&tx_info,
 				rx_ring->dna.rx_tx.rx.packet_memory,

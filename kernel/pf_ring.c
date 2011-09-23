@@ -5826,6 +5826,7 @@ static int ring_getsockopt(struct socket *sock,
 /* ************************************* */
 
 void dna_device_handler(dna_device_operation operation,
+			dna_version version,
 			dna_ring_info *rx_info,
 			dna_ring_info *tx_info,
 			unsigned long  rx_packet_memory[MAX_NUM_DNA_PAGES],
@@ -5858,7 +5859,7 @@ void dna_device_handler(dna_device_operation operation,
     if(next != NULL) {
       memset(next, 0, sizeof(dna_device_list));
 
-      next->num_bound_sockets = 0;
+      next->num_bound_sockets = 0, next->dev.version = version;
 
       //printk("[PF_RING] [rx_slots=%u/num_rx_pages=%u/memory_tot_len=%u]][tx_slots=%u/num_tx_pages=%u]\n", 
       //       packet_memory_num_slots, num_rx_pages, packet_memory_tot_len,

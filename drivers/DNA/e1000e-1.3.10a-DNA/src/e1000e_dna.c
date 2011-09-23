@@ -347,6 +347,7 @@ void alloc_dna_memory(struct e1000_adapter *adapter) {
 
       /* Register with PF_RING */
       hook->ring_dna_device_handler(add_device_mapping,
+				    dna_v1,
   				    &rx_info,
 				    &tx_info,
 				    adapter->dna.rx_packet_memory,

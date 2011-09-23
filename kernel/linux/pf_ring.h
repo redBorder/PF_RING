@@ -548,6 +548,11 @@ typedef struct {
   u_int16_t rx_descr_head, rx_descr_tail, rx_descr_next;
 } dna_indexes;
 
+typedef enum {
+  dna_v1 = 0,
+  dna_v2
+} dna_version;
+
 typedef struct {
   u_int16_t pkt_len;  /* 0 = no packet received */
   u_int32_t pkt_hash; /* RSS */
@@ -555,6 +560,7 @@ typedef struct {
 } dna_descriptor;
 
 typedef struct {
+  dna_version version;
   dna_memory_slots mem_info;
   u_int16_t channel_id;
   unsigned long rx_packet_memory[MAX_NUM_DNA_PAGES];  /* Invalid in userland */
@@ -906,6 +912,7 @@ typedef int   (*register_pfring_plugin)(struct pfring_plugin_registration
 typedef int   (*unregister_pfring_plugin)(u_int16_t pfring_plugin_id);
 typedef u_int (*read_device_pfring_free_slots)(int ifindex);
 typedef void  (*handle_ring_dna_device)(dna_device_operation operation,
+					dna_version version,
 					dna_ring_info *rx_info,
 					dna_ring_info *tx_info,
 					unsigned long  rx_packet_memory[MAX_NUM_DNA_PAGES],

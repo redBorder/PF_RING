@@ -1971,6 +1971,7 @@ static void e1000_clean_rx_ring(struct e1000_adapter *adapter)
               tx_info.descr_packet_memory_tot_len = rx_ring->size;
 
 	      hook->ring_dna_device_handler(remove_device_mapping,
+					    dna_v1,
   					    &rx_info,
 					    &tx_info,
 					    0, //adapter->dna.rx_packet_memory,
