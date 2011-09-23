@@ -5859,7 +5859,7 @@ void dna_device_handler(dna_device_operation operation,
     if(next != NULL) {
       memset(next, 0, sizeof(dna_device_list));
 
-      next->num_bound_sockets = 0, next->dev.version = version;
+      next->num_bound_sockets = 0, next->dev.mem_info.version = version;
 
       //printk("[PF_RING] [rx_slots=%u/num_rx_pages=%u/memory_tot_len=%u]][tx_slots=%u/num_tx_pages=%u]\n", 
       //       packet_memory_num_slots, num_rx_pages, packet_memory_tot_len,
