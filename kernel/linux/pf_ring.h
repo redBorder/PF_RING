@@ -530,11 +530,16 @@ typedef enum {
 } dna_device_model;
 
 typedef struct {  
+  u_int32_t packet_memory_num_chunks;
+  u_int32_t packet_memory_chunk_len;
   u_int32_t packet_memory_num_slots;
   u_int32_t packet_memory_slot_len;
-  u_int32_t packet_memory_tot_len;
   u_int32_t descr_packet_memory_tot_len;
-  u_int32_t packet_memory_num_tx_slots;
+} dna_ring_info;
+
+typedef struct {  
+  dna_ring_info rx;
+  dna_ring_info tx;
   u_int32_t phys_card_memory_len;
   dna_device_model device_model;
 } dna_memory_slots;
@@ -551,7 +556,7 @@ typedef struct {
 
 typedef struct {
   dna_memory_slots mem_info;
-  u_int16_t channel_id, num_rx_pages, num_tx_pages;
+  u_int16_t channel_id;
   unsigned long rx_packet_memory[MAX_NUM_DNA_PAGES];  /* Invalid in userland */
   unsigned long tx_packet_memory[MAX_NUM_DNA_PAGES];  /* Invalid in userland */
   void *rx_descr_packet_memory; /* Invalid in userland */
@@ -901,20 +906,15 @@ typedef int   (*register_pfring_plugin)(struct pfring_plugin_registration
 typedef int   (*unregister_pfring_plugin)(u_int16_t pfring_plugin_id);
 typedef u_int (*read_device_pfring_free_slots)(int ifindex);
 typedef void  (*handle_ring_dna_device)(dna_device_operation operation,
-					u_int num_rx_pages,
-					unsigned long packet_memory[MAX_NUM_DNA_PAGES],
-					u_int packet_memory_num_slots,
-					u_int packet_memory_slot_len,
-					u_int packet_memory_tot_len,
-					void *rx_descr_packet_memory,
-					u_int descr_packet_memory_tot_len,
-					u_int num_tx_pages,
-					unsigned long tx_packet_memory[MAX_NUM_DNA_PAGES],
-					void *tx_descr_packet_memory,
-					u_int num_tx_slots,
+					dna_ring_info *rx_info,
+					dna_ring_info *tx_info,
+					unsigned long  rx_packet_memory[MAX_NUM_DNA_PAGES],
+					void          *rx_descr_packet_memory,
+					unsigned long  tx_packet_memory[MAX_NUM_DNA_PAGES],
+					void          *tx_descr_packet_memory,
+					void          *phys_card_memory,
+					u_int          phys_card_memory_len,
 					u_int channel_id,
-					void *phys_card_memory,
-					u_int phys_card_memory_len,
 					struct net_device *netdev,
 					dna_device_model device_model,
 					u_char *device_address,
@@ -940,20 +940,15 @@ extern handle_ring_dna_device get_ring_dna_device_handler(void);
 extern void set_ring_dna_device_handler(handle_ring_dna_device
 					the_dna_device_handler);
 extern void do_ring_dna_device_handler(dna_device_operation operation,
-				       u_int num_rx_pages,
-				       unsigned long rx_packet_memory[MAX_NUM_DNA_PAGES],
-				       u_int packet_memory_num_slots,
-				       u_int packet_memory_slot_len,
-				       u_int packet_memory_tot_len,
-				       void *rx_descr_packet_memory,
-				       u_int descr_packet_memory_tot_len,
-				       u_int num_tx_pages,
-				       unsigned long tx_packet_memory[MAX_NUM_DNA_PAGES],
-				       void *tx_descr_packet_memory,
-				       u_int num_tx_slots,
+				       dna_ring_info *rx_info,
+				       dna_ring_info *tx_info,
+			 	       unsigned long  rx_packet_memory[MAX_NUM_DNA_PAGES],
+				       void          *rx_descr_packet_memory,
+				       unsigned long  tx_packet_memory[MAX_NUM_DNA_PAGES],
+				       void          *tx_descr_packet_memory,
+				       void          *phys_card_memory,
+				       u_int          phys_card_memory_len,
 				       u_int channel_id,
-				       void *phys_card_memory,
-				       u_int phys_card_memory_len,
 				       struct net_device *netdev,
 				       dna_device_model device_model,
 				       u_char *device_address,

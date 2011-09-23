@@ -4650,10 +4650,14 @@ void ixgbe_clean_rx_ring(struct ixgbe_ring *rx_ring)
 
 #ifdef ENABLE_DNA
 	{
-	  struct ixgbe_adapter *adapter = netdev_priv(rx_ring->netdev);
-	  struct ixgbe_ring    *tx_ring = adapter->tx_ring[rx_ring->queue_index];
+	  struct ixgbe_adapter  *adapter = netdev_priv(rx_ring->netdev);
+	  struct ixgbe_ring     *tx_ring = adapter->tx_ring[rx_ring->queue_index];
 	  struct pfring_hooks   *hook = (struct pfring_hooks*)rx_ring->netdev->pfring_ptr;
+	  struct ixgbe_hw *hw = &adapter->hw;
 	  u_int i;
+          dna_ring_info         rx_info = {0};
+          dna_ring_info         tx_info = {0};
+
 
 	  if(hook) {
 	    if(tx_ring->dna.memory_allocated) {
@@ -4684,29 +4688,38 @@ void ixgbe_clean_rx_ring(struct ixgbe_ring *rx_ring)
 	      }
 
 	      /* De-register with PF_RING: one per channel  */
-	      hook->ring_dna_device_handler(remove_device_mapping,
-					    rx_ring->dna.num_memory_pages,
-					    NULL,
-					    rx_ring->dna.packet_num_slots,
-					    rx_ring->dna.packet_slot_len,
-					    rx_ring->dna.tot_packet_memory,
-					    rx_ring->desc,
-					    /* Double because of the shadow descriptors */
-					    2 * rx_ring->size, /* tot len (bytes) */
-					    /* TX */
-					    tx_ring->dna.num_memory_pages, 0, NULL,
-					    tx_ring->dna.packet_num_slots,
-					    rx_ring->queue_index, /* Channel Id */
-					    (void*)rx_ring->netdev->mem_start,
-					    rx_ring->netdev->mem_end - rx_ring->netdev->mem_start,
-					    rx_ring->netdev,
-					    intel_ixgbe,
-					    rx_ring->netdev->dev_addr,
-					    &rx_ring->dna.rx_tx.rx.packet_waitqueue,
-					    &rx_ring->dna.rx_tx.rx.interrupt_received,
-					    (void*)rx_ring,
-					    NULL,
-					    NULL);	    
+
+              rx_info.packet_memory_num_chunks    = rx_ring->dna.num_memory_pages;
+              rx_info.packet_memory_chunk_len     = rx_ring->dna.tot_packet_memory;
+              rx_info.packet_memory_num_slots     = rx_ring->dna.packet_num_slots;
+              rx_info.packet_memory_slot_len      = rx_ring->dna.packet_slot_len;
+              rx_info.descr_packet_memory_tot_len = 2 * rx_ring->size;
+  
+              tx_info.packet_memory_num_chunks    = tx_ring->dna.num_memory_pages;
+              tx_info.packet_memory_chunk_len     = tx_ring->dna.tot_packet_memory;
+              tx_info.packet_memory_num_slots     = tx_ring->dna.packet_num_slots;
+              tx_info.packet_memory_slot_len      = tx_ring->dna.packet_slot_len;
+              tx_info.descr_packet_memory_tot_len = 2 * tx_ring->size;
+
+              hook->ring_dna_device_handler(remove_device_mapping,
+  				&rx_info,
+				&tx_info,
+				0, //rx_ring->dna.rx_tx.rx.packet_memory,
+				NULL, //rx_ring->desc, /* Packet descriptors */
+				0, //tx_ring->dna.rx_tx.tx.packet_memory,
+				NULL, //tx_ring->desc, /* Packet descriptors */
+				(void*)rx_ring->netdev->mem_start,
+				rx_ring->netdev->mem_end - rx_ring->netdev->mem_start,
+				rx_ring->queue_index, /* Channel Id */
+				rx_ring->netdev,
+				dna_model(hw),
+				rx_ring->netdev->dev_addr,
+				&rx_ring->dna.rx_tx.rx.packet_waitqueue,
+				&rx_ring->dna.rx_tx.rx.interrupt_received,
+				(void*)rx_ring,
+				NULL, //wait_packet_function_ptr,
+				NULL //notify_function_ptr
+				);
 
 	      rx_ring->dna.memory_allocated = 0;
 	    }

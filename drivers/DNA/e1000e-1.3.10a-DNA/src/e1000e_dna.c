@@ -194,6 +194,8 @@ void alloc_dna_memory(struct e1000_adapter *adapter) {
   unsigned int i;
   int cleaned_count = rx_ring->count; /* Allocate all slots in one shot */
   unsigned int bufsz = adapter->rx_buffer_len;
+  dna_ring_info         rx_info = {0}; 
+  dna_ring_info         tx_info = {0}; 
 
   /* Buffers are allocated all in one shot so we'll pass here once */
 #if 0
@@ -331,23 +333,29 @@ void alloc_dna_memory(struct e1000_adapter *adapter) {
 	}
       }
 
+      rx_info.packet_memory_num_chunks    = adapter->dna.num_memory_pages; //1;
+      rx_info.packet_memory_chunk_len     = adapter->dna.tot_packet_memory;
+      rx_info.packet_memory_num_slots     = adapter->dna.packet_num_slots;
+      rx_info.packet_memory_slot_len      = adapter->dna.packet_slot_len;
+      rx_info.descr_packet_memory_tot_len = rx_ring->size;
+  
+      tx_info.packet_memory_num_chunks    = adapter->dna.num_memory_pages; //1;
+      tx_info.packet_memory_chunk_len     = adapter->dna.tot_packet_memory;
+      tx_info.packet_memory_num_slots     = adapter->dna.packet_num_slots;
+      tx_info.packet_memory_slot_len      = adapter->dna.packet_slot_len;
+      tx_info.descr_packet_memory_tot_len = rx_ring->size;
+
       /* Register with PF_RING */
       hook->ring_dna_device_handler(add_device_mapping,
-				    1,
+  				    &rx_info,
+				    &tx_info,
 				    adapter->dna.rx_packet_memory,
-				    adapter->dna.packet_num_slots,
-				    adapter->dna.packet_slot_len,
-				    adapter->dna.tot_packet_memory,
 				    rx_ring->desc,
-				    rx_ring->size, /* tot len (bytes) */
-				    /* TX */
-				    1,
 				    adapter->dna.tx_packet_memory,
 				    tx_ring->desc, /* Packet descriptors */
-				    adapter->dna.packet_num_slots,
-				    0, /* Channel Id */
 				    (void*)netdev->mem_start,
 				    netdev->mem_end-netdev->mem_start,
+				    0, /* Channel Id */
 				    netdev,
 				    intel_e1000e,
 				    adapter->netdev->dev_addr,

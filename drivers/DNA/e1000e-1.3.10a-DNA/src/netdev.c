@@ -1913,8 +1913,10 @@ static void e1000_clean_rx_ring(struct e1000_adapter *adapter)
 	struct pci_dev *pdev = adapter->pdev;
 	unsigned int i, j;
 #ifdef ENABLE_DNA
-	struct e1000_ring *tx_ring = adapter->tx_ring;
+	//struct e1000_ring *tx_ring = adapter->tx_ring;
 	struct pfring_hooks *hook = (struct pfring_hooks*)adapter->netdev->pfring_ptr;
+	dna_ring_info         rx_info = {0}; 
+	dna_ring_info         tx_info = {0}; 
 
 	if(hook && (hook->magic == PF_RING) && adapter->dna.dna_enabled) {
 	  if(adapter->dna.rx_packet_memory[0] != 0) {
@@ -1955,22 +1957,29 @@ static void e1000_clean_rx_ring(struct e1000_adapter *adapter)
 	      }
 
 	      /* De-register with PF_RING */
+
+              rx_info.packet_memory_num_chunks    = 1;
+              rx_info.packet_memory_chunk_len     = adapter->dna.tot_packet_memory;
+              rx_info.packet_memory_num_slots     = adapter->dna.packet_num_slots;
+              rx_info.packet_memory_slot_len      = adapter->dna.packet_slot_len;
+              rx_info.descr_packet_memory_tot_len = rx_ring->size;
+  
+              tx_info.packet_memory_num_chunks    = 1;
+              tx_info.packet_memory_chunk_len     = adapter->dna.tot_packet_memory;
+              tx_info.packet_memory_num_slots     = adapter->dna.packet_num_slots;
+              tx_info.packet_memory_slot_len      = adapter->dna.packet_slot_len;
+              tx_info.descr_packet_memory_tot_len = rx_ring->size;
+
 	      hook->ring_dna_device_handler(remove_device_mapping,
-					    1,
-					    adapter->dna.rx_packet_memory,
-					    adapter->dna.packet_num_slots,
-					    adapter->dna.packet_slot_len,
-					    adapter->dna.tot_packet_memory,
-					    rx_ring->desc,
-					    rx_ring->size,
-					    /* TX */
-					    1,
-					    adapter->dna.tx_packet_memory,
-					    tx_ring->desc, /* Packet descriptors */
-					    adapter->dna.packet_num_slots,
-					    0, /* Channel Id */
+  					    &rx_info,
+					    &tx_info,
+					    0, //adapter->dna.rx_packet_memory,
+					    NULL, //rx_ring->desc,
+					    0, //adapter->dna.tx_packet_memory,
+					    NULL, //tx_ring->desc, /* Packet descriptors */
 					    (void*)adapter->netdev->mem_start,
 					    adapter->netdev->mem_end-adapter->netdev->mem_start,
+					    0, /* Channel Id */
 					    adapter->netdev,
 					    intel_e1000e,
 					    adapter->netdev->dev_addr,

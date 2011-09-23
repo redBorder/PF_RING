@@ -438,6 +438,8 @@ void dna_igb_alloc_rx_buffers(struct igb_ring *rx_ring, struct pfring_hooks *hoo
   u16			cache_line_size;
   struct igb_ring    *tx_ring = adapter->tx_ring[rx_ring->queue_index];
   dna_device_model	model = intel_igb;
+  dna_ring_info         rx_info = {0};
+  dna_ring_info         tx_info = {0};
 
   /* Check if the memory has been already allocated */
   if(rx_ring->dna.memory_allocated) return;
@@ -562,24 +564,28 @@ void dna_igb_alloc_rx_buffers(struct igb_ring *rx_ring, struct pfring_hooks *hoo
   tx_ring->dna.num_memory_pages = rx_ring->dna.num_memory_pages;
   dna_igb_alloc_tx_buffers(tx_ring, hook);
 
+  rx_info.packet_memory_num_chunks    = rx_ring->dna.num_memory_pages;
+  rx_info.packet_memory_chunk_len     = rx_ring->dna.tot_packet_memory;
+  rx_info.packet_memory_num_slots     = rx_ring->dna.packet_num_slots;
+  rx_info.packet_memory_slot_len      = rx_ring->dna.packet_slot_len;
+  rx_info.descr_packet_memory_tot_len = 2 * rx_ring->size;
+  
+  tx_info.packet_memory_num_chunks    = tx_ring->dna.num_memory_pages;
+  tx_info.packet_memory_chunk_len     = tx_ring->dna.tot_packet_memory;
+  tx_info.packet_memory_num_slots     = tx_ring->dna.packet_num_slots;
+  tx_info.packet_memory_slot_len      = tx_ring->dna.packet_slot_len;
+  tx_info.descr_packet_memory_tot_len = 2 * tx_ring->size;
+
   hook->ring_dna_device_handler(add_device_mapping,
-				/* RX */
-				rx_ring->dna.num_memory_pages,
+  				&rx_info,
+				&tx_info,
 				rx_ring->dna.rx_tx.rx.packet_memory,
-				rx_ring->dna.packet_num_slots,
-				rx_ring->dna.packet_slot_len,
-				rx_ring->dna.tot_packet_memory,
 				rx_ring->desc, /* Packet descriptors */
-				/* Double because of the shadow descriptors */
-				2 * rx_ring->size, /* tot len (bytes) */
-				/* TX */
-				tx_ring->dna.num_memory_pages,
 				tx_ring->dna.rx_tx.tx.packet_memory,
 				tx_ring->desc, /* Packet descriptors */
-				tx_ring->dna.packet_num_slots,
-				rx_ring->queue_index, /* Channel Id */
 				(void*)rx_ring->netdev->mem_start,
 				rx_ring->netdev->mem_end - rx_ring->netdev->mem_start,
+				rx_ring->queue_index, /* Channel Id */
 				rx_ring->netdev,
 				model,
 				rx_ring->netdev->dev_addr,
