@@ -4880,7 +4880,7 @@ static int ring_setsockopt(struct socket *sock,
     if(optlen == sizeof(struct sock_fprog)) {
       unsigned int fsize;
       struct sock_fprog fprog;
-      struct sk_filter *filter;
+      struct sk_filter *filter, *old_filter;
 
       ret = -EFAULT;
 
@@ -4907,22 +4907,29 @@ static int ring_setsockopt(struct socket *sock,
 	break;
       }
 
-      if(copy_from_user(filter->insns, fprog.filter, fsize))
-	break;
+      if(copy_from_user(filter->insns, fprog.filter, fsize)){
+	kfree(filter);
+        break;
+      }
 
       filter->len = fprog.len;
 
       if(sk_chk_filter(filter->insns, filter->len) != 0) {
 	/* Bad filter specified */
 	kfree(filter);
-	pfr->bpfFilter = NULL;
 	break;
       }
+
+      old_filter = pfr->bpfFilter;
 
       /* get the lock, set the filter, release the lock */
       write_lock(&pfr->ring_rules_lock);
       pfr->bpfFilter = filter;
       write_unlock(&pfr->ring_rules_lock);
+
+      if(old_filter != NULL)
+        kfree(old_filter);
+
       ret = 0;
 
       if(unlikely(enable_debug))

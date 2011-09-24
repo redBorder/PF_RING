@@ -181,6 +181,7 @@ extern "C" {
     int       (*loopback_test)                (pfring *, char *, u_int, u_int);
     int       (*enable_ring)                  (pfring *);
     int       (*disable_ring)                 (pfring *);
+    int       (*set_bpf_filter)               (pfring *, char *);
 
     /* DNA only */
     int      (*dna_init)             (pfring *);
@@ -271,6 +272,7 @@ extern "C" {
   int pfring_loopback_test(pfring *ring, char *buffer, u_int buffer_len, u_int test_len);
   int pfring_enable_ring(pfring *ring);
   int pfring_disable_ring(pfring *ring);
+  int pfring_set_bpf_filter(pfring *ring, char *filter_buffer);
 
   /* PF_RING Socket bundle (defined in pfring_mod.c) */
   void init_pfring_bundle(pfring_bundle *bundle, bundle_read_policy p);

@@ -23,6 +23,14 @@
 #include <linux/net_tstamp.h>
 #endif
 
+//#define ENABLE_BPF
+
+#ifdef ENABLE_BPF
+#include <pcap/pcap.h>
+#include <pcap/bpf.h>
+#include <linux/filter.h>
+#endif
+
 #include "pfring.h"
 #include "pfring_utils.h"
 #include "pfring_mod.h"
@@ -152,6 +160,7 @@ int pfring_mod_open(pfring *ring) {
   ring->enable_ring = pfring_mod_enable_ring;
   ring->disable_ring = pfring_mod_disable_ring;
   ring->is_pkt_available = pfring_mod_is_pkt_available;
+  ring->set_bpf_filter = pfring_mod_set_bpf_filter;
 
   ring->poll_duration = DEFAULT_POLL_DURATION;
   ring->fd = socket(PF_RING, SOCK_RAW, htons(ETH_P_ALL));
@@ -757,6 +766,43 @@ u_int16_t pfring_mod_get_slot_header_len(pfring *ring) {
   int rc = getsockopt(ring->fd, 0, SO_GET_PKT_HEADER_LEN, &hlen, &len);
 
   return((rc == 0) ? hlen : -1);
+}
+
+/* **************************************************** */
+
+int pfring_mod_set_bpf_filter(pfring *ring, char *filter_buffer){
+  int                rc = 0;
+#ifdef ENABLE_BPF
+  struct bpf_program filter;
+  struct sock_fprog  fcode;
+
+  if (!filter_buffer)
+    return -1;
+
+  if(pcap_compile_nopcap(ring->caplen,  /* snaplen_arg */
+                         DLT_EN10MB,    /* linktype_arg */
+                         &filter,       /* program */
+                         filter_buffer, /* const char *buf */
+                         0,             /* optimize */
+                         0              /* mask */
+                         ) == -1)
+    return -1;
+
+  if (filter.bf_insns == NULL)
+    return (-1);
+
+  fcode.len    = filter.bf_len;
+  fcode.filter = filter.bf_insns;
+
+  rc = setsockopt(ring->fd, 0, SO_ATTACH_FILTER, &fcode, sizeof(fcode));
+
+  if (rc == -1) {
+    int dummy = 0;
+    setsockopt(ring->fd, SOL_SOCKET, SO_DETACH_FILTER, &dummy, sizeof(dummy));
+  }
+#endif
+
+  return rc;
 }
 
 /* **************************************************** */

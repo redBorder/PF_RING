@@ -703,3 +703,14 @@ int pfring_is_pkt_available(pfring *ring){
 
   return -1;
 }
+
+/* **************************************************** */
+
+int pfring_set_bpf_filter(pfring *ring, char *filter_buffer){
+  if(ring && ring->set_bpf_filter) {
+    return ring->set_bpf_filter(ring, filter_buffer);
+  }
+
+  return -1;
+}
+
