@@ -1915,8 +1915,8 @@ static void e1000_clean_rx_ring(struct e1000_adapter *adapter)
 #ifdef ENABLE_DNA
 	//struct e1000_ring *tx_ring = adapter->tx_ring;
 	struct pfring_hooks *hook = (struct pfring_hooks*)adapter->netdev->pfring_ptr;
-	dna_ring_info         rx_info = {0}; 
-	dna_ring_info         tx_info = {0}; 
+	mem_ring_info         rx_info = {0}; 
+	mem_ring_info         tx_info = {0}; 
 
 	if(hook && (hook->magic == PF_RING) && adapter->dna.dna_enabled) {
 	  if(adapter->dna.rx_packet_memory[0] != 0) {

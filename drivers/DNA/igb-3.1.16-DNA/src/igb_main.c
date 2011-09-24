@@ -3461,8 +3461,8 @@ void igb_clean_rx_ring(struct igb_ring *rx_ring)
 	  struct igb_ring    *tx_ring = adapter->tx_ring[rx_ring->queue_index];
 	  struct pfring_hooks   *hook = (struct pfring_hooks*)rx_ring->netdev->pfring_ptr;
 	  u_int i;
-	  dna_ring_info         rx_info = {0}; 
-	  dna_ring_info         tx_info = {0}; 
+	  mem_ring_info         rx_info = {0}; 
+	  mem_ring_info         tx_info = {0}; 
 
 	  if(hook) {
 	    if(tx_ring->dna.memory_allocated) {

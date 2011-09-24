@@ -194,8 +194,8 @@ void alloc_dna_memory(struct e1000_adapter *adapter) {
   unsigned int i;
   int cleaned_count = rx_ring->count; /* Allocate all slots in one shot */
   unsigned int bufsz = adapter->rx_buffer_len;
-  dna_ring_info         rx_info = {0}; 
-  dna_ring_info         tx_info = {0}; 
+  mem_ring_info         rx_info = {0}; 
+  mem_ring_info         tx_info = {0}; 
 
   /* Buffers are allocated all in one shot so we'll pass here once */
 #if 0
@@ -217,10 +217,10 @@ void alloc_dna_memory(struct e1000_adapter *adapter) {
       adapter->dna.packet_slot_len  = ALIGN(bufsz, cache_line_size);
       adapter->dna.packet_num_slots = cleaned_count;
 
-      /* Align the slots to MAX_NUM_DNA_SLOTS_PER_PAGE */
-      adapter->dna.packet_num_slots += (adapter->dna.packet_num_slots % MAX_NUM_DNA_SLOTS_PER_PAGE);
-      adapter->dna.num_memory_pages  = adapter->dna.packet_num_slots / MAX_NUM_DNA_SLOTS_PER_PAGE;
-      adapter->dna.tot_packet_memory = adapter->dna.packet_slot_len * MAX_NUM_DNA_SLOTS_PER_PAGE;
+      /* Align the slots to MAX_NUM_SLOTS_PER_PAGE */
+      adapter->dna.packet_num_slots += (adapter->dna.packet_num_slots % MAX_NUM_SLOTS_PER_PAGE);
+      adapter->dna.num_memory_pages  = adapter->dna.packet_num_slots / MAX_NUM_SLOTS_PER_PAGE;
+      adapter->dna.tot_packet_memory = adapter->dna.packet_slot_len * MAX_NUM_SLOTS_PER_PAGE;
 
       if(0)
 	printk("[DNA] Allocating memory [%u slots][%u memory pages][tot_packet_memory %u bytes]\n",
@@ -246,8 +246,8 @@ void alloc_dna_memory(struct e1000_adapter *adapter) {
       for(i=0; i<cleaned_count; i++) {
 	u_int page_index, offset;
 
-	page_index = i / MAX_NUM_DNA_SLOTS_PER_PAGE;
-	offset = (i % MAX_NUM_DNA_SLOTS_PER_PAGE) * adapter->dna.packet_slot_len;
+	page_index = i / MAX_NUM_SLOTS_PER_PAGE;
+	offset = (i % MAX_NUM_SLOTS_PER_PAGE) * adapter->dna.packet_slot_len;
 	skb = (struct sk_buff *)(adapter->dna.rx_packet_memory[page_index] + offset);
 
 	if(0)
@@ -308,8 +308,8 @@ void alloc_dna_memory(struct e1000_adapter *adapter) {
 	for(i=0; i<cleaned_count; i++) {
 	  u_int page_index, offset;
 
-	  page_index = i / MAX_NUM_DNA_SLOTS_PER_PAGE;
-	  offset = (i % MAX_NUM_DNA_SLOTS_PER_PAGE) * adapter->dna.packet_slot_len;
+	  page_index = i / MAX_NUM_SLOTS_PER_PAGE;
+	  offset = (i % MAX_NUM_SLOTS_PER_PAGE) * adapter->dna.packet_slot_len;
 	  skb = (struct sk_buff *)(adapter->dna.tx_packet_memory[page_index] + offset);
 
 	  if(0)

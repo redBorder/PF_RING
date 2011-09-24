@@ -1,4 +1,4 @@
-/* ***************************************************************
+ /* ***************************************************************
  *
  * (C) 2004-11 - Luca Deri <deri@ntop.org>
  *
@@ -1444,6 +1444,7 @@ static int parse_raw_pkt(char *data, u_int data_len,
 /* ********************************** */
 
 static int parse_pkt(struct sk_buff *skb,
+		     u_int8_t real_skb,
 		     u_int16_t skb_displ,
 		     struct pfring_pkthdr *hdr,
 		     u_int8_t reset_all)
@@ -1454,7 +1455,10 @@ static int parse_pkt(struct sk_buff *skb,
   if(len > (skb->len + skb_displ))
     len = skb->len + skb_displ;
 
-  skb_copy_bits(skb, -skb_displ, pkt_header, len);
+  if(real_skb)
+    skb_copy_bits(skb, -skb_displ, pkt_header, len);
+  else
+    memcpy(pkt_header, skb->data, len);
 
   rc = parse_raw_pkt(pkt_header, len, hdr, reset_all);
   hdr->extended_hdr.parsed_pkt.offset.eth_offset = -skb_displ;
@@ -1899,14 +1903,9 @@ inline int copy_data_to_ring(struct sk_buff *skb,
   u_int32_t off, taken;
   u_short do_lock = ((!quick_mode) || (pfr->num_channels_per_ring > 0)) ? 1 : 0;
 
-  /* printk("[PF_RING] ==> copy_data_to_ring()\n"); */
-
   if(pfr->ring_slots == NULL) return(0);
 
   /* We need to lock as two ksoftirqd might put data onto the same ring */
-
-  if(hdr->ts.tv_sec == 0)
-    set_skb_time(skb, hdr);
 
   if(do_lock) write_lock(&pfr->ring_index_lock);
   // smp_rmb();
@@ -1931,6 +1930,9 @@ inline int copy_data_to_ring(struct sk_buff *skb,
   if(skb != NULL) {
     /* skb copy mode */
 
+    if(hdr->ts.tv_sec == 0)
+      set_skb_time(skb, hdr);
+    
     if(!quick_mode) {
       if((plugin_mem != NULL) && (offset > 0))
 	memcpy(&ring_bucket[pfr->slot_header_len], plugin_mem, offset);
@@ -2002,6 +2004,7 @@ inline int copy_raw_data_to_ring(struct pf_ring_socket *pfr,
 /* ********************************** */
 
 inline int add_pkt_to_ring(struct sk_buff *skb,
+			   u_int8_t real_skb,
 			   struct pf_ring_socket *_pfr,
 			   struct pfring_pkthdr *hdr,
 			   int displ, u_int32_t channel_id,
@@ -2011,8 +2014,8 @@ inline int add_pkt_to_ring(struct sk_buff *skb,
   u_int32_t the_bit = 1 << channel_id;
 
   if(unlikely(enable_debug))
-    printk("[PF_RING] --> add_pkt_to_ring(len=%d) [pfr->channel_id=%d][channel_id=%d]\n",
-	   hdr->len, pfr->channel_id, channel_id);
+    printk("[PF_RING] --> add_pkt_to_ring(len=%d) [pfr->channel_id=%d][channel_id=%d][real_skb=%u]\n",
+	   hdr->len, pfr->channel_id, channel_id, real_skb);
 
   if((!pfr->ring_active) || (!skb))
     return(0);
@@ -2033,20 +2036,25 @@ inline int add_pkt_to_ring(struct sk_buff *skb,
     return(0);
   }
 
-  return(copy_data_to_ring(skb, pfr, hdr, displ, offset, plugin_mem, NULL, 0));
+  if(real_skb)
+    return(copy_data_to_ring(skb, pfr, hdr, displ, offset, plugin_mem, NULL, 0));
+  else
+    return(copy_raw_data_to_ring(pfr, hdr, skb->data, hdr->len));
 }
 
 /* ********************************** */
 
-static int add_packet_to_ring(struct pf_ring_socket *pfr, struct pfring_pkthdr *hdr,
+static int add_packet_to_ring(struct pf_ring_socket *pfr, 
+			      u_int8_t real_skb,
+			      struct pfring_pkthdr *hdr,
 			      struct sk_buff *skb,
 			      int displ, u_int8_t parse_pkt_first)
 {
   if(parse_pkt_first)
-    parse_pkt(skb, displ, hdr, 0 /* Do not reset user-specified fields */);
+    parse_pkt(skb, real_skb, displ, hdr, 0 /* Do not reset user-specified fields */);
 
   ring_read_lock();
-  add_pkt_to_ring(skb, pfr, hdr, 0, RING_ANY_CHANNEL, displ, NULL);
+  add_pkt_to_ring(skb, real_skb, pfr, hdr, 0, RING_ANY_CHANNEL, displ, NULL);
   ring_read_unlock();
   return(0);
 }
@@ -2068,9 +2076,11 @@ static int add_raw_packet_to_ring(struct pf_ring_socket *pfr, struct pfring_pkth
 
 /* ********************************** */
 
-static int add_hdr_to_ring(struct pf_ring_socket *pfr, struct pfring_pkthdr *hdr)
+static int add_hdr_to_ring(struct pf_ring_socket *pfr, 
+			   u_int8_t real_skb,
+			   struct pfring_pkthdr *hdr)
 {
-  return(add_packet_to_ring(pfr, hdr, NULL, 0, 0));
+  return(add_packet_to_ring(pfr, real_skb, hdr, NULL, 0, 0));
 }
 
 /* ********************************** */
@@ -2428,6 +2438,7 @@ int bpf_filter_skb(struct sk_buff *skb,
  *
  */
 static int add_skb_to_ring(struct sk_buff *skb,
+			   u_int8_t real_skb,
 			   struct pf_ring_socket *pfr,
 			   struct pfring_pkthdr *hdr,
 			   int is_ip_pkt, int displ,
@@ -2560,7 +2571,7 @@ static int add_skb_to_ring(struct sk_buff *skb,
       } else
 	offset = 0, hdr->extended_hdr.parsed_header_len = 0, mem = NULL;
 
-      rc = add_pkt_to_ring(skb, pfr, hdr, displ, channel_id, offset, mem);
+      rc = add_pkt_to_ring(skb, real_skb, pfr, hdr, displ, channel_id, offset, mem);
     }
   }
 
@@ -2783,7 +2794,7 @@ static struct sk_buff* defrag_skb(struct sk_buff *skb,
 	  skb = skk;
 	  *defragmented_skb = 1;
 	  hdr->len = hdr->caplen = skb->len + displ;
-	  parse_pkt(skb, displ, hdr, 1);
+	  parse_pkt(skb, 1, displ, hdr, 1);
 	} else {
 	  //printk("[PF_RING] Fragment queued \n");
 	  return(NULL);	/* mask rcvd fragments */
@@ -2908,7 +2919,7 @@ static int skb_ring_handler(struct sk_buff *skb,
     hdr.extended_hdr.parsed_header_len = 0;
 
     if(pfr && pfr->rehash_rss && skb->dev) {
-      parse_pkt(skb, displ, &hdr, 1);
+      parse_pkt(skb, real_skb, displ, &hdr, 1);
 
       channel_id = hash_pkt_header(&hdr, 0, 0) % get_num_rx_queues(skb->dev);
     }
@@ -2924,7 +2935,7 @@ static int skb_ring_handler(struct sk_buff *skb,
       room_available |= copy_data_to_ring(skb, pfr, &hdr, displ, 0, NULL, NULL, 0);
     }
   } else {
-    is_ip_pkt = parse_pkt(skb, displ, &hdr, 1);
+    is_ip_pkt = parse_pkt(skb, real_skb, displ, &hdr, 1);
 
     if(enable_ip_defrag) {
       if(real_skb
@@ -2970,7 +2981,7 @@ static int skb_ring_handler(struct sk_buff *skb,
 	int old_caplen = hdr.caplen;  /* Keep old lenght */
 
 	hdr.caplen = min_val(hdr.caplen, pfr->bucket_len);
-	room_available |= add_skb_to_ring(skb, pfr, &hdr, is_ip_pkt,
+	room_available |= add_skb_to_ring(skb, real_skb, pfr, &hdr, is_ip_pkt,
 					  displ, channel_id, num_rx_channels);
 	hdr.caplen = old_caplen;
 	rc = 1;	/* Ring found: we've done our job */
@@ -3014,7 +3025,7 @@ static int skb_ring_handler(struct sk_buff *skb,
 	       ) {
 	      if(check_and_init_free_slot(pfr, pfr->slots_info->insert_off) /* Not full */) {
 		/* We've found the ring where the packet can be stored */
-		room_available |= add_skb_to_ring(skb, pfr, &hdr, is_ip_pkt,
+		room_available |= add_skb_to_ring(skb, real_skb, pfr, &hdr, is_ip_pkt,
 						  displ, channel_id, num_rx_channels);
 		rc = 1; /* Ring found: we've done our job */
 		break;
@@ -5834,11 +5845,11 @@ static int ring_getsockopt(struct socket *sock,
 
 void dna_device_handler(dna_device_operation operation,
 			dna_version version,
-			dna_ring_info *rx_info,
-			dna_ring_info *tx_info,
-			unsigned long  rx_packet_memory[MAX_NUM_DNA_PAGES],
+			mem_ring_info *rx_info,
+			mem_ring_info *tx_info,
+			unsigned long  rx_packet_memory[MAX_NUM_PAGES],
 			void          *rx_descr_packet_memory,
-			unsigned long  tx_packet_memory[MAX_NUM_DNA_PAGES],
+			unsigned long  tx_packet_memory[MAX_NUM_PAGES],
 			void          *tx_descr_packet_memory,
 			void          *phys_card_memory,
 			u_int          phys_card_memory_len,
@@ -6164,6 +6175,8 @@ static int ring_notifier(struct notifier_block *this, unsigned long msg, void *d
     /* Skip non ethernet interfaces */
     if(strncmp(dev->name, "eth", 3) 
        && strncmp(dev->name, "lan", 3)
+       && strncmp(dev->name, "dna", 3)
+       && strncmp(dev->name, "tnapi", 4)
        && strncmp(dev->name, "bond", 4)) {
       if(unlikely(enable_debug)) printk("[PF_RING] packet_notifier(%s): skipping non ethernet device\n", dev->name);
       return NOTIFY_DONE;

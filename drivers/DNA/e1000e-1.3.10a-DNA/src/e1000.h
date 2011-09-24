@@ -384,8 +384,8 @@ struct e1000_adapter {
     
     u_int tot_packet_memory, packet_slot_len, packet_num_slots, mem_order, num_memory_pages;
     /* Pointer to the slots where packets will be hosted */
-    unsigned long rx_packet_memory[MAX_NUM_DNA_PAGES];
-    unsigned long tx_packet_memory[MAX_NUM_DNA_PAGES];
+    unsigned long rx_packet_memory[MAX_NUM_PAGES];
+    unsigned long tx_packet_memory[MAX_NUM_PAGES];
   } dna;
 #endif
 };

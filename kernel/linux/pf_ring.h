@@ -476,9 +476,9 @@ typedef struct flowSlotInfo {
 
 /* **************************************** */
 
-#define DNA_SHIFT                      6
-#define MAX_NUM_DNA_SLOTS_PER_PAGE     (1 << DNA_SHIFT) /* 64 - it MUST be a power of 2 */
-#define MAX_NUM_DNA_PAGES             512
+#define DNA_SHIFT                   6
+#define MAX_NUM_SLOTS_PER_PAGE     (1 << DNA_SHIFT) /* 64 - it MUST be a power of 2 */
+#define MAX_NUM_PAGES             512
 
 /* *********************************** */
 
@@ -535,7 +535,7 @@ typedef struct {
   u_int32_t packet_memory_num_slots;
   u_int32_t packet_memory_slot_len;
   u_int32_t descr_packet_memory_tot_len;
-} dna_ring_info;
+} mem_ring_info;
 
 typedef enum {
   dna_v1 = 0,
@@ -544,8 +544,8 @@ typedef enum {
 
 typedef struct {
   dna_version version;
-  dna_ring_info rx;
-  dna_ring_info tx;
+  mem_ring_info rx;
+  mem_ring_info tx;
   u_int32_t phys_card_memory_len;
   dna_device_model device_model;
 } dna_memory_slots;
@@ -553,6 +553,10 @@ typedef struct {
 typedef struct {
   u_int16_t rx_descr_head, rx_descr_tail, rx_descr_next;
 } dna_indexes;
+
+typedef struct {
+  u_int16_t rx_descr_head, rx_descr_tail;
+} tnapi_indexes;
 
 typedef struct {
   u_int16_t pkt_len;  /* 0 = no packet received */
@@ -563,8 +567,8 @@ typedef struct {
 typedef struct {
   dna_memory_slots mem_info;
   u_int16_t channel_id;
-  unsigned long rx_packet_memory[MAX_NUM_DNA_PAGES];  /* Invalid in userland */
-  unsigned long tx_packet_memory[MAX_NUM_DNA_PAGES];  /* Invalid in userland */
+  unsigned long rx_packet_memory[MAX_NUM_PAGES];  /* Invalid in userland */
+  unsigned long tx_packet_memory[MAX_NUM_PAGES];  /* Invalid in userland */
   void *rx_descr_packet_memory; /* Invalid in userland */
   void *tx_descr_packet_memory; /* Invalid in userland */
   char *phys_card_memory;       /* Invalid in userland */
@@ -718,6 +722,7 @@ typedef int (*do_handle_sw_filtering_hash_bucket)(struct pf_ring_socket *pfr,
 					       u_char add_rule);
 
 typedef int (*do_add_packet_to_ring)(struct pf_ring_socket *pfr,
+				     u_int8_t real_skb,
 				     struct pfring_pkthdr *hdr, struct sk_buff *skb,
 				     int displ, u_int8_t parse_pkt_first);
 
@@ -907,17 +912,16 @@ struct pfring_plugin_registration {
   kernel_packet_term   pfring_packet_term;
 };
 
-typedef int   (*register_pfring_plugin)(struct pfring_plugin_registration
-					*reg);
+typedef int   (*register_pfring_plugin)(struct pfring_plugin_registration *reg);
 typedef int   (*unregister_pfring_plugin)(u_int16_t pfring_plugin_id);
 typedef u_int (*read_device_pfring_free_slots)(int ifindex);
 typedef void  (*handle_ring_dna_device)(dna_device_operation operation,
 					dna_version version,
-					dna_ring_info *rx_info,
-					dna_ring_info *tx_info,
-					unsigned long  rx_packet_memory[MAX_NUM_DNA_PAGES],
+					mem_ring_info *rx_info,
+					mem_ring_info *tx_info,
+					unsigned long  rx_packet_memory[MAX_NUM_PAGES],
 					void          *rx_descr_packet_memory,
-					unsigned long  tx_packet_memory[MAX_NUM_DNA_PAGES],
+					unsigned long  tx_packet_memory[MAX_NUM_PAGES],
 					void          *tx_descr_packet_memory,
 					void          *phys_card_memory,
 					u_int          phys_card_memory_len,
@@ -930,6 +934,7 @@ typedef void  (*handle_ring_dna_device)(dna_device_operation operation,
 					void *adapter_ptr,
 					dna_wait_packet wait_packet_function_ptr,
 					dna_device_notify dev_notify_function_ptr);
+typedef u_int8_t (*pfring_tx_pkt)(void* private_data, char *pkt, u_int pkt_len);
 
 extern register_pfring_plugin get_register_pfring_plugin(void);
 extern unregister_pfring_plugin get_unregister_pfring_plugin(void);
@@ -947,11 +952,11 @@ extern handle_ring_dna_device get_ring_dna_device_handler(void);
 extern void set_ring_dna_device_handler(handle_ring_dna_device
 					the_dna_device_handler);
 extern void do_ring_dna_device_handler(dna_device_operation operation,
-				       dna_ring_info *rx_info,
-				       dna_ring_info *tx_info,
-			 	       unsigned long  rx_packet_memory[MAX_NUM_DNA_PAGES],
+				       mem_ring_info *rx_info,
+				       mem_ring_info *tx_info,
+			 	       unsigned long  rx_packet_memory[MAX_NUM_PAGES],
 				       void          *rx_descr_packet_memory,
-				       unsigned long  tx_packet_memory[MAX_NUM_DNA_PAGES],
+				       unsigned long  tx_packet_memory[MAX_NUM_PAGES],
 				       void          *tx_descr_packet_memory,
 				       void          *phys_card_memory,
 				       u_int          phys_card_memory_len,
@@ -971,15 +976,17 @@ typedef int (*handle_ring_skb)(struct sk_buff *skb, u_char recv_packet,
 typedef int (*handle_ring_buffer)(struct net_device *dev,
 				  char *data, int len);
 typedef int (*handle_add_hdr_to_ring)(struct pf_ring_socket *pfr,
+				      u_int8_t real_skb,
 				      struct pfring_pkthdr *hdr);
 
 /* Hack to jump from a device directly to PF_RING */
 struct pfring_hooks {
   u_int32_t magic; /*
-		      It should be set to PF_RING
-		      and is MUST be the first one on this struct
+		     It should be set to PF_RING
+		     and is MUST be the first one on this struct
 		   */
   unsigned int *transparent_mode;
+  void *rx_private_data, *tx_private_data;
   handle_ring_skb ring_handler;
   handle_ring_buffer buffer_ring_handler;
   handle_add_hdr_to_ring buffer_add_hdr_to_ring;
@@ -987,6 +994,7 @@ struct pfring_hooks {
   unregister_pfring_plugin pfring_unregistration;
   handle_ring_dna_device ring_dna_device_handler;
   read_device_pfring_free_slots pfring_free_device_slots;
+  pfring_tx_pkt pfring_send_packet;
 };
 
 /* *************************************************************** */

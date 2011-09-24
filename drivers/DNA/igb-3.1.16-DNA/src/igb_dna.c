@@ -372,8 +372,8 @@ void dna_igb_alloc_tx_buffers(struct igb_ring *tx_ring, struct pfring_hooks *hoo
     u_int offset, page_index;
     char *pkt;
 
-    page_index = i / MAX_NUM_DNA_SLOTS_PER_PAGE;
-    offset = (i % MAX_NUM_DNA_SLOTS_PER_PAGE) * tx_ring->dna.packet_slot_len;
+    page_index = i / MAX_NUM_SLOTS_PER_PAGE;
+    offset = (i % MAX_NUM_SLOTS_PER_PAGE) * tx_ring->dna.packet_slot_len;
     pkt = (char *)(tx_ring->dna.rx_tx.tx.packet_memory[page_index] + offset);
 
     bi      = &tx_ring->buffer_info[i];
@@ -438,8 +438,8 @@ void dna_igb_alloc_rx_buffers(struct igb_ring *rx_ring, struct pfring_hooks *hoo
   u16			cache_line_size;
   struct igb_ring    *tx_ring = adapter->tx_ring[rx_ring->queue_index];
   dna_device_model	model = intel_igb;
-  dna_ring_info         rx_info = {0};
-  dna_ring_info         tx_info = {0};
+  mem_ring_info         rx_info = {0};
+  mem_ring_info         tx_info = {0};
 
   /* Check if the memory has been already allocated */
   if(rx_ring->dna.memory_allocated) return;
@@ -466,15 +466,15 @@ void dna_igb_alloc_rx_buffers(struct igb_ring *rx_ring, struct pfring_hooks *hoo
   rx_ring->dna.packet_slot_len  = ALIGN(sizeof(union e1000_adv_rx_desc), cache_line_size);
   rx_ring->dna.packet_num_slots = rx_ring->count;
 
-  /* Align the slots to MAX_NUM_DNA_SLOTS_PER_PAGE */
-  rx_ring->dna.packet_num_slots += (rx_ring->dna.packet_num_slots % MAX_NUM_DNA_SLOTS_PER_PAGE);
-  rx_ring->dna.num_memory_pages = rx_ring->dna.packet_num_slots / MAX_NUM_DNA_SLOTS_PER_PAGE;
+  /* Align the slots to MAX_NUM_SLOTS_PER_PAGE */
+  rx_ring->dna.packet_num_slots += (rx_ring->dna.packet_num_slots % MAX_NUM_SLOTS_PER_PAGE);
+  rx_ring->dna.num_memory_pages = rx_ring->dna.packet_num_slots / MAX_NUM_SLOTS_PER_PAGE;
 
   if(unlikely(enable_debug))
     printk("%s(): rx_ring->dna.packet_slot_len=%d\n", __FUNCTION__,
 	   rx_ring->dna.packet_slot_len);
 
-  rx_ring->dna.tot_packet_memory = rx_ring->dna.packet_slot_len * MAX_NUM_DNA_SLOTS_PER_PAGE;
+  rx_ring->dna.tot_packet_memory = rx_ring->dna.packet_slot_len * MAX_NUM_SLOTS_PER_PAGE;
 
   if(unlikely(enable_debug))
     printk("%s(): rx_ring->dna.tot_packet_memory=%d\n",
@@ -502,8 +502,8 @@ void dna_igb_alloc_rx_buffers(struct igb_ring *rx_ring, struct pfring_hooks *hoo
     u_int offset, page_index;
     char *pkt;
     
-    page_index = i / MAX_NUM_DNA_SLOTS_PER_PAGE;
-    offset = (i % MAX_NUM_DNA_SLOTS_PER_PAGE) * rx_ring->dna.packet_slot_len;
+    page_index = i / MAX_NUM_SLOTS_PER_PAGE;
+    offset = (i % MAX_NUM_SLOTS_PER_PAGE) * rx_ring->dna.packet_slot_len;
     pkt = (char *)(rx_ring->dna.rx_tx.rx.packet_memory[page_index] + offset);
 
     if(unlikely(enable_debug))

@@ -4655,8 +4655,8 @@ void ixgbe_clean_rx_ring(struct ixgbe_ring *rx_ring)
 	  struct pfring_hooks   *hook = (struct pfring_hooks*)rx_ring->netdev->pfring_ptr;
 	  struct ixgbe_hw *hw = &adapter->hw;
 	  u_int i;
-          dna_ring_info         rx_info = {0};
-          dna_ring_info         tx_info = {0};
+          mem_ring_info         rx_info = {0};
+          mem_ring_info         tx_info = {0};
 
 
 	  if(hook) {
