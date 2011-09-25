@@ -103,48 +103,23 @@ pfring* pfring_open(char *device_name, u_int8_t promisc,
     ret = -1;
     ring->device_name = NULL;
 
-    /*
-      Check if this is a DNA adapter and for some
-      reason the user forgot to add dna:ethX
-    */
-    if(strcmp(device_name, "any")
-       && strcmp(device_name, "lo")
-       && strncmp(device_name, "dna:", 4)) {
-      ring->device_name = strdup(device_name);
-      ret = pfring_dna_open(ring);     
-    }    
+    while (pfring_module_list[++i].name) {
+      char *str1;
 
-    if(ret >= 0) {
-      /* The DNA device exists */
-      mod_found = 1;
-    } else {
-      if (ring->device_name != NULL) {
-        free(ring->device_name);
-        ring->device_name = NULL;
-      }
-
-      if(ret == UNKNOWN_DNA_ADAPTER_MODEL) {
-	/* Invalid license found */
-	if(ring->device_name) free(ring->device_name);
-	free(ring);
-	return NULL;
-      }
-
-      while (pfring_module_list[++i].name) {
-	if(!(str = strstr(device_name, pfring_module_list[i].name))) continue;
-	if(!(str = strchr(str, ':')))                                continue;
-	if(!pfring_module_list[i].open)                              continue;
+      if(!(str = strstr(device_name, pfring_module_list[i].name))) continue;
+      if(!pfring_module_list[i].open)                              continue;
+      
+      str1 = strchr(str, ':');
 
 #ifdef RING_DEBUG
-	printf("pfring_open: found module %s\n", pfring_module_list[i].name);
+      printf("pfring_open: found module %s\n", pfring_module_list[i].name);
 #endif
-
-	mod_found = 1;
-	ring->device_name = strdup(++str);
-	ret = pfring_module_list[i].open(ring);
-	break;
-      }
-    }
+      
+      mod_found = 1;
+      ring->device_name = str1 ? strdup(++str1) : strdup(device_name);
+      ret = pfring_module_list[i].open(ring);
+      break;
+    }    
   }
 
   /* default */

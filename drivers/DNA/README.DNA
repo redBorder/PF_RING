@@ -30,25 +30,25 @@ Note that
 - you might need to change the interface names into your script
 - you can decide which adapters to enable as follows
 
-  insmod ./e1000e.ko adapters_to_enable=eth5,eth7
+  insmod ./e1000e.ko adapters_to_enable=dna0
 
   where adapters_to_enable contains the list of adapters to enable with DNA
 
 
 Testing DNA
 -----------
-Supposing that you have cross-connected the DNA interfaces ethX and ethY, you can send packet 
+Supposing that you have cross-connected the DNA interfaces dnaX and dnaY, you can send packet 
 on one interface and receive them from the other. Example
 
 [Sender]
 # cd ~/PF_RING/userland/examples/
-# sudo ./pfsend -i ethX -n 0
+# sudo ./pfsend -i dnaX -n 0
 
 [Receiver]
 # cd ~/PF_RING/userland/examples/
-# sudo ./pfcount -i ethY
+# sudo ./pfcount -i dnaY
 (optionally you can add '-a' for maximum performance)
 
 ---------------------------------------
-August 2011 - Luca Deri <deri@ntop.org>
+September 2011 - Luca Deri <deri@ntop.org>
 

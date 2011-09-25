@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Configure here the network interfaces to activate
-IF[0]=eth5
-IF[1]=eth6
+IF[0]=dna5
+IF[1]=dna6
 IF[2]=
 IF[3]=
 

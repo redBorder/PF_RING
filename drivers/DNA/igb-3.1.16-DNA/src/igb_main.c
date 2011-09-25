@@ -2222,7 +2222,11 @@ static int __devinit igb_probe(struct pci_dev *pdev,
 	 * driver. */
 	igb_get_hw_control(adapter);
 
+#ifdef ENABLE_DNA
+	strncpy(netdev->name, "dna%d", IFNAMSIZ);
+#else
 	strncpy(netdev->name, "eth%d", IFNAMSIZ);
+#endif
 	err = register_netdev(netdev);
 	if (err)
 		goto err_register;

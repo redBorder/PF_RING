@@ -8701,7 +8701,11 @@ static int __devinit ixgbe_probe(struct pci_dev *pdev,
 		hw->mac.ops.get_bus_info(hw);
 
 
+#ifdef ENABLE_DNA
+	strcpy(netdev->name, "dna%d");
+#else
 	strcpy(netdev->name, "eth%d");
+#endif
 	err = register_netdev(netdev);
 	if(err)
 		goto err_register;
