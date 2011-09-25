@@ -7196,7 +7196,11 @@ static int __devinit e1000_probe(struct pci_dev *pdev,
 	if (!(adapter->flags & FLAG_HAS_AMT))
 		e1000e_get_hw_control(adapter);
 
+#ifdef ENABLE_DNA
+	strncpy(netdev->name, "dna%d", sizeof(netdev->name) - 1);
+#else
 	strncpy(netdev->name, "eth%d", sizeof(netdev->name) - 1);
+#endif
 	err = register_netdev(netdev);
 	if (err)
 		goto err_register;

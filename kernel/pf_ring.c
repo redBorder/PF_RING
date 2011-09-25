@@ -2932,7 +2932,7 @@ static int skb_ring_handler(struct sk_buff *skb,
       /* printk("==>>> [%d][%d]\n", skb->dev->ifindex, channel_id); */
 
       rc = 1, hdr.caplen = min_val(hdr.caplen, pfr->bucket_len);
-      room_available |= copy_data_to_ring(skb, pfr, &hdr, displ, 0, NULL, NULL, 0);
+      room_available |= copy_data_to_ring(real_skb ? skb : NULL, pfr, &hdr, displ, 0, NULL, NULL, 0);
     }
   } else {
     is_ip_pkt = parse_pkt(skb, real_skb, displ, &hdr, 1);
