@@ -689,3 +689,14 @@ int pfring_set_bpf_filter(pfring *ring, char *filter_buffer){
   return -1;
 }
 
+/* **************************************************** */
+
+int pfring_remove_bpf_filter(pfring *ring){
+  if(ring && ring->remove_bpf_filter) {
+    return ring->remove_bpf_filter(ring);
+  }
+
+  return -1;
+}
+
+

@@ -2397,7 +2397,7 @@ int bpf_filter_skb(struct sk_buff *skb,
     rcu_read_lock_bh();
     res = sk_run_filter(skb, pfr->bpfFilter->insns
 #if(LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38))
-			, skb->len
+			, pfr->bpfFilter->len
 #endif
 			);
     rcu_read_unlock_bh();

@@ -182,6 +182,7 @@ extern "C" {
     int       (*enable_ring)                  (pfring *);
     int       (*disable_ring)                 (pfring *);
     int       (*set_bpf_filter)               (pfring *, char *);
+    int       (*remove_bpf_filter)            (pfring *);
 
     /* DNA only */
     int      (*dna_init)             (pfring *);
@@ -273,6 +274,7 @@ extern "C" {
   int pfring_enable_ring(pfring *ring);
   int pfring_disable_ring(pfring *ring);
   int pfring_set_bpf_filter(pfring *ring, char *filter_buffer);
+  int pfring_remove_bpf_filter(pfring *ring);
 
   /* PF_RING Socket bundle (defined in pfring_mod.c) */
   void init_pfring_bundle(pfring_bundle *bundle, bundle_read_policy p);

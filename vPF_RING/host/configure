@@ -1,6 +1,6 @@
-if [[ -f qemu-kvm-$VERSION.tar.gz && -d qemu-kvm-$VERSION-vpfring-diff ]]
+if [[ -f qemu-kvm-$1.tar.gz && -d qemu-kvm-$1-vpfring-diff ]]
 then
-	VERSION=$VERSION
+	VERSION=$1
 else
 	VERSION="0.14.1"
 	#echo "usage: $0 <supported qemu-kvm version>"

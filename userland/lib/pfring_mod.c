@@ -161,6 +161,7 @@ int pfring_mod_open(pfring *ring) {
   ring->disable_ring = pfring_mod_disable_ring;
   ring->is_pkt_available = pfring_mod_is_pkt_available;
   ring->set_bpf_filter = pfring_mod_set_bpf_filter;
+  ring->remove_bpf_filter = pfring_mod_remove_bpf_filter;
 
   ring->poll_duration = DEFAULT_POLL_DURATION;
   ring->fd = socket(PF_RING, SOCK_RAW, htons(ETH_P_ALL));
@@ -771,7 +772,7 @@ u_int16_t pfring_mod_get_slot_header_len(pfring *ring) {
 /* **************************************************** */
 
 int pfring_mod_set_bpf_filter(pfring *ring, char *filter_buffer){
-  int                rc = 0;
+  int                rc = -1;
 #ifdef ENABLE_BPF
   struct bpf_program filter;
   struct sock_fprog  fcode;
@@ -800,6 +801,19 @@ int pfring_mod_set_bpf_filter(pfring *ring, char *filter_buffer){
     int dummy = 0;
     setsockopt(ring->fd, SOL_SOCKET, SO_DETACH_FILTER, &dummy, sizeof(dummy));
   }
+#endif
+
+  return rc;
+}
+
+/* **************************************************** */
+
+int pfring_mod_remove_bpf_filter(pfring *ring){
+  int rc = -1;
+#ifdef ENABLE_BPF 
+  int dummy = 0;
+
+  rc = setsockopt(ring->fd, SOL_SOCKET, SO_DETACH_FILTER, &dummy, sizeof(dummy));
 #endif
 
   return rc;
