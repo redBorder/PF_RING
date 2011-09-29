@@ -185,6 +185,16 @@ static u_int plugin_registration_size = 0;
 static struct pfring_plugin_registration *plugin_registration[MAX_PLUGIN_ID] = { NULL };
 static u_short max_registered_plugin_id = 0;
 
+/* List of userspace rings */
+static struct list_head userspace_ring_list;
+static rwlock_t userspace_ring_lock = 
+#if(LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39))
+  RW_LOCK_UNLOCKED
+#else
+  __RW_LOCK_UNLOCKED(userspace_ring_lock)
+#endif
+;
+
 /* Dumy buffer used for loopback_test */
 u_int32_t loobpack_test_buffer_len = 4*1024*1024;
 u_char *loobpack_test_buffer = NULL;
@@ -1094,6 +1104,29 @@ static int ring_alloc_mem(struct sock *sk)
   u_int32_t tot_mem;
   struct pf_ring_socket *pfr = ring_sk(sk);
 
+  /* UserSPace RING 
+   * - producer attaching to a ring 
+   * - or consumer re-opening an old ring already attachred */
+  if (pfr->userspace_ring != NULL 
+      && (pfr->userspace_ring_type == userspace_ring_producer
+          || (pfr->userspace_ring_type == userspace_ring_consumer 
+	      && pfr->userspace_ring->ring_memory != NULL))) {
+
+    if (pfr->userspace_ring->ring_memory == NULL)
+      return (-1); /* Consumr ring memory has not yet been allocated */
+
+    pfr->slot_header_len = pfr->userspace_ring->slot_header_len;
+    pfr->bucket_len      = pfr->userspace_ring->bucket_len;
+    
+    pfr->ring_memory     = pfr->userspace_ring->ring_memory;
+    pfr->slots_info      = (FlowSlotInfo *) pfr->ring_memory;
+    pfr->ring_slots      = (char *) (pfr->ring_memory + sizeof(FlowSlotInfo));
+
+    pfr->insert_page_id = 1, pfr->insert_slot_id = 0;
+    pfr->sw_filtering_rules_default_accept_policy = 1;
+    pfr->num_sw_filtering_rules = pfr->num_hw_filtering_rules = 0;
+  }
+
   /* Check if the memory has been already allocated */
   if(pfr->ring_memory != NULL) return(0);
 
@@ -1169,6 +1202,15 @@ static int ring_alloc_mem(struct sock *sk)
   pfr->insert_page_id = 1, pfr->insert_slot_id = 0;
   pfr->sw_filtering_rules_default_accept_policy = 1;
   pfr->num_sw_filtering_rules = pfr->num_hw_filtering_rules = 0;
+
+  /* UserSPace RING 
+   * - consumer creating a new ring */
+  if (pfr->userspace_ring != NULL && pfr->userspace_ring_type == userspace_ring_consumer) {
+    pfr->userspace_ring->slot_header_len = pfr->slot_header_len;
+    pfr->userspace_ring->bucket_len      = pfr->bucket_len;
+    pfr->userspace_ring->tot_mem         = pfr->slots_info->tot_mem;
+    pfr->userspace_ring->ring_memory     = pfr->ring_memory;
+  }
 
   return(0);
 }
@@ -1960,7 +2002,9 @@ inline int copy_data_to_ring(struct sk_buff *skb,
     /* Raw data copy mode */
     raw_data_len = min_val(raw_data_len, pfr->bucket_len); /* Avoid overruns */
     memcpy(&ring_bucket[pfr->slot_header_len], raw_data, raw_data_len); /* Copy raw data if present */
-    hdr->len = hdr->caplen = raw_data_len, hdr->extended_hdr.if_index = FAKE_PACKET;
+    hdr->len = hdr->caplen = raw_data_len;
+    if (!quick_mode)
+      hdr->extended_hdr.if_index = FAKE_PACKET;
     /* printk("[PF_RING] Copied raw data at slot with offset %d [len=%d]\n", off, raw_data_len); */
   }
 
@@ -3512,6 +3556,105 @@ static int remove_virtual_filtering_device(struct sock *sock, char *device_name)
   return(-EINVAL);	/* Not found */
 }
 
+/* ********************************** */
+
+static struct pf_userspace_ring* userspace_ring_create(char *u_dev_name, 
+                                                       userspace_ring_client_type type) {
+  char *c_p;
+  long id; 
+  struct list_head *ptr, *tmp_ptr;
+  struct pf_userspace_ring *entry;
+  struct pf_userspace_ring *usr = NULL;
+
+  if (strncmp(u_dev_name, "usr", 3) != 0)
+    return NULL;
+
+  id = simple_strtol(&u_dev_name[3], &c_p, 10);
+
+  write_lock(&userspace_ring_lock);
+
+  list_for_each_safe(ptr, tmp_ptr, &userspace_ring_list) {
+    entry = list_entry(ptr, struct pf_userspace_ring, list);
+    if(entry->id == id) {
+
+      if (atomic_read(&entry->users[type]) > 0)
+        goto unlock;
+      
+      usr = entry;
+      break;
+    }
+  }
+
+  if (usr == NULL) {
+    /* Note: a userspace ring can be created by a consumer only,
+     * (however a producer can keep it if the consumer dies) */
+    if (type == userspace_ring_producer)
+      goto unlock;
+
+    usr = kmalloc(sizeof(struct pf_userspace_ring), GFP_ATOMIC);
+
+    if (usr == NULL)
+      goto unlock;
+    
+    memset(usr, 0, sizeof(struct pf_userspace_ring));
+
+    usr->id = id;
+    atomic_set(&usr->users[userspace_ring_consumer], 0);
+    atomic_set(&usr->users[userspace_ring_producer], 0);
+
+    list_add(&usr->list, &userspace_ring_list);
+  }
+
+  atomic_inc(&usr->users[type]);
+
+unlock:
+  write_unlock(&userspace_ring_lock);
+
+  if(unlikely(enable_debug))
+    if (usr != NULL)
+      printk("[PF_RING] userspace_ring_create() Userspace ring found or created.\n"); 
+
+  return usr;
+}
+
+/* ********************************** */
+
+static int userspace_ring_remove(struct pf_userspace_ring *usr, 
+                                        userspace_ring_client_type type) {
+  struct list_head *ptr, *tmp_ptr;
+  struct pf_userspace_ring *entry;
+  int ret = 0;
+
+  write_lock(&userspace_ring_lock);
+
+  list_for_each_safe(ptr, tmp_ptr, &userspace_ring_list) {
+    entry = list_entry(ptr, struct pf_userspace_ring, list);
+
+    if(entry == usr) {
+      if (atomic_read(&usr->users[type]) > 0)
+        atomic_dec(&usr->users[type]);
+     
+      if (atomic_read(&usr->users[userspace_ring_consumer]) == 0
+       && atomic_read(&usr->users[userspace_ring_producer]) == 0) {
+        ret = 1; /* ring memory can be freed */
+        list_del(ptr);
+        kfree(entry);
+      }
+
+      break;
+    }
+  }
+
+  write_unlock(&userspace_ring_lock);
+
+  if(unlikely(enable_debug))
+    if (ret == 1)
+      printk("[PF_RING] userspace_ring_remove() Ring can be freed.\n");
+
+  return ret;
+}
+
+
 /* *********************************************** */
 
 static int ring_release(struct socket *sock)
@@ -3520,6 +3663,7 @@ static int ring_release(struct socket *sock)
   struct pf_ring_socket *pfr = ring_sk(sk);
   struct list_head *ptr, *tmp_ptr;
   void *ring_memory_ptr;
+  int free_ring_memory = 1;
 
   if(!sk)
     return 0;
@@ -3680,7 +3824,11 @@ static int ring_release(struct socket *sock)
   if(pfr->appl_name != NULL)
     kfree(pfr->appl_name);
 
-  if(ring_memory_ptr != NULL)
+  /* Removing userspace ring if there are no other consumer/producer */
+  if (pfr->userspace_ring != NULL)
+    free_ring_memory = userspace_ring_remove(pfr->userspace_ring, pfr->userspace_ring_type);
+
+  if(ring_memory_ptr != NULL && free_ring_memory)
     vfree(ring_memory_ptr);
 
   if(pfr->dna_device_entry != NULL) {
@@ -3714,16 +3862,38 @@ static int packet_ring_bind(struct sock *sk, char *dev_name)
   if(dev_name == NULL)
     return(-EINVAL);
 
+  /* UserSpace RING.  
+   * Note: with userspace rings we expect that mmap() follow (only one) bind() */
+
+  if (pfr->userspace_ring != NULL)
+    return(-EINVAL); /* TODO bind() already called on a userspace ring */
+
+  if (strncmp(dev_name, "usr", 3) == 0) {
+  
+    if (pfr->ring_memory != NULL)
+      return(-EINVAL); /* TODO mmap() already called */
+
+    pfr->userspace_ring = userspace_ring_create(dev_name, userspace_ring_consumer);
+    
+    if (pfr->userspace_ring == NULL)
+      return -EINVAL;
+
+    pfr->userspace_ring_type = userspace_ring_consumer;
+    dev = &none_device_element;
+  } else {
+
   /* ************** */
 
-  list_for_each_safe(ptr, tmp_ptr, &ring_aware_device_list) {
-    ring_device_element *dev_ptr = list_entry(ptr, ring_device_element,
-					      device_list);
+    list_for_each_safe(ptr, tmp_ptr, &ring_aware_device_list) {
+      ring_device_element *dev_ptr = list_entry(ptr, ring_device_element,
+					        device_list);
 
-    if(strcmp(dev_ptr->dev->name, dev_name) == 0) {
-      dev = dev_ptr;
-      break;
+      if(strcmp(dev_ptr->dev->name, dev_name) == 0) {
+        dev = dev_ptr;
+        break;
+      }
     }
+
   }
 
   if((dev == NULL) || (dev->dev->type != ARPHRD_ETHER))
@@ -5481,6 +5651,32 @@ static int ring_setsockopt(struct socket *sock,
     break;
 #endif //VPFRING_SUPPORT
 
+  case SO_ATTACH_USERSPACE_RING:
+    {
+      char u_dev_name[32+1];
+
+      if(copy_from_user(u_dev_name, optval, sizeof(u_dev_name) - 1))
+	return -EFAULT;
+      
+      u_dev_name[sizeof(u_dev_name) - 1] = '\0';
+
+      if (pfr->ring_memory != NULL)
+        return -EINVAL; /* TODO mmap() already called */
+
+      /* Checks if the userspace ring exists */
+      pfr->userspace_ring = userspace_ring_create(u_dev_name, userspace_ring_producer); 
+      
+      if (pfr->userspace_ring == NULL)
+        return -EINVAL;
+
+      pfr->userspace_ring_type = userspace_ring_producer;
+
+      if(unlikely(enable_debug))
+        printk("[PF_RING] SO_ATTACH_USERSPACE_RING done.\n"); 
+    }
+    found = 1;
+    break;
+
   default:
     found = 0;
     break;
@@ -5801,6 +5997,14 @@ static int ring_getsockopt(struct socket *sock,
       return -EINVAL;
 
     if(copy_to_user(optval, &pfr->slot_header_len, sizeof(pfr->slot_header_len)))
+      return -EFAULT;
+    break;
+
+  case SO_GET_BUCKET_LEN:
+    if(len < sizeof(pfr->bucket_len))
+      return -EINVAL;
+
+    if(copy_to_user(optval, &pfr->bucket_len, sizeof(pfr->bucket_len)))
       return -EFAULT;
     break;
 
@@ -6386,6 +6590,7 @@ static int __init ring_init(void)
   INIT_LIST_HEAD(&ring_cluster_list);
   INIT_LIST_HEAD(&ring_aware_device_list);
   INIT_LIST_HEAD(&ring_dna_devices_list);
+  INIT_LIST_HEAD(&userspace_ring_list);
 
   for(i = 0; i < MAX_NUM_DEVICES; i++)
     INIT_LIST_HEAD(&device_ring_list[i]);
@@ -6403,7 +6608,7 @@ static int __init ring_init(void)
 
   memset(&none_dev, 0, sizeof(none_dev));
   strcpy(none_dev.name, "none");
-  none_dev.ifindex = MAX_NUM_IFIDX-2;
+  none_dev.ifindex = MAX_NUM_IFIDX-2, none_dev.type = ARPHRD_ETHER; 
   memset(&none_device_element, 0, sizeof(none_device_element));
   none_device_element.dev = &none_dev, none_device_element.device_type = standard_nic_family;
 

@@ -257,7 +257,6 @@ int pfring_mod_open(pfring *ring) {
   return 0;
 }
 
-
 /* ******************************* */
 
 int pfring_mod_add_hw_rule(pfring *ring, hw_filtering_rule *rule) {

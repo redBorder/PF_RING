@@ -65,7 +65,7 @@
 #define SO_SET_VPFRING_HOST_EVENTFD      120 /* host  to guest */
 #define SO_SET_VPFRING_GUEST_EVENTFD     121 /* guest to host (unused) */
 #define SO_SET_VPFRING_CLEAN_EVENTFDS    122
-
+#define SO_ATTACH_USERSPACE_RING         123
 
 /* Get */
 #define SO_GET_RING_VERSION              170
@@ -79,6 +79,7 @@
 #define SO_GET_NUM_QUEUED_PKTS           178
 #define SO_GET_PKT_HEADER_LEN            179
 #define SO_GET_LOOPBACK_TEST             180
+#define SO_GET_BUCKET_LEN                181
 
 /* Map */
 #define SO_MAP_DNA_DEVICE                190
@@ -717,6 +718,27 @@ struct ring_element {
 
 /* ************************************************* */
 
+typedef enum {
+  userspace_ring_consumer = 0,
+  userspace_ring_producer
+} userspace_ring_client_type;
+
+struct pf_userspace_ring {
+  u_int16_t  id;
+
+  u_int16_t  slot_header_len;
+  u_int32_t  bucket_len;
+
+  u_int32_t  tot_mem;
+  char      *ring_memory;
+
+  atomic_t   users[2]; /* producers/consumers */
+
+  struct list_head list;
+};
+
+/* ************************************************* */
+
 typedef int (*do_handle_sw_filtering_hash_bucket)(struct pf_ring_socket *pfr,
 					       sw_filtering_hash_bucket* rule,
 					       u_char add_rule);
@@ -811,6 +833,10 @@ struct pf_ring_socket {
 #ifdef VPFRING_SUPPORT
   struct eventfd_ctx *vpfring_host_eventfd_ctx;   /* host  -> guest */
 #endif /* VPFRING_SUPPORT */
+
+  /* UserSpace RING */
+  userspace_ring_client_type  userspace_ring_type;
+  struct pf_userspace_ring   *userspace_ring;
 };
 
 /* **************************************** */
@@ -1132,7 +1158,6 @@ struct pcaplike_pkthdr {
 };
 
 #endif /* __KERNEL__  */
-
 
 /* *********************************** */
 

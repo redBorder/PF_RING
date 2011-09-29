@@ -27,6 +27,10 @@
 #include "pfring_mod.h"
 #include "pfring_mod_multi.h"
 
+#ifdef HAVE_USERSPACE_RING
+#include "pfring_mod_usring.h"
+#endif
+
 #ifdef HAVE_DAG
 #include "pfring_mod_dag.h"
 #endif
@@ -66,6 +70,12 @@ static pfring_module_info pfring_module_list[] = {
     .name = "multi",
     .open = pfring_mod_multi_open,
   },
+#ifdef HAVE_USERSPACE_RING
+  {
+    .name = "userspace",
+    .open = pfring_mod_usring_open,
+  },
+#endif
   {0}
 };
 
