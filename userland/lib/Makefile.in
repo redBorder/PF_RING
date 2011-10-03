@@ -84,12 +84,19 @@ extract_virtual_lib:
 extract_userspace_ring_lib:
 	ar x @USERSPACE_RING_LIB@
 
-install: ${STATICLIB} ${DYNAMICLIB}
-	mkdir -p ${INSTDIR}/lib
+install: install-static install-shared
+
+install-includes:
 	mkdir -p ${INSTDIR}/include
-	cp ${STATICLIB} ${INSTDIR}/lib/
-	cp ${DYNAMICLIB} ${INSTDIR}/lib/
 	cp pfring.h ${INSTDIR}/include/
+
+install-static: ${STATICLIB} install-includes
+	mkdir -p ${INSTDIR}/lib
+	cp ${STATICLIB} ${INSTDIR}/lib/
+
+install-shared:	${DYNAMICLIB} install-includes
+	mkdir -p ${INSTDIR}/lib
+	cp ${DYNAMICLIB} ${INSTDIR}/lib/
 	ldconfig
 
 clean:
