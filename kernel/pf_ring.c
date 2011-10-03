@@ -3558,8 +3558,8 @@ static int remove_virtual_filtering_device(struct sock *sock, char *device_name)
 
 /* ********************************** */
 
-static struct pf_userspace_ring* userspace_ring_create(char *u_dev_name, 
-                                                       userspace_ring_client_type type) {
+static struct pf_userspace_ring* userspace_ring_create(char *u_dev_name, userspace_ring_client_type type,
+                                                       wait_queue_head_t *consumer_ring_slots_waitqueue) {
   char *c_p;
   long id; 
   struct list_head *ptr, *tmp_ptr;
@@ -3573,6 +3573,7 @@ static struct pf_userspace_ring* userspace_ring_create(char *u_dev_name,
 
   write_lock(&userspace_ring_lock);
 
+  /* checking if the userspace ring already exists */
   list_for_each_safe(ptr, tmp_ptr, &userspace_ring_list) {
     entry = list_entry(ptr, struct pf_userspace_ring, list);
     if(entry->id == id) {
@@ -3585,6 +3586,7 @@ static struct pf_userspace_ring* userspace_ring_create(char *u_dev_name,
     }
   }
 
+  /* creating a new userspace ring */
   if (usr == NULL) {
     /* Note: a userspace ring can be created by a consumer only,
      * (however a producer can keep it if the consumer dies) */
@@ -3606,6 +3608,9 @@ static struct pf_userspace_ring* userspace_ring_create(char *u_dev_name,
   }
 
   atomic_inc(&usr->users[type]);
+
+  if (type == userspace_ring_consumer)
+    usr->consumer_ring_slots_waitqueue = consumer_ring_slots_waitqueue;
 
 unlock:
   write_unlock(&userspace_ring_lock);
@@ -3633,6 +3638,9 @@ static int userspace_ring_remove(struct pf_userspace_ring *usr,
     if(entry == usr) {
       if (atomic_read(&usr->users[type]) > 0)
         atomic_dec(&usr->users[type]);
+
+      if (type == userspace_ring_consumer)
+        usr->consumer_ring_slots_waitqueue = NULL;
      
       if (atomic_read(&usr->users[userspace_ring_consumer]) == 0
        && atomic_read(&usr->users[userspace_ring_producer]) == 0) {
@@ -3873,7 +3881,8 @@ static int packet_ring_bind(struct sock *sk, char *dev_name)
     if (pfr->ring_memory != NULL)
       return(-EINVAL); /* TODO mmap() already called */
 
-    pfr->userspace_ring = userspace_ring_create(dev_name, userspace_ring_consumer);
+    pfr->userspace_ring = userspace_ring_create(dev_name, userspace_ring_consumer, 
+                                                &pfr->ring_slots_waitqueue);
     
     if (pfr->userspace_ring == NULL)
       return -EINVAL;
@@ -4217,14 +4226,25 @@ static int ring_sendmsg(struct kiocb *iocb, struct socket *sock,
 			struct msghdr *msg, size_t len)
 {
   struct pf_ring_socket *pfr = ring_sk(sock->sk);
-  struct sockaddr_pkt *saddr=(struct sockaddr_pkt *)msg->msg_name;
+  struct sockaddr_pkt *saddr;
   struct sk_buff *skb;
   __be16 proto=0;
   int err = 0;
 
+  /* Userspace RING: Waking up the ring consumer */
+  if (pfr->userspace_ring != NULL){
+    if (pfr->userspace_ring->consumer_ring_slots_waitqueue != NULL
+        && !(pfr->slots_info->userspace_ring_flags & USERSPACE_RING_NO_INTERRUPT)) {
+        pfr->slots_info->userspace_ring_flags |= USERSPACE_RING_NO_INTERRUPT;
+        wake_up_interruptible(pfr->userspace_ring->consumer_ring_slots_waitqueue); 
+    }
+    return (len);
+  }
+
   /*
    *	Get and verify the address.
    */
+  saddr=(struct sockaddr_pkt *)msg->msg_name;
   if(saddr)
     {
       if(saddr == NULL) proto = htons(ETH_P_ALL);
@@ -4347,7 +4367,7 @@ unsigned int ring_poll(struct file *file,
 
     pfr->ring_active = 1;
     // smp_rmb();
-
+   
     if(num_queued_pkts(pfr) < pfr->poll_num_pkts_watermark) {
       poll_wait(file, &pfr->ring_slots_waitqueue, wait);
       // smp_mb();
@@ -5664,7 +5684,7 @@ static int ring_setsockopt(struct socket *sock,
         return -EINVAL; /* TODO mmap() already called */
 
       /* Checks if the userspace ring exists */
-      pfr->userspace_ring = userspace_ring_create(u_dev_name, userspace_ring_producer); 
+      pfr->userspace_ring = userspace_ring_create(u_dev_name, userspace_ring_producer, NULL); 
       
       if (pfr->userspace_ring == NULL)
         return -EINVAL;

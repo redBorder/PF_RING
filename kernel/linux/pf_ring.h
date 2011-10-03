@@ -471,7 +471,8 @@ typedef struct flowSlotInfo {
   u_int64_t tot_read;
   u_int32_t remove_off /* managed by userland */;
   u_int32_t vpfring_guest_flags; /* used by vPFRing */
-  char u_padding[4080];
+  u_int32_t userspace_ring_flags;
+  char u_padding[4076];
   /* <-- 8192 bytes here, to get a page aligned block writable by userland only */
 } FlowSlotInfo;
 
@@ -733,6 +734,8 @@ struct pf_userspace_ring {
   char      *ring_memory;
 
   atomic_t   users[2]; /* producers/consumers */
+
+  wait_queue_head_t *consumer_ring_slots_waitqueue;
 
   struct list_head list;
 };
@@ -1173,5 +1176,8 @@ struct vpfring_eventfd_info {
 #define VPFRING_HOST_EVENT_RX_INT 0
 
 /* *********************************** */
+
+/* bit masks for the FlowSlotInfo.userspace_ring_flags bitmap */
+#define USERSPACE_RING_NO_INTERRUPT 1
 
 #endif /* __RING_H */
