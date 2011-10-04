@@ -2955,7 +2955,7 @@ static int skb_ring_handler(struct sk_buff *skb,
      The min() below is not really necessary but we have observed that sometimes
      skb->len > MTU thus it's better to be on the safe side
   */
-  hdr.len = hdr.caplen = min(skb->len + displ, skb->dev->mtu);
+  hdr.len = hdr.caplen = min(skb->len + displ, skb->dev->mtu + skb->dev->hard_header_len);
 
   if(quick_mode) {
     struct pf_ring_socket *pfr = device_rings[skb->dev->ifindex][channel_id];
