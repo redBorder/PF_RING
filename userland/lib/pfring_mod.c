@@ -570,7 +570,8 @@ int pfring_mod_poll(pfring *ring, u_int wait_duration) {
     int rc;
 
     /* Userspace RING: enabling interrupts */
-    ring->slots_info->userspace_ring_flags &= ~USERSPACE_RING_NO_INTERRUPT; 
+    if (ring->slots_info != NULL)
+      ring->slots_info->userspace_ring_flags &= ~USERSPACE_RING_NO_INTERRUPT; 
     //gcc_mb();
 
     /* Sleep when nothing is happening */
