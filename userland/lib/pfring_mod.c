@@ -112,6 +112,21 @@ int pfring_mod_is_pkt_available(pfring *ring) {
 }
 
 /* **************************************************** */
+
+int pfring_mod_next_pkt_time(pfring *ring, struct timeval *ts) {
+  struct pfring_pkthdr *header = (struct pfring_pkthdr*) &ring->slots[ring->slots_info->remove_off];
+
+  if (!pfring_there_is_pkt_available(ring))
+    return -1;
+
+  if (!header->ts.tv_sec)
+    return -1;
+
+  memcpy(ts, &header->ts, sizeof(struct timeval));
+  return 0;
+}
+
+/* **************************************************** */
 /*     Functions part of the "specialized" subset       */
 /* **************************************************** */
 

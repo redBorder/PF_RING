@@ -404,6 +404,15 @@ int pfring_send(pfring *ring, char *pkt, u_int pkt_len, u_int8_t flush_packet) {
 
 /* **************************************************** */
 
+int pfring_send_parsed(pfring *ring, char *pkt, struct pfring_pkthdr *hdr, u_int8_t flush_packet) {
+  if(likely(ring && ring->enabled && ring->send_parsed))
+    return ring->send_parsed(ring, pkt, hdr, flush_packet);
+
+  return -1;
+}
+
+/* **************************************************** */
+
 u_int8_t pfring_get_num_rx_channels(pfring *ring) {
   if(ring && ring->get_num_rx_channels)
     return ring->get_num_rx_channels(ring);
@@ -684,6 +693,16 @@ int pfring_disable_ring(pfring *ring) {
 int pfring_is_pkt_available(pfring *ring){
   if(ring && ring->is_pkt_available) {
     return ring->is_pkt_available(ring);
+  }
+
+  return -1;
+}
+
+/* **************************************************** */
+
+int pfring_next_pkt_time(pfring *ring, struct timeval *ts){
+  if(ring && ring->next_pkt_time) {
+    return ring->next_pkt_time(ring, ts);
   }
 
   return -1;
