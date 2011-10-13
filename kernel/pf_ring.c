@@ -2304,6 +2304,8 @@ int check_wildcard_rules(struct sk_buff *skb,
   if(unlikely(enable_debug))
     printk("[PF_RING] Entered check_wildcard_rules()\n");
 
+  read_lock(&pfr->ring_rules_lock);
+
   list_for_each_safe(ptr, tmp_ptr, &pfr->sw_filtering_rules) {
     sw_filtering_rule_element *entry;
     rule_action_behaviour behaviour = forward_packet_and_stop_rule_evaluation;
@@ -2352,18 +2354,20 @@ int check_wildcard_rules(struct sk_buff *skb,
 	    hash_bucket->rule.plugin_action.plugin_id = NO_PLUGIN_ID;
 	  }
 
+	  read_unlock(&pfr->ring_rules_lock);
+	  /* We have done with rule evaluation, but we need a write_lock to add the hash rule */
 	  write_lock(&pfr->ring_rules_lock);
 	  rc = pfr->handle_hash_rule(pfr, hash_bucket, 1 /* add_rule_from_plugin */);
 
 	  if((rc != 0) && (rc != -EEXIST)) {
 	    write_unlock(&pfr->ring_rules_lock);
 	    kfree(hash_bucket);
-	    return(-1);
+	    rc = -1;
 	  } else {
 	    if(rc != -EEXIST) /* Rule already existing */
 	      pfr->num_sw_filtering_rules++;
-
 	    write_unlock(&pfr->ring_rules_lock);
+	    rc = 0;
 
 	    if(unlikely(enable_debug))
 	      printk("[PF_RING] Added rule: [%d.%d.%d.%d:%d <-> %d.%d.%d.%d:%d][tot_rules=%d]\n",
@@ -2373,6 +2377,7 @@ int check_wildcard_rules(struct sk_buff *skb,
 		     ((hash_bucket->rule.host4_peer_b >> 16) & 0xff), ((hash_bucket->rule.host4_peer_b >> 8) & 0xff),
 		     ((hash_bucket->rule.host4_peer_b >> 0) & 0xff), hash_bucket->rule.port_peer_b, pfr->num_sw_filtering_rules);
 	  }
+	  return(rc);
 	}
 	break;
       } else if(behaviour == dont_forward_packet_and_stop_rule_evaluation) {
@@ -2405,6 +2410,8 @@ int check_wildcard_rules(struct sk_buff *skb,
       }
     }
   }  /* for */
+
+  read_unlock(&pfr->ring_rules_lock);
 
   return(0);
 }
