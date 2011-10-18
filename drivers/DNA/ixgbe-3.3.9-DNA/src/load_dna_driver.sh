@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Configure here the network interfaces to activate
-IF[0]=dna5
-IF[1]=dna6
+IF[0]=dna0
+IF[1]=dna1
 IF[2]=
 IF[3]=
 
@@ -24,6 +24,9 @@ insmod ./ixgbe.ko RSS=0,0,0,0
 
 # Enable 8 queues (you need 8 or more CPU cores)
 #insmod ./ixgbe.ko MQ=1,1 RSS=8,8 FdirMode=0,0
+
+# Enable hw filters
+#insmod ./ixgbe.ko RSS=0,0,0,0 FdirMode=2,2,2,2
 
 sleep 1
 

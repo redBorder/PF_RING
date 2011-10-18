@@ -38,6 +38,11 @@
 
 #include "ixgbe.h"
 
+#ifdef ENABLE_DNA
+#include "../../../../kernel/linux/pf_ring.h"
+extern s32 ixgbe_ftqf_add_filter(struct ixgbe_hw *hw, u8 proto, u32 saddr, u16 sport, u32 daddr, u16 dport, u8 rx_queue, u8 filter_id);
+#endif
+
 #ifndef ETH_GSTRING_LEN
 #define ETH_GSTRING_LEN 32
 #endif
@@ -940,6 +945,173 @@ static int ixgbe_set_eeprom(struct net_device *netdev,
 	void *ptr;
 	int max_len, first_word, last_word, ret_val = 0;
 	u16 i;
+
+#ifdef ENABLE_DNA
+	{
+	  /* Let's see if we can cast this structure to a filter */
+	  int debug = 0;
+	  u8 request_type = eeprom->len;
+
+	  if(debug)
+	    printk("--> ixgbe_set_eeprom(command=%d/magic=%d/bytes=%p)\n", 
+		   request_type, eeprom->magic, bytes);
+
+	  if((eeprom->magic == MAGIC_HW_FILTERING_RULE_REQUEST)
+	     && ((request_type == 0 /* ckeck */) || (request_type == 1 /* add/remove */))) {
+	    /* Here we go! */
+	    struct ixgbe_adapter *adapter = netdev_priv(netdev);
+            
+	    /* Note: the standard driver way is to allocate a struct ixgbe_fdir_filter *input
+	     * filling up the ->filter field. It also allows to registrate the filter. */
+            union ixgbe_atr_input input;
+	    union ixgbe_atr_input mask;
+
+	    int target_queue;
+	    hw_filtering_rule_command request = (hw_filtering_rule_command)eeprom->offset;
+	    hw_filtering_rule *rule = (hw_filtering_rule*)bytes;
+	    intel_82599_perfect_filter_hw_rule *perfect_rule;
+	    intel_82599_five_tuple_filter_hw_rule *ftfq_rule;
+
+	    if(debug)
+	      printk("--> ixgbe_set_eeprom(command=%d)\n", request_type);
+
+	    if (adapter->hw.mac.type == ixgbe_mac_82598EB) {
+	      if(debug)
+	        printk("--> ixgbe_set_eeprom() [error %d]\n", 1);
+	      return -EOPNOTSUPP;
+	    }
+
+	    if(request_type == 0) {
+	      /* ckeck */
+	      /*
+		We just want to check if this interface
+		supports hardware filtering
+	      */
+	      return(RING_MAGIC_VALUE);
+	    }
+
+	    if(bytes != NULL) {
+	      switch(rule->rule_family_type) {
+	      case intel_82599_five_tuple_rule:
+		ftfq_rule = &rule->rule_family.five_tuple_rule;
+
+		/* determine if we need to drop or route the packet */
+		if(ftfq_rule->queue_id >= (MAX_RX_QUEUES - 1))
+		  target_queue = MAX_RX_QUEUES - 1;
+		else
+		  target_queue = ftfq_rule->queue_id;
+
+		if(debug)
+		  printk("--> ixgbe_set_eeprom() -> ixgbe_ftqf_add_filter(id=%d,target_queue=%d) called\n",
+			 rule->rule_id, target_queue);
+
+		spin_lock(&adapter->fdir_perfect_lock);
+		if(request == add_hw_rule) {
+		  ixgbe_ftqf_add_filter(&adapter->hw, ftfq_rule->proto,
+					ftfq_rule->s_addr, ftfq_rule->s_port,
+					ftfq_rule->d_addr, ftfq_rule->d_port,
+					target_queue, rule->rule_id);
+		} else { /* Remove */
+		  /* Set the rule to accept all */
+		  ixgbe_ftqf_add_filter(&adapter->hw,
+					0, 0, 0, 0, 0,
+					0, rule->rule_id);
+		}
+
+		spin_unlock(&adapter->fdir_perfect_lock);
+		break;
+
+	      case intel_82599_perfect_filter_rule:
+		perfect_rule = &rule->rule_family.perfect_rule;
+
+		/*
+		 * Don't allow programming if we're not in perfect filter mode, or
+		 * if the action is a queue greater than the number of online Tx
+		 * queues.
+		 */
+		if (!(adapter->flags & IXGBE_FLAG_FDIR_PERFECT_CAPABLE)) {
+		  if(debug)
+		    printk("--> ixgbe_set_eeprom() IXGBE_FLAG_FDIR_PERFECT_CAPABLE=%d\n", 
+		           (adapter->flags & IXGBE_FLAG_FDIR_PERFECT_CAPABLE) ? 1 : 0);
+		  return -EINVAL;
+		}
+
+
+		/* determine if we need to drop or route the packet */
+		if(perfect_rule->queue_id >= (MAX_RX_QUEUES - 1))
+		  target_queue = MAX_RX_QUEUES - 1;
+		else
+		  target_queue = perfect_rule->queue_id;
+
+		memset(&input, 0, sizeof(union ixgbe_atr_input));
+		memset(&mask,  0, sizeof(union ixgbe_atr_input));
+
+		if(debug)
+		  printk("--> ixgbe_set_eeprom(rule_id=%d, request=%d, proto=%d, vlan=%d, ips=%08X, sport=%d, ipd=%08X, dport=%d)\n",
+			 rule->rule_id, request,
+			 perfect_rule->proto, perfect_rule->vlan_id,
+			 perfect_rule->s_addr, perfect_rule->s_port,
+			 perfect_rule->d_addr, perfect_rule->d_port);
+
+		if(perfect_rule->proto == 6 /* TCP */)
+	          input.formatted.flow_type = IXGBE_ATR_FLOW_TYPE_TCPV4;
+		else /* UDP */
+		  input.formatted.flow_type = IXGBE_ATR_FLOW_TYPE_UDPV4;
+
+		if(request == add_hw_rule) {
+		  /* Mask bits from the inputs based on user-supplied mask */
+		  if(perfect_rule->s_addr) {
+		    perfect_rule->s_addr = htonl(perfect_rule->s_addr);
+		    input.formatted.src_ip[0] = perfect_rule->s_addr;
+		    mask.formatted.src_ip[0] = ~perfect_rule->s_addr;
+		  }
+
+		  if(perfect_rule->d_addr) {
+		    perfect_rule->d_addr = htonl(perfect_rule->d_addr);
+		    input.formatted.dst_ip[0] = perfect_rule->d_addr;
+		    mask.formatted.dst_ip[0] = ~perfect_rule->d_addr;
+		  }
+
+		  /* 82599 expects these to be byte-swapped for perfect filtering */
+		  if(perfect_rule->s_port) {
+		    perfect_rule->s_port = ntohs(perfect_rule->s_port);
+		    input.formatted.src_port = perfect_rule->s_port;
+		    mask.formatted.src_port = ~perfect_rule->s_port;
+		  }
+
+		  if(perfect_rule->d_port) {
+		    perfect_rule->d_port = ntohs(perfect_rule->d_port);
+		    input.formatted.dst_port = perfect_rule->d_port;
+		    mask.formatted.dst_port = ~perfect_rule->d_port;
+		  }
+
+		  /* VLAN and Flex bytes are either completely masked or not */
+		  if (perfect_rule->vlan_id) {
+		    input.formatted.vlan_id = htons(perfect_rule->vlan_id & 0xEFFF);
+		    mask.formatted.vlan_id = htons(0xFFF);
+		  }
+		}
+
+		spin_lock(&adapter->fdir_perfect_lock);
+		if(debug)
+		  printk("--> ixgbe_fdir_add_perfect_filter_82599(id=%d,target_queue=%d/%d/%d) called\n",
+			 rule->rule_id, target_queue, target_queue, MAX_RX_QUEUES);
+		ixgbe_fdir_add_perfect_filter_82599(&adapter->hw, &input, &mask, rule->rule_id,
+						   (request == add_hw_rule) ? target_queue : 0);
+
+		/* TODO What about ixgbe_fdir_erase_perfect_filter_82599 ? */
+		spin_unlock(&adapter->fdir_perfect_lock);
+		break;
+
+	      default:
+		return -EOPNOTSUPP; /* It should not happen */
+	      } /* switch */
+
+	      return 0;
+	    }
+	  }
+	}
+#endif
 
 	if (eeprom->len == 0)
 		return -EOPNOTSUPP;

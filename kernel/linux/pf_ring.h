@@ -395,14 +395,10 @@ typedef int (*five_tuple_rule_handler)(struct pf_ring_socket *pfr,
 typedef int (*perfect_filter_hw_rule_handler)(struct pf_ring_socket *pfr,
 					      hw_filtering_rule *rule,
 					      hw_filtering_rule_command request);
-typedef int (*silicom_redirector_hw_rule_handler)(struct pf_ring_socket *pfr,
-						  hw_filtering_rule *rule,
-						  hw_filtering_rule_command request);
 
 typedef struct {
   five_tuple_rule_handler five_tuple_handler;
   perfect_filter_hw_rule_handler perfect_filter_handler;
-  silicom_redirector_hw_rule_handler redirector_rule_handler;
 } hw_filtering_device_handler;
 
 /* *********************************** */
@@ -615,7 +611,6 @@ struct add_to_cluster {
 typedef enum {
   standard_nic_family = 0, /* No Hw Filtering */
   intel_82599_family,
-  silicom_redirector_family,
 } pfring_device_type;
 
 typedef struct {

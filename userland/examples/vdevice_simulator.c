@@ -70,7 +70,7 @@ int main(int argc, char* argv[]) {
   }
 
   strcpy(info.device_name, "vdef0");
-  info.device_type = silicom_redirector_family;
+  // info.device_type = silicom_redirector_family;
 
   if((rc = pfring_set_virtual_device(pd, &info)) < 0) {
     printf("Unable to register virtual device %s [rc=%d]\n", info.device_name, rc);

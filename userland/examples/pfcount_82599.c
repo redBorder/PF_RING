@@ -681,29 +681,35 @@ int main(int argc, char* argv[]) {
 	printf("pfring_add_hw_rule(%d) succeeded: dropping TCP traffic\n", rule.rule_id);
     }
 
-    memset(&rule, 0, sizeof(rule)), rule.rule_family_type = intel_82599_five_tuple_rule;
-    rule.rule_id = rule_id++, ft_rule->queue_id = -1, ft_rule->proto = 6, ft_rule->s_addr = ntohl(inet_addr("192.168.30.207"));
-    rc = pfring_add_hw_rule(pd, &rule);
-    if(rc != 0)
-      printf("pfring_add_hw_rule(%d) failed [rc=%d]\n", rule.rule_id, rc);
-    else
-      printf("pfring_add_hw_rule(%d) succeeded: dropping TCP traffic 192.168.30.207 -> *\n", rule.rule_id);
+    if (0) {
+      memset(&rule, 0, sizeof(rule)), rule.rule_family_type = intel_82599_five_tuple_rule;
+      rule.rule_id = rule_id++, ft_rule->queue_id = -1, ft_rule->proto = 6, ft_rule->s_addr = ntohl(inet_addr("192.168.30.207"));
+      rc = pfring_add_hw_rule(pd, &rule);
+      if(rc != 0)
+        printf("pfring_add_hw_rule(%d) failed [rc=%d]\n", rule.rule_id, rc);
+      else
+        printf("pfring_add_hw_rule(%d) succeeded: dropping TCP traffic 192.168.30.207 -> *\n", rule.rule_id);
+    }
 
-    memset(&rule, 0, sizeof(rule)), rule.rule_family_type = intel_82599_five_tuple_rule;
-    rule.rule_id = rule_id++, ft_rule->queue_id = -1, ft_rule->proto = 6, ft_rule->d_addr = ntohl(inet_addr("192.168.30.207"));
-    rc = pfring_add_hw_rule(pd, &rule);
-    if(rc != 0)
-      printf("pfring_add_hw_rule(%d) failed [rc=%d]\n", rule.rule_id, rc);
-    else
-      printf("pfring_add_hw_rule(%d) succeeded: dropping TCP traffic * -> 192.168.30.207\n", rule.rule_id);
+    if (0) {
+      memset(&rule, 0, sizeof(rule)), rule.rule_family_type = intel_82599_five_tuple_rule;
+      rule.rule_id = rule_id++, ft_rule->queue_id = -1, ft_rule->proto = 6, ft_rule->d_addr = ntohl(inet_addr("192.168.30.207"));
+      rc = pfring_add_hw_rule(pd, &rule);
+      if(rc != 0)
+        printf("pfring_add_hw_rule(%d) failed [rc=%d]\n", rule.rule_id, rc);
+      else
+        printf("pfring_add_hw_rule(%d) succeeded: dropping TCP traffic * -> 192.168.30.207\n", rule.rule_id);
+    }
 
-    memset(&rule, 0, sizeof(rule)), rule.rule_family_type = intel_82599_five_tuple_rule;
-    rule.rule_id = rule_id++, ft_rule->queue_id = -1, ft_rule->proto = 0, ft_rule->d_addr = ntohl(inet_addr("192.168.30.207"));
-    rc = pfring_add_hw_rule(pd, &rule);
-    if(rc != 0)
-      printf("pfring_add_hw_rule(%d) failed [rc=%d]\n", rule.rule_id, rc);
-    else
-      printf("pfring_add_hw_rule(%d) succeeded: dropping non-TCP/UDP traffic * -> 192.168.30.207\n", rule.rule_id);
+    if (0) {
+      memset(&rule, 0, sizeof(rule)), rule.rule_family_type = intel_82599_five_tuple_rule;
+      rule.rule_id = rule_id++, ft_rule->queue_id = -1, ft_rule->proto = 0, ft_rule->d_addr = ntohl(inet_addr("192.168.30.207"));
+      rc = pfring_add_hw_rule(pd, &rule);
+      if(rc != 0)
+        printf("pfring_add_hw_rule(%d) failed [rc=%d]\n", rule.rule_id, rc);
+      else
+        printf("pfring_add_hw_rule(%d) succeeded: dropping non-TCP/UDP traffic * -> 192.168.30.207\n", rule.rule_id);
+    }
   }
 
   if(1) {
@@ -730,7 +736,7 @@ int main(int argc, char* argv[]) {
     }
 
 
-    if(1) {
+    if (1) {
       memset(&rule, 0, sizeof(rule)), rule.rule_family_type = intel_82599_perfect_filter_rule;
       rule.rule_id = rule_id++, perfect_rule->queue_id = -1, perfect_rule->proto = 17,
 	perfect_rule->s_addr = ntohl(inet_addr("192.168.30.207"));
@@ -776,7 +782,7 @@ int main(int argc, char* argv[]) {
       printf("Rule added successfully...\n");
   }
 
-  if(1) {
+  if(0) {
     filtering_rule rule;
 
 #define DUMMY_PLUGIN_ID   1

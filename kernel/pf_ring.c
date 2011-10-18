@@ -636,7 +636,6 @@ static int ring_proc_dev_get_info(char *buf, char **start, off_t offset,
       switch(dev_ptr->device_type) {
       case standard_nic_family: dev_family = "Standard NIC"; break;
       case intel_82599_family:  dev_family = "Intel 82599"; break;
-      case silicom_redirector_family: dev_family = "Silicom Redirector"; break;
       }
     }
 
@@ -687,8 +686,9 @@ static int i82599_generic_handler(struct pf_ring_socket *pfr,
 
   if((dev->ethtool_ops == NULL) || (dev->ethtool_ops->set_eeprom == NULL)) return(-1);
 
-  if(unlikely(enable_debug)) printk("[PF_RING] hw_filtering_rule[%s][request=%d][%p]\n",
-		   dev->name, request, dev->ethtool_ops->set_eeprom);
+  if(unlikely(enable_debug)) 
+    printk("[PF_RING] hw_filtering_rule[%s][request=%d][%p]\n",
+	   dev->name, request, dev->ethtool_ops->set_eeprom);
 
   eeprom.len = 1 /* add/remove (no check) */,
     eeprom.magic = MAGIC_HW_FILTERING_RULE_REQUEST, eeprom.offset = request;
@@ -721,12 +721,9 @@ static int handle_hw_filtering_rule(struct pf_ring_socket *pfr,
     else
       return(i82599_generic_handler(pfr, rule, command));
     break;
-
+  
   case silicom_redirector_rule:
-    if(pfr->ring_netdev->hw_filters.filter_handlers.redirector_rule_handler == NULL)
-      return(-EINVAL);
-    else
-      return(pfr->ring_netdev->hw_filters.filter_handlers.redirector_rule_handler(pfr, rule, command));
+    return(-EINVAL); /* handled in userland */
     break;
   }
 
@@ -3474,7 +3471,6 @@ static int ring_proc_virtual_filtering_dev_get_info(char *buf, char **start, off
     switch(info->device_type) {
     case standard_nic_family: dev_family = "Standard NIC"; break;
     case intel_82599_family:  dev_family = "Intel 82599"; break;
-    case silicom_redirector_family: dev_family = "Silicom Redirector"; break;
     }
 
     rlen =  sprintf(buf,      "Name:              %s\n", info->device_name);
