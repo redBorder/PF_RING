@@ -25,6 +25,10 @@ static unsigned int enable_debug = 0;
 module_param(enable_debug, uint, 0644);
 MODULE_PARM_DESC(enable_debug, "Set to 1 to enable DNA debug tracing into the syslog");
 
+static unsigned int mtu = 1500;
+module_param(mtu, uint, 0644);
+MODULE_PARM_DESC(mtu, "Change the default Maximum Transmission Unit");
+
 /* Forward */
 static inline void ixgbe_irq_disable(struct ixgbe_adapter *adapter);
 void ixgbe_irq_enable_queues(struct ixgbe_adapter *adapter, u64 qmask);
@@ -168,6 +172,7 @@ void dna_cleanup_rx_ring(struct ixgbe_ring *rx_ring) {
     count--;
   }
 }
+
 /* ********************************** */
 
 void notify_function_ptr(void *data, u_int8_t device_in_use) {
@@ -428,16 +433,15 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
     rx_ring->dna.packet_slot_len  += PAGE_SIZE/2;
   }
 
-  if(unlikely(enable_debug))
-    printk("%s(): rx_ring->dna.packet_slot_len=%d\n",__FUNCTION__,
-	   rx_ring->dna.packet_slot_len);
-
   rx_ring->dna.tot_packet_memory = rx_ring->dna.packet_slot_len * MAX_NUM_SLOTS_PER_PAGE;
 
   if(unlikely(enable_debug))
-    printk("%s(): RX tot_packet_memory=%d [num_memory_pages=%u]\n",
-	   __FUNCTION__, rx_ring->dna.tot_packet_memory,
-	   rx_ring->dna.num_memory_pages);
+    printk("%s(): RX dna.packet_slot_len=%d tot_packet_memory=%d num_memory_pages=%u MAX_NUM_SLOTS_PER_PAGE=%d\n",
+	   __FUNCTION__, 
+	   rx_ring->dna.packet_slot_len,
+	   rx_ring->dna.tot_packet_memory,
+	   rx_ring->dna.num_memory_pages,
+	   MAX_NUM_SLOTS_PER_PAGE);
 
   for(i=0; i<rx_ring->dna.num_memory_pages; i++) {
     rx_ring->dna.rx_tx.rx.packet_memory[i] =

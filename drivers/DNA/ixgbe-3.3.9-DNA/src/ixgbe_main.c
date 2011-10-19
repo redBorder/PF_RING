@@ -3471,6 +3471,13 @@ static void ixgbe_set_rx_buffer_len(struct ixgbe_adapter *adapter)
 	/* set jumbo enable since MHADD.MFS is keeping size locked at max_frame */
 	hlreg0 |= IXGBE_HLREG0_JUMBOEN;
 #ifdef ENABLE_DNA
+        if(unlikely(enable_debug))
+	  printk("%s(): RX +JUMBOEN mtu=%d max_frame=%d rx_buf_len=%d\n",
+	         __FUNCTION__,
+	         netdev->mtu,
+	         max_frame,
+	         rx_buf_len);
+
 	hlreg0 &= ~IXGBE_HLREG0_RXCRCSTRP; /* Disable CRC strip */
 #endif
 	IXGBE_WRITE_REG(hw, IXGBE_HLREG0, hlreg0);
@@ -5938,6 +5945,22 @@ static int __devinit ixgbe_sw_init(struct ixgbe_adapter *adapter)
 	struct pci_dev *pdev = adapter->pdev;
 	int err;
 	int max_frame = adapter->netdev->mtu + ETH_HLEN + ETH_FCS_LEN;
+
+#ifdef ENABLE_DNA
+	if(    mtu != adapter->netdev->mtu
+	   &&  mtu >= 68 
+	   && (mtu + ETH_HLEN + ETH_FCS_LEN) <= IXGBE_MAX_JUMBO_FRAME_SIZE) {
+
+          if(unlikely(enable_debug))
+	    printk("%s(): Setting mtu (%d) to %d\n",
+	           __FUNCTION__,
+	           adapter->netdev->mtu,
+	           mtu);
+
+	  adapter->netdev->mtu = mtu;
+	  max_frame = adapter->netdev->mtu + ETH_HLEN + ETH_FCS_LEN;
+	}
+#endif
 
 	/* PCI config space info */
 

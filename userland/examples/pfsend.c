@@ -197,7 +197,7 @@ int main(int argc, char* argv[]) {
   char c, *pcap_in = NULL, mac_address[6];
   int promisc, i, verbose = 0, active_poll = 0, reforge_mac = 0;
   u_int mac_a, mac_b, mac_c, mac_d, mac_e, mac_f;
-  char buffer[1500];
+  char buffer[9000];
   int send_len = 60;
   u_int32_t num = 1;
   int bind_core = -1;
@@ -366,8 +366,11 @@ int main(int argc, char* argv[]) {
     }
   } else {
     struct packet *p;
+    u_int16_t *eth_len = &buffer[12];
 
-    for(i=0; i<send_len; i++) buffer[i] = i;
+    for(i=0; i<send_len; i++) buffer[i] = i%0xff;
+
+    *eth_len = send_len - 14;
 
     if(reforge_mac) memcpy(buffer, mac_address, 6);
 
