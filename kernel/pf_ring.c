@@ -3301,10 +3301,6 @@ static int handle_sw_filtering_hash_bucket(struct pf_ring_socket *pfr,
 	printk("[PF_RING] handle_sw_filtering_hash_bucket() "
 	       "no duplicate rule found: adding the rule\n");
 
-      if(rule->rule.plugin_action.plugin_id > 0) {
-	if(plugin_registration[rule->rule.plugin_action.plugin_id]->pfring_plugin_register)
-	  plugin_registration[rule->rule.plugin_action.plugin_id]->pfring_plugin_register(0);
-      }
       rule->next = pfr->sw_filtering_hash[hash_value];
       pfr->sw_filtering_hash[hash_value] = rule;
       rc = 0;
@@ -5028,6 +5024,13 @@ static int add_sw_filtering_hash_bucket(struct pf_ring_socket *pfr, sw_filtering
 
   write_lock(&pfr->ring_rules_lock);
   rc = handle_sw_filtering_hash_bucket(pfr, rule, 1 /* add */);
+
+  if (rc == 0) {
+    if(rule->rule.plugin_action.plugin_id > 0) {
+	if(plugin_registration[rule->rule.plugin_action.plugin_id]->pfring_plugin_register)
+	  plugin_registration[rule->rule.plugin_action.plugin_id]->pfring_plugin_register(1);
+      }
+  }
 
   if((rc != 0) && (rc != -EEXIST)) {
     kfree(rule);
