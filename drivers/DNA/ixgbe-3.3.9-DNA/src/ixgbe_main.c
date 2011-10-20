@@ -3426,6 +3426,9 @@ static void ixgbe_set_rx_buffer_len(struct ixgbe_adapter *adapter)
 	u32 mhadd, hlreg0;
 
 	/* Decide whether to use packet split mode or not */
+#ifdef ENABLE_DNA
+        adapter->flags &= ~IXGBE_FLAG_RX_PS_ENABLED;
+#else
 	if(netdev->mtu > ETH_DATA_LEN) {
 		if(adapter->flags & IXGBE_FLAG_RX_PS_CAPABLE)
 			adapter->flags |= IXGBE_FLAG_RX_PS_ENABLED;
@@ -3437,6 +3440,7 @@ static void ixgbe_set_rx_buffer_len(struct ixgbe_adapter *adapter)
 		else
 			adapter->flags |= IXGBE_FLAG_RX_PS_ENABLED;
 	}
+#endif
 
 #ifdef IXGBE_FCOE
 	/* adjust max frame to be able to do baby jumbo for FCoE */

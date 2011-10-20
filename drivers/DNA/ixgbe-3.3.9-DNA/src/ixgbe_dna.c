@@ -427,11 +427,12 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
 
   rx_ring->dna.num_memory_pages = rx_ring->dna.packet_num_slots / MAX_NUM_SLOTS_PER_PAGE;
 
-  if (ring_is_ps_enabled(rx_ring)) {
+  /* Packet Split disabled in DNA mode */
+  //if (ring_is_ps_enabled(rx_ring)) {
     /* data will be put in this buffer */
     /* Original fuction allocate PAGE_SIZE/2 for this buffer*/
-    rx_ring->dna.packet_slot_len  += PAGE_SIZE/2;
-  }
+  //  rx_ring->dna.packet_slot_len  += PAGE_SIZE/2;
+  //}
 
   rx_ring->dna.tot_packet_memory = rx_ring->dna.packet_slot_len * MAX_NUM_SLOTS_PER_PAGE;
 
@@ -488,16 +489,14 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
 			     rx_ring->dna.packet_slot_len,
 			     PCI_DMA_FROMDEVICE);
 
-    /* See Datasheet v2.3 - 7.1.6 */
-    if (!ring_is_ps_enabled(rx_ring)) {
-      /* Standard MTU */
+    /* Packet Split disabled in DNA mode */
+    //if (!ring_is_ps_enabled(rx_ring)) {
       rx_desc->read.hdr_addr = 0;
       rx_desc->read.pkt_addr = cpu_to_le64(bi->dma);
-    } else {
-      /* Jumbo frames */
-      rx_desc->read.hdr_addr = cpu_to_le64(bi->dma);
-      rx_desc->read.pkt_addr = cpu_to_le64(bi->dma + rx_ring->dna.packet_slot_len);
-    }
+    //} else {
+    //  rx_desc->read.hdr_addr = cpu_to_le64(bi->dma);
+    //  rx_desc->read.pkt_addr = cpu_to_le64(bi->dma + rx_ring->dna.packet_slot_len);
+    //}
 
     rx_desc->wb.upper.status_error = 0;
 
