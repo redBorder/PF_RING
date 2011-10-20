@@ -2485,6 +2485,14 @@ static int __devinit igb_sw_init(struct igb_adapter *adapter)
 	struct net_device *netdev = adapter->netdev;
 	struct pci_dev *pdev = adapter->pdev;
 
+#ifdef ENABLE_DNA
+	if(    mtu != netdev->mtu
+	   &&  mtu >= 68 
+	   && (mtu + ETH_HLEN + ETH_FCS_LEN + VLAN_TAG_SIZE) <= MAX_JUMBO_FRAME_SIZE) {
+	  netdev->mtu = mtu;
+	}
+#endif
+
 	/* PCI config space info */
 
 	hw->vendor_id = pdev->vendor;
