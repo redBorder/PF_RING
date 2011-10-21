@@ -357,8 +357,12 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u
 	   usec, nsec);
 
 #if 0
-    for(i=0; i<32; i++) printf("%02X ", p[i]);
-    printf("\n");
+    {
+      int i;
+      
+      for(i=0; i<h->len; i++) printf("%02X ", p[i]);
+      printf("\n");
+    }
 #endif
 
     if(h->extended_hdr.parsed_header_len > 0) {

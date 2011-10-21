@@ -6115,14 +6115,14 @@ void dna_device_handler(dna_device_operation operation,
       //       num_tx_slots, num_tx_pages);
 
       /* RX */
-      if (rx_info != NULL)
+      if(rx_info != NULL)
         memcpy(&next->dev.mem_info.rx, rx_info, sizeof(next->dev.mem_info.rx));
       if(rx_packet_memory != NULL)
         memcpy(&next->dev.rx_packet_memory, rx_packet_memory, sizeof(next->dev.rx_packet_memory));
       next->dev.rx_descr_packet_memory = rx_descr_packet_memory;
 
       /* TX */
-      if (tx_info != NULL)
+      if(tx_info != NULL)
         memcpy(&next->dev.mem_info.tx, tx_info, sizeof(next->dev.mem_info.tx));
       if(tx_packet_memory != NULL)
 	memcpy(&next->dev.tx_packet_memory, tx_packet_memory, sizeof(next->dev.tx_packet_memory));

@@ -467,7 +467,7 @@ void dna_igb_alloc_rx_buffers(struct igb_ring *rx_ring, struct pfring_hooks *hoo
   if(unlikely(enable_debug))
     printk("%s(): pci cache line size %d\n",__FUNCTION__, cache_line_size);
 
-  rx_ring->dna.packet_slot_len  = ALIGN(sizeof(union e1000_adv_rx_desc), cache_line_size);
+  rx_ring->dna.packet_slot_len  = ALIGN(rx_ring->rx_buffer_len, cache_line_size);
   rx_ring->dna.packet_num_slots = rx_ring->count;
 
   /* Align the slots to MAX_NUM_SLOTS_PER_PAGE */
