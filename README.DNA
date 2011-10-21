@@ -17,10 +17,6 @@ are currently available:
 These drivers can be found in drivers/DNA. Please refer to drivers/DNA/README.DNA 
 for additional information about this matter.
 
-If you own a Silicom adapter you can use the DNA drivers at no cost. If you own a non-Silicom
-NIC you need a license for the 1 Gbit DNA driver (per MAC address) that you can buy on
-http://shop.ntop.org/.
-
 With both drivers you can achieve wire rate at any packet size. You can test RX
 using the pfcount application, and TX using the pfsend application.
 
