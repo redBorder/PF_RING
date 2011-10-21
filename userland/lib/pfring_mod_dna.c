@@ -175,6 +175,7 @@ int pfring_dna_open(pfring *ring) {
   ring->set_poll_duration = pfring_mod_set_poll_duration;
   ring->add_hw_rule = pfring_mod_add_hw_rule;
   ring->remove_hw_rule = pfring_mod_remove_hw_rule;
+  ring->handle_hash_filtering_rule = pfring_dna_handle_hash_filtering_rule;
   ring->set_channel_id = pfring_mod_set_channel_id;
   ring->set_application_name = pfring_mod_set_application_name;
   ring->bind = pfring_mod_bind;
@@ -356,5 +357,41 @@ int pfring_dna_enable_ring(pfring *ring) {
     rc = ring->dna_enable(ring);
 
   return rc;
+}
+
+/* **************************************************** */
+
+int pfring_dna_handle_hash_filtering_rule(pfring *ring,
+				 	  hash_filtering_rule* rule_to_add,
+					  u_char add_rule) {
+  hw_filtering_rule rule;
+  memset(&rule, 0, sizeof(rule));
+
+  if(!rule_to_add)
+    return -2;
+
+  if (ring->dna_dev.mem_info.device_model != intel_ixgbe_82599)
+    return -3;
+
+  if (rule_to_add->plugin_action.plugin_id != NO_PLUGIN_ID)
+    return -4;
+
+  if (rule_to_add->rule_action != dont_forward_packet_and_stop_rule_evaluation)
+    return -5;
+
+  rule.rule_id = rule_to_add->rule_id;
+  rule.rule_family_type = intel_82599_perfect_filter_rule;
+  rule.rule_family.perfect_rule.vlan_id  = rule_to_add->vlan_id;
+  rule.rule_family.perfect_rule.proto    = rule_to_add->proto;
+  rule.rule_family.perfect_rule.s_addr   = rule_to_add->host_peer_a.v4;
+  rule.rule_family.perfect_rule.d_addr   = rule_to_add->host_peer_b.v4;
+  rule.rule_family.perfect_rule.s_port   = rule_to_add->port_peer_a;
+  rule.rule_family.perfect_rule.d_port   = rule_to_add->port_peer_b;
+  rule.rule_family.perfect_rule.queue_id = -1;
+
+  if (add_rule)
+    return pfring_mod_add_hw_rule(ring, &rule);
+  else
+    return pfring_mod_remove_hw_rule(ring, rule.rule_id);
 }
 

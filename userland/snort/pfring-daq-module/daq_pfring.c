@@ -59,6 +59,7 @@ typedef struct _pfring_context
   u_int breakloop;
   int promisc_flag;
   int timeout;
+  u_int16_t filter_count;
   DAQ_Analysis_Func_t analysis_func;
   uint32_t netmask;
   DAQ_Stats_t stats;
@@ -158,6 +159,7 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
   context->snaplen = config->snaplen;
   context->promisc_flag =(config->flags & DAQ_CFG_PROMISC);
   context->timeout =(config->timeout > 0) ?(int) config->timeout : -1;
+  context->filter_count = 0;
 
   context->device = strdup(config->name);
   if(!context->device) {
@@ -363,6 +365,8 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
     DAQ_PktHdr_t hdr;
     DAQ_Verdict verdict;
 
+    memset(&phdr, 0, sizeof(phdr));
+
     ret = pfring_recv((current_ring = context->ring_handle),
 		      &context->pkt_buffer, 0, &phdr, 0 /* Dont't wait */);
 
@@ -411,6 +415,7 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
 
 	memset(&hash_rule, 0, sizeof(hash_rule));
 
+	hash_rule.rule_id     = context->filter_count++;
 	hash_rule.vlan_id     = phdr.extended_hdr.parsed_pkt.vlan_id;
 	hash_rule.proto       = phdr.extended_hdr.parsed_pkt.l3_proto;
 	memcpy(&hash_rule.host_peer_a, &phdr.extended_hdr.parsed_pkt.ipv4_src, sizeof(ip_addr));
@@ -423,7 +428,16 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
 
 	rc = pfring_handle_hash_filtering_rule(context->ring_handle, &hash_rule, 1 /* add_rule */);
 
-	/* printf("Verdict=%d [pfring_handle_hash_filtering_rule=%d]\n", verdict, rc); */
+	/*
+	printf("[DEBUG] %d.%d.%d.%d:%d -> %d.%d.%d.%d:%d Verdict=%d [pfring_handle_hash_filtering_rule=%d]\n", 
+	       hash_rule.host_peer_a.v4 >> 24 & 0xFF, hash_rule.host_peer_a.v4 >> 16 & 0xFF,
+	       hash_rule.host_peer_a.v4 >>  8 & 0xFF, hash_rule.host_peer_a.v4 >>  0 & 0xFF, 
+	       hash_rule.port_peer_a & 0xFFFF, 
+	       hash_rule.host_peer_b.v4 >> 24 & 0xFF, hash_rule.host_peer_b.v4 >> 16 & 0xFF,
+	       hash_rule.host_peer_b.v4 >>  8 & 0xFF, hash_rule.host_peer_b.v4 >>  0 & 0xFF,
+	       hash_rule.port_peer_b & 0xFFFF, 
+	       verdict, rc);
+	*/
 
 	if(verdict == DAQ_VERDICT_BLACKLIST) {
 	  break;

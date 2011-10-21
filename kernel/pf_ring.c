@@ -5506,6 +5506,7 @@ static int ring_setsockopt(struct socket *sock,
 
       if(rule->rule.rule_id == hw_rule.rule_id) {
 	/* There's already a rule with the same id: failure */
+	printk("[PF_RING] Warning: duplicated hw rule id %d\n", hw_rule.rule_id);
 	return -EINVAL;
       }
     }
@@ -5514,6 +5515,9 @@ static int ring_setsockopt(struct socket *sock,
 
     if(ret != -1) {
       hw_filtering_rule_element *rule;
+	
+      if(unlikely(enable_debug))
+        printk("[PF_RING] New hw filtering rule [id=%d]\n", hw_rule.rule_id);
 
       /* Add the hw rule to the socket hw rule list */
       rule = kmalloc(sizeof(hw_filtering_rule_element), GFP_ATOMIC);

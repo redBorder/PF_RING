@@ -1069,12 +1069,12 @@ static int ixgbe_set_eeprom(struct net_device *netdev,
 		}
 
 		if (perfect_rule->s_port) { 
-		  perfect_cmd_fs->h_u.tcp_ip4_spec.psrc = ntohs(perfect_rule->s_port);
+		  perfect_cmd_fs->h_u.tcp_ip4_spec.psrc = htons(perfect_rule->s_port);
 		  perfect_cmd_fs->m_u.tcp_ip4_spec.psrc = 0x0000;
 		}
 
 		if (perfect_rule->d_port) { 
-		  perfect_cmd_fs->h_u.tcp_ip4_spec.pdst = ntohs(perfect_rule->d_port);
+		  perfect_cmd_fs->h_u.tcp_ip4_spec.pdst = htons(perfect_rule->d_port);
 		  perfect_cmd_fs->m_u.tcp_ip4_spec.pdst = 0x0000;
 		}
 
