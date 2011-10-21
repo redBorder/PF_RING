@@ -15,18 +15,14 @@ rmmod pf_ring
 # We assume that you have compiled PF_RING
 insmod ../../../../kernel/pf_ring.ko
 
-# Set <id> as many times as the number of processors
 # Default
 #insmod ./igb.ko
 
 # Disable multiqueue
-#insmod ./igb.ko VMDQ=0,0,0,0
-
-# Enable multiqueue
-insmod ./igb.ko
+insmod ./igb.ko VMDQ=0,0,0,0
 
 # Enable 8 queues (you need 8 or more CPU cores)
-#insmod ./igb.ko VMDQ=1,1 RSS=8,8 FdirMode=0,0
+#insmod ./igb.ko RSS=8,8,8,8
 
 sleep 1
 
