@@ -705,7 +705,8 @@ static int handle_hw_filtering_rule(struct pf_ring_socket *pfr,
 				    hw_filtering_rule *rule,
 				    hw_filtering_rule_command command) {
 
-  printk("[PF_RING] --> handle_hw_filtering_rule(command=%d)\n", command);
+  if(unlikely(enable_debug))
+    printk("[PF_RING] --> handle_hw_filtering_rule(command=%d)\n", command);
 
   switch(rule->rule_family_type) {
   case intel_82599_five_tuple_rule:
