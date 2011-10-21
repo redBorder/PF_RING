@@ -41,6 +41,7 @@
 #ifdef ENABLE_DNA
 #include "../../../../kernel/linux/pf_ring.h"
 extern s32 ixgbe_ftqf_add_filter(struct ixgbe_hw *hw, u8 proto, u32 saddr, u16 sport, u32 daddr, u16 dport, u8 rx_queue, u8 filter_id);
+static int ixgbe_set_rx_ntuple(struct net_device *dev, struct ethtool_rx_ntuple *cmd);
 #endif
 
 #ifndef ETH_GSTRING_LEN
@@ -959,12 +960,6 @@ static int ixgbe_set_eeprom(struct net_device *netdev,
 	  if((eeprom->magic == MAGIC_HW_FILTERING_RULE_REQUEST)
 	     && ((request_type == 0 /* ckeck */) || (request_type == 1 /* add/remove */))) {
 	    /* Here we go! */
-	    struct ixgbe_adapter *adapter = netdev_priv(netdev);
-            
-	    /* Note: the standard driver way is to allocate a struct ixgbe_fdir_filter *input
-	     * filling up the ->filter field. It also allows to registrate the filter. */
-            union ixgbe_atr_input input;
-	    union ixgbe_atr_input mask;
 
 	    int target_queue;
 	    hw_filtering_rule_command request = (hw_filtering_rule_command)eeprom->offset;
@@ -972,14 +967,17 @@ static int ixgbe_set_eeprom(struct net_device *netdev,
 	    intel_82599_perfect_filter_hw_rule *perfect_rule;
 	    intel_82599_five_tuple_filter_hw_rule *ftfq_rule;
 
-	    if(debug)
-	      printk("--> ixgbe_set_eeprom(command=%d)\n", request_type);
+	    int rc;
+	    struct ethtool_rx_ntuple perfect_cmd;
+	    struct ethtool_rx_ntuple_flow_spec *perfect_cmd_fs = &perfect_cmd.fs;
 
-	    if (adapter->hw.mac.type == ixgbe_mac_82598EB) {
-	      if(debug)
-	        printk("--> ixgbe_set_eeprom() [error %d]\n", 1);
+	    if (hw->mac.type == ixgbe_mac_82598EB) {
+	      printk("[DNA] hw filtering rule not supported\n");
 	      return -EOPNOTSUPP;
 	    }
+
+	    if(debug)
+	      printk("--> ixgbe_set_eeprom(command=%d)\n", request_type);
 
 	    if(request_type == 0) {
 	      /* ckeck */
@@ -1030,77 +1028,72 @@ static int ixgbe_set_eeprom(struct net_device *netdev,
 		 * queues.
 		 */
 		if (!(adapter->flags & IXGBE_FLAG_FDIR_PERFECT_CAPABLE)) {
-		  if(debug)
-		    printk("--> ixgbe_set_eeprom() IXGBE_FLAG_FDIR_PERFECT_CAPABLE=%d\n", 
-		           (adapter->flags & IXGBE_FLAG_FDIR_PERFECT_CAPABLE) ? 1 : 0);
-		  return -EINVAL;
+	          printk("[DNA] perfect filters not supported\n");
+	          return -EOPNOTSUPP;
 		}
 
+		memset(&perfect_cmd, 0, sizeof(struct ethtool_rx_ntuple));
 
 		/* determine if we need to drop or route the packet */
-		if(perfect_rule->queue_id >= (MAX_RX_QUEUES - 1))
-		  target_queue = MAX_RX_QUEUES - 1;
+		if(perfect_rule->queue_id >= adapter->num_rx_queues - 1)
+		  perfect_cmd_fs->action = ETHTOOL_RXNTUPLE_ACTION_DROP;
 		else
-		  target_queue = perfect_rule->queue_id;
+		  perfect_cmd_fs->action = perfect_rule->queue_id;
 
-		memset(&input, 0, sizeof(union ixgbe_atr_input));
-		memset(&mask,  0, sizeof(union ixgbe_atr_input));
+		if (request != add_hw_rule)
+		  perfect_cmd_fs->action = ETHTOOL_RXNTUPLE_ACTION_CLEAR;
 
-		if(debug)
-		  printk("--> ixgbe_set_eeprom(rule_id=%d, request=%d, proto=%d, vlan=%d, ips=%08X, sport=%d, ipd=%08X, dport=%d)\n",
-			 rule->rule_id, request,
-			 perfect_rule->proto, perfect_rule->vlan_id,
-			 perfect_rule->s_addr, perfect_rule->s_port,
-			 perfect_rule->d_addr, perfect_rule->d_port);
-
-		if(perfect_rule->proto == 6 /* TCP */)
-	          input.formatted.flow_type = IXGBE_ATR_FLOW_TYPE_TCPV4;
-		else /* UDP */
-		  input.formatted.flow_type = IXGBE_ATR_FLOW_TYPE_UDPV4;
-
-		if(request == add_hw_rule) {
-		  /* Mask bits from the inputs based on user-supplied mask */
-		  if(perfect_rule->s_addr) {
-		    perfect_rule->s_addr = htonl(perfect_rule->s_addr);
-		    input.formatted.src_ip[0] = perfect_rule->s_addr;
-		    mask.formatted.src_ip[0] = ~perfect_rule->s_addr;
-		  }
-
-		  if(perfect_rule->d_addr) {
-		    perfect_rule->d_addr = htonl(perfect_rule->d_addr);
-		    input.formatted.dst_ip[0] = perfect_rule->d_addr;
-		    mask.formatted.dst_ip[0] = ~perfect_rule->d_addr;
-		  }
-
-		  /* 82599 expects these to be byte-swapped for perfect filtering */
-		  if(perfect_rule->s_port) {
-		    perfect_rule->s_port = ntohs(perfect_rule->s_port);
-		    input.formatted.src_port = perfect_rule->s_port;
-		    mask.formatted.src_port = ~perfect_rule->s_port;
-		  }
-
-		  if(perfect_rule->d_port) {
-		    perfect_rule->d_port = ntohs(perfect_rule->d_port);
-		    input.formatted.dst_port = perfect_rule->d_port;
-		    mask.formatted.dst_port = ~perfect_rule->d_port;
-		  }
-
-		  /* VLAN and Flex bytes are either completely masked or not */
-		  if (perfect_rule->vlan_id) {
-		    input.formatted.vlan_id = htons(perfect_rule->vlan_id & 0xEFFF);
-		    mask.formatted.vlan_id = htons(0xFFF);
-		  }
+		switch (perfect_rule->proto) {
+		case 6 /* TCP */:
+	          perfect_cmd_fs->flow_type = TCP_V4_FLOW;
+		  break;
+		case 132 /* SCTP */:
+		  perfect_cmd_fs->flow_type = SCTP_V4_FLOW;
+		  break;
+		case 17 /* UDP */:
+		  perfect_cmd_fs->flow_type = UDP_V4_FLOW;
+		  break;
+		default:
+		  perfect_cmd_fs->flow_type = IP_USER_FLOW;
+		  break;
 		}
 
-		spin_lock(&adapter->fdir_perfect_lock);
-		if(debug)
-		  printk("--> ixgbe_fdir_add_perfect_filter_82599(id=%d,target_queue=%d/%d/%d) called\n",
-			 rule->rule_id, target_queue, target_queue, MAX_RX_QUEUES);
-		ixgbe_fdir_add_perfect_filter_82599(&adapter->hw, &input, &mask, rule->rule_id,
-						   (request == add_hw_rule) ? target_queue : 0);
+		if (perfect_rule->s_addr) {
+		  perfect_cmd_fs->h_u.tcp_ip4_spec.ip4src = htonl(perfect_rule->s_addr);
+		  perfect_cmd_fs->m_u.tcp_ip4_spec.ip4src = 0x00000000; /* /32 */
+		}
 
-		/* TODO What about ixgbe_fdir_erase_perfect_filter_82599 ? */
-		spin_unlock(&adapter->fdir_perfect_lock);
+		if (perfect_rule->d_addr) { 
+		  perfect_cmd_fs->h_u.tcp_ip4_spec.ip4dst = htonl(perfect_rule->d_addr);
+		  perfect_cmd_fs->m_u.tcp_ip4_spec.ip4dst = 0x00000000; /* /32 */
+		}
+
+		if (perfect_rule->s_port) { 
+		  perfect_cmd_fs->h_u.tcp_ip4_spec.psrc = ntohs(perfect_rule->s_port);
+		  perfect_cmd_fs->m_u.tcp_ip4_spec.psrc = 0x0000;
+		}
+
+		if (perfect_rule->d_port) { 
+		  perfect_cmd_fs->h_u.tcp_ip4_spec.pdst = ntohs(perfect_rule->d_port);
+		  perfect_cmd_fs->m_u.tcp_ip4_spec.pdst = 0x0000;
+		}
+
+		if (perfect_rule->vlan_id) {
+		  perfect_cmd_fs->vlan_tag = perfect_rule->vlan_id;
+		  perfect_cmd_fs->vlan_tag_mask = 0xFFF; /* VLANID meaningful, VLAN priority ignored */
+		}
+		
+		/* Data not supported
+		 * perfect_cmd_fs->data
+		 * perfect_cmd_fs->data_mask
+		 */
+
+		rc = ixgbe_set_rx_ntuple(netdev, &perfect_cmd);
+
+		if (rc != 0) {
+		  printk("[DNA] Warning: ixgbe_set_rx_ntuple() returned %d\n", rc);
+		}
+
 		break;
 
 	      default:
