@@ -366,7 +366,7 @@ int main(int argc, char* argv[]) {
     }
   } else {
     struct packet *p;
-    u_int16_t *eth_len = &buffer[12];
+    u_int16_t *eth_len = (u_int16_t *) &buffer[12];
 
     for(i=0; i<send_len; i++) buffer[i] = i%0xff;
 
