@@ -423,7 +423,7 @@ int main(int argc, char* argv[]) {
     if(verbose)
       printf("[%d] pfring_send(%d) returned %d\n", i, tosend->len, rc);
 
-    if(rc == -1) {
+    if(rc < 0) {
       /* Not enough space in buffer */
 
       if(gbit_s == 0) {
