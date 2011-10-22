@@ -330,6 +330,19 @@ int pfring_recv(pfring *ring, u_char** buffer, u_int buffer_len,
 
 /* **************************************************** */
 
+int pfring_recv_parsed(pfring *ring, u_char** buffer, u_int buffer_len,
+		       struct pfring_pkthdr *hdr, u_int8_t wait_for_incoming_packet,
+		       u_int8_t level /* 1..4 */, u_int8_t add_timestamp, u_int8_t add_hash) {
+  int rc = pfring_recv(ring, buffer, buffer_len, hdr, wait_for_incoming_packet);
+
+  if (rc > 0) 
+    rc = pfring_parse_pkt(*buffer, hdr, level, add_timestamp, add_hash);
+
+  return rc;	       
+}
+
+/* **************************************************** */
+
 int pfring_set_poll_watermark(pfring *ring, u_int16_t watermark) {
   if(ring && ring->set_poll_watermark)
     return ring->set_poll_watermark(ring, watermark);

@@ -123,13 +123,13 @@ void print_stats() {
 	    pfringStat.recv == 0 ? 0 :
 	    (double)(pfringStat.drop*100)/(double)(pfringStat.recv+pfringStat.drop));
     fprintf(stderr, "%s pkts - %s bytes", 
-	    format_numbers((double)nPkts, buf1, sizeof(buf1), 0),
-	    format_numbers((double)nBytes, buf2, sizeof(buf2), 0));
+	    pfring_format_numbers((double)nPkts, buf1, sizeof(buf1), 0),
+	    pfring_format_numbers((double)nBytes, buf2, sizeof(buf2), 0));
 
     if(print_all)
       fprintf(stderr, " [%s pkt/sec - %s Mbit/sec]\n",
-	      format_numbers((double)(nPkts*1000)/deltaMillisec, buf1, sizeof(buf1), 1),
-	      format_numbers(thpt, buf2, sizeof(buf2), 1));
+	      pfring_format_numbers((double)(nPkts*1000)/deltaMillisec, buf1, sizeof(buf1), 1),
+	      pfring_format_numbers(thpt, buf2, sizeof(buf2), 1));
     else
       fprintf(stderr, "\n");
 
@@ -139,8 +139,8 @@ void print_stats() {
       fprintf(stderr, "=========================\n"
 	      "Actual Stats: %llu pkts [%s ms][%s pkt/sec]\n",
 	      (long long unsigned int)diff,
-	      format_numbers(deltaMillisec, buf1, sizeof(buf1), 1),
-	      format_numbers(((double)diff/(double)(deltaMillisec/1000)),  buf2, sizeof(buf2), 1));
+	      pfring_format_numbers(deltaMillisec, buf1, sizeof(buf1), 1),
+	      pfring_format_numbers(((double)diff/(double)(deltaMillisec/1000)),  buf2, sizeof(buf2), 1));
     }
 
     lastPkts = nPkts;
@@ -339,8 +339,8 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u
     uint nsec=0;
 
     if(h->ts.tv_sec == 0) {
-      gettimeofday((struct timeval*)&h->ts, NULL);
-      parse_pkt((u_char*)p, (struct pfring_pkthdr*)h);
+      memset((void*)&h->extended_hdr.parsed_pkt, 0, sizeof(struct pkt_parsing_info));
+      pfring_parse_pkt((u_char*)p, (struct pfring_pkthdr*)h, 4, 1, 1);
     }
  
     if(h->extended_hdr.timestamp_ns) {

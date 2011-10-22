@@ -81,6 +81,43 @@ struct udphdr {
 #define TH_ACK_MULTIPLIER	0x10
 #define TH_URG_MULTIPLIER	0x20
 
+struct ipv6hdr {
+#if defined(__LITTLE_ENDIAN_BITFIELD)
+  __u8		priority:4,
+		version:4;
+#elif defined(__BIG_ENDIAN_BITFIELD)
+  __u8		version:4,
+		priority:4;
+#else
+#endif
+  __u8		flow_lbl[3];
+
+  __be16	payload_len;
+  __u8		nexthdr;
+  __u8		hop_limit;
+
+  struct in6_addr saddr;
+  struct in6_addr daddr;
+};
+
+struct ipv6_opt_hdr {
+  __u8		nexthdr;
+  __u8 		hdrlen;
+	/* TLV encoded option data follows */
+} __attribute__((packed));
+
+#define NEXTHDR_HOP     	  0
+#define NEXTHDR_TCP     	  6
+#define NEXTHDR_UDP     	 17
+#define NEXTHDR_IPV6    	 41
+#define NEXTHDR_ROUTING 	 43
+#define NEXTHDR_FRAGMENT	 44
+#define NEXTHDR_ESP     	 50
+#define NEXTHDR_AUTH    	 51
+#define NEXTHDR_ICMP    	 58
+#define NEXTHDR_NONE    	 59
+#define NEXTHDR_DEST    	 60
+#define NEXTHDR_MOBILITY	135
 
 #endif /* _PFRING_UTILS_H_ */
 

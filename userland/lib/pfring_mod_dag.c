@@ -333,7 +333,7 @@ int pfring_dag_recv(pfring *ring, u_char** buffer, u_int buffer_len, struct pfri
   hdr->extended_hdr.timestamp_ns = ts;
 
 #ifdef PFRING_DAG_PARSE_PKT
-  parse_pkt(*buffer, hdr);      
+  pfring_parse_pkt(*buffer, hdr, 4, 0, 1);
 #else
   hdr->extended_hdr.parsed_header_len = 0;
 #endif

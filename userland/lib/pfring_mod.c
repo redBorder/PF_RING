@@ -255,7 +255,7 @@ int pfring_mod_open(pfring *ring) {
 #endif
 
   if(ring->promisc) {
-    if(set_if_promisc(ring->device_name, 1) == 0)
+    if(pfring_set_if_promisc(ring->device_name, 1) == 0)
       ring->clear_promisc = 1;
   }
 
@@ -372,7 +372,7 @@ void pfring_mod_close(pfring *ring) {
     munmap(ring->buffer, ring->slots_info->tot_mem);
 
   if(ring->clear_promisc)
-    set_if_promisc(ring->device_name, 0);
+    pfring_set_if_promisc(ring->device_name, 0);
 
   close(ring->fd);
 }

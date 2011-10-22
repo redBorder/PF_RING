@@ -40,7 +40,7 @@ unsigned long long numPkts = 0, numBytes = 0;
 
 int pcap_set_cluster(pcap_t *ring, u_int clusterId);
 int pcap_set_application_name(pcap_t *handle, char *name);
-char* format_numbers(double val, char *buf, u_int buf_len, u_int8_t add_decimals);
+char* pfring_format_numbers(double val, char *buf, u_int buf_len, u_int8_t add_decimals);
 
 /* *************************************** */
 /*
@@ -100,8 +100,8 @@ void print_stats() {
       diff = numPkts-lastPkts;
       fprintf(stderr, "=========================\n"
 	      "Actual Stats: %s pkts [%.1f ms][%s pkt/sec]\n",
-	      format_numbers(diff, buf1, sizeof(buf1), 0), deltaSec*1000, 
-	      format_numbers(((double)diff/(double)(deltaSec)), buf2, sizeof(buf2), 1));
+	      pfring_format_numbers(diff, buf1, sizeof(buf1), 0), deltaSec*1000, 
+	      pfring_format_numbers(((double)diff/(double)(deltaSec)), buf2, sizeof(buf2), 1));
       lastPkts = numPkts;
     }
 

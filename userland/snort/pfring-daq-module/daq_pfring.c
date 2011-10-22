@@ -415,6 +415,9 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
 
 	memset(&hash_rule, 0, sizeof(hash_rule));
 
+        pfring_parse_pkt(context->pkt_buffer, &phdr, 4, 0, 0);
+	/* or use pfring_recv_parsed() to force parsing. */
+
 	hash_rule.rule_id     = context->filter_count++;
 	hash_rule.vlan_id     = phdr.extended_hdr.parsed_pkt.vlan_id;
 	hash_rule.proto       = phdr.extended_hdr.parsed_pkt.l3_proto;
@@ -428,7 +431,7 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
 
 	rc = pfring_handle_hash_filtering_rule(context->ring_handle, &hash_rule, 1 /* add_rule */);
 
-	/*
+	/*	
 	printf("[DEBUG] %d.%d.%d.%d:%d -> %d.%d.%d.%d:%d Verdict=%d [pfring_handle_hash_filtering_rule=%d]\n", 
 	       hash_rule.host_peer_a.v4 >> 24 & 0xFF, hash_rule.host_peer_a.v4 >> 16 & 0xFF,
 	       hash_rule.host_peer_a.v4 >>  8 & 0xFF, hash_rule.host_peer_a.v4 >>  0 & 0xFF, 

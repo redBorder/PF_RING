@@ -144,6 +144,7 @@ extern "C" {
     void      (*close)                        (pfring *);
     int	      (*stats)                        (pfring *, pfring_stat *);
     int       (*recv)                         (pfring *, u_char**, u_int, struct pfring_pkthdr *, u_int8_t);
+    int       (*recv_parsed)                  (pfring *, u_char**, u_int, struct pfring_pkthdr *, u_int8_t, u_int8_t, u_int8_t, u_int8_t); 
     int       (*set_poll_watermark)           (pfring *, u_int16_t);
     int       (*set_poll_duration)            (pfring *, u_int);
     int       (*add_hw_rule)                  (pfring *, hw_filtering_rule *);
@@ -230,8 +231,10 @@ extern "C" {
   void pfring_close(pfring *ring);
   int pfring_stats(pfring *ring, pfring_stat *stats);
   int pfring_recv(pfring *ring, u_char** buffer, u_int buffer_len,
-		  struct pfring_pkthdr *hdr,
-		  u_int8_t wait_for_incoming_packet);
+		  struct pfring_pkthdr *hdr, u_int8_t wait_for_incoming_packet);
+  int pfring_recv_parsed(pfring *ring, u_char** buffer, u_int buffer_len,
+		  struct pfring_pkthdr *hdr, u_int8_t wait_for_incoming_packet,
+		  u_int8_t level /* 1..4 */, u_int8_t add_timestamp, u_int8_t add_hash);
   int pfring_set_poll_watermark(pfring *ring, u_int16_t watermark);
   int pfring_set_poll_duration(pfring *ring, u_int duration);
   int pfring_add_hw_rule(pfring *ring, hw_filtering_rule *rule);
@@ -292,9 +295,10 @@ extern "C" {
 
 
   /* Utils (defined in pfring_utils.c) */
-  int parse_pkt(u_char *pkt, struct pfring_pkthdr *hdr);
-  int set_if_promisc(const char *device, int set_promisc);
-  char* format_numbers(double val, char *buf, u_int buf_len, u_int8_t add_decimals);
+  int pfring_parse_pkt(u_char *pkt, struct pfring_pkthdr *hdr, u_int8_t level /* 2..4 */, 
+		       u_int8_t add_timestamp /* 0,1 */, u_int8_t add_hash /* 0,1 */);
+  int pfring_set_if_promisc(const char *device, int set_promisc);
+  char* pfring_format_numbers(double val, char *buf, u_int buf_len, u_int8_t add_decimals);
 
   /* ********************************* */
 

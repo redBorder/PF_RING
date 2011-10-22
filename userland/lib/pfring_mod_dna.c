@@ -81,7 +81,7 @@ void pfring_dna_close(pfring *ring) {
   pfring_map_dna_device(ring, remove_device_mapping, "");
 
   if(ring->clear_promisc)
-    set_if_promisc(ring->device_name, 0);
+    pfring_set_if_promisc(ring->device_name, 0);
 
   close(ring->fd);
 }
@@ -119,7 +119,7 @@ int pfring_dna_recv(pfring *ring, u_char** buffer, u_int buffer_len,
       if(0)
 	hdr->extended_hdr.parsed_header_len = 0;
       else if(buffer_len > 0)
-	parse_pkt(*buffer, hdr);
+	pfring_parse_pkt(*buffer, hdr, 4, 1, 1);
 
       hdr->extended_hdr.rx_direction = 1;
 
@@ -326,7 +326,7 @@ int pfring_dna_open(pfring *ring) {
   /* ***************************************** */
 
   if(ring->promisc) {
-    if(set_if_promisc(ring->device_name, 1) == 0)
+    if(pfring_set_if_promisc(ring->device_name, 1) == 0)
       ring->clear_promisc = 1;
   }
 
