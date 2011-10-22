@@ -26,7 +26,7 @@ insmod ./ixgbe.ko RSS=0,0,0,0
 #insmod ./ixgbe.ko MQ=1,1 RSS=8,8 FdirMode=0,0
 
 # Enable hw filters
-#insmod ./ixgbe.ko RSS=0,0,0,0 FdirMode=2,2,2,2
+#insmod ./ixgbe.ko RSS=0,0,0,0 FdirMode=2,2,2,2 FdirPballoc=3,3,3,3
 
 # Set a large MTU (jumbo frame)
 #insmod ./ixgbe.ko RSS=0,0,0,0 mtu=9000

@@ -19,7 +19,7 @@ insmod ../../../../kernel/pf_ring.ko
 #insmod ./igb.ko
 
 # Disable multiqueue
-insmod ./igb.ko VMDQ=0,0,0,0
+insmod ./igb.ko
 
 # Enable 8 queues (you need 8 or more CPU cores)
 #insmod ./igb.ko RSS=8,8,8,8

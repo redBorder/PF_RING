@@ -144,7 +144,6 @@ extern "C" {
     void      (*close)                        (pfring *);
     int	      (*stats)                        (pfring *, pfring_stat *);
     int       (*recv)                         (pfring *, u_char**, u_int, struct pfring_pkthdr *, u_int8_t);
-    int       (*recv_parsed)                  (pfring *, u_char**, u_int, struct pfring_pkthdr *, u_int8_t, u_int8_t, u_int8_t, u_int8_t); 
     int       (*set_poll_watermark)           (pfring *, u_int16_t);
     int       (*set_poll_duration)            (pfring *, u_int);
     int       (*add_hw_rule)                  (pfring *, hw_filtering_rule *);
