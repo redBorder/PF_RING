@@ -19,7 +19,6 @@
 #include "pfring_utils.h"
 
 static u_int32_t pfring_hash_pkt(struct pfring_pkthdr *hdr) {
-  printf("computing hash \n");
   return  
     hdr->extended_hdr.parsed_pkt.vlan_id +
     hdr->extended_hdr.parsed_pkt.l3_proto +
@@ -183,8 +182,6 @@ TIMESTAMP:
 
   if (add_hash && hdr->extended_hdr.pkt_hash == 0)
     hdr->extended_hdr.pkt_hash = pfring_hash_pkt(hdr);
-
-printf("analized = %d \n", analized);
 
   return analized;
 }

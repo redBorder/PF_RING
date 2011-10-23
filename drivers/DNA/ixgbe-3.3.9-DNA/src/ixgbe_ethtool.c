@@ -954,8 +954,8 @@ static int ixgbe_set_eeprom(struct net_device *netdev,
 	  u8 request_type = eeprom->len;
 
 	  if(debug)
-	    printk("--> ixgbe_set_eeprom(command=%d/magic=%d/bytes=%p)\n", 
-		   request_type, eeprom->magic, bytes);
+	    printk("[DNA][DEBUG] %s(command=%d/magic=%d/bytes=%p)\n", 
+		   __FUNCTION__, request_type, eeprom->magic, bytes);
 
 	  if((eeprom->magic == MAGIC_HW_FILTERING_RULE_REQUEST)
 	     && ((request_type == 0 /* ckeck */) || (request_type == 1 /* add/remove */))) {
@@ -977,7 +977,7 @@ static int ixgbe_set_eeprom(struct net_device *netdev,
 	    }
 
 	    if(debug)
-	      printk("--> ixgbe_set_eeprom(command=%d)\n", request_type);
+	      printk("[DNA][DEBUG] %s(command=%d)\n", __FUNCTION__, request_type);
 
 	    if(request_type == 0) {
 	      /* ckeck */
@@ -1000,8 +1000,8 @@ static int ixgbe_set_eeprom(struct net_device *netdev,
 		  target_queue = ftfq_rule->queue_id;
 
 		if(debug)
-		  printk("--> ixgbe_set_eeprom() -> ixgbe_ftqf_add_filter(id=%d,target_queue=%d) called\n",
-			 rule->rule_id, target_queue);
+		  printk("[DNA][DEBUG] %s() -> ixgbe_ftqf_add_filter(id=%d,target_queue=%d) called\n",
+			 __FUNCTION__, rule->rule_id, target_queue);
 
 		spin_lock(&adapter->fdir_perfect_lock);
 		if(request == add_hw_rule) {
@@ -1090,8 +1090,15 @@ static int ixgbe_set_eeprom(struct net_device *netdev,
 
 		rc = ixgbe_set_rx_ntuple(netdev, &perfect_cmd);
 
-		if (rc != 0) {
-		  printk("[DNA] Warning: ixgbe_set_rx_ntuple() returned %d\n", rc);
+		if (debug && rc != 0) {
+		  printk("[DNA][DEBUG] %s() Error: ixgbe_set_rx_ntuple(%d.%d.%d.%d:%d -> %d.%d.%d.%d:%d) returned %d\n",
+		         __FUNCTION__, rc,
+		         perfect_rule->s_addr >> 24 & 0xFF, perfect_rule->s_addr >> 16 & 0xFF,
+		         perfect_rule->s_addr >>  8 & 0xFF, perfect_rule->s_addr >>  0 & 0xFF, 
+		         perfect_rule->s_port & 0xFFFF, 
+		         perfect_rule->d_addr >> 24 & 0xFF, perfect_rule->d_addr >> 16 & 0xFF,
+		         perfect_rule->d_addr >>  8 & 0xFF, perfect_rule->d_addr >>  0 & 0xFF,
+		         perfect_rule->d_port & 0xFFFF);
 		}
 
 		break;
