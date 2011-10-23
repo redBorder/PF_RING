@@ -2356,17 +2356,17 @@ int check_wildcard_rules(struct sk_buff *skb,
 	  /* We have done with rule evaluation, but we need a write_lock to add the hash rule */
 	  write_lock(&pfr->ring_rules_lock);
 	  rc = pfr->handle_hash_rule(pfr, hash_bucket, 1 /* add_rule_from_plugin */);
+	  if (rc == 0) 
+	    pfr->num_sw_filtering_rules++;
+	  write_unlock(&pfr->ring_rules_lock);
 
-	  if((rc != 0) && (rc != -EEXIST)) {
-	    write_unlock(&pfr->ring_rules_lock);
+	  if(rc != 0) {
 	    kfree(hash_bucket);
-	    rc = -1;
+	    if(rc == -EEXIST) /* Rule already existing */
+	      rc = 0;
+	    else 
+	      rc = -1;
 	  } else {
-	    if(rc != -EEXIST) /* Rule already existing */
-	      pfr->num_sw_filtering_rules++;
-	    write_unlock(&pfr->ring_rules_lock);
-	    rc = 0;
-
 	    if(unlikely(enable_debug))
 	      printk("[PF_RING] Added rule: [%d.%d.%d.%d:%d <-> %d.%d.%d.%d:%d][tot_rules=%d]\n",
 		     ((hash_bucket->rule.host4_peer_a >> 24) & 0xff), ((hash_bucket->rule.host4_peer_a >> 16) & 0xff),
