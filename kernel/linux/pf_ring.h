@@ -753,12 +753,15 @@ typedef int (*do_add_raw_packet_to_ring)(struct pf_ring_socket *pfr,
 
 /* ************************************************* */
 
+#define MAX_NUM_DEVICES_ID    MAX_NUM_IFIDX
 /*
  * Ring options
  */
 struct pf_ring_socket {
   u_int8_t ring_active, num_rx_channels, rehash_rss;
   ring_device_element *ring_netdev;
+
+  DECLARE_BITMAP(netdev_mask, MAX_NUM_DEVICES_ID /* bits */);
   u_short ring_pid;
   u_int32_t ring_id;
   char *appl_name; /* String that identifies the application bound to the socket */

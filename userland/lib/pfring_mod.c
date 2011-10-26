@@ -19,9 +19,7 @@
 #include <sys/types.h>
 #include <pthread.h>
 
-#ifdef ENABLE_HW_TIMESTAMP
 #include <linux/net_tstamp.h>
-#endif
 
 //#define ENABLE_BPF
 
@@ -62,8 +60,6 @@ unsigned long long rdtsc() {
 
 /* **************************************************** */
 
-#ifdef ENABLE_HW_TIMESTAMP
-
 static int pfring_enable_hw_timestamp(pfring* ring, char *device_name) {
   struct hwtstamp_config hwconfig;
   struct ifreq ifr;
@@ -96,8 +92,6 @@ static int pfring_enable_hw_timestamp(pfring* ring, char *device_name) {
   close(sock_fd);
   return(rc);
 }
-
-#endif
 
 /* **************************************************** */
 
@@ -259,9 +253,7 @@ int pfring_mod_open(pfring *ring) {
       ring->clear_promisc = 1;
   }
 
-#ifdef ENABLE_HW_TIMESTAMP
   pfring_enable_hw_timestamp(ring, ring->device_name);
-#endif
 
   ring->slot_header_len = pfring_get_slot_header_len(ring);
   if(ring->slot_header_len == (u_int16_t)-1) {
@@ -304,7 +296,7 @@ int pfring_mod_set_application_name(pfring *ring, char *name) {
 
 int pfring_mod_bind(pfring *ring, char *device_name) {
   struct sockaddr sa;
-  char *at;
+  char *at, *elem, name_copy[256];
   u_int32_t channel_id = RING_ANY_CHANNEL;
   int rc = 0;
 
@@ -349,17 +341,24 @@ int pfring_mod_bind(pfring *ring, char *device_name) {
   ring->sock_tx.sll_family = PF_PACKET;
   ring->sock_tx.sll_protocol = htons(ETH_P_ALL);
 
-  memset(&sa, 0, sizeof(sa));
-  sa.sa_family = PF_RING;
-  snprintf(sa.sa_data, sizeof(sa.sa_data), "%s", device_name);
+  snprintf(name_copy, sizeof(name_copy), "%s", device_name);
+  elem = strtok(name_copy, ";,");
 
-  rc = bind(ring->fd, (struct sockaddr *)&sa, sizeof(sa));
-
-  if(rc == 0) {
-    rc = pfring_set_channel_id(ring, channel_id);
-
-    if(rc != 0)
-      printf("pfring_set_channel_id() failed: %d\n", rc);
+  while(elem != NULL) {
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_family = PF_RING;
+    snprintf(sa.sa_data, sizeof(sa.sa_data), "%s", elem);
+    
+    rc = bind(ring->fd, (struct sockaddr *)&sa, sizeof(sa));
+    
+    if(rc == 0) {
+      rc = pfring_set_channel_id(ring, channel_id);
+      
+      if(rc != 0)
+	printf("pfring_set_channel_id() failed: %d\n", rc);
+    }
+    
+    elem = strtok(NULL, ";,");
   }
 
   return(rc);

@@ -385,8 +385,9 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u
     memcpy(&ehdr, p+h->extended_hdr.parsed_header_len, sizeof(struct ether_header));
     eth_type = ntohs(ehdr.ether_type);
 
-    printf("[%s][%s -> %s][eth_type=0x%04X] ",
+    printf("[%s][if_index=%d][%s -> %s][eth_type=0x%04X] ",
 	   h->extended_hdr.rx_direction ? "RX" : "TX",
+	   h->extended_hdr.if_index,
 	   etheraddr_string(ehdr.ether_shost, buf1),
 	   etheraddr_string(ehdr.ether_dhost, buf2), eth_type);
 
