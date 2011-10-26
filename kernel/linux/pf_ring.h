@@ -623,7 +623,7 @@ typedef struct {
 
 #ifdef __KERNEL__
 
-#define CLUSTER_LEN       8
+#define CLUSTER_LEN       32
 
 /*
  * A ring cluster is used group together rings used by various applications

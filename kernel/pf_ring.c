@@ -6405,13 +6405,11 @@ static int ring_notifier(struct notifier_block *this, unsigned long msg, void *d
   struct pfring_hooks *hook;
 
   if(dev != NULL) {
-    if(unlikely(enable_debug)) printk("[PF_RING] packet_notifier(%lu)\n", msg);
-
+    if(unlikely(enable_debug)) 
+      printk("[PF_RING] packet_notifier(%lu) [%s][%d]\n", msg, dev->name, dev->type);
+    
     /* Skip non ethernet interfaces */
-    if(strncmp(dev->name, "eth", 3) 
-       && strncmp(dev->name, "lan", 3)
-       && strncmp(dev->name, "dna", 3)
-       && strncmp(dev->name, "tnapi", 4)
+    if((dev->type != ARPHRD_ETHER)
        && strncmp(dev->name, "bond", 4)) {
       if(unlikely(enable_debug)) printk("[PF_RING] packet_notifier(%s): skipping non ethernet device\n", dev->name);
       return NOTIFY_DONE;
