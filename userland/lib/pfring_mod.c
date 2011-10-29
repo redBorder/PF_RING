@@ -61,6 +61,9 @@ unsigned long long rdtsc() {
 /* **************************************************** */
 
 static int pfring_enable_hw_timestamp(pfring* ring, char *device_name) {
+#ifdef HWTSTAMP_TX_OFF
+  return(-1);
+#else
   struct hwtstamp_config hwconfig;
   struct ifreq ifr;
   int rc, sock_fd;
@@ -91,6 +94,7 @@ static int pfring_enable_hw_timestamp(pfring* ring, char *device_name) {
 
   close(sock_fd);
   return(rc);
+#endif
 }
 
 /* **************************************************** */
@@ -449,7 +453,7 @@ int pfring_mod_recv(pfring *ring, u_char** buffer, u_int buffer_len,
 
     if(pfring_there_is_pkt_available(ring)) {
       char *bucket = &ring->slots[ring->slots_info->remove_off];
-      u_int32_t next_off, real_slot_len, insert_off, bktLen;
+      u_int32_t next_off, real_slot_len, bktLen;
 
       memcpy(hdr, bucket, ring->slot_header_len);
 
@@ -459,7 +463,6 @@ int pfring_mod_recv(pfring *ring, u_char** buffer, u_int buffer_len,
 	bktLen = hdr->caplen+hdr->extended_hdr.parsed_header_len;
 
       real_slot_len = ring->slot_header_len + bktLen;
-      insert_off = ring->slots_info->insert_off;
       if(bktLen > buffer_len) bktLen = buffer_len;
 
       if(buffer_len == 0)
