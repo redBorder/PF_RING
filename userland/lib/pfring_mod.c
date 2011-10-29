@@ -19,7 +19,9 @@
 #include <sys/types.h>
 #include <pthread.h>
 
+#ifdef ENABLE_HW_TIMESTAMP
 #include <linux/net_tstamp.h>
+#endif
 
 //#define ENABLE_BPF
 
@@ -61,9 +63,7 @@ unsigned long long rdtsc() {
 /* **************************************************** */
 
 static int pfring_enable_hw_timestamp(pfring* ring, char *device_name) {
-#ifdef HWTSTAMP_TX_OFF
-  return(-1);
-#else
+#ifdef ENABLE_HW_TIMESTAMP
   struct hwtstamp_config hwconfig;
   struct ifreq ifr;
   int rc, sock_fd;
@@ -94,6 +94,8 @@ static int pfring_enable_hw_timestamp(pfring* ring, char *device_name) {
 
   close(sock_fd);
   return(rc);
+#else
+  return(-1);
 #endif
 }
 
