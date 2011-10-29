@@ -21,7 +21,10 @@ echo ""
 
 # Command to generate a patch: diff -u original.c new.c > original.patch
 patch qemu-kvm-$VERSION/Makefile.target < qemu-kvm-$VERSION-vpfring-diff/Makefile.target.patch
-
+if [[ -f qemu-kvm-$VERSION-vpfring-diff/virtio-pci.c.patch ]]
+then
+	patch qemu-kvm-$VERSION/hw/virtio-pci.c < qemu-kvm-$VERSION-vpfring-diff/virtio-pci.c.patch
+fi
 cp qemu-kvm-$VERSION-vpfring-diff/hw/* qemu-kvm-$VERSION/hw/
 
 echo ""
