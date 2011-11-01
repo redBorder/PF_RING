@@ -46,13 +46,13 @@ OBJS      = pfring.o pfring_mod.o pfring_utils.o ${DNA_OBJS} ${VIRTUAL_OBJS} ${D
 # CROSS_COMPILE=arm-mv5sft-linux-gnueabi-
 #
 CC        = ${CROSS_COMPILE}gcc
-CFLAGS    = -g  -Wall -fPIC ${INCLUDE} @HAVE_DNA@ @HAVE_VIRTUAL@ @HAVE_DAG@ @HAVE_BPF@ @HAVE_USERSPACE_RING@ @CFLAGS@
+CFLAGS    = -g  -Wall -fPIC ${INCLUDE} @HAVE_DNA@ @HAVE_VIRTUAL@ @HAVE_DAG@ @HAVE_BPF@ @HAVE_USERSPACE_RING@ @CFLAGS@ @HAVE_REDIRECTOR@
 LDFLAGS   = -g -shared
 
 SYSLIBS   = -lpthread @SYSLIBS@
 
 # How to make an object file
-%.o: %.c %.h
+%.o: %.c %.h pfring_redirector.c Makefile
 #	@echo "=*= making object $@ =*="
 	${CC} ${CFLAGS} -c $< -o $@
 

@@ -59,6 +59,10 @@ extern int pthread_spin_unlock (pthread_spinlock_t *__lock) __THROW;
 #include <linux/pf_ring.h>
 #include <linux/if_ether.h>
 
+#ifdef HAVE_REDIRECTOR
+#include <librdi.h>
+#endif
+
 #define MAX_CAPLEN             16384
 #define PAGE_SIZE               4096
 
@@ -193,11 +197,16 @@ extern "C" {
     u_int8_t (*dna_check_packet_to_read) (pfring *, u_int8_t);
     u_char*  (*dna_next_packet)      (pfring *, u_char **, u_int, struct pfring_pkthdr *);
 
+    /* Silicom Redirector Only */
+    struct {
+      int8_t device_id, port_id;
+    } rdi;
+
     /* All devices */
     char *buffer, *slots, *device_name;
     u_int32_t caplen;
     u_int16_t slot_header_len;
-    u_int8_t kernel_packet_consumer, is_shutting_down;
+    u_int8_t kernel_packet_consumer, is_shutting_down, socket_default_accept_policy;
     int fd;
     FlowSlotInfo *slots_info;
     u_int poll_sleep;

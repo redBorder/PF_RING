@@ -972,7 +972,9 @@ static int ixgbe_set_eeprom(struct net_device *netdev,
 	    struct ethtool_rx_ntuple_flow_spec *perfect_cmd_fs = &perfect_cmd.fs;
 
 	    if (hw->mac.type == ixgbe_mac_82598EB) {
-	      printk("[DNA] hw filtering rule not supported\n");
+	      if(debug)
+		printk("[DNA] Hardware filtering rule not supported (no 82599)\n");
+
 	      return -EOPNOTSUPP;
 	    }
 

@@ -566,9 +566,14 @@ int pfring_mod_purge_idle_hash_rules(pfring *ring, u_int16_t inactivity_sec) {
 
 int pfring_mod_toggle_filtering_policy(pfring *ring,
 				       u_int8_t rules_default_accept_policy) {
-  return(setsockopt(ring->fd, 0, SO_TOGGLE_FILTER_POLICY,
-		    &rules_default_accept_policy,
-		    sizeof(rules_default_accept_policy)));
+  int rc = setsockopt(ring->fd, 0, SO_TOGGLE_FILTER_POLICY,
+		      &rules_default_accept_policy,
+		      sizeof(rules_default_accept_policy));
+
+  if(rc == 0)
+    ring->socket_default_accept_policy = rules_default_accept_policy;
+
+  return(rc);
 }
 
 /* **************************************************** */
@@ -679,11 +684,9 @@ int pfring_mod_add_filtering_rule(pfring *ring, filtering_rule* rule_to_add) {
   if(!rule_to_add)
     return(-1);
 
-  /* Sanitize entry */
-  if(rule_to_add->core_fields.port_low > rule_to_add->core_fields.port_high)
-    rule_to_add->core_fields.port_low = rule_to_add->core_fields.port_high;
-  if(rule_to_add->core_fields.host4_low > rule_to_add->core_fields.host4_high)
-    rule_to_add->core_fields.host4_low = rule_to_add->core_fields.host4_high;
+  /* Sanitize entry (add IPv6 check) */
+  rule_to_add->core_fields.shost.v4 &= rule_to_add->core_fields.shost_mask.v4;
+  rule_to_add->core_fields.dhost.v4 &= rule_to_add->core_fields.dhost_mask.v4;
 
   if(rule_to_add->balance_id > rule_to_add->balance_pool)
     rule_to_add->balance_id = 0;

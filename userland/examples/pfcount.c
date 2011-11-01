@@ -154,7 +154,7 @@ void print_stats() {
 /* ******************************** */
 
 void add_rule(u_int add_rule) {
-#if 0
+#if 1
   hash_filtering_rule rule;
 
   memset(&rule, 0, sizeof(hash_filtering_rule));
@@ -179,7 +179,7 @@ void add_rule(u_int add_rule) {
 
   rule.rule_id = 5;
   rule.rule_action = forward_packet_and_stop_rule_evaluation;
-  rule.core_fields.port_low = 80, rule.core_fields.port_high = 80;
+  rule.core_fields.sport_low = 80, rule.core_fields.sport_high = 80;
 
   if(pfring_add_filtering_rule(pd, &rule) < 0)
     printf("pfring_add_hash_filtering_rule(2) failed\n");
@@ -798,16 +798,67 @@ int main(int argc, char* argv[]) {
   if(0) {
     filtering_rule rule;
 
+#if 1
     memset(&rule, 0, sizeof(rule));
 
-    rule.rule_id = 5;
-    rule.rule_action = forward_packet_and_stop_rule_evaluation;
-    rule.core_fields.port_low = 80, rule.core_fields.port_high = 80;
+    rule.rule_id = 0;
+    rule.rule_action = dont_forward_packet_and_stop_rule_evaluation;
+    rule.core_fields.sport_low = 1701, rule.core_fields.sport_high = 1701;
 
     if(pfring_add_filtering_rule(pd, &rule) < 0)
-      printf("pfring_add_hash_filtering_rule(2) failed\n");
+      printf("pfring_add_filtering_rule(%d) failed\n", 1);
     else
       printf("Rule added successfully...\n");
+
+    /* ******************************************************* */
+
+    memset(&rule, 0, sizeof(rule));
+
+    rule.rule_id = 0;
+    rule.rule_action = dont_forward_packet_and_stop_rule_evaluation;
+    rule.core_fields.shost.v4 = ntohl(inet_addr("192.168.1.1")), rule.core_fields.shost_mask.v4 = ntohl(inet_addr("255.0.0.0"));
+
+    if(pfring_add_filtering_rule(pd, &rule) < 0)
+      printf("pfring_add_filtering_rule(%d) failed\n", 2);
+    else
+      printf("Rule added successfully...\n");
+
+    /* ******************************************************* */
+
+    memset(&rule, 0, sizeof(rule));
+
+    rule.rule_id = 0;
+    rule.rule_action = dont_forward_packet_and_stop_rule_evaluation;
+    rule.core_fields.dhost.v4 = ntohl(inet_addr("192.168.1.1")), rule.core_fields.dhost_mask.v4 = ntohl(inet_addr("255.0.0.0"));
+
+    if(pfring_add_filtering_rule(pd, &rule) < 0)
+      printf("pfring_add_filtering_rule(%d) failed\n", 2);
+    else
+      printf("Rule added successfully...\n");
+#else
+
+    pfring_toggle_filtering_policy(pd, 0); /* Default to drop */
+
+    memset(&rule, 0, sizeof(rule));
+
+    rule.rule_id = 0;
+    rule.rule_action = forward_packet_and_stop_rule_evaluation;
+    rule.core_fields.sport_low = 1701, rule.core_fields.sport_high = 1701;
+
+    if(pfring_add_filtering_rule(pd, &rule) < 0)
+      printf("pfring_add_filtering_rule(%d) failed\n", 1);
+    else
+      printf("Rule added successfully...\n");
+
+    rule.rule_id = 0;
+    rule.rule_action = forward_packet_and_stop_rule_evaluation;
+    rule.core_fields.dhost.v4 = ntohl(inet_addr("192.168.1.1")), rule.core_fields.dhost_mask.v4 = ntohl(inet_addr("255.0.0.0"));
+
+    if(pfring_add_filtering_rule(pd, &rule) < 0)
+      printf("pfring_add_filtering_rule(%d) failed\n", 2);
+    else
+      printf("Rule added successfully...\n");
+#endif
   }
 
   if(0) {

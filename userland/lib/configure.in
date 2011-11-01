@@ -4,7 +4,7 @@ AC_PROG_CC
 AC_CONFIG_FILES(Makefile)
 
 
-AC_CHECK_HEADERS([linux/net_tstamp.h])
+AC_CHECK_HEADERS([linux/net_tstamp.h librdi.h])
 
 CFLAGS=""
 SYS_LIBS=""
@@ -39,6 +39,9 @@ else
   AC_MSG_RESULT(no)
 fi
 
+
+AC_CHECK_HEADERS([librdi.h])
+
 AC_MSG_CHECKING([Userspace ring support])
 if test -f $USERSPACE_RING_LIB && test -f $USERSPACE_RING_HDR; then
   HAVE_USERSPACE_RING="-D HAVE_USERSPACE_RING"
@@ -48,6 +51,20 @@ if test -f $USERSPACE_RING_LIB && test -f $USERSPACE_RING_HDR; then
 else
   USERSPACE_RING_LIB=""
   AC_MSG_RESULT(no)
+fi
+
+dnl> Silicom Redirector NIC
+if test "x$ac_cv_header_librdi_h" = x""yes; then :
+   AC_CHECK_LIB( [rdi], [rdi_init])
+
+   AC_MSG_CHECKING([Silicom Redirector support])
+   if test "x$ac_cv_lib_rdi_rdi_init" = x""yes; then :
+      HAVE_REDIRECTOR="-D HAVE_REDIRECTOR"
+      SILICOM_LIBS="-lrdi"
+      AC_MSG_RESULT(yes)
+   else
+      AC_MSG_RESULT(no)
+   fi
 fi
 
 AC_CHECK_LIB( [nl], [nl_handle_alloc], [SYSLIBS="$SYSLIBS -lnl"])
@@ -74,7 +91,7 @@ dnl               [HAVE_BPF="-D ENABLE_BPF"],
 dnl               [], [] )
 
 if test "x$ac_cv_header_linux_net_tstamp_h" = x""yes; then :
-CFLAGS="-DENABLE_HW_TIMESTAMP $CFLAGS"
+CFLAGS="-D ENABLE_HW_TIMESTAMP $CFLAGS"
 fi
 
 if test ".${prefix}" = ".NONE"; then
@@ -104,6 +121,8 @@ AC_SUBST(BPF_INCLUDE)
 AC_SUBST(BPF_LIB)
 AC_SUBST(SYSLIBS)
 AC_SUBST(INSTALL_PREFIX)
+AC_SUBST(SILICOM_LIBS)
+AC_SUBST(HAVE_REDIRECTOR)
 
 dnl> AC_CONFIG_FILES([Makefile])
 AC_CONFIG_FILES([../examples/Makefile])

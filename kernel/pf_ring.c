@@ -1711,28 +1711,43 @@ static int match_filtering_rule(struct pf_ring_socket *pfr,
 
   /* IPv6 */
   if(hdr->extended_hdr.parsed_pkt.ip_version == 6) {
-    if(memcmp(&rule->rule.core_fields.host6_low, &ip_zero, sizeof(struct in6_addr)) > 0) {
-      if((memcmp(&hdr->extended_hdr.parsed_pkt.ipv6_src, &rule->rule.core_fields.host6_low, sizeof(struct in6_addr) < 0)
-	  || memcmp(&hdr->extended_hdr.parsed_pkt.ipv6_src, &rule->rule.core_fields.host6_high, sizeof(struct in6_addr) > 0))
-	 && (memcmp(&hdr->extended_hdr.parsed_pkt.ipv6_dst, &rule->rule.core_fields.host6_low,  sizeof(struct in6_addr) < 0)
-	     || memcmp(&hdr->extended_hdr.parsed_pkt.ipv6_dst, &rule->rule.core_fields.host6_high, sizeof(struct in6_addr) > 0)))
-	return(0);
+    /* IPv6 */
+    
+    if(rule->rule.core_fields.shost_mask.v6.s6_addr32[0] != 0) {
+      int i;
+
+      for(i=0; i<4; i++) {
+	if((hdr->extended_hdr.parsed_pkt.ip_src.v6.s6_addr32[i] && rule->rule.core_fields.shost_mask.v6.s6_addr32[i]) 
+	   != rule->rule.core_fields.shost.v6.s6_addr32[i])	  
+	  return(0);
+      }
     }
-  } else if(rule->rule.core_fields.host4_low > 0) {
-    if(((hdr->extended_hdr.parsed_pkt.ipv4_src < rule->rule.core_fields.host4_low)
-	|| (hdr->extended_hdr.parsed_pkt.ipv4_src > rule->rule.core_fields.host4_high))
-       && ((hdr->extended_hdr.parsed_pkt.ipv4_dst < rule->rule.core_fields.host4_low)
-	   || (hdr->extended_hdr.parsed_pkt.ipv4_dst > rule->rule.core_fields.host4_high)))
+
+    if(rule->rule.core_fields.dhost_mask.v6.s6_addr32[0] != 0) {
+      int i;
+
+      for(i=0; i<4; i++) {
+	if((hdr->extended_hdr.parsed_pkt.ip_dst.v6.s6_addr32[i] && rule->rule.core_fields.dhost_mask.v6.s6_addr32[i]) 
+	   != rule->rule.core_fields.dhost.v6.s6_addr32[i])	  
+	  return(0);
+      }
+    }
+  } else {
+    /* IPv4 */
+    if((hdr->extended_hdr.parsed_pkt.ip_src.v4 && rule->rule.core_fields.shost_mask.v4) != rule->rule.core_fields.shost.v4)
+      return(0);
+
+    if((hdr->extended_hdr.parsed_pkt.ip_dst.v4 && rule->rule.core_fields.shost_mask.v4) != rule->rule.core_fields.dhost.v4)
       return(0);
   }
 
-  if(rule->rule.core_fields.port_high > 0) {
-    if(((hdr->extended_hdr.parsed_pkt.l4_src_port < rule->rule.core_fields.port_low)
-	|| (hdr->extended_hdr.parsed_pkt.l4_src_port > rule->rule.core_fields.port_high))
-       && ((hdr->extended_hdr.parsed_pkt.l4_dst_port < rule->rule.core_fields.port_low)
-	   || (hdr->extended_hdr.parsed_pkt.l4_dst_port > rule->rule.core_fields.port_high)))
-      return(0);
-  }
+  
+
+  if((hdr->extended_hdr.parsed_pkt.l4_src_port < rule->rule.core_fields.sport_low) 
+     || (hdr->extended_hdr.parsed_pkt.l4_src_port > rule->rule.core_fields.sport_high)
+     || (hdr->extended_hdr.parsed_pkt.l4_dst_port < rule->rule.core_fields.dport_low)
+     || (hdr->extended_hdr.parsed_pkt.l4_dst_port > rule->rule.core_fields.dport_high))
+      return(0);  
 
   if(rule->rule.balance_pool > 0) {
     u_int32_t balance_hash = hash_pkt_header(hdr, 0, 0) % rule->rule.balance_pool;
@@ -1875,13 +1890,14 @@ static int match_filtering_rule(struct pf_ring_socket *pfr,
 	   hdr->extended_hdr.parsed_pkt.ipv4_src, hdr->extended_hdr.parsed_pkt.l4_src_port,
 	   hdr->extended_hdr.parsed_pkt.ipv4_dst, hdr->extended_hdr.parsed_pkt.l4_dst_port);
 
-    printk("[PF_RING] [rule(vlan=%u, proto=%u, ip=%u-%u, port=%u-%u)(behaviour=%d)]\n",
+    printk("[PF_RING] [rule(vlan=%u, proto=%u, ip=%u:%u, port=%u:%u-%u:%u)(behaviour=%d)]\n",
 	   rule->rule.core_fields.vlan_id,
 	   rule->rule.core_fields.proto,
-	   rule->rule.core_fields.host4_low,
-	   rule->rule.core_fields.host4_high,
-	   rule->rule.core_fields.port_low,
-	   rule->rule.core_fields.port_high, *behaviour);
+	   rule->rule.core_fields.shost.v4,
+	   rule->rule.core_fields.dhost.v4,
+	   rule->rule.core_fields.sport_low, rule->rule.core_fields.sport_high,
+	   rule->rule.core_fields.dport_low, rule->rule.core_fields.dport_high,
+	   *behaviour);
   }
 
   rule->rule.internals.jiffies_last_match = jiffies;

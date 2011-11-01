@@ -172,7 +172,7 @@ void add_rule(u_int add_rule) {
 
   rule.rule_id = 5;
   rule.rule_action = forward_packet_and_stop_rule_evaluation;
-  rule.core_fields.port_low = 80, rule.core_fields.port_high = 80;
+  rule.core_fields.sport_low = 80, rule.core_fields.sport_high = 80;
 
   if(pfring_add_filtering_rule(pd, &rule) < 0)
     printf("pfring_add_hash_filtering_rule(2) failed\n");
@@ -774,7 +774,7 @@ int main(int argc, char* argv[]) {
 
     rule.rule_id = 5;
     rule.rule_action = forward_packet_and_stop_rule_evaluation;
-    rule.core_fields.port_low = 80, rule.core_fields.port_high = 80;
+    rule.core_fields.sport_low = 80, rule.core_fields.sport_high = 80;
 
     if(pfring_add_filtering_rule(pd, &rule) < 0)
       printf("pfring_add_hash_filtering_rule(2) failed\n");

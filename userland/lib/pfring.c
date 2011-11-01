@@ -74,6 +74,10 @@ static pfring_module_info pfring_module_list[] = {
   {0}
 };
 
+#ifdef HAVE_REDIRECTOR
+#include "pfring_redirector.c"
+#endif
+
 /* **************************************************** */
 
 pfring* pfring_open(char *device_name, u_int8_t promisc,
@@ -143,11 +147,20 @@ pfring* pfring_open(char *device_name, u_int8_t promisc,
   if(ring->reentrant)
     pthread_spin_init(&ring->spinlock, PTHREAD_PROCESS_PRIVATE);
 
+  ring->socket_default_accept_policy = 1; /* Accept (default) */
+
+  ring->rdi.device_id = ring->rdi.port_id = -1; /* Default */
+
+#ifdef HAVE_REDIRECTOR
+  init_redirector(ring);
+#endif
+
   ring->initialized = 1;
 
 #ifdef RING_DEBUG
   printf("[PF_RING] Successfully open pfring_open(%s)\n", device_name);
 #endif
+
   return ring;
 }
 
@@ -360,6 +373,11 @@ int pfring_add_hw_rule(pfring *ring, hw_filtering_rule *rule) {
   if(ring && ring->add_hw_rule)
     return ring->add_hw_rule(ring, rule);
 
+#ifdef HAVE_REDIRECTOR
+  if(ring && (ring->rdi.port_id != -1))
+    return(redirector_add_hw_rule(ring, rule));
+#endif
+
   return -1;
 }
 
@@ -368,6 +386,11 @@ int pfring_add_hw_rule(pfring *ring, hw_filtering_rule *rule) {
 int pfring_remove_hw_rule(pfring *ring, u_int16_t rule_id) {
   if(ring && ring->remove_hw_rule)
     return ring->remove_hw_rule(ring, rule_id);
+  
+#ifdef HAVE_REDIRECTOR
+  if(ring && (ring->rdi.port_id != -1))
+    return(redirector_remove_hw_rule(ring, rule_id));
+#endif
 
   return -1;
 }
@@ -566,8 +589,17 @@ int pfring_purge_idle_hash_rules(pfring *ring, u_int16_t inactivity_sec) {
 /* **************************************************** */
 
 int pfring_add_filtering_rule(pfring *ring, filtering_rule* rule_to_add) {
-  if(ring && ring->add_filtering_rule)
-    return ring->add_filtering_rule(ring, rule_to_add);
+  if(ring && ring->add_filtering_rule) {
+    int rc = ring->add_filtering_rule(ring, rule_to_add);
+
+    if(rc < 0)
+      return(rc);
+  }
+
+#ifdef HAVE_REDIRECTOR
+  if(ring && (ring->rdi.port_id != -1))
+    return(redirector_add_filtering_rule(ring, rule_to_add));
+#endif
 
   return -1;
 }
@@ -575,8 +607,17 @@ int pfring_add_filtering_rule(pfring *ring, filtering_rule* rule_to_add) {
 /* **************************************************** */
 
 int pfring_remove_filtering_rule(pfring *ring, u_int16_t rule_id) {
-  if(ring && ring->remove_filtering_rule)
-    return ring->remove_filtering_rule(ring, rule_id);
+  if(ring && ring->remove_filtering_rule) {
+    int rc = ring->remove_filtering_rule(ring, rule_id);
+
+    if(rc < 0)
+      return(rc);
+  }
+
+#ifdef HAVE_REDIRECTOR
+  if(ring && (ring->rdi.port_id != -1))
+    return(redirector_remove_filtering_rule(ring, rule_id));
+#endif
 
   return -1;
 }
@@ -594,8 +635,18 @@ int pfring_get_filtering_rule_stats(pfring *ring, u_int16_t rule_id,
 /* **************************************************** */
 
 int pfring_toggle_filtering_policy(pfring *ring, u_int8_t rules_default_accept_policy) {
-  if(ring && ring->toggle_filtering_policy)
-    return ring->toggle_filtering_policy(ring, rules_default_accept_policy);
+  if(ring && ring->toggle_filtering_policy) {
+    int rc = ring->toggle_filtering_policy(ring, rules_default_accept_policy);
+    
+    if(rc < 0)
+      return(rc);
+  }
+
+#ifdef HAVE_REDIRECTOR
+  if(ring && (ring->rdi.port_id != -1)) {
+    return(redirector_set_traffic_policy(ring, rules_default_accept_policy));
+  }
+#endif
 
   return -1;
 }
