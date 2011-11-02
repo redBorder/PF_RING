@@ -17,7 +17,7 @@
 
 int redirector_set_traffic_policy(pfring *ring, u_int8_t rules_default_accept_policy) {
   ring->socket_default_accept_policy = rules_default_accept_policy;
-  return(rdi_set_cfg(ring->rdi.device_id, rules_default_accept_policy ? 4 /* MON_1 */ : 5 /* MON_2 */));
+  return(rdi_set_cfg(ring->rdi.device_id, rules_default_accept_policy ? 2 /* INLINE_2 */ : 5 /* MON_2 */));
 }
 
 /* ********************************* */
