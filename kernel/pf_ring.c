@@ -6430,7 +6430,12 @@ static int ring_notifier(struct notifier_block *this, unsigned long msg, void *d
       printk("[PF_RING] packet_notifier(%lu) [%s][%d]\n", msg, dev->name, dev->type);
     
     /* Skip non ethernet interfaces */
-    if((dev->type != ARPHRD_ETHER)
+    if(
+       (dev->type != ARPHRD_ETHER) /* Ethernet */
+       /* Wifi */
+       && (dev->type != ARPHRD_IEEE80211) 
+       && (dev->type != ARPHRD_IEEE80211_PRISM)
+       && (dev->type != ARPHRD_IEEE80211_RADIOTAP) 
        && strncmp(dev->name, "bond", 4)) {
       if(unlikely(enable_debug)) printk("[PF_RING] packet_notifier(%s): skipping non ethernet device\n", dev->name);
       return NOTIFY_DONE;
