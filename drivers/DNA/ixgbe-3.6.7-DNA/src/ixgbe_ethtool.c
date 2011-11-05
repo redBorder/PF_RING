@@ -41,7 +41,10 @@
 #ifdef ENABLE_DNA
 #include "../../../../kernel/linux/pf_ring.h"
 extern s32 ixgbe_ftqf_add_filter(struct ixgbe_hw *hw, u8 proto, u32 saddr, u16 sport, u32 daddr, u16 dport, u8 rx_queue, u8 filter_id);
+
+#ifdef ETHTOOL_RXNTUPLE_ACTION_DROP
 static int ixgbe_set_rx_ntuple(struct net_device *dev, struct ethtool_rx_ntuple *cmd);
+#endif
 #endif
 
 #ifndef ETH_GSTRING_LEN
@@ -860,7 +863,7 @@ static int ixgbe_set_eeprom(struct net_device *netdev,
 	int max_len, first_word, last_word, ret_val = 0;
 	u16 i;
 
-#ifdef ENABLE_DNA
+#if defined(ENABLE_DNA) && defined(ETHTOOL_RXNTUPLE_ACTION_DROP)
 	{
 	  /* Let's see if we can cast this structure to a filter */
 	  int debug = 0;
