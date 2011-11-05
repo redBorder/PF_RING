@@ -1347,7 +1347,7 @@ static int parse_raw_pkt(char *data, u_int data_len,
   hdr->extended_hdr.parsed_pkt.eth_type = ntohs(eh->h_proto);
   hdr->extended_hdr.parsed_pkt.offset.eth_offset = 0;
 
-  if(hdr->extended_hdr.parsed_pkt.eth_type == 0x8100 /* 802.1q (VLAN) */) {
+  if(hdr->extended_hdr.parsed_pkt.eth_type == ETH_P_8021Q /* 802.1q (VLAN) */) {
     hdr->extended_hdr.parsed_pkt.offset.vlan_offset =
       hdr->extended_hdr.parsed_pkt.offset.eth_offset + sizeof(struct ethhdr);
 
@@ -1360,13 +1360,13 @@ static int parse_raw_pkt(char *data, u_int data_len,
     displ = 4;
   } else {
     displ = 0;
-    hdr->extended_hdr.parsed_pkt.vlan_id = 0;	/* Any VLAN */
+    hdr->extended_hdr.parsed_pkt.vlan_id = 0; /* Any VLAN */
   }
 
   if(unlikely(enable_debug))
     printk("[PF_RING] [eth_type=%04X]\n", hdr->extended_hdr.parsed_pkt.eth_type);
 
-  if(hdr->extended_hdr.parsed_pkt.eth_type == 0x0800 /* IPv4 */ ) {
+  if(hdr->extended_hdr.parsed_pkt.eth_type == ETH_P_IP /* IPv4 */ ) {
     struct iphdr *ip;
 
     hdr->extended_hdr.parsed_pkt.offset.l3_offset = hdr->extended_hdr.parsed_pkt.offset.eth_offset + displ + sizeof(struct ethhdr);
@@ -1381,7 +1381,7 @@ static int parse_raw_pkt(char *data, u_int data_len,
     hdr->extended_hdr.parsed_pkt.ipv4_tos = ip->tos;
     hdr->extended_hdr.parsed_pkt.ip_version = 4;
     ip_len  = ip->ihl*4;
-  } else if(hdr->extended_hdr.parsed_pkt.eth_type == 0x86DD /* IPv6 */) {
+  } else if(hdr->extended_hdr.parsed_pkt.eth_type == ETH_P_IPV6 /* IPv6 */) {
     struct ipv6hdr *ipv6;
 
     hdr->extended_hdr.parsed_pkt.ip_version = 6;
@@ -2977,7 +2977,8 @@ static int skb_ring_handler(struct sk_buff *skb,
      The min() below is not really necessary but we have observed that sometimes
      skb->len > MTU thus it's better to be on the safe side
   */
-  hdr.len = hdr.caplen = min(skb->len + displ, skb->dev->mtu + skb->dev->hard_header_len);
+  hdr.len = hdr.caplen = min(skb->len + displ, 
+			     skb->dev->mtu + skb->dev->hard_header_len + 4 /* VLAN header */);
 
   if(quick_mode) {
     struct pf_ring_socket *pfr = device_rings[skb->dev->ifindex][channel_id];
