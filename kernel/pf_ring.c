@@ -41,6 +41,7 @@
  * - Fedor Sakharov <fedor.sakharov@gmail.com>
  * - Daniel Christopher <Chris.Daniel@visualnetworksystems.com>
  * - Martin Holste <mcholste@gmail.com>
+ * - Eric Leblond <eric@regit.org>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -4505,7 +4506,13 @@ static int remove_from_cluster(struct sock *sock, struct pf_ring_socket *pfr)
     cluster_ptr = list_entry(ptr, ring_cluster_element, list);
 
     if(cluster_ptr->cluster.cluster_id == pfr->cluster_id) {
-      return(remove_from_cluster_list(&cluster_ptr->cluster, sock));
+      int ret = remove_from_cluster_list(&cluster_ptr->cluster, sock);
+
+      if (cluster_ptr->cluster.num_cluster_elements == 0) {
+	list_del(ptr);
+	kfree(cluster_ptr);
+      }
+      return ret;
     }
   }
 
