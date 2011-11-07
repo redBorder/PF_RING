@@ -1,10 +1,19 @@
-if [[ -f qemu-kvm-$1.tar.gz && -d qemu-kvm-$1-vpfring-diff ]]
+if [[ -d qemu-kvm-$1-vpfring-diff ]]
 then
 	VERSION=$1
 else
-	VERSION="0.15.0"
+	VERSION="0.15.1"
 	#echo "usage: $0 <supported qemu-kvm version>"
 	#exit
+fi
+
+if [[ ! -f qemu-kvm-$VERSION.tar.gz ]]
+then
+	echo ""
+	echo "Downloading QEMU/KVM $VERSION from http://downloads.sourceforge.net/project/kvm/qemu-kvm/$VERSION/qemu-kvm-$VERSION.tar.gz"
+	echo ""
+
+	wget http://downloads.sourceforge.net/project/kvm/qemu-kvm/$VERSION/qemu-kvm-$VERSION.tar.gz
 fi
 
 echo ""
