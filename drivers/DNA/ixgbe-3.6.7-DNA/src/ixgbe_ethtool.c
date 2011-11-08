@@ -847,7 +847,7 @@ static int ixgbe_get_eeprom(struct net_device *netdev,
 	for (i = 0; i < eeprom_len; i++)
 		le16_to_cpus(&eeprom_buff[i]);
 
-	memcpy(bytes, (u8 *)eeprom_buff + (eeprom->offset & 1), eeprom->len);
+
 	kfree(eeprom_buff);
 
 	return ret_val;
@@ -862,174 +862,6 @@ static int ixgbe_set_eeprom(struct net_device *netdev,
 	void *ptr;
 	int max_len, first_word, last_word, ret_val = 0;
 	u16 i;
-
-#if defined(ENABLE_DNA) && defined(ETHTOOL_RXNTUPLE_ACTION_DROP)
-	{
-	  /* Let's see if we can cast this structure to a filter */
-	  int debug = 0;
-	  u8 request_type = eeprom->len;
-
-	  if(debug)
-	    printk("[DNA][DEBUG] %s(command=%d/magic=%d/bytes=%p)\n", 
-		   __FUNCTION__, request_type, eeprom->magic, bytes);
-
-	  if((eeprom->magic == MAGIC_HW_FILTERING_RULE_REQUEST)
-	     && ((request_type == 0 /* ckeck */) || (request_type == 1 /* add/remove */))) {
-	    /* Here we go! */
-
-	    int target_queue;
-	    hw_filtering_rule_command request = (hw_filtering_rule_command)eeprom->offset;
-	    hw_filtering_rule *rule = (hw_filtering_rule*)bytes;
-	    intel_82599_perfect_filter_hw_rule *perfect_rule;
-	    intel_82599_five_tuple_filter_hw_rule *ftfq_rule;
-
-	    int rc;
-	    struct ethtool_rx_ntuple perfect_cmd;
-	    struct ethtool_rx_ntuple_flow_spec *perfect_cmd_fs = &perfect_cmd.fs;
-
-	    if (hw->mac.type == ixgbe_mac_82598EB) {
-	      if(debug)
-		printk("[DNA] Hardware filtering rule not supported (no 82599)\n");
-
-	      return -EOPNOTSUPP;
-	    }
-
-	    if(debug)
-	      printk("[DNA][DEBUG] %s(command=%d)\n", __FUNCTION__, request_type);
-
-	    if(request_type == 0) {
-	      /* ckeck */
-	      /*
-		We just want to check if this interface
-		supports hardware filtering
-	      */
-	      return(RING_MAGIC_VALUE);
-	    }
-
-	    if(bytes != NULL) {
-	      switch(rule->rule_family_type) {
-	      case intel_82599_five_tuple_rule:
-		ftfq_rule = &rule->rule_family.five_tuple_rule;
-
-		/* determine if we need to drop or route the packet */
-		if(ftfq_rule->queue_id >= (MAX_RX_QUEUES - 1))
-		  target_queue = MAX_RX_QUEUES - 1;
-		else
-		  target_queue = ftfq_rule->queue_id;
-
-		if(debug)
-		  printk("[DNA][DEBUG] %s() -> ixgbe_ftqf_add_filter(id=%d,target_queue=%d) called\n",
-			 __FUNCTION__, rule->rule_id, target_queue);
-
-		spin_lock(&adapter->fdir_perfect_lock);
-		if(request == add_hw_rule) {
-		  ixgbe_ftqf_add_filter(&adapter->hw, ftfq_rule->proto,
-					ftfq_rule->s_addr, ftfq_rule->s_port,
-					ftfq_rule->d_addr, ftfq_rule->d_port,
-					target_queue, rule->rule_id);
-		} else { /* Remove */
-		  /* Set the rule to accept all */
-		  ixgbe_ftqf_add_filter(&adapter->hw,
-					0, 0, 0, 0, 0,
-					0, rule->rule_id);
-		}
-
-		spin_unlock(&adapter->fdir_perfect_lock);
-		break;
-
-	      case intel_82599_perfect_filter_rule:
-		perfect_rule = &rule->rule_family.perfect_rule;
-
-		/*
-		 * Don't allow programming if we're not in perfect filter mode, or
-		 * if the action is a queue greater than the number of online Tx
-		 * queues.
-		 */
-		if (!(adapter->flags & IXGBE_FLAG_FDIR_PERFECT_CAPABLE)) {
-	          printk("[DNA] perfect filters not supported\n");
-	          return -EOPNOTSUPP;
-		}
-
-		memset(&perfect_cmd, 0, sizeof(struct ethtool_rx_ntuple));
-
-		/* determine if we need to drop or route the packet */
-		if(perfect_rule->queue_id >= adapter->num_rx_queues - 1)
-		  perfect_cmd_fs->action = ETHTOOL_RXNTUPLE_ACTION_DROP;
-		else
-		  perfect_cmd_fs->action = perfect_rule->queue_id;
-
-		if (request != add_hw_rule)
-		  perfect_cmd_fs->action = ETHTOOL_RXNTUPLE_ACTION_CLEAR;
-
-		switch (perfect_rule->proto) {
-		case 6 /* TCP */:
-	          perfect_cmd_fs->flow_type = TCP_V4_FLOW;
-		  break;
-		case 132 /* SCTP */:
-		  perfect_cmd_fs->flow_type = SCTP_V4_FLOW;
-		  break;
-		case 17 /* UDP */:
-		  perfect_cmd_fs->flow_type = UDP_V4_FLOW;
-		  break;
-		default:
-		  perfect_cmd_fs->flow_type = IP_USER_FLOW;
-		  break;
-		}
-
-		if (perfect_rule->s_addr) {
-		  perfect_cmd_fs->h_u.tcp_ip4_spec.ip4src = htonl(perfect_rule->s_addr);
-		  perfect_cmd_fs->m_u.tcp_ip4_spec.ip4src = 0x00000000; /* /32 */
-		}
-
-		if (perfect_rule->d_addr) { 
-		  perfect_cmd_fs->h_u.tcp_ip4_spec.ip4dst = htonl(perfect_rule->d_addr);
-		  perfect_cmd_fs->m_u.tcp_ip4_spec.ip4dst = 0x00000000; /* /32 */
-		}
-
-		if (perfect_rule->s_port) { 
-		  perfect_cmd_fs->h_u.tcp_ip4_spec.psrc = htons(perfect_rule->s_port);
-		  perfect_cmd_fs->m_u.tcp_ip4_spec.psrc = 0x0000;
-		}
-
-		if (perfect_rule->d_port) { 
-		  perfect_cmd_fs->h_u.tcp_ip4_spec.pdst = htons(perfect_rule->d_port);
-		  perfect_cmd_fs->m_u.tcp_ip4_spec.pdst = 0x0000;
-		}
-
-		if (perfect_rule->vlan_id) {
-		  perfect_cmd_fs->vlan_tag = perfect_rule->vlan_id;
-		  perfect_cmd_fs->vlan_tag_mask = 0xFFF; /* VLANID meaningful, VLAN priority ignored */
-		}
-		
-		/* Data not supported
-		 * perfect_cmd_fs->data
-		 * perfect_cmd_fs->data_mask
-		 */
-
-		rc = ixgbe_set_rx_ntuple(netdev, &perfect_cmd);
-
-		if (debug && rc != 0) {
-		  printk("[DNA][DEBUG] %s() Error: ixgbe_set_rx_ntuple(%d.%d.%d.%d:%d -> %d.%d.%d.%d:%d) returned %d\n",
-		         __FUNCTION__, rc,
-		         perfect_rule->s_addr >> 24 & 0xFF, perfect_rule->s_addr >> 16 & 0xFF,
-		         perfect_rule->s_addr >>  8 & 0xFF, perfect_rule->s_addr >>  0 & 0xFF, 
-		         perfect_rule->s_port & 0xFFFF, 
-		         perfect_rule->d_addr >> 24 & 0xFF, perfect_rule->d_addr >> 16 & 0xFF,
-		         perfect_rule->d_addr >>  8 & 0xFF, perfect_rule->d_addr >>  0 & 0xFF,
-		         perfect_rule->d_port & 0xFFFF);
-		}
-
-		break;
-
-	      default:
-		return -EOPNOTSUPP; /* It should not happen */
-	      } /* switch */
-
-	      return 0;
-	    }
-	  }
-	}
-#endif
 
 	if (eeprom->len == 0)
 		return -EOPNOTSUPP;
@@ -3177,6 +3009,13 @@ static int ixgbe_set_rxnfc(struct net_device *dev, struct ethtool_rxnfc *cmd)
 	struct ixgbe_adapter *adapter = netdev_priv(dev);
 	int ret = -EOPNOTSUPP;
 
+#ifdef ENABLE_DNA
+	struct ethtool_rx_flow_spec *fsp = (struct ethtool_rx_flow_spec*) &cmd->fs;
+
+	if (fsp->ring_cookie >= adapter->num_rx_queues - 1 /* MAX_RX_QUEUES-1 */)
+	  fsp->ring_cookie = RX_CLS_FLOW_DISC /* MAX_RX_QUEUES-1 */; /* drop */
+#endif
+
 	switch (cmd->cmd) {
 	case ETHTOOL_SRXCLSRLINS:
 		ret = ixgbe_add_ethtool_fdir_entry(adapter, cmd);
@@ -3187,6 +3026,34 @@ static int ixgbe_set_rxnfc(struct net_device *dev, struct ethtool_rxnfc *cmd)
 	case ETHTOOL_SRXFH:
 		ret = ixgbe_set_rss_hash_opt(adapter, cmd);
 		break;
+#ifdef ENABLE_DNA
+	case ETHTOOL_PFRING_SRXFTRLINS:
+		{
+		spin_lock(&adapter->fdir_perfect_lock);
+		ret = ixgbe_ftqf_add_filter(&adapter->hw, 
+					    fsp->flow_type,
+					    fsp->h_u.tcp_ip4_spec.ip4src, 
+					    fsp->h_u.tcp_ip4_spec.psrc,
+					    fsp->h_u.tcp_ip4_spec.ip4dst, 
+					    fsp->h_u.tcp_ip4_spec.pdst,
+					    fsp->ring_cookie,
+					    fsp->location);
+		spin_unlock(&adapter->fdir_perfect_lock);
+		}
+		break;
+	case ETHTOOL_PFRING_SRXFTRLDEL:
+		spin_lock(&adapter->fdir_perfect_lock);
+		ret = ixgbe_ftqf_add_filter(&adapter->hw, 0, 0, 0, 0, 0, 0, 
+					    fsp->location);
+		spin_unlock(&adapter->fdir_perfect_lock);
+		break;
+	case ETHTOOL_PFRING_SRXFTCHECK:
+		if (adapter->hw.mac.type != ixgbe_mac_82598EB) 	
+			ret = RING_MAGIC_VALUE;
+		else 
+			printk("[DNA] Hardware filtering rule not supported (no 82599)\n");
+		break;
+#endif
 	default:
 		break;
 	}

@@ -679,25 +679,121 @@ static int ring_proc_dev_get_info(char *buf, char **start, off_t offset,
 
 static int i82599_generic_handler(struct pf_ring_socket *pfr,
 				  hw_filtering_rule *rule, hw_filtering_rule_command request) {
+  int rc = -1;
 #if(LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,31))
   struct net_device *dev = pfr->ring_netdev->dev;
-  struct ethtool_eeprom eeprom; /* Used to to the magic [MAGIC_HW_FILTERING_RULE_REQUEST] */
+  intel_82599_five_tuple_filter_hw_rule *ftfq_rule;
+  intel_82599_perfect_filter_hw_rule *perfect_rule;
+  struct ethtool_rxnfc cmd;
+  struct ethtool_rx_flow_spec *fsp = &cmd.fs;
 
   if(dev == NULL) return(-1);
 
-  if((dev->ethtool_ops == NULL) || (dev->ethtool_ops->set_eeprom == NULL)) return(-1);
+  if((dev->ethtool_ops == NULL) || (dev->ethtool_ops->set_rxnfc == NULL)) return(-1);
 
   if(unlikely(enable_debug)) 
     printk("[PF_RING] hw_filtering_rule[%s][request=%d][%p]\n",
-	   dev->name, request, dev->ethtool_ops->set_eeprom);
+	   dev->name, request, dev->ethtool_ops->set_rxnfc);
 
-  eeprom.len = 1 /* add/remove (no check) */,
-    eeprom.magic = MAGIC_HW_FILTERING_RULE_REQUEST, eeprom.offset = request;
+  memset(&cmd, 0, sizeof(struct ethtool_rxnfc));
 
-  return(dev->ethtool_ops->set_eeprom(dev, &eeprom, (u8*)rule));
-#else
-  return(-1);
+  switch (rule->rule_family_type) {
+    case intel_82599_five_tuple_rule:
+      ftfq_rule = &rule->rule_family.five_tuple_rule;
+ 
+      fsp->h_u.tcp_ip4_spec.ip4src = ftfq_rule->s_addr;
+      fsp->h_u.tcp_ip4_spec.psrc   = ftfq_rule->s_port;
+      fsp->h_u.tcp_ip4_spec.ip4dst = ftfq_rule->d_addr;
+      fsp->h_u.tcp_ip4_spec.pdst   = ftfq_rule->d_port;
+      fsp->flow_type   = ftfq_rule->proto;
+      fsp->ring_cookie = ftfq_rule->queue_id;
+      fsp->location    = rule->rule_id;
+
+      cmd.cmd = (request == add_hw_rule ? ETHTOOL_PFRING_SRXFTRLINS : ETHTOOL_PFRING_SRXFTRLDEL);
+
+      break;
+
+    case intel_82599_perfect_filter_rule:
+      perfect_rule = &rule->rule_family.perfect_rule;
+
+      fsp->ring_cookie = perfect_rule->queue_id;
+      fsp->location    = rule->rule_id;
+
+      if (perfect_rule->s_addr) {
+        fsp->h_u.tcp_ip4_spec.ip4src = htonl(perfect_rule->s_addr);
+        fsp->m_u.tcp_ip4_spec.ip4src = 0xFFFFFFFF;
+      }
+
+      if (perfect_rule->d_addr) {
+        fsp->h_u.tcp_ip4_spec.ip4dst = htonl(perfect_rule->d_addr);
+        fsp->m_u.tcp_ip4_spec.ip4dst = 0xFFFFFFFF;
+      }
+
+      if (perfect_rule->s_port) {
+        fsp->h_u.tcp_ip4_spec.psrc = htons(perfect_rule->s_port);
+        fsp->m_u.tcp_ip4_spec.psrc = 0xFFFF;
+      }
+
+      if (perfect_rule->d_port) {
+        fsp->h_u.tcp_ip4_spec.pdst = htons(perfect_rule->d_port);
+        fsp->m_u.tcp_ip4_spec.pdst = 0xFFFF;
+      }
+
+      /* TODO
+      if (perfect_rule->vlan_id) {
+        fsp->h_ext.vlan_tci = perfect_rule->vlan_id;
+	fsp->m_ext.vlan_tci = 0xFFF; // VLANID meaningful, VLAN priority ignored
+	fsp->h_ext.vlan_etype
+	fsp->m_ext.vlan_etype
+	// fsp->flow_type & FLOW_EXT
+      }
+      */
+
+      switch (perfect_rule->proto) {
+	case 6:   // TCP
+          fsp->flow_type = TCP_V4_FLOW;
+	  break;
+	case 132: // SCTP
+	  fsp->flow_type = SCTP_V4_FLOW;
+	  break;
+	case 17:  // UDP
+	  fsp->flow_type = UDP_V4_FLOW;
+	  break;
+	default:
+	  fsp->flow_type = IP_USER_FLOW;
+	  break;
+      }
+
+      cmd.cmd = (request == add_hw_rule ? ETHTOOL_SRXCLSRLINS : ETHTOOL_SRXCLSRLDEL);
+
+      break;
+
+    default:
+      break;
+  }
+
+  if (cmd.cmd) {
+
+    rc = dev->ethtool_ops->set_rxnfc(dev, &cmd);
+
+    if (unlikely(enable_debug) 
+     && rule->rule_family_type == intel_82599_perfect_filter_rule
+     && rc < 0
+     ) {
+      intel_82599_perfect_filter_hw_rule *perfect_rule = &rule->rule_family.perfect_rule; 
+      printk("[DNA][DEBUG] %s() ixgbe_set_rxnfc(%d.%d.%d.%d:%d -> %d.%d.%d.%d:%d) returned %d\n",
+    	     __FUNCTION__,
+             perfect_rule->s_addr >> 24 & 0xFF, perfect_rule->s_addr >> 16 & 0xFF,
+             perfect_rule->s_addr >>  8 & 0xFF, perfect_rule->s_addr >>  0 & 0xFF, 
+             perfect_rule->s_port & 0xFFFF, 
+             perfect_rule->d_addr >> 24 & 0xFF, perfect_rule->d_addr >> 16 & 0xFF,
+             perfect_rule->d_addr >>  8 & 0xFF, perfect_rule->d_addr >>  0 & 0xFF,
+             perfect_rule->d_port & 0xFFFF, 
+	     rc);
+    }
+  }
 #endif
+  return(rc);
 }
 
 /* ************************************* */
@@ -6376,16 +6472,16 @@ int add_device_to_ring_list(struct net_device *dev) {
 
 #if(LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,31))
   /* Dirty trick to fix at some point used to discover Intel 82599 interfaces: FIXME */
-  if((dev_ptr->dev->ethtool_ops != NULL) && (dev_ptr->dev->ethtool_ops->set_eeprom != NULL)) {
-    struct ethtool_eeprom eeprom; /* Used to to the magic [MAGIC_HW_FILTERING_RULE_REQUEST] */
+  if((dev_ptr->dev->ethtool_ops != NULL) && (dev_ptr->dev->ethtool_ops->set_rxnfc != NULL)) {
+    struct ethtool_rxnfc cmd;
     int rc;
 
-    eeprom.len = 0 /* check */, eeprom.magic = MAGIC_HW_FILTERING_RULE_REQUEST;
+    cmd.cmd = ETHTOOL_PFRING_SRXFTCHECK /* check */;
 
-    rc = dev_ptr->dev->ethtool_ops->set_eeprom(dev_ptr->dev, &eeprom, (u8*)NULL);
+    rc = dev_ptr->dev->ethtool_ops->set_rxnfc(dev_ptr->dev, &cmd);
 
     if(unlikely(enable_debug))
-      printk("[PF_RING] set_eeprom returned %d\n", rc);
+      printk("[PF_RING] set_rxnfc returned %d\n", rc);
 
     if(rc == RING_MAGIC_VALUE) {
       /* This device supports hardware filtering */

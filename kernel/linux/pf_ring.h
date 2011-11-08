@@ -372,7 +372,11 @@ typedef struct {
   } rule_family;
 } hw_filtering_rule;
 
-#define MAGIC_HW_FILTERING_RULE_REQUEST  0x29010020
+#define MAGIC_HW_FILTERING_RULE_REQUEST  0x29010020 /* deprecated? */
+
+#define ETHTOOL_PFRING_SRXFTCHECK 0x10000000
+#define ETHTOOL_PFRING_SRXFTRLDEL 0x10000031
+#define ETHTOOL_PFRING_SRXFTRLINS 0x10000032
 
 typedef enum {
   add_hw_rule,
