@@ -1444,6 +1444,10 @@ static void igb_configure(struct igb_adapter *adapter)
 	struct net_device *netdev = adapter->netdev;
 	int i;
 
+#ifdef ENABLE_DNA
+	dna_check_enable_adapter(adapter);
+#endif
+
 	igb_get_hw_control(adapter);
 	igb_set_rx_mode(netdev);
 
@@ -1463,10 +1467,6 @@ static void igb_configure(struct igb_adapter *adapter)
 		netdev->features |= NETIF_F_MULTI_QUEUE;
 	else
 		netdev->features &= ~NETIF_F_MULTI_QUEUE;
-#endif
-
-#ifdef ENABLE_DNA
-	dna_check_enable_adapter(adapter);
 #endif
 
 	/* call igb_desc_unused which always leaves
@@ -3278,7 +3278,7 @@ void igb_configure_rx_ring(struct igb_adapter *adapter,
 	      hw->fc.requested_mode == e1000_fc_rx_pause)))
 		srrctl |= E1000_SRRCTL_DROP_EN;
 
-#ifndef ENABLE_DNA
+#ifdef ENABLE_DNA
 	if(adapter->dna.dna_enabled)
 	  srrctl |= E1000_SRRCTL_DROP_EN;
 #endif
