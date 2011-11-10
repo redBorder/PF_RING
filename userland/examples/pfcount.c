@@ -212,8 +212,9 @@ void sigproc(int sig) {
 /* ******************************** */
 
 void my_sigalarm(int sig) {
-  if (do_shutdown)
+  if(do_shutdown)
     return;
+
   print_stats();
   alarm(ALARM_SLEEP);
   signal(SIGALRM, my_sigalarm);
@@ -228,7 +229,7 @@ char* etheraddr_string(const u_char *ep, char *buf) {
   char *cp;
 
   cp = buf;
-  if ((j = *ep >> 4) != 0)
+  if((j = *ep >> 4) != 0)
     *cp++ = hex[j];
   else
     *cp++ = '0';
@@ -237,7 +238,7 @@ char* etheraddr_string(const u_char *ep, char *buf) {
 
   for(i = 5; (int)--i >= 0;) {
     *cp++ = ':';
-    if ((j = *ep >> 4) != 0)
+    if((j = *ep >> 4) != 0)
       *cp++ = hex[j];
     else
       *cp++ = '0';
@@ -267,10 +268,10 @@ char* _intoa(unsigned int addr, char* buf, u_short bufLen) {
     byte = addr & 0xff;
     *--cp = byte % 10 + '0';
     byte /= 10;
-    if (byte > 0) {
+    if(byte > 0) {
       *--cp = byte % 10 + '0';
       byte /= 10;
-      if (byte > 0)
+      if(byte > 0)
 	*--cp = byte + '0';
     }
     *--cp = '.';
@@ -441,7 +442,7 @@ int32_t gmt2local(time_t t) {
   struct tm *gmt, *loc;
   struct tm sgmt;
 
-  if (t == 0)
+  if(t == 0)
     t = time(NULL);
   gmt = &sgmt;
   *gmt = *gmtime(&t);
@@ -455,7 +456,7 @@ int32_t gmt2local(time_t t) {
    * avoid problems when the julian day wraps.
    */
   dir = loc->tm_year - gmt->tm_year;
-  if (dir == 0)
+  if(dir == 0)
     dir = loc->tm_yday - gmt->tm_yday;
   dt += dir * 24 * 60 * 60;
 
@@ -788,10 +789,10 @@ int main(int argc, char* argv[]) {
   signal(SIGINT, sigproc);
 
 
-  if(!verbose) {
+  //  if(!verbose) {
     signal(SIGALRM, my_sigalarm);
     alarm(ALARM_SLEEP);
-  }
+    //  }
 
   pfring_enable_ring(pd);
 

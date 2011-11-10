@@ -66,6 +66,7 @@
 #define SO_SET_VPFRING_GUEST_EVENTFD     121 /* guest to host (unused) */
 #define SO_SET_VPFRING_CLEAN_EVENTFDS    122
 #define SO_ATTACH_USERSPACE_RING         123
+#define SO_SHUTDOWN_RING                 124
 
 /* Get */
 #define SO_GET_RING_VERSION              170
@@ -758,7 +759,7 @@ typedef int (*do_add_raw_packet_to_ring)(struct pf_ring_socket *pfr,
  * Ring options
  */
 struct pf_ring_socket {
-  u_int8_t ring_active, num_rx_channels, rehash_rss;
+  u_int8_t ring_active, ring_shutdown, num_rx_channels, rehash_rss;
   ring_device_element *ring_netdev;
 
   DECLARE_BITMAP(netdev_mask, MAX_NUM_DEVICES_ID /* bits */);

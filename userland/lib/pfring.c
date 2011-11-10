@@ -250,9 +250,12 @@ void pfring_close(pfring *ring) {
 /* **************************************************** */
 
 void pfring_shutdown(pfring *ring) {
+  int dummy = 0;
+
   if(!ring)
     return;
 
+  setsockopt(ring->fd, 0, SO_SHUTDOWN_RING, &dummy, sizeof(dummy));
   ring->is_shutting_down = ring->break_recv_loop = 1;
 }
 
@@ -283,7 +286,7 @@ int pfring_loop(pfring *ring, pfringProcesssPacket looper,
   struct pfring_pkthdr hdr;
   int rc = 0;
 
-  if(!ring)
+  if((!ring) || ring->is_shutting_down)
     return -1;
 
   ring->break_recv_loop = 0;
@@ -329,6 +332,7 @@ int pfring_recv(pfring *ring, u_char** buffer, u_int buffer_len,
 		u_int8_t wait_for_incoming_packet) {
   if(likely((ring 
 	     && ring->enabled 
+	     && (!ring->is_shutting_down)
 	     && ring->recv
 	     && (ring->direction != tx_only_direction))))
     return ring->recv(ring, buffer, buffer_len, hdr, wait_for_incoming_packet);
@@ -427,7 +431,11 @@ int pfring_bind(pfring *ring, char *device_name) {
 int pfring_send(pfring *ring, char *pkt, u_int pkt_len, u_int8_t flush_packet) {
   if(unlikely(pkt_len > 9000 /* Jumbo MTU */)) return(-1);
   
-  if(likely(ring && ring->enabled && ring->send && (ring->direction != rx_only_direction)))
+  if(likely(ring
+	    && ring->enabled
+	    && (!ring->is_shutting_down)
+	    && ring->send
+	    && (ring->direction != rx_only_direction)))
     return ring->send(ring, pkt, pkt_len, flush_packet);
 
   return -1;
@@ -436,7 +444,10 @@ int pfring_send(pfring *ring, char *pkt, u_int pkt_len, u_int8_t flush_packet) {
 /* **************************************************** */
 
 int pfring_send_parsed(pfring *ring, char *pkt, struct pfring_pkthdr *hdr, u_int8_t flush_packet) {
-  if(likely(ring && ring->enabled && ring->send_parsed))
+  if(likely(ring 
+	    && (!ring->is_shutting_down)
+	    && ring->enabled 
+	    && ring->send_parsed))
     return ring->send_parsed(ring, pkt, hdr, flush_packet);
 
   return -1;
@@ -722,6 +733,7 @@ int pfring_enable_ring(pfring *ring) {
     int rc;
     
     if(ring->enabled) return(0);
+
     rc = ring->enable_ring(ring);
     if(rc == 0) ring->enabled = 1;
 
@@ -738,6 +750,7 @@ int pfring_disable_ring(pfring *ring) {
     int rc;
 
     if(!ring->enabled) return(0);
+
     rc = ring->disable_ring(ring);
     if(rc == 0) ring->enabled = 0;
 

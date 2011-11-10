@@ -3075,7 +3075,9 @@ static int skb_ring_handler(struct sk_buff *skb,
      skb->len > MTU thus it's better to be on the safe side
   */
   hdr.len = hdr.caplen = min(skb->len + displ, 
-			     skb->dev->mtu + skb->dev->hard_header_len + 4 /* VLAN header */);
+			     skb->dev->mtu /* 1500 */
+			     + skb->dev->hard_header_len /* 14 */
+			     + 4 /* VLAN header */);
 
   if(quick_mode) {
     struct pf_ring_socket *pfr = device_rings[skb->dev->ifindex][channel_id];
@@ -3536,6 +3538,7 @@ static int ring_create(
   }
 
   memset(pfr, 0, sizeof(*pfr));
+  pfr->ring_shutdown = 0;
   pfr->ring_active = 0;	/* We activate as soon as somebody waits for packets */
   pfr->num_rx_channels = UNKNOWN_NUM_RX_CHANNELS;
   pfr->channel_id = RING_ANY_CHANNEL;
@@ -4477,6 +4480,9 @@ unsigned int ring_poll(struct file *file,
     printk("[PF_RING] -- poll called\n");
 
   pfr->num_poll_calls++;
+
+  if(unlikely(pfr->ring_shutdown))
+    return(mask);
 
   if(pfr->dna_device == NULL) {
     /* PF_RING mode (No DNA) */
@@ -5831,6 +5837,11 @@ static int ring_setsockopt(struct socket *sock,
         printk("[PF_RING] SO_ATTACH_USERSPACE_RING done.\n"); 
     }
     found = 1;
+    break;
+
+  case SO_SHUTDOWN_RING:
+    found = 1, pfr->ring_active = 0, pfr->ring_shutdown = 1;
+    wake_up_interruptible(&pfr->ring_slots_waitqueue);
     break;
 
   default:
