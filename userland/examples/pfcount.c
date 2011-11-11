@@ -789,10 +789,10 @@ int main(int argc, char* argv[]) {
   signal(SIGINT, sigproc);
 
 
-  //  if(!verbose) {
+  if(!verbose) {
     signal(SIGALRM, my_sigalarm);
     alarm(ALARM_SLEEP);
-    //  }
+  }
 
   pfring_enable_ring(pd);
 

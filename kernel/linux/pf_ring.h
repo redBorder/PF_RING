@@ -375,9 +375,37 @@ typedef struct {
 
 #define MAGIC_HW_FILTERING_RULE_REQUEST  0x29010020 /* deprecated? */
 
+#ifdef __KERNEL__
+
 #define ETHTOOL_PFRING_SRXFTCHECK 0x10000000
 #define ETHTOOL_PFRING_SRXFTRLDEL 0x10000031
 #define ETHTOOL_PFRING_SRXFTRLINS 0x10000032
+
+#if defined(I82599_HW_FILTERING_SUPPORT) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,40))
+#define	FLOW_EXT 0x80000000
+union _kcompat_ethtool_flow_union {
+	struct ethtool_tcpip4_spec		tcp_ip4_spec;
+	struct ethtool_usrip4_spec		usr_ip4_spec;
+	__u8					hdata[60];
+};
+struct _kcompat_ethtool_flow_ext {
+	__be16	vlan_etype;
+	__be16	vlan_tci;
+	__be32	data[2];
+};
+struct _kcompat_ethtool_rx_flow_spec {
+	__u32		flow_type;
+	union _kcompat_ethtool_flow_union h_u;
+	struct _kcompat_ethtool_flow_ext h_ext;
+	union _kcompat_ethtool_flow_union m_u;
+	struct _kcompat_ethtool_flow_ext m_ext;
+	__u64		ring_cookie;
+	__u32		location;
+};
+#define ethtool_rx_flow_spec _kcompat_ethtool_rx_flow_spec
+#endif /* defined(I82599_HW_FILTERING_SUPPORT) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,40)) */
+
+#endif /* __KERNEL__ */
 
 typedef enum {
   add_hw_rule,

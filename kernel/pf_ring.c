@@ -110,6 +110,10 @@
 #define VPFRING_SUPPORT
 #endif
 
+#if(LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,31))
+#define I82599_HW_FILTERING_SUPPORT
+#endif
+
 #include <linux/pf_ring.h>
 
 #ifndef SVN_REV
@@ -680,12 +684,13 @@ static int ring_proc_dev_get_info(char *buf, char **start, off_t offset,
 static int i82599_generic_handler(struct pf_ring_socket *pfr,
 				  hw_filtering_rule *rule, hw_filtering_rule_command request) {
   int rc = -1;
-#if(LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,31))
+
+#ifdef I82599_HW_FILTERING_SUPPORT
   struct net_device *dev = pfr->ring_netdev->dev;
   intel_82599_five_tuple_filter_hw_rule *ftfq_rule;
   intel_82599_perfect_filter_hw_rule *perfect_rule;
   struct ethtool_rxnfc cmd;
-  struct ethtool_rx_flow_spec *fsp = &cmd.fs;
+  struct ethtool_rx_flow_spec *fsp = (struct ethtool_rx_flow_spec *) &cmd.fs;
 
   if(dev == NULL) return(-1);
 
@@ -739,27 +744,25 @@ static int i82599_generic_handler(struct pf_ring_socket *pfr,
         fsp->m_u.tcp_ip4_spec.pdst = 0xFFFF;
       }
 
-      /* TODO
       if (perfect_rule->vlan_id) {
         fsp->h_ext.vlan_tci = perfect_rule->vlan_id;
 	fsp->m_ext.vlan_tci = 0xFFF; // VLANID meaningful, VLAN priority ignored
-	fsp->h_ext.vlan_etype
-	fsp->m_ext.vlan_etype
-	// fsp->flow_type & FLOW_EXT
+	/* fsp->h_ext.vlan_etype
+	 * fsp->m_ext.vlan_etype */
+	fsp->flow_type |= FLOW_EXT;
       }
-      */
 
       switch (perfect_rule->proto) {
-	case 6:   // TCP
+	case 6:   /* TCP */
           fsp->flow_type = TCP_V4_FLOW;
 	  break;
-	case 132: // SCTP
+	case 132: /* SCTP */
 	  fsp->flow_type = SCTP_V4_FLOW;
 	  break;
-	case 17:  // UDP
+	case 17:  /* UDP */
 	  fsp->flow_type = UDP_V4_FLOW;
 	  break;
-	default:
+	default: /* * */
 	  fsp->flow_type = IP_USER_FLOW;
 	  break;
       }
