@@ -582,8 +582,9 @@ int pfring_get_hash_filtering_rule_stats(pfring *ring, hash_filtering_rule* rule
 
 int pfring_handle_hash_filtering_rule(pfring *ring, hash_filtering_rule* rule_to_add, 
 				      u_char add_rule) {
+  int rc = -1;
   if(ring && ring->handle_hash_filtering_rule) {
-    int rc = ring->handle_hash_filtering_rule(ring, rule_to_add, add_rule);
+    rc = ring->handle_hash_filtering_rule(ring, rule_to_add, add_rule);
     
     if(rc < 0)
       return(rc);
@@ -591,10 +592,10 @@ int pfring_handle_hash_filtering_rule(pfring *ring, hash_filtering_rule* rule_to
   
 #ifdef HAVE_REDIRECTOR
   if(ring && (ring->rdi.port_id != -1))
-    return(redirector_add_hash_filtering_rule(ring, rule_to_add));
+    rc = redirector_add_hash_filtering_rule(ring, rule_to_add);
 #endif
 
-  return -1;
+  return(rc);
 }
 
 /* **************************************************** */

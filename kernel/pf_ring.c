@@ -781,8 +781,7 @@ static int i82599_generic_handler(struct pf_ring_socket *pfr,
 
     if (unlikely(enable_debug)
      && rule->rule_family_type == intel_82599_perfect_filter_rule
-     && rc < 0
-     ) {
+     && rc < 0) {
       intel_82599_perfect_filter_hw_rule *perfect_rule = &rule->rule_family.perfect_rule;
       printk("[DNA][DEBUG] %s() ixgbe_set_rxnfc(%d.%d.%d.%d:%d -> %d.%d.%d.%d:%d) returned %d\n",
     	     __FUNCTION__,
@@ -5657,7 +5656,7 @@ static int ring_setsockopt(struct socket *sock,
     }
 
     ret = handle_hw_filtering_rule(pfr, &hw_rule, add_hw_rule);
-
+ 
     if(ret != -1) {
       hw_filtering_rule_element *rule;
 
@@ -5684,6 +5683,8 @@ static int ring_setsockopt(struct socket *sock,
         }
       }
     }
+
+    found = 1;
     break;
 
   case SO_DEL_HW_FILTERING_RULE:

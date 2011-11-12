@@ -155,6 +155,7 @@ void print_stats() {
 
 void drop_packet_rule(const struct pfring_pkthdr *h) {
   const struct pkt_parsing_info *hdr = &h->extended_hdr.parsed_pkt;
+  static int rule_id=0;
 
   if(add_drop_rule == 1) {
     hash_filtering_rule rule;
@@ -162,7 +163,7 @@ void drop_packet_rule(const struct pfring_pkthdr *h) {
     memset(&rule, 0, sizeof(hash_filtering_rule));
     
     rule.vlan_id = hdr->vlan_id;
-    rule.proto = hdr->l3_proto, rule.rule_id = 0 /* dynamic */;
+    rule.proto = hdr->l3_proto, rule.rule_id = rule_id++;
     rule.rule_action = dont_forward_packet_and_stop_rule_evaluation;
     rule.host4_peer_a = hdr->ip_src.v4, rule.host4_peer_b = hdr->ip_dst.v4;
     rule.port_peer_a = hdr->l4_src_port, rule.port_peer_b = hdr->l4_dst_port;
@@ -176,7 +177,7 @@ void drop_packet_rule(const struct pfring_pkthdr *h) {
     
     memset(&rule, 0, sizeof(rule));
     
-    rule.rule_id = 0; /* Let the card pick one for us */
+    rule.rule_id = rule_id++;
     rule.rule_action = dont_forward_packet_and_stop_rule_evaluation;
     
     rule.core_fields.shost.v4 = hdr->ip_src.v4, rule.core_fields.shost_mask.v4 = 0xFFFFFFFF;
