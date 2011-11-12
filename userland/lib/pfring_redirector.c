@@ -26,11 +26,10 @@ void init_redirector(pfring *ring) {
   int i, done = 0;
 
   /*
-    Avoid messages shown on console 
+    Avoid messages shown on console
     librdi connect: No such file or directory
   */
-  freopen("/dev/null", "w", stderr);
-  freopen("/dev/null", "r", stderr);
+  freopen("/dev/null", "rw", stderr);
 
   for(i=0; ((!done) && (i < rdi_get_dev_num())); i++) {
     char dev_name[32];
@@ -68,7 +67,7 @@ void init_redirector(pfring *ring) {
     system(cmd);
 
     if((rc = rdi_init(ring->rdi.device_id)) < 0) {
-      printf("WARNING: unable to initialize redirector [device=%d@port=%d][rc=%d]\n", 
+      printf("WARNING: unable to initialize redirector [device=%d@port=%d][rc=%d]\n",
 	     ring->rdi.device_id, ring->rdi.port_id, rc);
       ring->rdi.port_id = ring->rdi.device_id = -1;
     }
@@ -81,13 +80,14 @@ void init_redirector(pfring *ring) {
     if(redirector_set_traffic_policy(ring, 1 /* accept (default) */) < 0)
       printf("WARNING: unable to set default traffic policy on device %d\n", ring->rdi.device_id);
 
-    syslog(LOG_INFO, "Redirector port: device=%d@port=%d\n", ring->rdi.device_id, ring->rdi.port_id);
+    syslog(LOG_INFO, "Redirector port: device=%d@port=%d\n",
+	   ring->rdi.device_id, ring->rdi.port_id);
   }
 }
 
 /* ********************************* */
 
-int redirector_add_hw_rule(pfring *ring, hw_filtering_rule *rule, 
+int redirector_add_hw_rule(pfring *ring, hw_filtering_rule *rule,
 			   filtering_rule* rule_to_add,
 			   hash_filtering_rule* hash_rule_to_add) {
   int ret;
@@ -99,9 +99,9 @@ int redirector_add_hw_rule(pfring *ring, hw_filtering_rule *rule,
   }
 
   memset(&rdi_rule, 0, sizeof(rdi_rule));
- 
+
   rdi_rule.rule_id       = rule->rule_id;
-  rdi_rule.port          = rule->rule_family.redirector_rule.rule_port; 
+  rdi_rule.port          = rule->rule_family.redirector_rule.rule_port;
   rdi_rule.src_port      = rule->rule_family.redirector_rule.src_port_low;
   rdi_rule.src_port_max  = rule->rule_family.redirector_rule.src_port_high;
 
@@ -134,14 +134,14 @@ int redirector_add_hw_rule(pfring *ring, hw_filtering_rule *rule,
     /* *********  MIRROR RULE  ********* */
     case mirror_rule:
       rdi_rule.rule_act = RDI_SET_MIR;
-      rdi_rule.mirror_port = rule->rule_family.redirector_rule.rule_target_port; 
+      rdi_rule.mirror_port = rule->rule_family.redirector_rule.rule_target_port;
 
       ret = rdi_add_rule_mir(ring->rdi.device_id, &rdi_rule);
     break;
-    
+
     default:
       ret = -1;
-      syslog(LOG_ERR, "Unrecognized rule type [rule_type=%d]", rule->rule_family.redirector_rule.rule_type); 
+      syslog(LOG_ERR, "Unrecognized rule type [rule_type=%d]", rule->rule_family.redirector_rule.rule_type);
     break;
   }
 
@@ -196,7 +196,7 @@ int redirector_add_filtering_rule(pfring *ring, filtering_rule* rule_to_add) {
     // silicom->rule_type = ;
     return(-2); /* Not YET supported */
     break;
-    
+
   case bounce_packet_and_stop_rule_evaluation:
   case bounce_packet_and_continue_rule_evaluation:
   case execute_action_and_continue_rule_evaluation:
@@ -223,7 +223,7 @@ int redirector_add_hash_filtering_rule(pfring *ring, hash_filtering_rule* rule_t
   hw_filtering_rule hw_rule;
   silicom_redirector_hw_rule *silicom;
   int rc;
-  
+
   /* Convert generic filtering rule into redirector filtering rule */
   memset(&hw_rule, 0, sizeof(hw_rule));
   hw_rule.rule_family_type = silicom_redirector_rule;
@@ -251,7 +251,7 @@ int redirector_add_hash_filtering_rule(pfring *ring, hash_filtering_rule* rule_t
     // silicom->rule_type = ;
     return(-2); /* Not YET supported */
     break;
-    
+
   case bounce_packet_and_stop_rule_evaluation:
   case bounce_packet_and_continue_rule_evaluation:
   case execute_action_and_continue_rule_evaluation:

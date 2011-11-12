@@ -104,7 +104,7 @@ void print_stats() {
   avgThptBytes = (double)(num_bytes_good_sent * 1000)/deltaMillisec;
   avgThptBytes /= (1000*1000*1000)/8;
   
-  fprintf(stderr, "TX rate: [current %s pps/%s Gbps][average %s pps/%s Gbps][total %s pkts]\n", 
+  fprintf(stdout, "TX rate: [current %s pps/%s Gbps][average %s pps/%s Gbps][total %s pkts]\n", 
 	  pfring_format_numbers(currentThpt, buf1, sizeof(buf1), 1),
 	  pfring_format_numbers(currentThptBytes, buf2, sizeof(buf2), 1),
 	  pfring_format_numbers(avgThpt, buf3, sizeof(buf3), 1),
@@ -128,7 +128,7 @@ void my_sigalarm(int sig) {
 void sigproc(int sig) {
   static int called = 0;
 
-  fprintf(stderr, "Leaving...\n");
+  fprintf(stdout, "Leaving...\n");
   if(called) return; else called = 1;
   do_shutdown = 1;
   print_stats();
