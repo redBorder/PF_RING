@@ -25,6 +25,13 @@ int redirector_set_traffic_policy(pfring *ring, u_int8_t rules_default_accept_po
 void init_redirector(pfring *ring) {
   int i, done = 0;
 
+  /*
+    Avoid messages shown on console 
+    librdi connect: No such file or directory
+  */
+  freopen("/dev/null", "w", stderr);
+  freopen("/dev/null", "r", stderr);
+
   for(i=0; ((!done) && (i < rdi_get_dev_num())); i++) {
     char dev_name[32];
     FILE *fd;
