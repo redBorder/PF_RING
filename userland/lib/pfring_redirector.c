@@ -80,7 +80,9 @@ void init_redirector(pfring *ring) {
 
 /* ********************************* */
 
-int redirector_add_hw_rule(pfring *ring, hw_filtering_rule *rule) {
+int redirector_add_hw_rule(pfring *ring, hw_filtering_rule *rule, 
+			   filtering_rule* rule_to_add,
+			   hash_filtering_rule* hash_rule_to_add) {
   int ret;
   rdi_mem_t rdi_rule;
 
@@ -94,8 +96,9 @@ int redirector_add_hw_rule(pfring *ring, hw_filtering_rule *rule) {
   rdi_rule.rule_id       = rule->rule_id;
   rdi_rule.port          = rule->rule_family.redirector_rule.rule_port; 
   rdi_rule.src_port      = rule->rule_family.redirector_rule.src_port_low;
-  rdi_rule.dst_port      = rule->rule_family.redirector_rule.dst_port_low;
   rdi_rule.src_port_max  = rule->rule_family.redirector_rule.src_port_high;
+
+  rdi_rule.dst_port      = rule->rule_family.redirector_rule.dst_port_low;
   rdi_rule.dst_port_max  = rule->rule_family.redirector_rule.dst_port_high;
   rdi_rule.src_ip        = rule->rule_family.redirector_rule.src_addr.v4; /* IPv4 only */
   rdi_rule.dst_ip        = rule->rule_family.redirector_rule.dst_addr.v4; /* IPv4 only */
@@ -107,7 +110,6 @@ int redirector_add_hw_rule(pfring *ring, hw_filtering_rule *rule) {
   //? rdi_rule.vlan_mask     = rule->?;
 
   switch (rule->rule_family.redirector_rule.rule_type) {
-
     /* *********   DROP RULE    ********* */
     case drop_rule:
       rdi_rule.rule_act = RDI_SET_DROP;
@@ -138,8 +140,12 @@ int redirector_add_hw_rule(pfring *ring, hw_filtering_rule *rule) {
 
   if(ret < 0)
     return ret;
-  else
+  else {
+    /* ret now contains the ID of the rule just added */
+    if(rule_to_add)      rule_to_add->rule_id = ret;
+    if(hash_rule_to_add) hash_rule_to_add->rule_id = ret;
     ret = rdi_install_rules(ring->rdi.device_id);
+  }
 
   return(ret);
 }
@@ -201,7 +207,71 @@ int redirector_add_filtering_rule(pfring *ring, filtering_rule* rule_to_add) {
   silicom->src_port_low = rule_to_add->core_fields.sport_low, silicom->src_port_high = rule_to_add->core_fields.sport_high;
   silicom->dst_port_low = rule_to_add->core_fields.dport_low, silicom->dst_port_high = rule_to_add->core_fields.dport_high;
 
-  return(redirector_add_hw_rule(ring, &hw_rule));
+  return(redirector_add_hw_rule(ring, &hw_rule, rule_to_add, NULL));
+}
+
+/* ********************************* */
+
+int redirector_add_hash_filtering_rule(pfring *ring, hash_filtering_rule* rule_to_add) {
+  hw_filtering_rule hw_rule;
+  silicom_redirector_hw_rule *silicom;
+  int rc;
+  
+  /* Convert generic filtering rule into redirector filtering rule */
+  memset(&hw_rule, 0, sizeof(hw_rule));
+  hw_rule.rule_family_type = silicom_redirector_rule;
+  hw_rule.rule_id = rule_to_add->rule_id;
+  silicom = &hw_rule.rule_family.redirector_rule;
+
+  switch(rule_to_add->rule_action) {
+  case forward_packet_and_stop_rule_evaluation:
+  case forward_packet_add_rule_and_stop_rule_evaluation:
+    if(ring->socket_default_accept_policy) return(0); /* Nothing to do */
+    /*
+      2 is the constant to add for connecting source with destination port
+      (Broadcom -> Intel basically)
+    */
+    silicom->rule_type = mirror_rule, silicom->rule_target_port = ring->rdi.port_id + 2;
+    break;
+
+  case dont_forward_packet_and_stop_rule_evaluation:
+    if(!ring->socket_default_accept_policy) return(0); /* Nothing to do */
+    silicom->rule_type = drop_rule;
+    break;
+
+  case reflect_packet_and_stop_rule_evaluation:
+  case reflect_packet_and_continue_rule_evaluation:
+    // silicom->rule_type = ;
+    return(-2); /* Not YET supported */
+    break;
+    
+  case bounce_packet_and_stop_rule_evaluation:
+  case bounce_packet_and_continue_rule_evaluation:
+  case execute_action_and_continue_rule_evaluation:
+  case execute_action_and_stop_rule_evaluation:
+    return(-3); /* Not supported */
+  }
+
+  silicom->rule_port = ring->rdi.port_id;
+  silicom->vlan_id_low = silicom->vlan_id_high = rule_to_add->vlan_id;
+  silicom->l3_proto = rule_to_add->proto;
+  memcpy(&silicom->src_addr, &rule_to_add->host_peer_a, sizeof(ip_addr));
+  memcpy(&silicom->dst_addr, &rule_to_add->host_peer_b, sizeof(ip_addr));
+  silicom->src_mask = 0xFFFFFFFF, silicom->dst_mask = 0xFFFFFFFF;
+  silicom->src_port_low = rule_to_add->port_peer_a, silicom->src_port_high = rule_to_add->port_peer_a;
+  silicom->dst_port_low = rule_to_add->port_peer_b, silicom->dst_port_high = rule_to_add->port_peer_b;
+
+  rc = redirector_add_hw_rule(ring, &hw_rule, NULL, rule_to_add);
+
+  if(rc < 0) return(rc);
+
+  /* Add reverse direction */
+  memcpy(&silicom->src_addr, &rule_to_add->host_peer_b, sizeof(ip_addr));
+  memcpy(&silicom->dst_addr, &rule_to_add->host_peer_a, sizeof(ip_addr));
+  silicom->src_port_low = rule_to_add->port_peer_b, silicom->src_port_high = rule_to_add->port_peer_b;
+  silicom->dst_port_low = rule_to_add->port_peer_a, silicom->dst_port_high = rule_to_add->port_peer_a;
+
+  return(redirector_add_hw_rule(ring, &hw_rule, NULL, rule_to_add));
 }
 
 /* ********************************* */
