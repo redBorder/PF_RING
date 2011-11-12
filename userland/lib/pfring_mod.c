@@ -42,11 +42,15 @@
 
 #define USE_MB
 
+#define gcc_mb() __asm__ __volatile__("": : :"memory")
+
+#if defined(__i386__) || defined(__x86_64__)
 #define rmb()   asm volatile("lfence":::"memory")
 #define wmb()   asm volatile("sfence" ::: "memory")
-
-#define gcc_mb() __asm__ __volatile__("": : :"memory");
-
+#else /* other architectures (e.g. ARM) */
+#define rmb() gcc_mb()
+#define wmb() gcc_mb()
+#endif
 
 /* **************************************************** */
 /*                  Static functions                    */
