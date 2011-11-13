@@ -176,6 +176,8 @@ int pfring_dna_open(pfring *ring) {
   ring->add_hw_rule = pfring_mod_add_hw_rule;
   ring->remove_hw_rule = pfring_mod_remove_hw_rule;
   ring->handle_hash_filtering_rule = pfring_dna_handle_hash_filtering_rule;
+  ring->add_filtering_rule = pfring_dna_add_filtering_rule;
+  ring->remove_filtering_rule = pfring_dna_remove_filtering_rule;
   ring->set_channel_id = pfring_mod_set_channel_id;
   ring->set_application_name = pfring_mod_set_application_name;
   ring->bind = pfring_mod_bind;
@@ -376,8 +378,23 @@ int pfring_dna_handle_hash_filtering_rule(pfring *ring,
   if (rule_to_add->plugin_action.plugin_id != NO_PLUGIN_ID)
     return -4;
 
-  if (rule_to_add->rule_action != dont_forward_packet_and_stop_rule_evaluation)
-    return -5;
+  switch(rule_to_add->rule_action) {
+  case forward_packet_and_stop_rule_evaluation:
+  case forward_packet_add_rule_and_stop_rule_evaluation:
+    return 0; /* Nothing to do */
+
+  case dont_forward_packet_and_stop_rule_evaluation:
+    break; /* Ok - DROP */
+
+  case reflect_packet_and_stop_rule_evaluation:
+  case reflect_packet_and_continue_rule_evaluation:
+  case bounce_packet_and_stop_rule_evaluation:
+  case bounce_packet_and_continue_rule_evaluation:
+  case execute_action_and_continue_rule_evaluation:
+  case execute_action_and_stop_rule_evaluation:
+  default:
+    return -5; /* Not supported */
+  }
 
   rule.rule_id = rule_to_add->rule_id;
   rule.rule_family_type = intel_82599_perfect_filter_rule;
@@ -393,5 +410,59 @@ int pfring_dna_handle_hash_filtering_rule(pfring *ring,
     return pfring_mod_add_hw_rule(ring, &rule);
   else
     return pfring_mod_remove_hw_rule(ring, rule.rule_id);
+}
+/* **************************************************** */
+
+int pfring_dna_add_filtering_rule(pfring *ring, filtering_rule* rule_to_add) {
+  hw_filtering_rule rule;
+  memset(&rule, 0, sizeof(rule));
+
+  if(!rule_to_add)
+    return -2;
+
+  if (ring->dna_dev.mem_info.device_model != intel_ixgbe_82599)
+    return -3;
+
+  if (rule_to_add->plugin_action.plugin_id != NO_PLUGIN_ID)
+    return -4;
+
+  switch(rule_to_add->rule_action) {
+  case forward_packet_and_stop_rule_evaluation:
+  case forward_packet_add_rule_and_stop_rule_evaluation:
+    return 0; /* Nothing to do */
+
+  case dont_forward_packet_and_stop_rule_evaluation:
+    break; /* Ok - DROP */
+
+  case reflect_packet_and_stop_rule_evaluation:
+  case reflect_packet_and_continue_rule_evaluation:
+  case bounce_packet_and_stop_rule_evaluation:
+  case bounce_packet_and_continue_rule_evaluation:
+  case execute_action_and_continue_rule_evaluation:
+  case execute_action_and_stop_rule_evaluation:
+  default:
+    return -5; /* Not supported */
+  }
+
+  //rule_to_add->balance_id
+  //rule_to_add->balance_pool
+
+  rule.rule_id = rule_to_add->rule_id;
+  rule.rule_family_type = intel_82599_five_tuple_rule;
+  //rule_to_add->core_fields.vlan_id
+  rule.rule_family.five_tuple_rule.proto    = rule_to_add->core_fields.proto;
+  rule.rule_family.five_tuple_rule.s_addr   = rule_to_add->core_fields.shost.v4 & rule_to_add->core_fields.shost_mask.v4; 
+  rule.rule_family.five_tuple_rule.d_addr   = rule_to_add->core_fields.dhost.v4 & rule_to_add->core_fields.dhost_mask.v4;
+  rule.rule_family.five_tuple_rule.s_port   = rule_to_add->core_fields.sport_low; //rule_to_add->core_fields.sport_high
+  rule.rule_family.five_tuple_rule.d_port   = rule_to_add->core_fields.dport_low; //rule_to_add->core_fields.dport_high
+  rule.rule_family.five_tuple_rule.queue_id = -1;
+
+  return pfring_mod_add_hw_rule(ring, &rule);
+}
+
+/* **************************************************** */
+
+int pfring_dna_remove_filtering_rule(pfring *ring, u_int16_t rule_id) {
+  return pfring_mod_remove_hw_rule(ring, rule_id);
 }
 

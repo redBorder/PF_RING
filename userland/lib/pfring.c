@@ -610,8 +610,9 @@ int pfring_purge_idle_hash_rules(pfring *ring, u_int16_t inactivity_sec) {
 /* **************************************************** */
 
 int pfring_add_filtering_rule(pfring *ring, filtering_rule* rule_to_add) {
+  int rc = -1;
   if(ring && ring->add_filtering_rule) {
-    int rc = ring->add_filtering_rule(ring, rule_to_add);
+    rc = ring->add_filtering_rule(ring, rule_to_add);
 
     if(rc < 0)
       return(rc);
@@ -619,17 +620,18 @@ int pfring_add_filtering_rule(pfring *ring, filtering_rule* rule_to_add) {
 
 #ifdef HAVE_REDIRECTOR
   if(ring && (ring->rdi.port_id != -1))
-    return(redirector_add_filtering_rule(ring, rule_to_add));
+    rc = redirector_add_filtering_rule(ring, rule_to_add);
 #endif
 
-  return -1;
+  return(rc);
 }
 
 /* **************************************************** */
 
 int pfring_remove_filtering_rule(pfring *ring, u_int16_t rule_id) {
+  int rc = -1;
   if(ring && ring->remove_filtering_rule) {
-    int rc = ring->remove_filtering_rule(ring, rule_id);
+    rc = ring->remove_filtering_rule(ring, rule_id);
 
     if(rc < 0)
       return(rc);
@@ -637,10 +639,10 @@ int pfring_remove_filtering_rule(pfring *ring, u_int16_t rule_id) {
 
 #ifdef HAVE_REDIRECTOR
   if(ring && (ring->rdi.port_id != -1))
-    return(redirector_remove_filtering_rule(ring, rule_id));
+    rc = redirector_remove_filtering_rule(ring, rule_id);
 #endif
 
-  return -1;
+  return(rc);
 }
 
 /* **************************************************** */
@@ -656,20 +658,20 @@ int pfring_get_filtering_rule_stats(pfring *ring, u_int16_t rule_id,
 /* **************************************************** */
 
 int pfring_toggle_filtering_policy(pfring *ring, u_int8_t rules_default_accept_policy) {
+  int rc = -1;
   if(ring && ring->toggle_filtering_policy) {
-    int rc = ring->toggle_filtering_policy(ring, rules_default_accept_policy);
+    rc = ring->toggle_filtering_policy(ring, rules_default_accept_policy);
     
     if(rc < 0)
       return(rc);
   }
 
 #ifdef HAVE_REDIRECTOR
-  if(ring && (ring->rdi.port_id != -1)) {
-    return(redirector_set_traffic_policy(ring, rules_default_accept_policy));
-  }
+  if(ring && (ring->rdi.port_id != -1))
+    rc = redirector_set_traffic_policy(ring, rules_default_accept_policy);
 #endif
 
-  return -1;
+  return(rc);
 }
 
 /* **************************************************** */

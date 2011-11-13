@@ -22,6 +22,8 @@ int  pfring_dna_recv (pfring *ring, u_char** buffer, u_int buffer_len,
 int  pfring_dna_send(pfring *ring, char *pkt, u_int pkt_len);
 int  pfring_dna_enable_ring(pfring *ring);
 int  pfring_dna_handle_hash_filtering_rule(pfring *ring, hash_filtering_rule* rule_to_add, u_char add_rule);
+int pfring_dna_add_filtering_rule(pfring *ring, filtering_rule* rule_to_add);
+int pfring_dna_remove_filtering_rule(pfring *ring, u_int16_t rule_id);
 
 /* DNA */
 extern int dna_init(pfring* ring, u_short len);
