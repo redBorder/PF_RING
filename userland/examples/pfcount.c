@@ -161,7 +161,8 @@ void drop_packet_rule(const struct pfring_pkthdr *h) {
     hash_filtering_rule rule;
     
     memset(&rule, 0, sizeof(hash_filtering_rule));
-    
+
+    rule.rule_id = rule_id++;    
     rule.vlan_id = hdr->vlan_id;
     rule.proto = hdr->l3_proto, rule.rule_id = rule_id++;
     rule.rule_action = dont_forward_packet_and_stop_rule_evaluation;
@@ -183,7 +184,7 @@ void drop_packet_rule(const struct pfring_pkthdr *h) {
     rule.core_fields.shost.v4 = hdr->ip_src.v4, rule.core_fields.shost_mask.v4 = 0xFFFFFFFF;
     rule.core_fields.sport_low = rule.core_fields.sport_high = hdr->l4_src_port;
     
-    rule.core_fields.dhost.v4 = hdr->ip_dst.v4, rule.core_fields.shost_mask.v4 = 0xFFFFFFFF;
+    rule.core_fields.dhost.v4 = hdr->ip_dst.v4, rule.core_fields.dhost_mask.v4 = 0xFFFFFFFF;
     rule.core_fields.dport_low = rule.core_fields.dport_high = hdr->l4_dst_port;
     
     if(pfring_add_filtering_rule(pd, &rule) < 0)
