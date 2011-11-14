@@ -727,7 +727,7 @@ int main(int argc, char* argv[]) {
     if(1) {
       memset(&rule, 0, sizeof(rule)), rule.rule_family_type = intel_82599_perfect_filter_rule;
       rule.rule_id = rule_id++, perfect_rule->queue_id = -1, perfect_rule->proto = 6,
-	perfect_rule->s_addr = ntohl(inet_addr("192.168.30.207"));
+	perfect_rule->s_addr = ntohl(inet_addr("3.3.3.11"));
       rc = pfring_add_hw_rule(pd, &rule);
       if(rc != 0)
 	printf("pfring_add_hw_rule(%d) failed [rc=%d]: did you enable the FlowDirector (insmod ixgbe.ko FdirMode=2)\n", rule.rule_id, rc);
@@ -739,7 +739,7 @@ int main(int argc, char* argv[]) {
     if (1) {
       memset(&rule, 0, sizeof(rule)), rule.rule_family_type = intel_82599_perfect_filter_rule;
       rule.rule_id = rule_id++, perfect_rule->queue_id = -1, perfect_rule->proto = 17,
-	perfect_rule->s_addr = ntohl(inet_addr("192.168.30.207"));
+	perfect_rule->s_addr = ntohl(inet_addr("3.3.3.11"));
       rc = pfring_add_hw_rule(pd, &rule);
       if(rc != 0)
 	printf("pfring_add_hw_rule(%d) failed [rc=%d]: did you enable the FlowDirector (insmod ixgbe.ko FdirMode=2)\n", rule.rule_id, rc);

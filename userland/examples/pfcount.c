@@ -179,7 +179,7 @@ void drop_packet_rule(const struct pfring_pkthdr *h) {
     
     rule.rule_id = rule_id++;
     rule.rule_action = dont_forward_packet_and_stop_rule_evaluation;
-    
+    rule.core_fields.proto = hdr->l3_proto;
     rule.core_fields.shost.v4 = hdr->ip_src.v4, rule.core_fields.shost_mask.v4 = 0xFFFFFFFF;
     rule.core_fields.sport_low = rule.core_fields.sport_high = hdr->l4_src_port;
     
@@ -435,8 +435,12 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u
 
   numPkts[threadId]++, numBytes[threadId] += h->len;
 
-  if(add_drop_rule)
+  if(add_drop_rule) {
+    if(h->ts.tv_sec == 0)
+      pfring_parse_pkt((u_char*)p, (struct pfring_pkthdr*)h, 4, 0, 1);
+
     drop_packet_rule(h);
+  }
 }
 
 /* *************************************** */

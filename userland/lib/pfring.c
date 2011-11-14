@@ -347,7 +347,7 @@ int pfring_recv_parsed(pfring *ring, u_char** buffer, u_int buffer_len,
 		       u_int8_t level /* 1..4 */, u_int8_t add_timestamp, u_int8_t add_hash) {
   int rc = pfring_recv(ring, buffer, buffer_len, hdr, wait_for_incoming_packet);
 
-  if (rc > 0) 
+  if(rc > 0) 
     rc = pfring_parse_pkt(*buffer, hdr, level, add_timestamp, add_hash);
 
   return rc;	       

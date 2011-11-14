@@ -352,10 +352,10 @@ int pfring_dna_open(pfring *ring) {
 int pfring_dna_enable_ring(pfring *ring) {
   int rc = pfring_mod_enable_ring(ring);
 
-  if (rc < 0)
+  if(rc < 0)
     return rc;
 
-  if (ring->dna_enable)
+  if(ring->dna_enable)
     rc = ring->dna_enable(ring);
 
   return rc;
@@ -372,10 +372,10 @@ int pfring_dna_handle_hash_filtering_rule(pfring *ring,
   if(!rule_to_add)
     return -2;
 
-  if (ring->dna_dev.mem_info.device_model != intel_ixgbe_82599)
+  if(ring->dna_dev.mem_info.device_model != intel_ixgbe_82599)
     return -3;
 
-  if (rule_to_add->plugin_action.plugin_id != NO_PLUGIN_ID)
+  if(rule_to_add->plugin_action.plugin_id != NO_PLUGIN_ID)
     return -4;
 
   switch(rule_to_add->rule_action) {
@@ -406,7 +406,7 @@ int pfring_dna_handle_hash_filtering_rule(pfring *ring,
   rule.rule_family.perfect_rule.d_port   = rule_to_add->port_peer_b;
   rule.rule_family.perfect_rule.queue_id = -1;
 
-  if (add_rule)
+  if(add_rule)
     return pfring_mod_add_hw_rule(ring, &rule);
   else
     return pfring_mod_remove_hw_rule(ring, rule.rule_id);
@@ -420,10 +420,10 @@ int pfring_dna_add_filtering_rule(pfring *ring, filtering_rule* rule_to_add) {
   if(!rule_to_add)
     return -2;
 
-  if (ring->dna_dev.mem_info.device_model != intel_ixgbe_82599)
+  if(ring->dna_dev.mem_info.device_model != intel_ixgbe_82599)
     return -3;
 
-  if (rule_to_add->plugin_action.plugin_id != NO_PLUGIN_ID)
+  if(rule_to_add->plugin_action.plugin_id != NO_PLUGIN_ID)
     return -4;
 
   switch(rule_to_add->rule_action) {
