@@ -2908,9 +2908,6 @@ static int e1000_alloc_ring_dma(struct e1000_adapter *adapter,
 	if (adapter->node != -1)
 		set_dev_node(pci_dev_to_dev(pdev), adapter->node);
 	ring->desc = dma_alloc_coherent(pci_dev_to_dev(pdev), 
-#ifdef ENABLE_DNA
-					2 * /* Alloc shadow descriptors */
-#endif
 					ring->size, &ring->dma,
 					GFP_KERNEL);
 	if (!ring->desc)
@@ -2987,7 +2984,14 @@ int e1000e_setup_rx_resources(struct e1000_adapter *adapter)
 	rx_ring->size = rx_ring->count * desc_len;
 	rx_ring->size = ALIGN(rx_ring->size, 4096);
 
+#ifdef ENABLE_DNA
+        rx_ring->size *= 2; /* Alloc shadow descriptors */
+#endif
 	err = e1000_alloc_ring_dma(adapter, rx_ring);
+#ifdef ENABLE_DNA
+        rx_ring->size /= 2;
+#endif
+
 	if (err)
 		goto err_pages;
 
@@ -5163,8 +5167,6 @@ void e1000e_update_stats(struct e1000_adapter *adapter)
 #ifdef ENABLE_DNA
 	}
 #endif
-
-	adapter->stats.mpc += er32(MPC);
 
 	/* Half-duplex statistics */
 	if (adapter->link_duplex == HALF_DUPLEX) {
@@ -7480,12 +7482,12 @@ static int __devinit e1000_probe(struct pci_dev *pdev,
 	adapter->hw.phy.autoneg_advertised = 0x2f;
 
 	/* ring size defaults */
-	adapter->rx_ring->count = 256;
-	adapter->tx_ring->count = 256;
-
 #ifdef ENABLE_DNA
-	adapter->rx_ring->count = 2048;
-	adapter->tx_ring->count = 2048;
+	adapter->rx_ring->count = E1000_MAX_RXD;
+	adapter->tx_ring->count = E1000_MAX_TXD;
+#else
+	adapter->rx_ring->count = E1000_DEFAULT_RXD;
+	adapter->tx_ring->count = E1000_DEFAULT_TXD;
 #endif
 
 	/*
