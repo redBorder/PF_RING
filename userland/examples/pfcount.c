@@ -115,28 +115,28 @@ void print_stats() {
 
     thpt = ((double)8*nBytes)/(deltaMillisec*1000);
 
-    fprintf(stderr, "=========================\n"
+    printf("=========================\n"
 	    "Absolute Stats: [%u pkts rcvd][%u pkts dropped]\n"
 	    "Total Pkts=%u/Dropped=%.1f %%\n",
 	    (unsigned int)pfringStat.recv, (unsigned int)pfringStat.drop,
 	    (unsigned int)(pfringStat.recv+pfringStat.drop),
 	    pfringStat.recv == 0 ? 0 :
 	    (double)(pfringStat.drop*100)/(double)(pfringStat.recv+pfringStat.drop));
-    fprintf(stderr, "%s pkts - %s bytes", 
+    printf("%s pkts - %s bytes", 
 	    pfring_format_numbers((double)nPkts, buf1, sizeof(buf1), 0),
 	    pfring_format_numbers((double)nBytes, buf2, sizeof(buf2), 0));
 
     if(print_all)
-      fprintf(stderr, " [%s pkt/sec - %s Mbit/sec]\n",
+      printf(" [%s pkt/sec - %s Mbit/sec]\n",
 	      pfring_format_numbers((double)(nPkts*1000)/deltaMillisec, buf1, sizeof(buf1), 1),
 	      pfring_format_numbers(thpt, buf2, sizeof(buf2), 1));
     else
-      fprintf(stderr, "\n");
+      printf("\n");
 
     if(print_all && (lastTime.tv_sec > 0)) {
       deltaMillisec = delta_time(&endTime, &lastTime);
       diff = nPkts-lastPkts;
-      fprintf(stderr, "=========================\n"
+      printf("=========================\n"
 	      "Actual Stats: %llu pkts [%s ms][%s pkt/sec]\n",
 	      (long long unsigned int)diff,
 	      pfring_format_numbers(deltaMillisec, buf1, sizeof(buf1), 1),
@@ -148,7 +148,7 @@ void print_stats() {
 
   lastTime.tv_sec = endTime.tv_sec, lastTime.tv_usec = endTime.tv_usec;
 
-  fprintf(stderr, "=========================\n\n");
+  printf("=========================\n\n");
 }
 
 /* ******************************** */

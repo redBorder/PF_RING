@@ -308,6 +308,7 @@ void dna_ixgbe_alloc_tx_buffers(struct ixgbe_ring *tx_ring, struct pfring_hooks 
   union ixgbe_adv_tx_desc *tx_desc, *shadow_tx_desc;
   struct ixgbe_tx_buffer *bi;
   u16 i;
+  int num_slots_per_page = tx_ring->dna.tot_packet_memory / tx_ring->dna.packet_slot_len;
   // struct ixgbe_adapter 	*adapter = netdev_priv(tx_ring->netdev);
 
   /* Check if the memory has been already allocated */
@@ -346,8 +347,8 @@ void dna_ixgbe_alloc_tx_buffers(struct ixgbe_ring *tx_ring, struct pfring_hooks 
     u_int offset, page_index;
     char *pkt;
 
-    page_index = i / MAX_NUM_SLOTS_PER_PAGE;
-    offset = (i % MAX_NUM_SLOTS_PER_PAGE) * tx_ring->dna.packet_slot_len;
+    page_index = i / num_slots_per_page;
+    offset = (i % num_slots_per_page) * tx_ring->dna.packet_slot_len;
     pkt = (char *)(tx_ring->dna.rx_tx.tx.packet_memory[page_index] + offset);
 
     bi      = &tx_ring->tx_buffer_info[i];
@@ -396,6 +397,7 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
   struct pfring_hooks   *hook = (struct pfring_hooks*)rx_ring->netdev->pfring_ptr;
   mem_ring_info         rx_info = {0};
   mem_ring_info         tx_info = {0};
+  int                   num_slots_per_page;
 
   /* Check if the memory has been already allocated */
   if(rx_ring->dna.memory_allocated) return;
@@ -422,10 +424,12 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
   rx_ring->dna.packet_slot_len  = ALIGN(rx_ring->rx_buf_len, cache_line_size);
   rx_ring->dna.packet_num_slots = rx_ring->count;
 
-  /* Align the slots to MAX_NUM_SLOTS_PER_PAGE */
-  rx_ring->dna.packet_num_slots += (rx_ring->dna.packet_num_slots % MAX_NUM_SLOTS_PER_PAGE);
+  rx_ring->dna.tot_packet_memory = PAGE_SIZE << DNA_MAX_CHUNK_ORDER;
 
-  rx_ring->dna.num_memory_pages = rx_ring->dna.packet_num_slots / MAX_NUM_SLOTS_PER_PAGE;
+  num_slots_per_page = rx_ring->dna.tot_packet_memory / rx_ring->dna.packet_slot_len;
+
+  rx_ring->dna.num_memory_pages = (rx_ring->dna.packet_num_slots + num_slots_per_page-1) / num_slots_per_page;
+
 
   /* Packet Split disabled in DNA mode */
   //if (ring_is_ps_enabled(rx_ring)) {
@@ -434,15 +438,13 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
   //  rx_ring->dna.packet_slot_len  += PAGE_SIZE/2;
   //}
 
-  rx_ring->dna.tot_packet_memory = rx_ring->dna.packet_slot_len * MAX_NUM_SLOTS_PER_PAGE;
-
   if(unlikely(enable_debug))
-    printk("%s(): RX dna.packet_slot_len=%d tot_packet_memory=%d num_memory_pages=%u MAX_NUM_SLOTS_PER_PAGE=%d\n",
+    printk("%s(): RX dna.packet_slot_len=%d tot_packet_memory=%d num_memory_pages=%u num_slots_per_page=%d\n",
 	   __FUNCTION__, 
 	   rx_ring->dna.packet_slot_len,
 	   rx_ring->dna.tot_packet_memory,
 	   rx_ring->dna.num_memory_pages,
-	   MAX_NUM_SLOTS_PER_PAGE);
+	   num_slots_per_page);
 
   for(i=0; i<rx_ring->dna.num_memory_pages; i++) {
     rx_ring->dna.rx_tx.rx.packet_memory[i] =
@@ -464,8 +466,8 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
     u_int offset, page_index;
     char *pkt;
 
-    page_index = i / MAX_NUM_SLOTS_PER_PAGE;
-    offset = (i % MAX_NUM_SLOTS_PER_PAGE) * rx_ring->dna.packet_slot_len;
+    page_index = i / num_slots_per_page;
+    offset = (i % num_slots_per_page) * rx_ring->dna.packet_slot_len;
     pkt = (char *)(rx_ring->dna.rx_tx.rx.packet_memory[page_index] + offset);
 
     /*
@@ -527,6 +529,7 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
   tx_ring->dna.packet_num_slots = rx_ring->dna.packet_num_slots;
   tx_ring->dna.mem_order = rx_ring->dna.mem_order;
   tx_ring->dna.num_memory_pages = rx_ring->dna.num_memory_pages;
+
   dna_ixgbe_alloc_tx_buffers(tx_ring, hook);
 
   rx_info.packet_memory_num_chunks    = rx_ring->dna.num_memory_pages;

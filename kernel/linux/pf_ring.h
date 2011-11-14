@@ -503,9 +503,8 @@ typedef struct flowSlotInfo {
 
 /* **************************************** */
 
-#define DNA_SHIFT                   6
-#define MAX_NUM_SLOTS_PER_PAGE     (1 << DNA_SHIFT) /* 64 - it MUST be a power of 2 */
-#define MAX_NUM_PAGES             512
+#define DNA_MAX_CHUNK_ORDER		5
+#define DNA_MAX_NUM_CHUNKS		512
 
 /* *********************************** */
 
@@ -594,8 +593,8 @@ typedef struct {
 typedef struct {
   dna_memory_slots mem_info;
   u_int16_t channel_id;
-  unsigned long rx_packet_memory[MAX_NUM_PAGES];  /* Invalid in userland */
-  unsigned long tx_packet_memory[MAX_NUM_PAGES];  /* Invalid in userland */
+  unsigned long rx_packet_memory[DNA_MAX_NUM_CHUNKS];  /* Invalid in userland */
+  unsigned long tx_packet_memory[DNA_MAX_NUM_CHUNKS];  /* Invalid in userland */
   void *rx_descr_packet_memory; /* Invalid in userland */
   void *tx_descr_packet_memory; /* Invalid in userland */
   char *phys_card_memory;       /* Invalid in userland */
@@ -975,9 +974,9 @@ typedef void  (*handle_ring_dna_device)(dna_device_operation operation,
 					dna_version version,
 					mem_ring_info *rx_info,
 					mem_ring_info *tx_info,
-					unsigned long  rx_packet_memory[MAX_NUM_PAGES],
+					unsigned long  rx_packet_memory[DNA_MAX_NUM_CHUNKS],
 					void          *rx_descr_packet_memory,
-					unsigned long  tx_packet_memory[MAX_NUM_PAGES],
+					unsigned long  tx_packet_memory[DNA_MAX_NUM_CHUNKS],
 					void          *tx_descr_packet_memory,
 					void          *phys_card_memory,
 					u_int          phys_card_memory_len,
@@ -1010,9 +1009,9 @@ extern void set_ring_dna_device_handler(handle_ring_dna_device
 extern void do_ring_dna_device_handler(dna_device_operation operation,
 				       mem_ring_info *rx_info,
 				       mem_ring_info *tx_info,
-			 	       unsigned long  rx_packet_memory[MAX_NUM_PAGES],
+			 	       unsigned long  rx_packet_memory[DNA_MAX_NUM_CHUNKS],
 				       void          *rx_descr_packet_memory,
-				       unsigned long  tx_packet_memory[MAX_NUM_PAGES],
+				       unsigned long  tx_packet_memory[DNA_MAX_NUM_CHUNKS],
 				       void          *tx_descr_packet_memory,
 				       void          *phys_card_memory,
 				       u_int          phys_card_memory_len,

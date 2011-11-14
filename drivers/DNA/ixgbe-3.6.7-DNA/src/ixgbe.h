@@ -390,12 +390,12 @@ struct ixgbe_ring {
 	u_int8_t            interrupt_enabled;
 	
 	/* Pointer to the slots where packets will be hosted */
-	unsigned long       packet_memory[MAX_NUM_PAGES];
+	unsigned long       packet_memory[DNA_MAX_NUM_CHUNKS];
       } rx;
       
       struct {
 	/* Pointer to the slots where packets will be hosted */
-	unsigned long       packet_memory[MAX_NUM_PAGES];
+	unsigned long       packet_memory[DNA_MAX_NUM_CHUNKS];
       } tx;
     } rx_tx;
   } dna;
