@@ -3012,8 +3012,8 @@ static int ixgbe_set_rxnfc(struct net_device *dev, struct ethtool_rxnfc *cmd)
 #ifdef ENABLE_DNA
 	struct ethtool_rx_flow_spec *fsp = (struct ethtool_rx_flow_spec*) &cmd->fs;
 
-	if (fsp->ring_cookie >= adapter->num_rx_queues - 1 /* MAX_RX_QUEUES-1 */)
-	  fsp->ring_cookie = RX_CLS_FLOW_DISC /* MAX_RX_QUEUES-1 */; /* drop */
+	if (fsp->ring_cookie > (adapter->num_rx_queues - 1))
+	  fsp->ring_cookie = RX_CLS_FLOW_DISC; /* drop */
 #endif
 
 	switch (cmd->cmd) {
