@@ -748,6 +748,29 @@ int main(int argc, char* argv[]) {
     }
   }
 
+  if(0) {
+    int rc, rule_id = 0;
+    hw_filtering_rule rule;
+    intel_82599_perfect_filter_hw_rule *perfect_rule;
+
+    printf("### Perfect Rule Steering Example ###\n");
+    /*
+      NOTE:
+      - valid protocols: UDP or TCP
+     */
+    perfect_rule = &rule.rule_family.perfect_rule;
+
+    if(1) {
+      memset(&rule, 0, sizeof(rule)), rule.rule_family_type = intel_82599_perfect_filter_rule;
+      rule.rule_id = rule_id++, perfect_rule->queue_id = 1, perfect_rule->proto = 17,
+	perfect_rule->s_addr = ntohl(inet_addr("5.6.7.9"));
+      rc = pfring_add_hw_rule(pd, &rule);
+      if(rc != 0)
+	printf("pfring_add_hw_rule(%d) failed [rc=%d]: did you enable the FlowDirector (insmod ixgbe.ko FdirMode=2)\n", rule.rule_id, rc);
+      else
+	printf("pfring_add_hw_rule(%d) succeeded: steering UDP traffic 5.6.7.9:* -> * to queue #1\n", rule.rule_id);
+    }
+  }
 
   signal(SIGINT, sigproc);
   signal(SIGTERM, sigproc);
