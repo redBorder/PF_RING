@@ -37,8 +37,8 @@
 #define pfring_ptr ec_ptr
 
 /* Versioning */
-#define RING_VERSION                "5.1.0"
-#define RING_VERSION_NUM           0x050100
+#define RING_VERSION                "5.2.0"
+#define RING_VERSION_NUM           0x050200
 
 /* Set */
 #define SO_ADD_TO_CLUSTER                 99
