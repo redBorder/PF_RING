@@ -37,7 +37,7 @@ USERSPACE_RING_OBJS = @USERSPACE_RING_OBJS@
 #
 # Object files
 #
-OBJS      = pfring.o pfring_mod.o pfring_utils.o ${DNA_OBJS} ${VIRTUAL_OBJS} ${DAG_OBJS} ${USERSPACE_RING_OBJS}
+OBJS      = pfring.o pfring_mod.o pfring_utils.o pfring_hw_filtering.o ${DNA_OBJS} ${VIRTUAL_OBJS} ${DAG_OBJS} ${USERSPACE_RING_OBJS}
 
 #
 # C compiler and flags
@@ -52,7 +52,7 @@ LDFLAGS   = -g -shared
 SYSLIBS   = -lpthread @SYSLIBS@
 
 # How to make an object file
-%.o: %.c %.h pfring_redirector.c Makefile
+%.o: %.c %.h Makefile
 #	@echo "=*= making object $@ =*="
 	${CC} ${CFLAGS} -c $< -o $@
 

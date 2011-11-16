@@ -6217,6 +6217,17 @@ static int ring_getsockopt(struct socket *sock,
     }
     break;
 
+  case SO_GET_DEVICE_TYPE:
+    if(len < sizeof(pfring_device_type))
+      return -EINVAL;
+
+    if (pfr->ring_netdev == NULL)
+      return -EFAULT;
+
+    if(copy_to_user(optval, &pfr->ring_netdev->device_type, sizeof(pfring_device_type)))
+      return -EFAULT;
+    break;
+
   default:
     return -ENOPROTOOPT;
   }

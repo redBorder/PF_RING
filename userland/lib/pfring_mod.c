@@ -144,8 +144,6 @@ int pfring_mod_open(pfring *ring) {
   ring->recv  = pfring_mod_recv;
   ring->set_poll_watermark = pfring_mod_set_poll_watermark;
   ring->set_poll_duration = pfring_mod_set_poll_duration;
-  ring->add_hw_rule = pfring_mod_add_hw_rule;
-  ring->remove_hw_rule = pfring_mod_remove_hw_rule;
   ring->set_channel_id = pfring_mod_set_channel_id;
   ring->set_application_name = pfring_mod_set_application_name;
   ring->bind = pfring_mod_bind;
@@ -272,18 +270,6 @@ int pfring_mod_open(pfring *ring) {
   }
 
   return 0;
-}
-
-/* ******************************* */
-
-int pfring_mod_add_hw_rule(pfring *ring, hw_filtering_rule *rule) {
-  return(setsockopt(ring->fd, 0, SO_ADD_HW_FILTERING_RULE, rule, sizeof(hw_filtering_rule)));
-}
-
-/* ******************************* */
-
-int pfring_mod_remove_hw_rule(pfring *ring, u_int16_t rule_id) {
-  return(setsockopt(ring->fd, 0, SO_DEL_HW_FILTERING_RULE, &rule_id, sizeof(rule_id)));
 }
 
 /* ******************************* */

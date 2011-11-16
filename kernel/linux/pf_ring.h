@@ -81,6 +81,7 @@
 #define SO_GET_PKT_HEADER_LEN            179
 #define SO_GET_LOOPBACK_TEST             180
 #define SO_GET_BUCKET_LEN                181
+#define SO_GET_DEVICE_TYPE               182
 
 /* Map */
 #define SO_MAP_DNA_DEVICE                190

@@ -127,6 +127,14 @@ extern "C" {
 
   /* ********************************* */
 
+  typedef enum {
+    hardware_and_software = 0,
+    hardware_only,
+    software_only
+  } filtering_mode;
+
+  /* ********************************* */
+
   struct __pfring {
     u_int8_t initialized, enabled;
     packet_direction direction; /* Specify the capture direction for packets */
@@ -150,8 +158,6 @@ extern "C" {
     int       (*recv)                         (pfring *, u_char**, u_int, struct pfring_pkthdr *, u_int8_t);
     int       (*set_poll_watermark)           (pfring *, u_int16_t);
     int       (*set_poll_duration)            (pfring *, u_int);
-    int       (*add_hw_rule)                  (pfring *, hw_filtering_rule *);
-    int       (*remove_hw_rule)               (pfring *, u_int16_t);
     int       (*set_channel_id)               (pfring *, u_int32_t);
     int       (*set_application_name)         (pfring *, char *);
     int       (*bind)                         (pfring *, char *);
@@ -201,6 +207,9 @@ extern "C" {
     struct {
       int8_t device_id, port_id;
     } rdi;
+
+    filtering_mode ft_mode;
+    pfring_device_type ft_device_type;
 
     /* All devices */
     char *buffer, *slots, *device_name;
@@ -290,6 +299,7 @@ extern "C" {
   int pfring_disable_ring(pfring *ring);
   int pfring_set_bpf_filter(pfring *ring, char *filter_buffer);
   int pfring_remove_bpf_filter(pfring *ring);
+  int pfring_set_filtering_mode(pfring *ring, filtering_mode mode);
 
   /* PF_RING Socket bundle (defined in pfring_mod.c) */
   void init_pfring_bundle(pfring_bundle *bundle, bundle_read_policy p);

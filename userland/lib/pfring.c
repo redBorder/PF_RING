@@ -20,6 +20,8 @@
 
 #include "pfring.h"
 
+#include "pfring_hw_filtering.h"
+
 // #define RING_DEBUG
 
 /* ********************************* */
@@ -73,10 +75,6 @@ static pfring_module_info pfring_module_list[] = {
 #endif
   {0}
 };
-
-#ifdef HAVE_REDIRECTOR
-#include "pfring_redirector.c"
-#endif
 
 /* **************************************************** */
 
@@ -151,9 +149,7 @@ pfring* pfring_open(char *device_name, u_int8_t promisc,
 
   ring->rdi.device_id = ring->rdi.port_id = -1; /* Default */
 
-#ifdef HAVE_REDIRECTOR
-  init_redirector(ring);
-#endif
+  pfring_hw_ft_init(ring);
 
   ring->initialized = 1;
 
@@ -374,29 +370,19 @@ int pfring_set_poll_duration(pfring *ring, u_int duration) {
 /* **************************************************** */
 
 int pfring_add_hw_rule(pfring *ring, hw_filtering_rule *rule) {
-  if(ring && ring->add_hw_rule)
-    return ring->add_hw_rule(ring, rule);
+  if(!ring)
+    return -1;
 
-#ifdef HAVE_REDIRECTOR
-  if(ring && (ring->rdi.port_id != -1))
-    return(redirector_add_hw_rule(ring, rule, NULL, NULL));
-#endif
-
-  return -1;
+  return pfring_hw_ft_add_hw_rule(ring, rule);
 }
 
 /* **************************************************** */
 
 int pfring_remove_hw_rule(pfring *ring, u_int16_t rule_id) {
-  if(ring && ring->remove_hw_rule)
-    return ring->remove_hw_rule(ring, rule_id);
-  
-#ifdef HAVE_REDIRECTOR
-  if(ring && (ring->rdi.port_id != -1))
-    return(redirector_remove_hw_rule(ring, rule_id));
-#endif
-
-  return -1;
+  if(!ring)
+    return -1;
+    
+  return pfring_hw_ft_remove_hw_rule(ring, rule_id);
 }
 
 /* **************************************************** */
@@ -583,19 +569,23 @@ int pfring_get_hash_filtering_rule_stats(pfring *ring, hash_filtering_rule* rule
 int pfring_handle_hash_filtering_rule(pfring *ring, hash_filtering_rule* rule_to_add, 
 				      u_char add_rule) {
   int rc = -1;
-  if(ring && ring->handle_hash_filtering_rule) {
-    rc = ring->handle_hash_filtering_rule(ring, rule_to_add, add_rule);
+
+  if(!ring)
+    return rc;
+  
+  if(ring->ft_mode != hardware_only) {
+    if (ring->handle_hash_filtering_rule) {
+      rc = ring->handle_hash_filtering_rule(ring, rule_to_add, add_rule);
     
-    if(rc < 0)
-      return(rc);
+      if(rc < 0)
+        return rc;
+    } else return rc;
   }
   
-#ifdef HAVE_REDIRECTOR
-  if(ring && (ring->rdi.port_id != -1))
-    rc = redirector_add_hash_filtering_rule(ring, rule_to_add);
-#endif
+  if(ring->ft_mode != software_only)
+    rc = pfring_hw_ft_handle_hash_filtering_rule(ring, rule_to_add, add_rule);
 
-  return(rc);
+  return rc;
 }
 
 /* **************************************************** */
@@ -611,38 +601,46 @@ int pfring_purge_idle_hash_rules(pfring *ring, u_int16_t inactivity_sec) {
 
 int pfring_add_filtering_rule(pfring *ring, filtering_rule* rule_to_add) {
   int rc = -1;
-  if(ring && ring->add_filtering_rule) {
-    rc = ring->add_filtering_rule(ring, rule_to_add);
 
-    if(rc < 0)
-      return(rc);
+  if(!ring)
+    return rc;
+
+  if(ring->ft_mode != hardware_only) {
+    if(ring->add_filtering_rule) {
+      rc = ring->add_filtering_rule(ring, rule_to_add);
+
+      if(rc < 0)
+        return rc;
+    } else return rc;
   }
 
-#ifdef HAVE_REDIRECTOR
-  if(ring && (ring->rdi.port_id != -1))
-    rc = redirector_add_filtering_rule(ring, rule_to_add);
-#endif
+  if(ring->ft_mode != software_only)
+    rc = pfring_hw_ft_add_filtering_rule(ring, rule_to_add);
 
-  return(rc);
+  return rc;
 }
 
 /* **************************************************** */
 
 int pfring_remove_filtering_rule(pfring *ring, u_int16_t rule_id) {
   int rc = -1;
-  if(ring && ring->remove_filtering_rule) {
-    rc = ring->remove_filtering_rule(ring, rule_id);
 
-    if(rc < 0)
-      return(rc);
+  if(!ring)
+    return rc;
+
+  if(ring->ft_mode != hardware_only) {
+    if(ring->remove_filtering_rule) {
+      rc = ring->remove_filtering_rule(ring, rule_id);
+
+      if(rc < 0)
+        return rc;
+    } else return rc;
   }
 
-#ifdef HAVE_REDIRECTOR
-  if(ring && (ring->rdi.port_id != -1))
-    rc = redirector_remove_filtering_rule(ring, rule_id);
-#endif
+  if(ring->ft_mode != software_only)
+    rc = pfring_hw_ft_remove_filtering_rule(ring, rule_id);
 
-  return(rc);
+  return rc;
 }
 
 /* **************************************************** */
@@ -659,17 +657,19 @@ int pfring_get_filtering_rule_stats(pfring *ring, u_int16_t rule_id,
 
 int pfring_toggle_filtering_policy(pfring *ring, u_int8_t rules_default_accept_policy) {
   int rc = -1;
-  if(ring && ring->toggle_filtering_policy) {
+
+  if(!ring)
+    return rc;
+
+  if(ring->toggle_filtering_policy) {
     rc = ring->toggle_filtering_policy(ring, rules_default_accept_policy);
     
     if(rc < 0)
       return(rc);
   }
 
-#ifdef HAVE_REDIRECTOR
-  if(ring && (ring->rdi.port_id != -1))
-    rc = redirector_set_traffic_policy(ring, rules_default_accept_policy);
-#endif
+  if(ring->ft_mode != software_only)
+    rc = pfring_hw_ft_set_traffic_policy(ring, rules_default_accept_policy);
 
   return(rc);
 }
@@ -812,4 +812,13 @@ int pfring_remove_bpf_filter(pfring *ring){
   return -1;
 }
 
+/* **************************************************** */
+
+int pfring_set_filtering_mode(pfring *ring, filtering_mode mode){
+  if(!ring)
+    return -1;
+
+  ring->ft_mode = mode;
+  return 0;
+}
 
