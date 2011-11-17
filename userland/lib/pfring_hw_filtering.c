@@ -65,6 +65,9 @@ int pfring_hw_ft_set_traffic_policy(pfring *ring, u_int8_t rules_default_accept_
 int pfring_hw_ft_add_hw_rule(pfring *ring, hw_filtering_rule *rule) {
   int rc;
 
+  if(!rule)
+    return -2;
+
   switch (ring->ft_device_type) {
     case intel_82599_family:
       rc = virtual_filtering_device_add_hw_rule(ring, rule);
@@ -119,6 +122,9 @@ int pfring_hw_ft_remove_hw_rule(pfring *ring, u_int16_t rule_id) {
 int pfring_hw_ft_handle_hash_filtering_rule(pfring *ring, hash_filtering_rule* rule_to_add, u_char add_rule) {
   int rc;
 
+  if(!rule_to_add)
+    return -2;
+
   switch (ring->ft_device_type) {
     case intel_82599_family:
       if(add_rule)
@@ -152,6 +158,9 @@ int pfring_hw_ft_handle_hash_filtering_rule(pfring *ring, hash_filtering_rule* r
 
 int pfring_hw_ft_add_filtering_rule(pfring *ring, filtering_rule* rule_to_add) {
   int rc;
+
+  if(!rule_to_add)
+    return -2;
 
   switch (ring->ft_device_type) {
     case intel_82599_family:

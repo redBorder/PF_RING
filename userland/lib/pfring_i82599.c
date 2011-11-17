@@ -17,14 +17,12 @@ int i82599_add_hash_filtering_rule(pfring *ring, hash_filtering_rule* rule_to_ad
   hw_filtering_rule rule;
   memset(&rule, 0, sizeof(rule));
 
-  if(!rule_to_add)
-    return -2;
-
-  if(ring->dna_dev.mem_info.device_model != intel_ixgbe_82599)
-    return -3;
+  //if(ring->ft_device_type != intel_82599_family
+  //&& ring->dna_dev.mem_info.device_model != intel_ixgbe_82599)
+  //  return -4;
 
   if(rule_to_add->plugin_action.plugin_id != NO_PLUGIN_ID)
-    return -4;
+    return -5;
 
   switch(rule_to_add->rule_action) {
   case forward_packet_and_stop_rule_evaluation:
@@ -41,7 +39,7 @@ int i82599_add_hash_filtering_rule(pfring *ring, hash_filtering_rule* rule_to_ad
   case execute_action_and_continue_rule_evaluation:
   case execute_action_and_stop_rule_evaluation:
   default:
-    return -5; /* Not supported */
+    return -3; /* Not supported */
   }
 
   rule.rule_id = rule_to_add->rule_id;
@@ -63,14 +61,12 @@ int i82599_add_filtering_rule(pfring *ring, filtering_rule* rule_to_add) {
   hw_filtering_rule rule;
   memset(&rule, 0, sizeof(rule));
 
-  if(!rule_to_add)
-    return -2;
-
-  if(ring->dna_dev.mem_info.device_model != intel_ixgbe_82599)
-    return -3;
+  //if(ring->ft_device_type != intel_82599_family
+  //&& ring->dna_dev.mem_info.device_model != intel_ixgbe_82599)
+  //  return -4;
 
   if(rule_to_add->plugin_action.plugin_id != NO_PLUGIN_ID)
-    return -4;
+    return -5;
 
   switch(rule_to_add->rule_action) {
   case forward_packet_and_stop_rule_evaluation:
@@ -87,7 +83,7 @@ int i82599_add_filtering_rule(pfring *ring, filtering_rule* rule_to_add) {
   case execute_action_and_continue_rule_evaluation:
   case execute_action_and_stop_rule_evaluation:
   default:
-    return -5; /* Not supported */
+    return -3; /* Not supported */
   }
 
   //rule_to_add->balance_id
