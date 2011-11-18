@@ -437,7 +437,7 @@ void* packet_consumer_thread(void* _id) {
     CPU_ZERO(&cpuset);
     CPU_SET(core_id, &cpuset);
     if((s = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset)) != 0)
-      printf("Error while binding thread %ld to core %ld: errno=%i\n", 
+      fprintf(stderr, "Error while binding thread %ld to core %ld: errno=%i\n", 
 	     thread_id, core_id, s);
     else {
       printf("Set thread %lu on core %lu/%u\n", thread_id, core_id, numCPU);
@@ -529,7 +529,7 @@ int main(int argc, char* argv[]) {
   num_channels = pfring_open_multichannel(device,  promisc, snaplen, 0, ring);
   
   if(num_channels <= 0) {
-    printf("pfring_open_multichannel() returned %d\n", num_channels);
+    fprintf(stderr, "pfring_open_multichannel() returned %d\n", num_channels);
     return(-1);
   }
 
@@ -546,11 +546,11 @@ int main(int argc, char* argv[]) {
     pfring_set_application_name(ring[i], buf);
 
     if((rc = pfring_set_direction(ring[i], direction)) != 0)
-	printf("pfring_set_direction returned [rc=%d][direction=%d]\n", rc, direction);
+	fprintf(stderr, "pfring_set_direction returned [rc=%d][direction=%d]\n", rc, direction);
     
     if(watermark > 0) {
       if((rc = pfring_set_poll_watermark(ring[i], watermark)) != 0)
-	printf("pfring_set_poll_watermark returned [rc=%d][watermark=%d]\n", rc, watermark);
+	fprintf(stderr, "pfring_set_poll_watermark returned [rc=%d][watermark=%d]\n", rc, watermark);
     }
     
     if(rehash_rss)

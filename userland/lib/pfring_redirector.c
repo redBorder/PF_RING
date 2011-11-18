@@ -27,9 +27,12 @@ void init_redirector(pfring *ring) {
 
   /*
     Avoid messages shown on console
-    librdi connect: No such file or directory
+    "librdi connect: No such file or directory"
+    Redirecting stderr:
   */
-  freopen("/dev/null", "rw", stderr);
+  //freopen("/dev/null", "rw", stderr);
+  FILE *e = stderr;
+  stderr = fopen("/dev/null","a");
 
   for(i=0; ((!done) && (i < rdi_get_dev_num())); i++) {
     char dev_name[32];
@@ -83,6 +86,10 @@ void init_redirector(pfring *ring) {
     syslog(LOG_INFO, "Redirector port: device=%d@port=%d\n",
 	   ring->rdi.device_id, ring->rdi.port_id);
   }
+  
+  /* Recovering stderr */
+  fclose(stderr);
+  stderr = e;
 }
 
 /* ********************************* */

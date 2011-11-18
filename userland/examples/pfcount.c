@@ -115,28 +115,28 @@ void print_stats() {
 
     thpt = ((double)8*nBytes)/(deltaMillisec*1000);
 
-    printf("=========================\n"
+    fprintf(stderr, "=========================\n"
 	    "Absolute Stats: [%u pkts rcvd][%u pkts dropped]\n"
 	    "Total Pkts=%u/Dropped=%.1f %%\n",
 	    (unsigned int)pfringStat.recv, (unsigned int)pfringStat.drop,
 	    (unsigned int)(pfringStat.recv+pfringStat.drop),
 	    pfringStat.recv == 0 ? 0 :
 	    (double)(pfringStat.drop*100)/(double)(pfringStat.recv+pfringStat.drop));
-    printf("%s pkts - %s bytes", 
+    fprintf(stderr, "%s pkts - %s bytes", 
 	    pfring_format_numbers((double)nPkts, buf1, sizeof(buf1), 0),
 	    pfring_format_numbers((double)nBytes, buf2, sizeof(buf2), 0));
 
     if(print_all)
-      printf(" [%s pkt/sec - %s Mbit/sec]\n",
+      fprintf(stderr, " [%s pkt/sec - %s Mbit/sec]\n",
 	      pfring_format_numbers((double)(nPkts*1000)/deltaMillisec, buf1, sizeof(buf1), 1),
 	      pfring_format_numbers(thpt, buf2, sizeof(buf2), 1));
     else
-      printf("\n");
+      fprintf(stderr, "\n");
 
     if(print_all && (lastTime.tv_sec > 0)) {
       deltaMillisec = delta_time(&endTime, &lastTime);
       diff = nPkts-lastPkts;
-      printf("=========================\n"
+      fprintf(stderr, "=========================\n"
 	      "Actual Stats: %llu pkts [%s ms][%s pkt/sec]\n",
 	      (long long unsigned int)diff,
 	      pfring_format_numbers(deltaMillisec, buf1, sizeof(buf1), 1),
@@ -148,7 +148,7 @@ void print_stats() {
 
   lastTime.tv_sec = endTime.tv_sec, lastTime.tv_usec = endTime.tv_usec;
 
-  printf("=========================\n\n");
+  fprintf(stderr, "=========================\n\n");
 }
 
 /* ******************************** */
@@ -170,7 +170,7 @@ void drop_packet_rule(const struct pfring_pkthdr *h) {
     rule.port_peer_a = hdr->l4_src_port, rule.port_peer_b = hdr->l4_dst_port;
     
     if(pfring_handle_hash_filtering_rule(pd, &rule, 1 /* add_rule */) < 0)
-      printf("pfring_add_hash_filtering_rule(1) failed\n");
+      fprintf(stderr, "pfring_add_hash_filtering_rule(1) failed\n");
     else
       printf("Added filtering rule %d\n", rule.rule_id);
   } else {
@@ -188,7 +188,7 @@ void drop_packet_rule(const struct pfring_pkthdr *h) {
     rule.core_fields.dport_low = rule.core_fields.dport_high = hdr->l4_dst_port;
     
     if(pfring_add_filtering_rule(pd, &rule) < 0)
-      printf("pfring_add_hash_filtering_rule(2) failed\n");
+      fprintf(stderr, "pfring_add_hash_filtering_rule(2) failed\n");
     else
       printf("Rule %d added successfully...\n", rule.rule_id);
 
@@ -507,7 +507,7 @@ int bind2core(u_int core_id) {
   CPU_ZERO(&cpuset);
   CPU_SET(core_id, &cpuset);
   if((s = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset)) != 0) {
-    printf("Error while binding to core %u: errno=%i\n", core_id, s);
+    fprintf(stderr, "Error while binding to core %u: errno=%i\n", core_id, s);
     return(-1);
   } else {
     return(0);
@@ -562,7 +562,7 @@ void* packet_consumer_thread(void* _id) {
       len = sizeof(stats);
       rc = pfring_get_filtering_rule_stats(pd, 5, (char*)&stats, &len);
       if(rc < 0)
-	printf("pfring_get_filtering_rule_stats() failed [rc=%d]\n", rc);
+	fprintf(stderr, "pfring_get_filtering_rule_stats() failed [rc=%d]\n", rc);
       else {
 	printf("[Pkts=%u][Bytes=%u]\n",
 	       (unsigned int)stats.num_pkts,
@@ -715,7 +715,7 @@ int main(int argc, char* argv[]) {
   pd = pfring_open(device, promisc,  snaplen, (num_threads > 1) ? 1 : 0);
 
   if(pd == NULL) {
-    printf("pfring_open error (pf_ring not loaded or perhaps you use quick mode and have already a socket bound to %s ?)\n",
+    fprintf(stderr, "pfring_open error (pf_ring not loaded or perhaps you use quick mode and have already a socket bound to %s ?)\n",
 	   device);
     return(-1);
   } else {
@@ -731,7 +731,7 @@ int main(int argc, char* argv[]) {
   }
   
   if(pfring_get_bound_device_address(pd, mac_address) != 0)
-    printf("Impossible to know the device address\n");
+    fprintf(stderr, "Impossible to know the device address\n");
   else
     printf("Capturing from %s [%s]\n", device, etheraddr_string(mac_address, buf));
 
@@ -744,11 +744,11 @@ int main(int argc, char* argv[]) {
   }
 
   if((rc = pfring_set_direction(pd, direction)) != 0)
-    printf("pfring_set_direction returned [rc=%d][direction=%d]\n", rc, direction);
+    fprintf(stderr, "pfring_set_direction returned [rc=%d][direction=%d]\n", rc, direction);
 
   if(watermark > 0) {
     if((rc = pfring_set_poll_watermark(pd, watermark)) != 0)
-      printf("pfring_set_poll_watermark returned [rc=%d][watermark=%d]\n", rc, watermark);
+      fprintf(stderr, "pfring_set_poll_watermark returned [rc=%d][watermark=%d]\n", rc, watermark);
   }
 
   if(rehash_rss)
@@ -783,7 +783,7 @@ int main(int argc, char* argv[]) {
     // rule.extended_fields.filter_plugin_id = DUMMY_PLUGIN_ID; /* Enable packet parsing/filtering */
 
     if(pfring_add_filtering_rule(pd, &rule) < 0)
-      printf("pfring_add_hash_filtering_rule(2) failed\n");
+      fprintf(stderr, "pfring_add_hash_filtering_rule(2) failed\n");
     else
       printf("Rule added successfully...\n");
   }
