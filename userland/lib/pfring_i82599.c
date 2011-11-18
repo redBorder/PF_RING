@@ -21,9 +21,6 @@ int i82599_add_hash_filtering_rule(pfring *ring, hash_filtering_rule* rule_to_ad
   //&& ring->dna_dev.mem_info.device_model != intel_ixgbe_82599)
   //  return -4;
 
-  if(rule_to_add->plugin_action.plugin_id != NO_PLUGIN_ID)
-    return -5;
-
   switch(rule_to_add->rule_action) {
   case forward_packet_and_stop_rule_evaluation:
   case forward_packet_add_rule_and_stop_rule_evaluation:
@@ -65,9 +62,6 @@ int i82599_add_filtering_rule(pfring *ring, filtering_rule* rule_to_add) {
   //&& ring->dna_dev.mem_info.device_model != intel_ixgbe_82599)
   //  return -4;
 
-  if(rule_to_add->plugin_action.plugin_id != NO_PLUGIN_ID)
-    return -5;
-
   switch(rule_to_add->rule_action) {
   case forward_packet_and_stop_rule_evaluation:
   case forward_packet_add_rule_and_stop_rule_evaluation:
@@ -93,10 +87,10 @@ int i82599_add_filtering_rule(pfring *ring, filtering_rule* rule_to_add) {
   rule.rule_family_type = intel_82599_five_tuple_rule;
   //rule_to_add->core_fields.vlan_id
   rule.rule_family.five_tuple_rule.proto    = rule_to_add->core_fields.proto;
-  rule.rule_family.five_tuple_rule.s_addr   = rule_to_add->core_fields.shost.v4 & rule_to_add->core_fields.shost_mask.v4; 
-  rule.rule_family.five_tuple_rule.d_addr   = rule_to_add->core_fields.dhost.v4 & rule_to_add->core_fields.dhost_mask.v4;
-  rule.rule_family.five_tuple_rule.s_port   = rule_to_add->core_fields.sport_low; //rule_to_add->core_fields.sport_high
-  rule.rule_family.five_tuple_rule.d_port   = rule_to_add->core_fields.dport_low; //rule_to_add->core_fields.dport_high
+  rule.rule_family.five_tuple_rule.s_addr   = rule_to_add->core_fields.shost.v4 & rule_to_add->core_fields.shost_mask.v4; //TOCHECK
+  rule.rule_family.five_tuple_rule.d_addr   = rule_to_add->core_fields.dhost.v4 & rule_to_add->core_fields.dhost_mask.v4; //TOCHECK
+  rule.rule_family.five_tuple_rule.s_port   = rule_to_add->core_fields.sport_low; //TODO rule_to_add->core_fields.sport_high
+  rule.rule_family.five_tuple_rule.d_port   = rule_to_add->core_fields.dport_low; //TODO rule_to_add->core_fields.dport_high
   rule.rule_family.five_tuple_rule.queue_id = -1;
 
   return virtual_filtering_device_add_hw_rule(ring, &rule);
