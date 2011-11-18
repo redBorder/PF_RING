@@ -1840,8 +1840,6 @@ static int match_filtering_rule(struct pf_ring_socket *pfr,
       return(0);
   }
 
-  printk("[PF_RING] %u:%u\n", hdr->extended_hdr.parsed_pkt.l4_src_port, hdr->extended_hdr.parsed_pkt.l4_dst_port);
-
   if((rule->rule.core_fields.sport_high != 0)
     && ((hdr->extended_hdr.parsed_pkt.l4_src_port < rule->rule.core_fields.sport_low)
 	|| (hdr->extended_hdr.parsed_pkt.l4_src_port > rule->rule.core_fields.sport_high)))
