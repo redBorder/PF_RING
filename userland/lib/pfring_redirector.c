@@ -12,6 +12,7 @@
  */
 
 #include <syslog.h>
+#include <sys/stat.h>
 
 /* ********************************* */
 
@@ -23,73 +24,72 @@ int redirector_set_traffic_policy(pfring *ring, u_int8_t rules_default_accept_po
 /* ********************************* */
 
 void init_redirector(pfring *ring) {
-  int i, done = 0;
+  struct stat buf;
 
-  /*
-    Avoid messages shown on console
-    "librdi connect: No such file or directory"
-    Redirecting stderr:
-  */
-  //freopen("/dev/null", "rw", stderr);
-  FILE *e = stderr;
-  stderr = fopen("/dev/null","a");
+  /* Check if it is likely that a Silicom NIC is present */
+  if(stat("/proc/net/rdi", &buf) == 0) {
+    int i, done = 0;
 
-  for(i=0; ((!done) && (i < rdi_get_dev_num())); i++) {
-    char dev_name[32];
-    FILE *fd;
+    for(i=0; ((!done) && (i < rdi_get_dev_num())); i++) {
+      char dev_name[32];
+      FILE *fd;
 
-    snprintf(dev_name, sizeof(dev_name), "/proc/net/rdi/dev%d", i);
-    fd = fopen(dev_name, "r");
+      snprintf(dev_name, sizeof(dev_name), "/proc/net/rdi/dev%d", i);
+      fd = fopen(dev_name, "r");
 
-    if(fd != NULL) {
-      char buf[64];
+      if(fd != NULL) {
+	char buf[64];
 
-      while(fgets(buf, sizeof(buf), fd) != NULL) {
-	if(strstr(buf, ring->device_name) != NULL) {
-	  /* d:0.0 dna0 */
-	  int port;
+	while(fgets(buf, sizeof(buf), fd) != NULL) {
+	  if(strstr(buf, ring->device_name) != NULL) {
+	    /* d:0.0 dna0 */
+	    int port;
 
-	  if(sscanf(buf, "d:0.%d", &port) == 1) {
-	    ring->rdi.port_id = (int8_t)port;
-	    ring->rdi.device_id = i;
-	    done = 1;
+	    if(sscanf(buf, "d:0.%d", &port) == 1) {
+	      ring->rdi.port_id = (int8_t)port;
+	      ring->rdi.device_id = i;
+	      done = 1;
+	    }
+	    break;
 	  }
-	  break;
 	}
+
+	fclose(fd);
       }
-
-      fclose(fd);
     }
-  }
 
-  if((ring->rdi.port_id != -1) && (ring->rdi.device_id != -1)) {
-    int rc;
-    char *cmd = "/bin/rdictl set_cfg 2 > /dev/null";
+    if((ring->rdi.port_id != -1) && (ring->rdi.device_id != -1)) {
+      int rc;
+      char *cmd = "/bin/rdictl set_cfg 2 > /dev/null";
 
-    /* Temporary patch */
-    system(cmd);
+      /* Temporary patch */
+      system(cmd);
 
-    if((rc = rdi_init(ring->rdi.device_id)) < 0) {
-      printf("WARNING: unable to initialize redirector [device=%d@port=%d][rc=%d]\n",
-	     ring->rdi.device_id, ring->rdi.port_id, rc);
-      ring->rdi.port_id = ring->rdi.device_id = -1;
+      if((rc = rdi_init(ring->rdi.device_id)) < 0) {
+	printf("WARNING: unable to initialize redirector [device=%d@port=%d][rc=%d]\n",
+	       ring->rdi.device_id, ring->rdi.port_id, rc);
+	ring->rdi.port_id = ring->rdi.device_id = -1;
+      }
     }
-  }
 
-  if(ring->rdi.device_id != -1) {
-    if(rdi_clear_rules(ring->rdi.device_id) < 0)
-      printf("WARNING: unable to clear rules for device %d\n", ring->rdi.device_id);
+    if(ring->rdi.device_id != -1) {
+      if(rdi_clear_rules(ring->rdi.device_id) < 0)
+	printf("WARNING: unable to clear rules for device %d\n", ring->rdi.device_id);
 
-    if(redirector_set_traffic_policy(ring, 1 /* accept (default) */) < 0)
-      printf("WARNING: unable to set default traffic policy on device %d\n", ring->rdi.device_id);
+      if(redirector_set_traffic_policy(ring, 1 /* accept (default) */) < 0)
+	printf("WARNING: unable to set default traffic policy on device %d\n", ring->rdi.device_id);
 
-    syslog(LOG_INFO, "Redirector port: device=%d@port=%d\n",
-	   ring->rdi.device_id, ring->rdi.port_id);
-  }
-  
-  /* Recovering stderr */
-  fclose(stderr);
-  stderr = e;
+      syslog(LOG_INFO, "Redirector port: device=%d@port=%d\n",
+	     ring->rdi.device_id, ring->rdi.port_id);
+    }
+  } else 
+    ring->rdi.port_id = ring->rdi.device_id = -1;
+}
+
+/* ********************************* */
+
+static u_int32_t cird2mask(u_int cidr) {
+  return((0xffffffff >> (32 - cidr)) << (32 - cidr));
 }
 
 /* ********************************* */
@@ -116,8 +116,8 @@ int redirector_add_hw_rule(pfring *ring, hw_filtering_rule *rule,
   rdi_rule.dst_port_max  = rule->rule_family.redirector_rule.dst_port_high;
   rdi_rule.src_ip        = rule->rule_family.redirector_rule.src_addr.v4; /* IPv4 only */
   rdi_rule.dst_ip        = rule->rule_family.redirector_rule.dst_addr.v4; /* IPv4 only */
-  rdi_rule.src_ip_mask   = rule->rule_family.redirector_rule.src_mask;
-  rdi_rule.dst_ip_mask   = rule->rule_family.redirector_rule.dst_mask;
+  rdi_rule.src_ip_mask   = cird2mask(rule->rule_family.redirector_rule.src_mask);
+  rdi_rule.dst_ip_mask   = cird2mask(rule->rule_family.redirector_rule.dst_mask);
   rdi_rule.ip_protocol   = rule->rule_family.redirector_rule.l3_proto;
   rdi_rule.vlan          = rule->rule_family.redirector_rule.vlan_id_low;
   rdi_rule.vlan_max      = rule->rule_family.redirector_rule.vlan_id_high;
