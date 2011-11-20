@@ -45,7 +45,7 @@ void init_redirector(pfring *ring) {
 	    /* d:0.0 dna0 */
 	    int port;
 
-	    if(sscanf(buf, "d:0.%d", &port) == 1) {
+	    if(sscanf(&buf[1], ":0.%d", &port) == 1) {
 	      ring->rdi.port_id = (int8_t)port;
 	      ring->rdi.device_id = i;
 	      done = 1;
@@ -74,15 +74,17 @@ void init_redirector(pfring *ring) {
 
     if(ring->rdi.device_id != -1) {
       if(rdi_clear_rules(ring->rdi.device_id) < 0)
-	printf("WARNING: unable to clear rules for device %d\n", ring->rdi.device_id);
+	printf("WARNING: unable to clear rules for device %d\n",
+	       ring->rdi.device_id);
 
       if(redirector_set_traffic_policy(ring, 1 /* accept (default) */) < 0)
-	printf("WARNING: unable to set default traffic policy on device %d\n", ring->rdi.device_id);
+	printf("WARNING: unable to set default traffic policy on device %d\n",
+	       ring->rdi.device_id);
 
       syslog(LOG_INFO, "Redirector port: device=%d@port=%d\n",
 	     ring->rdi.device_id, ring->rdi.port_id);
     }
-  } else 
+  } else
     ring->rdi.port_id = ring->rdi.device_id = -1;
 }
 
@@ -101,7 +103,8 @@ int redirector_add_hw_rule(pfring *ring, hw_filtering_rule *rule,
   rdi_mem_t rdi_rule;
 
   if (rule->rule_family_type != silicom_redirector_rule) {
-    syslog(LOG_ERR, "Invalid rule family type [rule_family_type=%d]", rule->rule_family_type);
+    syslog(LOG_ERR, "Invalid rule family type [rule_family_type=%d]",
+	   rule->rule_family_type);
     return -1;
   }
 
@@ -148,7 +151,8 @@ int redirector_add_hw_rule(pfring *ring, hw_filtering_rule *rule,
 
     default:
       ret = -1;
-      syslog(LOG_ERR, "Unrecognized rule type [rule_type=%d]", rule->rule_family.redirector_rule.rule_type);
+      syslog(LOG_ERR, "Unrecognized rule type [rule_type=%d]", 
+	     rule->rule_family.redirector_rule.rule_type);
     break;
   }
 
