@@ -255,18 +255,3 @@ char* pfring_format_numbers(double val, char *buf, u_int buf_len, u_int8_t add_d
   return(buf);
 }
 
-/* *************************************** */
-
-#ifndef HAVE_PTHREAD_SET_AFFINITY
-int pthread_attr_setaffinity_np (pthread_attr_t *__attr,
-				 size_t cpusetsize,
-				 cpu_set_t *__cpuset) {
-  return(0);
-}
-
-extern int pthread_setaffinity_np (pthread_t __th, size_t __cpusetsize,
-				   cpu_set_t *__cpuset) {
-  return(0);
-}
-#endif
-
