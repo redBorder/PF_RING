@@ -909,7 +909,7 @@ struct parse_buffer {
 
 /* Plugins */
 /* Execute an action (e.g. update rule stats) */
-typedef int (*plugin_handle_skb)(struct pf_ring_socket *the_ring,
+typedef int (*plugin_handle_skb)(struct pf_ring_socket *pfr,
 				 sw_filtering_rule_element *rule,       /* In case the match is on the list */
 				 sw_filtering_hash_bucket *hash_bucket, /* In case the match is on the hash */
 				 struct pfring_pkthdr *hdr,
@@ -918,7 +918,7 @@ typedef int (*plugin_handle_skb)(struct pf_ring_socket *the_ring,
 				 struct parse_buffer **filter_rule_memory_storage,
 				 rule_action_behaviour *behaviour);
 /* Return 1/0 in case of match/no match for the given skb */
-typedef int (*plugin_filter_skb)(struct pf_ring_socket *the_ring,
+typedef int (*plugin_filter_skb)(struct pf_ring_socket *pfr,
 				 sw_filtering_rule_element *rule,
 				 struct pfring_pkthdr *hdr,
 				 struct sk_buff *skb, int displ,

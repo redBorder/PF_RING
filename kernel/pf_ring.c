@@ -6669,7 +6669,12 @@ static int ring_notifier(struct notifier_block *this, unsigned long msg, void *d
 #endif
 #endif
 
+#if(LINUX_VERSION_CODE >= KERNEL_VERSION(3,1,0))
+	    strncpy(dev_ptr->proc_entry->name, dev->name, dev_ptr->proc_entry->namelen);
+	    dev_ptr->proc_entry->name[dev_ptr->proc_entry->namelen /* size is namelen+1 */] = '\0';
+#else
 	    dev_ptr->proc_entry->name = dev->name;
+#endif
 	    break;
 	  }
 	}
