@@ -2539,9 +2539,19 @@ static int __devinit igb_sw_init(struct igb_adapter *adapter)
 
 	pci_read_config_word(pdev, PCI_COMMAND, &hw->bus.pci_cmd_word);
 
+#ifdef ENABLE_DNA
+	adapter->tx_ring_count = min(num_tx_slots, (u32)IGB_MAX_TXD);
+	adapter->tx_ring_count = max(adapter->tx_ring_count, (u16)IGB_MIN_TXD);
+	adapter->tx_ring_count = ALIGN(adapter->tx_ring_count, REQ_TX_DESCRIPTOR_MULTIPLE);
+
+	adapter->rx_ring_count = min(num_rx_slots, (u32)IGB_MAX_RXD);
+	adapter->rx_ring_count = max(adapter->rx_ring_count, (u16)IGB_MIN_RXD);
+	adapter->rx_ring_count = ALIGN(adapter->rx_ring_count, REQ_RX_DESCRIPTOR_MULTIPLE);
+#else
 	/* set default ring sizes */
 	adapter->tx_ring_count = IGB_DEFAULT_TXD;
 	adapter->rx_ring_count = IGB_DEFAULT_RXD;
+#endif
 
 	/* set default work limits */
 	adapter->tx_work_limit = IGB_DEFAULT_TX_WORK;

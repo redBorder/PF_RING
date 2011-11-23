@@ -34,6 +34,14 @@ static unsigned int mtu = 1500;
 module_param(mtu, uint, 0644);
 MODULE_PARM_DESC(mtu, "Change the default Maximum Transmission Unit");
 
+static unsigned int num_rx_slots = IGB_DEFAULT_RXD;
+module_param(num_rx_slots, uint, 0644);
+MODULE_PARM_DESC(num_rx_slots, "Specify the number of RX slots. Default: 256");
+
+static unsigned int num_tx_slots = IGB_DEFAULT_TXD;
+module_param(num_tx_slots, uint, 0644);
+MODULE_PARM_DESC(num_tx_slots, "Specify the number of TX slots. Default: 256");
+
 /* Forward */
 static void igb_irq_enable(struct igb_adapter *adapter);
 static void igb_irq_disable(struct igb_adapter *adapter);
@@ -556,10 +564,10 @@ void dna_igb_alloc_rx_buffers(struct igb_ring *rx_ring, struct pfring_hooks *hoo
 
   /* Allocate TX memory */
   tx_ring->dna.tot_packet_memory = rx_ring->dna.tot_packet_memory;
-  tx_ring->dna.packet_slot_len = rx_ring->dna.packet_slot_len;
-  tx_ring->dna.packet_num_slots = rx_ring->dna.packet_num_slots;
-  tx_ring->dna.mem_order = rx_ring->dna.mem_order;
-  tx_ring->dna.num_memory_pages = rx_ring->dna.num_memory_pages;
+  tx_ring->dna.packet_slot_len   = rx_ring->dna.packet_slot_len;
+  tx_ring->dna.packet_num_slots  = tx_ring->count;
+  tx_ring->dna.mem_order         = rx_ring->dna.mem_order;
+  tx_ring->dna.num_memory_pages  = (tx_ring->dna.packet_num_slots + num_slots_per_page-1) / num_slots_per_page;
 
   dna_igb_alloc_tx_buffers(tx_ring, hook);
 
@@ -596,9 +604,8 @@ void dna_igb_alloc_rx_buffers(struct igb_ring *rx_ring, struct pfring_hooks *hoo
 				notify_function_ptr);
 
   if(unlikely(enable_debug))
-    printk("[DNA] igb: %s: Enabled DNA on queue %d [size=%u][count=%d]\n",
-	   rx_ring->netdev->name, rx_ring->queue_index, 
-	   rx_ring->size, rx_ring->count);  
+    printk("[DNA] igb: %s: Enabled DNA on queue %d [RX][size=%u][count=%d] [TX][size=%u][count=%d]\n",
+	   rx_ring->netdev->name, rx_ring->queue_index, rx_ring->size, rx_ring->count, tx_ring->size, tx_ring->count);
 
   rx_ring->dna.memory_allocated = 1;
 }
