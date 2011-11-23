@@ -87,11 +87,16 @@
 #define IXGBE_MIN_RXD			     64
 
 #ifdef ENABLE_DNA
-#define DNA_DEFAULT                       8192
+#undef IXGBE_DEFAULT_TXD		  
 #undef IXGBE_DEFAULT_RXD
+#undef IXGBE_MAX_RXD
+#undef IXGBE_MAX_TXD
+#define DNA_DEFAULT                        8192
+#define DNA_MAX                           32768
 #define IXGBE_DEFAULT_RXD           DNA_DEFAULT
-#undef IXGBE_DEFAULT_TXD
 #define IXGBE_DEFAULT_TXD           DNA_DEFAULT
+#define IXGBE_MAX_RXD                   DNA_MAX
+#define IXGBE_MAX_TXD                   DNA_MAX
 #endif
 
 /* flow control */

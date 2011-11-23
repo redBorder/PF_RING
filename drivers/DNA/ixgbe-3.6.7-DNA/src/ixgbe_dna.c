@@ -29,6 +29,14 @@ static unsigned int mtu = 1500;
 module_param(mtu, uint, 0644);
 MODULE_PARM_DESC(mtu, "Change the default Maximum Transmission Unit");
 
+static unsigned int num_rx_slots = IXGBE_DEFAULT_RXD;
+module_param(num_rx_slots, uint, 0644);
+MODULE_PARM_DESC(num_rx_slots, "Specify the number of RX slots. Default: 8192");
+
+static unsigned int num_tx_slots = IXGBE_DEFAULT_TXD;
+module_param(num_tx_slots, uint, 0644);
+MODULE_PARM_DESC(num_tx_slots, "Specify the number of TX slots. Default: 8192");
+
 /* Forward */
 static inline void ixgbe_irq_disable(struct ixgbe_adapter *adapter);
 void ixgbe_irq_enable_queues(struct ixgbe_adapter *adapter, u64 qmask);
@@ -520,15 +528,15 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
   dna_reset_rx_ring(rx_ring);
 
   if(unlikely(enable_debug))
-  printk("[DNA] next_to_clean=%u/next_to_use=%u [register=%d]\n",
-	 rx_ring->next_to_clean, rx_ring->next_to_use, IXGBE_READ_REG(hw, IXGBE_RDT(rx_ring->reg_idx)));
+    printk("[DNA] next_to_clean=%u/next_to_use=%u [register=%d]\n",
+	   rx_ring->next_to_clean, rx_ring->next_to_use, IXGBE_READ_REG(hw, IXGBE_RDT(rx_ring->reg_idx)));
 
   /* Allocate TX memory */
   tx_ring->dna.tot_packet_memory = rx_ring->dna.tot_packet_memory;
-  tx_ring->dna.packet_slot_len = rx_ring->dna.packet_slot_len;
-  tx_ring->dna.packet_num_slots = rx_ring->dna.packet_num_slots;
-  tx_ring->dna.mem_order = rx_ring->dna.mem_order;
-  tx_ring->dna.num_memory_pages = rx_ring->dna.num_memory_pages;
+  tx_ring->dna.packet_slot_len   = rx_ring->dna.packet_slot_len;
+  tx_ring->dna.packet_num_slots  = tx_ring->count;
+  tx_ring->dna.mem_order         = rx_ring->dna.mem_order;
+  tx_ring->dna.num_memory_pages  = (tx_ring->dna.packet_num_slots + num_slots_per_page-1) / num_slots_per_page;
 
   dna_ixgbe_alloc_tx_buffers(tx_ring, hook);
 
@@ -565,8 +573,8 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
 				notify_function_ptr);
 
   if(unlikely(enable_debug))
-    printk("[DNA] ixgbe: %s: Enabled DNA on queue %d [size=%u][count=%d]\n",
-	   rx_ring->netdev->name, rx_ring->queue_index, rx_ring->size, rx_ring->count);
+    printk("[DNA] ixgbe: %s: Enabled DNA on queue %d [RX][size=%u][count=%d] [TX][size=%u][count=%d]\n",
+	   rx_ring->netdev->name, rx_ring->queue_index, rx_ring->size, rx_ring->count, tx_ring->size, tx_ring->count);
 #if 0
   if(adapter->hw.mac.type != ixgbe_mac_82598EB)
     ixgbe_irq_disable_queues(rx_ring->q_vector->adapter, ((u64)1 << rx_ring->queue_index));

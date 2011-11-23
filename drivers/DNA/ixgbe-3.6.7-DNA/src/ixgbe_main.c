@@ -6497,9 +6497,19 @@ static int __devinit ixgbe_sw_init(struct ixgbe_adapter *adapter)
 	hw->fc.send_xon = true;
 	hw->fc.disable_fc_autoneg = false;
 
+#ifdef ENABLE_DNA
+	adapter->tx_ring_count = max(num_tx_slots, (u32)IXGBE_MIN_TXD);
+	adapter->tx_ring_count = min(adapter->tx_ring_count, (u32)IXGBE_MAX_TXD);
+	adapter->tx_ring_count = ALIGN(adapter->tx_ring_count,IXGBE_REQ_TX_DESCRIPTOR_MULTIPLE);
+
+	adapter->rx_ring_count = max(num_rx_slots, (u32)IXGBE_MIN_RXD);
+	adapter->rx_ring_count = min(adapter->rx_ring_count, (u32)IXGBE_MAX_RXD);
+	adapter->rx_ring_count = ALIGN(adapter->rx_ring_count,IXGBE_REQ_RX_DESCRIPTOR_MULTIPLE);
+#else
 	/* set default ring sizes */
 	adapter->tx_ring_count = IXGBE_DEFAULT_TXD;
 	adapter->rx_ring_count = IXGBE_DEFAULT_RXD;
+#endif
 
 	/* set default work limits */
 	adapter->tx_work_limit = IXGBE_DEFAULT_TX_WORK;
