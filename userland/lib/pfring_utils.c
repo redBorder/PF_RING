@@ -18,6 +18,51 @@
 #include "pfring.h"
 #include "pfring_utils.h"
 
+/* ******************************* */
+
+#ifdef ENABLE_HW_TIMESTAMP
+#include <linux/net_tstamp.h>
+#endif
+
+int pfring_enable_hw_timestamp(pfring* ring, char *device_name) {
+#ifdef ENABLE_HW_TIMESTAMP
+  struct hwtstamp_config hwconfig;
+  struct ifreq ifr;
+  int rc, sock_fd;
+
+  sock_fd = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
+  if(sock_fd <= 0) return(-1);
+
+  memset(&hwconfig, 0, sizeof(hwconfig));
+
+  /* Enable RX/disable TX timestamps */
+  hwconfig.tx_type = HWTSTAMP_TX_OFF;
+  hwconfig.rx_filter = HWTSTAMP_FILTER_ALL;
+
+  memset(&ifr, 0, sizeof(ifr));
+  strcpy(ifr.ifr_name, device_name);
+  ifr.ifr_data = (void *)&hwconfig;
+
+  rc = ioctl(sock_fd, SIOCSHWTSTAMP, &ifr);
+  if(rc < 0)
+    rc = errno;
+  else
+    rc = 0;
+
+#ifdef RING_DEBUG
+  printf("pfring_enable_hw_timestamp(%s) returned %d\n",
+	 device_name, rc);
+#endif
+
+  close(sock_fd);
+  return(rc);
+#else
+  return(-1);
+#endif
+}
+
+/* ******************************* */
+
 static u_int32_t pfring_hash_pkt(struct pfring_pkthdr *hdr) {
   return  
     hdr->extended_hdr.parsed_pkt.vlan_id +

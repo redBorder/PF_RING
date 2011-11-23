@@ -317,6 +317,7 @@ extern "C" {
 		       u_int8_t add_timestamp /* 0,1 */, u_int8_t add_hash /* 0,1 */);
   int pfring_set_if_promisc(const char *device, int set_promisc);
   char* pfring_format_numbers(double val, char *buf, u_int buf_len, u_int8_t add_decimals);
+  int pfring_enable_hw_timestamp(pfring* ring, char *device_name);
 
   /* ********************************* */
 

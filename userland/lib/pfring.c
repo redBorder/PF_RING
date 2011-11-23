@@ -279,7 +279,7 @@ void pfring_config(u_short cpu_percentage) {
 int pfring_loop(pfring *ring, pfringProcesssPacket looper, 
 		const u_char *user_bytes, u_int8_t wait_for_packet) {
   u_char *buffer = NULL;
-  struct pfring_pkthdr hdr;
+  struct pfring_pkthdr hdr = { 0 };
   int rc = 0;
 
   if((!ring) || ring->is_shutting_down)
