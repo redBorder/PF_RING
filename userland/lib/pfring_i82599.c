@@ -82,15 +82,19 @@ int i82599_add_filtering_rule(pfring *ring, filtering_rule* rule_to_add) {
 
   //rule_to_add->balance_id
   //rule_to_add->balance_pool
-
+  //rule_to_add->core_fields.shost_mask.v4 (/32 only)
+  //rule_to_add->core_fields.dhost_mask.v4 (/32 only)
+  //rule_to_add->core_fields.sport_high    (no range)
+  //rule_to_add->core_fields.dport_high    (no range)
+  //rule_to_add->core_fields.vlan_id       (no VLAN)
+  
   rule.rule_id = rule_to_add->rule_id;
   rule.rule_family_type = intel_82599_five_tuple_rule;
-  //rule_to_add->core_fields.vlan_id
   rule.rule_family.five_tuple_rule.proto    = rule_to_add->core_fields.proto;
-  rule.rule_family.five_tuple_rule.s_addr   = rule_to_add->core_fields.shost.v4 & rule_to_add->core_fields.shost_mask.v4; //TOCHECK
-  rule.rule_family.five_tuple_rule.d_addr   = rule_to_add->core_fields.dhost.v4 & rule_to_add->core_fields.dhost_mask.v4; //TOCHECK
-  rule.rule_family.five_tuple_rule.s_port   = rule_to_add->core_fields.sport_low; //TODO rule_to_add->core_fields.sport_high
-  rule.rule_family.five_tuple_rule.d_port   = rule_to_add->core_fields.dport_low; //TODO rule_to_add->core_fields.dport_high
+  rule.rule_family.five_tuple_rule.s_addr   = rule_to_add->core_fields.shost.v4;
+  rule.rule_family.five_tuple_rule.d_addr   = rule_to_add->core_fields.dhost.v4;
+  rule.rule_family.five_tuple_rule.s_port   = rule_to_add->core_fields.sport_low;
+  rule.rule_family.five_tuple_rule.d_port   = rule_to_add->core_fields.dport_low; 
   rule.rule_family.five_tuple_rule.queue_id = -1;
 
   return virtual_filtering_device_add_hw_rule(ring, &rule);
