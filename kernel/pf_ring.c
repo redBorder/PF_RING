@@ -1411,15 +1411,16 @@ inline u_int32_t hash_pkt(u_int16_t vlan_id, u_int8_t proto,
 
 /* ********************************** */
 
-inline u_int32_t hash_pkt_header(struct pfring_pkthdr * hdr, u_char mask_src, u_char mask_dst)
+inline u_int32_t hash_pkt_header(struct pfring_pkthdr * hdr, u_char mask_src, u_char mask_dst, 
+				 u_char mask_port, u_char mask_proto, u_char mask_vlan)
 {
   if(hdr->extended_hdr.pkt_hash == 0)
-    hdr->extended_hdr.pkt_hash = hash_pkt(hdr->extended_hdr.parsed_pkt.vlan_id,
-					  hdr->extended_hdr.parsed_pkt.l3_proto,
+    hdr->extended_hdr.pkt_hash = hash_pkt(mask_vlan  ? 0 : hdr->extended_hdr.parsed_pkt.vlan_id,
+					  mask_proto ? 0 : hdr->extended_hdr.parsed_pkt.l3_proto,
 					  mask_src ? ip_zero : hdr->extended_hdr.parsed_pkt.ip_src,
 					  mask_dst ? ip_zero : hdr->extended_hdr.parsed_pkt.ip_dst,
-					  mask_src ? 0 : hdr->extended_hdr.parsed_pkt.l4_src_port,
-					  mask_dst ? 0 : hdr->extended_hdr.parsed_pkt.l4_dst_port);
+					  (mask_src || mask_port) ? 0 : hdr->extended_hdr.parsed_pkt.l4_src_port,
+					  (mask_dst || mask_port) ? 0 : hdr->extended_hdr.parsed_pkt.l4_dst_port);
 
   return(hdr->extended_hdr.pkt_hash);
 }
@@ -1576,7 +1577,7 @@ static int parse_raw_pkt(char *data, u_int data_len,
   } else
     hdr->extended_hdr.parsed_pkt.l4_src_port = hdr->extended_hdr.parsed_pkt.l4_dst_port = 0;
 
-  hash_pkt_header(hdr, 0, 0);
+  hash_pkt_header(hdr, 0, 0, 0, 0, 0);
 
   return(1); /* IP */
 }
@@ -1851,7 +1852,7 @@ static int match_filtering_rule(struct pf_ring_socket *pfr,
     return(0);
 
   if(rule->rule.balance_pool > 0) {
-    u_int32_t balance_hash = hash_pkt_header(hdr, 0, 0) % rule->rule.balance_pool;
+    u_int32_t balance_hash = hash_pkt_header(hdr, 0, 0, 0, 0, 0) % rule->rule.balance_pool;
 
     if(balance_hash != rule->rule.balance_id)
       return(0);
@@ -2337,7 +2338,7 @@ int check_perfect_rules(struct sk_buff *skb,
   sw_filtering_hash_bucket *hash_bucket;
   u_int8_t hash_found = 0;
 
-  hash_idx = hash_pkt_header(hdr, 0, 0) % DEFAULT_RING_HASH_SIZE;
+  hash_idx = hash_pkt_header(hdr, 0, 0, 0, 0, 0) % DEFAULT_RING_HASH_SIZE;
   hash_bucket = pfr->sw_filtering_hash[hash_idx];
 
   while(hash_bucket != NULL) {
@@ -2625,7 +2626,7 @@ static int add_skb_to_ring(struct sk_buff *skb,
   u_int8_t hash_found = 0;
 
   if(pfr && pfr->rehash_rss && skb->dev)
-    channel_id = hash_pkt_header(hdr, 0, 0) % get_num_rx_queues(skb->dev);
+    channel_id = hash_pkt_header(hdr, 0, 0, 0, 0, 0) % get_num_rx_queues(skb->dev);
 
   /* This is a memory holder for storing parsed packet information
      that will then be freed when the packet has been handled
@@ -2768,11 +2769,23 @@ static u_int hash_pkt_cluster(ring_cluster_element * cluster_ptr,
 {
   u_int idx;
 
-  if(cluster_ptr->cluster.hashing_mode == cluster_round_robin) {
-    idx = cluster_ptr->cluster.hashing_id++;
-  } else {
-    /* Per-flow clustering */
-    idx = hash_pkt_header(hdr, 0, 0);
+  switch(cluster_ptr->cluster.hashing_mode) {
+    case cluster_round_robin: 
+      idx = cluster_ptr->cluster.hashing_id++;
+      break;
+    case cluster_per_flow_2_tuple:
+      idx = hash_pkt_header(hdr, 0, 0, 1, 1, 1);
+      break;
+    case cluster_per_flow_4_tuple:
+      idx = hash_pkt_header(hdr, 0, 0, 0, 1, 1);
+      break;
+    case cluster_per_flow_5_tuple:
+      idx = hash_pkt_header(hdr, 0, 0, 0, 0, 1);
+      break;
+    case cluster_per_flow:
+    default:
+      idx = hash_pkt_header(hdr, 0, 0, 0, 0, 0);
+      break;
   }
 
   return(idx % cluster_ptr->cluster.num_cluster_elements);
@@ -3098,7 +3111,7 @@ static int skb_ring_handler(struct sk_buff *skb,
     if(pfr && pfr->rehash_rss && skb->dev) {
       parse_pkt(skb, real_skb, displ, &hdr, 1);
 
-      channel_id = hash_pkt_header(&hdr, 0, 0) % get_num_rx_queues(skb->dev);
+      channel_id = hash_pkt_header(&hdr, 0, 0, 0, 0, 0) % get_num_rx_queues(skb->dev);
     }
 
     if(unlikely(enable_debug)) printk("[PF_RING] Expecting channel %d [%p]\n", channel_id, pfr);

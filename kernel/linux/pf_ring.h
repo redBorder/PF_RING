@@ -628,8 +628,11 @@ typedef struct {
 /* ************************************************* */
 
 typedef enum {
-  cluster_per_flow = 0,
-  cluster_round_robin
+  cluster_per_flow = 0,     /* 6-tuple: <src ip, src port, dst ip, dst port, proto, vlan>  */
+  cluster_round_robin,
+  cluster_per_flow_2_tuple, /* 2-tuple: <src ip,           dst ip                       >  */
+  cluster_per_flow_4_tuple, /* 4-tuple: <src ip, src port, dst ip, dst port             >  */
+  cluster_per_flow_5_tuple, /* 5-tuple: <src ip, src port, dst ip, dst port, proto      >  */
 } cluster_type;
 
 struct add_to_cluster {
