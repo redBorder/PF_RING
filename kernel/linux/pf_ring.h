@@ -289,6 +289,7 @@ typedef struct {
   u_int8_t balance_id, balance_pool; /* If balance_pool > 0, then pass the packet above only if the
 					(hash(proto, sip, sport, dip, dport) % balance_pool) = balance_id */
   u_int8_t locked;		     /* Do not purge with pfring_purge_idle_rules() */
+  u_int8_t bidirectional;	     /* Swap peers when checking if they match the rule. Default: monodir */
   filtering_rule_core_fields     core_fields;
   filtering_rule_extended_fields extended_fields;
   filtering_rule_plugin_action   plugin_action;
@@ -440,7 +441,7 @@ typedef struct {
 
 /*
  * The hashtable contains only perfect matches: no
- * wildacards or so are accepted.
+ * wildacards or so are accepted. (bidirectional)
  */
 typedef struct {
   u_int16_t rule_id; /* Future use */
@@ -934,10 +935,14 @@ typedef int (*plugin_get_stats)(struct pf_ring_socket *pfr,
 				u_char* stats_buffer, u_int stats_buffer_len);
 
 /* Build a new rule when forward_packet_add_rule_and_stop_rule_evaluation is specified
-   return 0 in case of success , an error code (< 0) otherwise */
+   return 0 in case of success , an error code (< 0) otherwise.
+   sw_filtering_rule_element or sw_filtering_hash_bucket must be allocated by the plugin.*/
 typedef int (*plugin_add_rule)(sw_filtering_rule_element *rule,
 			       struct pfring_pkthdr *hdr,
-			       sw_filtering_hash_bucket *hash_bucket);
+			       sw_filtering_rule_element **new_rule_element,
+			       sw_filtering_hash_bucket **new_hash_bucket,
+			       u_int16_t filter_plugin_id,
+			       struct parse_buffer **filter_rule_memory_storage);
 typedef void (*plugin_register)(u_int8_t register_plugin);
 
 /* Called when a ring is disposed */
