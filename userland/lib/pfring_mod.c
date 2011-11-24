@@ -122,6 +122,7 @@ int pfring_mod_open(pfring *ring) {
   ring->purge_idle_hash_rules = pfring_mod_purge_idle_hash_rules;
   ring->add_filtering_rule = pfring_mod_add_filtering_rule;
   ring->remove_filtering_rule = pfring_mod_remove_filtering_rule;
+  ring->purge_idle_rules = pfring_mod_purge_idle_rules;
   ring->get_filtering_rule_stats = pfring_mod_get_filtering_rule_stats;
   ring->toggle_filtering_policy = pfring_mod_toggle_filtering_policy;
   ring->enable_rss_rehash = pfring_mod_enable_rss_rehash;
@@ -507,6 +508,12 @@ int pfring_mod_remove_from_cluster(pfring *ring) {
 
 int pfring_mod_purge_idle_hash_rules(pfring *ring, u_int16_t inactivity_sec) {
   return(setsockopt(ring->fd, 0, SO_PURGE_IDLE_HASH_RULES, &inactivity_sec, sizeof(inactivity_sec)));
+}
+
+/* ******************************* */
+
+int pfring_mod_purge_idle_rules(pfring *ring, u_int16_t inactivity_sec) {
+  return(setsockopt(ring->fd, 0, SO_PURGE_IDLE_RULES, &inactivity_sec, sizeof(inactivity_sec)));
 }
 
 /* **************************************************** */

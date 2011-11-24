@@ -2261,6 +2261,177 @@ static void free_parse_memory(struct parse_buffer *parse_memory_buffer[])
     }
 }
 
+/* ************************************* */
+
+static void free_filtering_rule(sw_filtering_rule_element * entry)
+{
+#ifdef CONFIG_TEXTSEARCH
+  int i;
+
+  for(i = 0; (i < MAX_NUM_PATTERN) && (entry->pattern[i] != NULL); i++)
+    textsearch_destroy(entry->pattern[i]);
+#endif
+
+  if(entry->plugin_data_ptr != NULL) {
+    kfree(entry->plugin_data_ptr);
+    entry->plugin_data_ptr = NULL;
+  }
+
+  if(entry->rule.internals.reflector_dev != NULL)
+    dev_put(entry->rule.internals.reflector_dev);	/* Release device */
+
+  if(entry->rule.extended_fields.filter_plugin_id > 0) {
+    if(plugin_registration[entry->rule.extended_fields.filter_plugin_id]->pfring_plugin_register)
+      plugin_registration[entry->rule.extended_fields.filter_plugin_id]->pfring_plugin_register(0);
+  }
+
+  if(entry->rule.plugin_action.plugin_id > 0) {
+    if(plugin_registration[entry->rule.plugin_action.plugin_id]->pfring_plugin_register)
+      plugin_registration[entry->rule.plugin_action.plugin_id]->pfring_plugin_register(0);
+  }
+}
+
+/* ************************************* */
+
+static void free_sw_filtering_hash_bucket(sw_filtering_hash_bucket * bucket)
+{
+  if(bucket->plugin_data_ptr != NULL) {
+    kfree(bucket->plugin_data_ptr);
+    bucket->plugin_data_ptr = NULL;
+  }
+
+  if(bucket->rule.internals.reflector_dev != NULL)
+    dev_put(bucket->rule.internals.reflector_dev);	/* Release device */
+
+  if(bucket->rule.plugin_action.plugin_id > 0) {
+    if(plugin_registration[bucket->rule.plugin_action.plugin_id]->pfring_plugin_register)
+      plugin_registration[bucket->rule.plugin_action.plugin_id]->pfring_plugin_register(0);
+  }
+}
+
+/*
+  NOTE
+
+  I jeopardize the get_coalesce/set_eeprom fields for my purpose
+  until hw filtering support is part of the kernel
+
+*/
+
+/* ************************************* */
+
+static int handle_sw_filtering_hash_bucket(struct pf_ring_socket *pfr,
+					   sw_filtering_hash_bucket * rule,
+					   u_char add_rule)
+{
+  u_int32_t hash_value = hash_pkt(rule->rule.vlan_id, rule->rule.proto,
+				  rule->rule.host_peer_a, rule->rule.host_peer_b,
+				  rule->rule.port_peer_a, rule->rule.port_peer_b)
+    % DEFAULT_RING_HASH_SIZE;
+  int rc = -1;
+
+  if(unlikely(enable_debug))
+    printk("[PF_RING] %s(vlan=%u, proto=%u, "
+	   "sip=%d.%d.%d.%d, sport=%u, dip=%d.%d.%d.%d, dport=%u, "
+	   "hash_value=%u, add_rule=%d) called\n", 
+	   __FUNCTION__,
+	   rule->rule.vlan_id,
+	   rule->rule.proto, ((rule->rule.host4_peer_a >> 24) & 0xff),
+	   ((rule->rule.host4_peer_a >> 16) & 0xff),
+	   ((rule->rule.host4_peer_a >> 8) & 0xff),
+	   ((rule->rule.host4_peer_a >> 0) & 0xff),
+	   rule->rule.port_peer_a,
+	   ((rule->rule.host4_peer_b >> 24) & 0xff),
+	   ((rule->rule.host4_peer_b >> 16) & 0xff),
+	   ((rule->rule.host4_peer_b >> 8) & 0xff),
+	   ((rule->rule.host4_peer_b >> 0) & 0xff),
+	   rule->rule.port_peer_b, hash_value, add_rule);
+
+  if(add_rule) {
+    if(pfr->sw_filtering_hash == NULL)
+      pfr->sw_filtering_hash = (sw_filtering_hash_bucket **)
+	kcalloc(DEFAULT_RING_HASH_SIZE, sizeof(sw_filtering_hash_bucket *), GFP_ATOMIC);
+    if(pfr->sw_filtering_hash == NULL) {
+      /* kfree(rule); */
+      if(unlikely(enable_debug))
+	printk("[PF_RING] %s() returned %d [0]\n", __FUNCTION__, -EFAULT);
+      return(-EFAULT);
+    }
+  }
+
+  if(unlikely(enable_debug))
+    printk("[PF_RING] %s() allocated memory\n", __FUNCTION__);
+
+  if(pfr->sw_filtering_hash == NULL) {
+    /* We're trying to delete a hash rule from an empty hash */
+    return(-EFAULT);
+  }
+
+  if(pfr->sw_filtering_hash[hash_value] == NULL) {
+    if(add_rule)
+      pfr->sw_filtering_hash[hash_value] = rule, rule->next = NULL, rc = 0;
+    else {
+      if(unlikely(enable_debug))
+	printk("[PF_RING] %s() returned %d [1]\n", __FUNCTION__, -1);
+      return(-1);	/* Unable to find the specified rule */
+    }
+  } else {
+    sw_filtering_hash_bucket *prev = NULL, *bucket = pfr->sw_filtering_hash[hash_value];
+
+    while(bucket != NULL) {
+      if(hash_filtering_rule_match(&bucket->rule, &rule->rule)) {
+	if(add_rule) {
+	  if(unlikely(enable_debug))
+	    printk("[PF_RING] Duplicate found while adding rule: discarded\n");
+	  /* kfree(rule); */
+	  return(-EEXIST);
+	} else {
+	  /* We've found the bucket to delete */
+
+	  if(unlikely(enable_debug))
+	    printk("[PF_RING] %s() found a bucket to delete: removing it\n", __FUNCTION__);
+	  if(prev == NULL)
+	    pfr->sw_filtering_hash[hash_value] = bucket->next;
+	  else
+	    prev->next = bucket->next;
+
+	  free_sw_filtering_hash_bucket(bucket);
+	  kfree(bucket);
+	  pfr->num_sw_filtering_rules--;
+	  if(unlikely(enable_debug))
+	    printk("[PF_RING] %s() returned %d [2]\n", __FUNCTION__, 0);
+	  return(0);
+	}
+      } else {
+	prev = bucket;
+	bucket = bucket->next;
+      }
+    }
+
+    if(add_rule) {
+      /* If the flow arrived until here, then this rule is unique */
+
+      if(unlikely(enable_debug))
+	printk("[PF_RING] %s() no duplicate rule found: adding the rule\n", __FUNCTION__);
+
+      /* Avoid immediate rule purging */
+      rule->rule.internals.jiffies_last_match = jiffies;
+
+      rule->next = pfr->sw_filtering_hash[hash_value];
+      pfr->sw_filtering_hash[hash_value] = rule;
+      pfr->num_sw_filtering_rules++;
+      rc = 0;
+    } else {
+      /* The rule we searched for has not been found */
+      rc = -1;
+    }
+  }
+
+  if(unlikely(enable_debug))
+    printk("[PF_RING] %s() returned %d [3]\n", __FUNCTION__, rc);
+
+  return(rc);
+}
+
 /* ********************************** */
 
 static int reflect_packet(struct sk_buff *skb,
@@ -2469,7 +2640,6 @@ int check_wildcard_rules(struct sk_buff *skb,
 	    hash_bucket->rule.port_peer_b = hdr->extended_hdr.parsed_pkt.l4_dst_port;
 	    hash_bucket->rule.rule_action = forward_packet_and_stop_rule_evaluation;
 	    hash_bucket->rule.reflector_device_name[0] = '\0';
-	    hash_bucket->rule.internals.jiffies_last_match = jiffies; /* Avoid immediate rule purging */
 	    hash_bucket->rule.internals.reflector_dev = NULL;
 	    hash_bucket->rule.plugin_action.plugin_id = NO_PLUGIN_ID;
 	  }
@@ -2477,9 +2647,7 @@ int check_wildcard_rules(struct sk_buff *skb,
 	  read_unlock(&pfr->ring_rules_lock);
 	  /* We have done with rule evaluation, but we need a write_lock to add the hash rule */
 	  write_lock(&pfr->ring_rules_lock);
-	  rc = pfr->handle_hash_rule(pfr, hash_bucket, 1 /* add_rule_from_plugin */);
-	  if(rc == 0)
-	    pfr->num_sw_filtering_rules++;
+	  rc = handle_sw_filtering_hash_bucket(pfr, hash_bucket, 1 /* add_rule_from_plugin */);
 	  write_unlock(&pfr->ring_rules_lock);
 
 	  if(rc != 0) {
@@ -2852,19 +3020,18 @@ int unregister_plugin(u_int16_t pfring_plugin_id)
 	rule = list_entry(ptr, sw_filtering_rule_element, list);
 
 	if(rule->rule.plugin_action.plugin_id == pfring_plugin_id) {
+	  rule->rule.plugin_action.plugin_id = NO_PLUGIN_ID;
+
 	  if(plugin_registration[pfring_plugin_id]
 	     && plugin_registration[pfring_plugin_id]->pfring_plugin_free_ring_mem) {
 	    /* Custom free function */
 	    plugin_registration[pfring_plugin_id]->pfring_plugin_free_ring_mem(rule);
-	  } else {
-	    if(rule->plugin_data_ptr !=
-	       NULL) {
-	      kfree(rule->plugin_data_ptr);
-	      rule->plugin_data_ptr = NULL;
-	    }
 	  }
 
-	  rule->rule.plugin_action.plugin_id = NO_PLUGIN_ID;
+	  if(rule->plugin_data_ptr !=  NULL) {
+	    kfree(rule->plugin_data_ptr);
+	    rule->plugin_data_ptr = NULL;
+	  }
 	}
       }
     }
@@ -3307,159 +3474,6 @@ static int buffer_ring_handler(struct net_device *dev, char *data, int len)
 			  UNKNOWN_NUM_RX_CHANNELS));
 }
 
-/* ************************************* */
-
-static void free_filtering_rule(filtering_rule * rule)
-{
-  if(rule->internals.reflector_dev != NULL)
-    dev_put(rule->internals.reflector_dev);	/* Release device */
-
-  if(rule->extended_fields.filter_plugin_id > 0) {
-    if(plugin_registration[rule->extended_fields.filter_plugin_id]->pfring_plugin_register)
-      plugin_registration[rule->extended_fields.filter_plugin_id]->pfring_plugin_register(0);
-  }
-
-  if(rule->plugin_action.plugin_id > 0) {
-    if(plugin_registration[rule->plugin_action.plugin_id]->pfring_plugin_register)
-      plugin_registration[rule->plugin_action.plugin_id]->pfring_plugin_register(0);
-  }
-}
-
-/* ************************************* */
-
-static void free_sw_filtering_hash_bucket(sw_filtering_hash_bucket * bucket)
-{
-  if(bucket->plugin_data_ptr)
-    kfree(bucket->plugin_data_ptr);
-
-  if(bucket->rule.internals.reflector_dev != NULL)
-    dev_put(bucket->rule.internals.reflector_dev);	/* Release device */
-
-  if(bucket->rule.plugin_action.plugin_id > 0) {
-    if(plugin_registration[bucket->rule.plugin_action.plugin_id]->pfring_plugin_register)
-      plugin_registration[bucket->rule.plugin_action.plugin_id]->pfring_plugin_register(0);
-  }
-}
-
-/*
-  NOTE
-
-  I jeopardize the get_coalesce/set_eeprom fields for my purpose
-  until hw filtering support is part of the kernel
-
-*/
-
-/* ************************************* */
-
-static int handle_sw_filtering_hash_bucket(struct pf_ring_socket *pfr,
-					   sw_filtering_hash_bucket * rule,
-					   u_char add_rule)
-{
-  u_int32_t hash_value = hash_pkt(rule->rule.vlan_id, rule->rule.proto,
-				  rule->rule.host_peer_a, rule->rule.host_peer_b,
-				  rule->rule.port_peer_a, rule->rule.port_peer_b)
-    % DEFAULT_RING_HASH_SIZE;
-  int rc = -1;
-
-  if(unlikely(enable_debug))
-    printk("[PF_RING] handle_sw_filtering_hash_bucket(vlan=%u, proto=%u, "
-	   "sip=%d.%d.%d.%d, sport=%u, dip=%d.%d.%d.%d, dport=%u, "
-	   "hash_value=%u, add_rule=%d) called\n", rule->rule.vlan_id,
-	   rule->rule.proto, ((rule->rule.host4_peer_a >> 24) & 0xff),
-	   ((rule->rule.host4_peer_a >> 16) & 0xff),
-	   ((rule->rule.host4_peer_a >> 8) & 0xff),
-	   ((rule->rule.host4_peer_a >> 0) & 0xff),
-	   rule->rule.port_peer_a,
-	   ((rule->rule.host4_peer_b >> 24) & 0xff),
-	   ((rule->rule.host4_peer_b >> 16) & 0xff),
-	   ((rule->rule.host4_peer_b >> 8) & 0xff),
-	   ((rule->rule.host4_peer_b >> 0) & 0xff),
-	   rule->rule.port_peer_b, hash_value, add_rule);
-
-  if(add_rule) {
-    if(pfr->sw_filtering_hash == NULL)
-      pfr->sw_filtering_hash = (sw_filtering_hash_bucket **)
-	kcalloc(DEFAULT_RING_HASH_SIZE, sizeof(sw_filtering_hash_bucket *), GFP_ATOMIC);
-    if(pfr->sw_filtering_hash == NULL) {
-      /* kfree(rule); */
-      if(unlikely(enable_debug))
-	printk("[PF_RING] handle_sw_filtering_hash_bucket() returned %d [0]\n", -EFAULT);
-      return(-EFAULT);
-    }
-  }
-
-  if(unlikely(enable_debug))
-    printk("[PF_RING] handle_sw_filtering_hash_bucket() allocated memory\n");
-
-  if(pfr->sw_filtering_hash == NULL) {
-    /* We're trying to delete a hash rule from an empty hash */
-    return(-EFAULT);
-  }
-
-  if(pfr->sw_filtering_hash[hash_value] == NULL) {
-    if(add_rule)
-      pfr->sw_filtering_hash[hash_value] = rule, rule->next = NULL, rc = 0;
-    else {
-      if(unlikely(enable_debug))
-	printk("[PF_RING] handle_sw_filtering_hash_bucket() returned %d [1]\n", -1);
-      return(-1);	/* Unable to find the specified rule */
-    }
-  } else {
-    sw_filtering_hash_bucket *prev = NULL, *bucket = pfr->sw_filtering_hash[hash_value];
-
-    while(bucket != NULL) {
-      if(hash_filtering_rule_match(&bucket->rule, &rule->rule)) {
-	if(add_rule) {
-	  if(unlikely(enable_debug))
-	    printk("[PF_RING] Duplicate found while adding rule: discarded\n");
-	  /* kfree(rule); */
-	  return(-EEXIST);
-	} else {
-	  /* We've found the bucket to delete */
-
-	  if(unlikely(enable_debug))
-	    printk("[PF_RING] handle_sw_filtering_hash_bucket()"
-		   " found a bucket to delete: removing it\n");
-	  if(prev == NULL)
-	    pfr->sw_filtering_hash[hash_value] = bucket->next;
-	  else
-	    prev->next = bucket->next;
-
-	  free_sw_filtering_hash_bucket(bucket);
-	  kfree(bucket);
-	  if(unlikely(enable_debug))
-	    printk("[PF_RING] handle_sw_filtering_hash_bucket() returned %d [2]\n", 0);
-	  return(0);
-	}
-      } else {
-	prev = bucket;
-	bucket = bucket->next;
-      }
-    }
-
-    if(add_rule) {
-      /* If the flow arrived until here, then this rule is unique */
-
-      if(unlikely(enable_debug))
-	printk("[PF_RING] handle_sw_filtering_hash_bucket() "
-	       "no duplicate rule found: adding the rule\n");
-
-      rule->next = pfr->sw_filtering_hash[hash_value];
-      pfr->sw_filtering_hash[hash_value] = rule;
-      rc = 0;
-    } else {
-      /* The rule we searched for has not been found */
-      rc = -1;
-    }
-  }
-
-  if(unlikely(enable_debug))
-    printk("[PF_RING] handle_sw_filtering_hash_bucket() returned %d [3]\n",
-	   rc);
-
-  return(rc);
-}
-
 /* ********************************** */
 
 static int packet_rcv(struct sk_buff *skb, struct net_device *dev,
@@ -3568,7 +3582,6 @@ static int ring_create(
   pfr->channel_id = RING_ANY_CHANNEL;
   pfr->bucket_len = DEFAULT_BUCKET_LEN;
   pfr->poll_num_pkts_watermark = DEFAULT_MIN_PKT_QUEUED;
-  pfr->handle_hash_rule = handle_sw_filtering_hash_bucket;
   pfr->add_packet_to_ring = add_packet_to_ring;
   pfr->add_raw_packet_to_ring = add_raw_packet_to_ring;
   init_waitqueue_head(&pfr->ring_slots_waitqueue);
@@ -3886,33 +3899,18 @@ static int ring_release(struct socket *sock)
   if(pfr->ring_netdev != &none_device_element) {
     list_for_each_safe(ptr, tmp_ptr, &pfr->sw_filtering_rules) {
       sw_filtering_rule_element *rule;
-#ifdef CONFIG_TEXTSEARCH
-      int i;
-#endif
-
       rule = list_entry(ptr, sw_filtering_rule_element, list);
 
       if(plugin_registration[rule->rule.plugin_action.plugin_id]
 	 && plugin_registration[rule->rule.plugin_action.plugin_id]->pfring_plugin_free_ring_mem) {
 	/* Custom free function */
 	plugin_registration[rule->rule.plugin_action.plugin_id]->pfring_plugin_free_ring_mem(rule);
-      } else {
-	if(unlikely(enable_debug))
-	  printk("[PF_RING] --> default_free [rule->rule.plugin_action.plugin_id=%d]\n",
-		 rule->rule.plugin_action.plugin_id);
-	if(rule->plugin_data_ptr != NULL) {
-	  kfree(rule->plugin_data_ptr);
-	  rule->plugin_data_ptr = NULL;
-	}
+       /* Note: pfring_plugin_free_ring_mem() can be used to free global data structures.
+        * If it is used to free rule->plugin_data_ptr, rule->plugin_data_ptr must be set to NULL */
       }
-
-#ifdef CONFIG_TEXTSEARCH
-      for(i = 0; (i < MAX_NUM_PATTERN) && (rule->pattern[i] != NULL); i++)
-	textsearch_destroy(rule->pattern[i]);
-#endif
-
+      
       list_del(ptr);
-      free_filtering_rule(&rule->rule);
+      free_filtering_rule(rule);
       kfree(rule);
     }
 
@@ -4917,8 +4915,7 @@ static void purge_idle_hash_rules(struct pf_ring_socket *pfr,
 		      num_purged_rules,
 		      pfr->num_sw_filtering_rules);
 
-	    free_sw_filtering_hash_bucket
-	      (scan);
+	    free_sw_filtering_hash_bucket(scan);
 	    kfree(scan);
 
 	    if(prev == NULL)
@@ -4926,8 +4923,8 @@ static void purge_idle_hash_rules(struct pf_ring_socket *pfr,
 	    else
 	      prev->next = next;
 
-	    pfr->num_sw_filtering_rules--,
-	      num_purged_rules++;
+	    pfr->num_sw_filtering_rules--;
+	    num_purged_rules++;
 	  } else
 	    prev = scan;
 
@@ -4944,40 +4941,86 @@ static void purge_idle_hash_rules(struct pf_ring_socket *pfr,
 
 /* ************************************* */
 
+static void purge_idle_rules(struct pf_ring_socket *pfr,
+			     uint16_t rule_inactivity)
+{
+  struct list_head *ptr, *tmp_ptr;
+  int num_purged_rules = 0;
+  unsigned long expire_jiffies =
+    jiffies - msecs_to_jiffies(1000 * rule_inactivity);
+
+  if(unlikely(enable_debug))
+    printk("[PF_RING] %s(rule_inactivity=%d) [num_sw_filtering_rules=%d]\n",
+	   __FUNCTION__, rule_inactivity, pfr->num_sw_filtering_rules);
+
+  /* Free filtering rules inactive for more than rule_inactivity seconds */
+  if(pfr->num_sw_filtering_rules > 0) {
+    list_for_each_safe(ptr, tmp_ptr, &pfr->sw_filtering_rules) {
+      sw_filtering_rule_element *entry;
+      entry = list_entry(ptr, sw_filtering_rule_element, list);
+
+      if(!entry->rule.locked 
+         && entry->rule.internals.jiffies_last_match < expire_jiffies) {
+        /* Expired rule: free it */
+
+	if(unlikely(enable_debug))
+	  printk ("[PF_RING] Purging rule "
+		  // "[last_match=%u][expire_jiffies=%u]"
+		  "[%d.%d.%d.%d:%d -> %d.%d.%d.%d:%d][purged=%d][tot_rules=%d]\n",
+		  //(unsigned int) entry->rule.internals.jiffies_last_match,
+		  //(unsigned int) expire_jiffies,
+		  ((entry->rule.core_fields.shost.v4 >> 24) & 0xff),
+		  ((entry->rule.core_fields.shost.v4 >> 16) & 0xff),
+		  ((entry->rule.core_fields.shost.v4 >> 8)  & 0xff),
+		  ((entry->rule.core_fields.shost.v4 >> 0)  & 0xff),
+		    entry->rule.core_fields.sport_low,
+		  ((entry->rule.core_fields.dhost.v4 >> 24) & 0xff),
+		  ((entry->rule.core_fields.dhost.v4 >> 16) & 0xff),
+		  ((entry->rule.core_fields.dhost.v4 >> 8)  & 0xff),
+		  ((entry->rule.core_fields.dhost.v4 >> 0) & 0xff),
+		    entry->rule.core_fields.dport_low,
+		  num_purged_rules,
+		  pfr->num_sw_filtering_rules);
+
+        list_del(ptr);
+        free_filtering_rule(entry);
+        kfree(entry);
+
+        pfr->num_sw_filtering_rules--;
+        num_purged_rules++;
+      }
+    }
+  }
+
+  if(unlikely(enable_debug))
+    printk("[PF_RING] Purged %d rules [tot_rules=%d]\n",
+	   num_purged_rules, pfr->num_sw_filtering_rules);
+}
+
+/* ************************************* */
+
 static int remove_sw_filtering_rule_element(struct pf_ring_socket *pfr, u_int16_t rule_id)
 {
   int rule_found = 0;
   struct list_head *ptr, *tmp_ptr;
 
-  write_lock(&pfr->ring_rules_lock);
-
   list_for_each_safe(ptr, tmp_ptr, &pfr->sw_filtering_rules) {
     sw_filtering_rule_element *entry;
-
     entry = list_entry(ptr, sw_filtering_rule_element, list);
 
     if(entry->rule.rule_id == rule_id) {
-#ifdef CONFIG_TEXTSEARCH
-      int i;
-
-      for(i = 0; (i < MAX_NUM_PATTERN) && (entry->pattern[i] != NULL); i++)
-	textsearch_destroy(entry->pattern[i]);
-#endif
       list_del(ptr);
+      free_filtering_rule(entry);
+      kfree(entry);
+
       pfr->num_sw_filtering_rules--;
 
-      if(entry->plugin_data_ptr)
-	kfree(entry->plugin_data_ptr);
-      free_filtering_rule(&entry->rule);
-      kfree(entry);
       if(unlikely(enable_debug))
 	printk("[PF_RING] SO_REMOVE_FILTERING_RULE: rule %d has been removed\n", rule_id);
       rule_found = 1;
       break;
     }
   }	/* for */
-
-  write_unlock(&pfr->ring_rules_lock);
 
   return(rule_found);
 }
@@ -5089,6 +5132,9 @@ static int add_sw_filtering_rule_element(struct pf_ring_socket *pfr, sw_filterin
     printk("[PF_RING] SO_ADD_FILTERING_RULE: About to add rule %d\n",
 	   rule->rule.rule_id);
 
+  /* Avoid immediate rule purging */
+  rule->rule.internals.jiffies_last_match = jiffies;
+
   /* Implement an ordered add */
   list_for_each_safe(ptr, tmp_ptr, &pfr->sw_filtering_rules) {
     entry = list_entry(ptr, sw_filtering_rule_element, list);
@@ -5188,12 +5234,8 @@ static int add_sw_filtering_hash_bucket(struct pf_ring_socket *pfr, sw_filtering
       }
   }
 
-  if((rc != 0) && (rc != -EEXIST)) {
+  if(rc != 0) /* even if rc == -EEXIST */
     kfree(rule);
-  } else {
-    if(rc != -EEXIST)
-      pfr->num_sw_filtering_rules++;
-  }
 
   write_unlock(&pfr->ring_rules_lock);
   return(rc);
@@ -5427,6 +5469,22 @@ static int ring_setsockopt(struct socket *sock,
     }
     break;
 
+  case SO_PURGE_IDLE_RULES:
+    if(optlen != sizeof(rule_inactivity))
+      return -EINVAL;
+
+    if(copy_from_user(&rule_inactivity, optval, sizeof(rule_inactivity)))
+      return -EFAULT;
+    else {
+      if(rule_inactivity > 0) {
+	write_lock(&pfr->ring_rules_lock);
+	purge_idle_rules(pfr, rule_inactivity);
+	write_unlock(&pfr->ring_rules_lock);
+      }
+      ret = 0;
+    }
+    break;
+
   case SO_TOGGLE_FILTER_POLICY:
     if(optlen != sizeof(u_int8_t))
       return -EINVAL;
@@ -5519,10 +5577,16 @@ static int ring_setsockopt(struct socket *sock,
 
     if(optlen == sizeof(u_int16_t /* rule_id */ )) {
       /* This is a list rule */
+      int rc;
+
       if(copy_from_user(&rule_id, optval, optlen))
 	return -EFAULT;
 
-      if(remove_sw_filtering_rule_element(pfr, rule_id) == 0) {
+      write_lock(&pfr->ring_rules_lock);
+      rc = remove_sw_filtering_rule_element(pfr, rule_id);
+      write_unlock(&pfr->ring_rules_lock);
+      
+      if (rc == 0) {
 	if(unlikely(enable_debug))
 	  printk("[PF_RING] SO_REMOVE_FILTERING_RULE: rule %d does not exist\n", rule_id);
 	return -EFAULT;	/* Rule not found */
@@ -5537,14 +5601,10 @@ static int ring_setsockopt(struct socket *sock,
 
       write_lock(&pfr->ring_rules_lock);
       rc = handle_sw_filtering_hash_bucket(pfr, &rule, 0 /* delete */ );
+      write_unlock(&pfr->ring_rules_lock);
 
-      if(rc != 0) {
-	write_unlock(&pfr->ring_rules_lock);
+      if(rc != 0)
 	return(rc);
-      } else {
-	pfr->num_sw_filtering_rules--;
-	write_unlock(&pfr->ring_rules_lock);
-      }
     } else
       return -EFAULT;
     break;

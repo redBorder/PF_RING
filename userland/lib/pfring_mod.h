@@ -46,7 +46,8 @@ int pfring_mod_get_hash_filtering_rule_stats(pfring *ring,
 int pfring_mod_handle_hash_filtering_rule(pfring *ring,
 					  hash_filtering_rule* rule_to_add,
 					  u_char add_rule);
-int pfring_mod_purge_idle_hash_rules(pfring *ring, u_int16_t inactivity_sec);  
+int pfring_mod_purge_idle_hash_rules(pfring *ring, u_int16_t inactivity_sec); 
+int pfring_mod_purge_idle_rules(pfring *ring, u_int16_t inactivity_sec);
 int pfring_mod_add_filtering_rule(pfring *ring, filtering_rule* rule_to_add);
 int pfring_mod_remove_filtering_rule(pfring *ring, u_int16_t rule_id);
 int pfring_mod_get_filtering_rule_stats(pfring *ring, u_int16_t rule_id,

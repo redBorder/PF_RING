@@ -67,6 +67,7 @@
 #define SO_SET_VPFRING_CLEAN_EVENTFDS    122
 #define SO_ATTACH_USERSPACE_RING         123
 #define SO_SHUTDOWN_RING                 124
+#define SO_PURGE_IDLE_RULES              125 /* inactivity (sec) */
 
 /* Get */
 #define SO_GET_RING_VERSION              170
@@ -287,6 +288,7 @@ typedef struct {
   rule_action_behaviour rule_action; /* What to do in case of match */
   u_int8_t balance_id, balance_pool; /* If balance_pool > 0, then pass the packet above only if the
 					(hash(proto, sip, sport, dip, dport) % balance_pool) = balance_id */
+  u_int8_t locked;		     /* Do not purge with pfring_purge_idle_rules() */
   filtering_rule_core_fields     core_fields;
   filtering_rule_extended_fields extended_fields;
   filtering_rule_plugin_action   plugin_action;
@@ -855,7 +857,6 @@ struct pf_ring_socket {
   u_int insert_page_id, insert_slot_id;
 
   /* Function pointer */
-  do_handle_sw_filtering_hash_bucket handle_hash_rule;
   do_add_packet_to_ring add_packet_to_ring;
   do_add_raw_packet_to_ring add_raw_packet_to_ring;
 

@@ -599,6 +599,15 @@ int pfring_purge_idle_hash_rules(pfring *ring, u_int16_t inactivity_sec) {
 
 /* **************************************************** */
 
+int pfring_purge_idle_rules(pfring *ring, u_int16_t inactivity_sec) {
+  if(ring && ring->purge_idle_rules)
+    return ring->purge_idle_rules(ring, inactivity_sec);
+
+  return -1;
+}
+
+/* **************************************************** */
+
 int pfring_add_filtering_rule(pfring *ring, filtering_rule* rule_to_add) {
   int rc = -1;
 

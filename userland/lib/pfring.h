@@ -177,9 +177,10 @@ extern "C" {
     int       (*set_packet_consumer_mode)     (pfring *, u_int8_t, char *, u_int);
     int       (*get_hash_filtering_rule_stats)(pfring *, hash_filtering_rule *, char *, u_int *);
     int       (*handle_hash_filtering_rule)   (pfring *, hash_filtering_rule *, u_char);
-    int       (*purge_idle_hash_rules)        (pfring *, u_int16_t);  
+    int       (*purge_idle_hash_rules)        (pfring *, u_int16_t);
     int       (*add_filtering_rule)           (pfring *, filtering_rule *);
     int       (*remove_filtering_rule)        (pfring *, u_int16_t);
+    int       (*purge_idle_rules)             (pfring *, u_int16_t);
     int       (*get_filtering_rule_stats)     (pfring *, u_int16_t, char *, u_int *);
     int       (*toggle_filtering_policy)      (pfring *, u_int8_t);
     int       (*enable_rss_rehash)            (pfring *);
@@ -274,15 +275,16 @@ extern "C" {
   u_int8_t pfring_get_packet_consumer_mode(pfring *ring);
   int pfring_set_packet_consumer_mode(pfring *ring, u_int8_t plugin_id,
 				      char *plugin_data, u_int plugin_data_len);
-  int pfring_get_hash_filtering_rule_stats(pfring *ring,
-					   hash_filtering_rule* rule,
-					   char* stats, u_int *stats_len);
   int pfring_handle_hash_filtering_rule(pfring *ring,
 					hash_filtering_rule* rule_to_add,
 					u_char add_rule);
-  int pfring_purge_idle_hash_rules(pfring *ring, u_int16_t inactivity_sec);  
   int pfring_add_filtering_rule(pfring *ring, filtering_rule* rule_to_add);
   int pfring_remove_filtering_rule(pfring *ring, u_int16_t rule_id);
+  int pfring_purge_idle_hash_rules(pfring *ring, u_int16_t inactivity_sec);
+  int pfring_purge_idle_rules(pfring *ring, u_int16_t inactivity_sec);
+  int pfring_get_hash_filtering_rule_stats(pfring *ring,
+					   hash_filtering_rule* rule,
+					   char* stats, u_int *stats_len);
   int pfring_get_filtering_rule_stats(pfring *ring, u_int16_t rule_id,
 				      char* stats, u_int *stats_len);
   int pfring_toggle_filtering_policy(pfring *ring, u_int8_t rules_default_accept_policy);
