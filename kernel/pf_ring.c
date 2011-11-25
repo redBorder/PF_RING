@@ -2640,7 +2640,7 @@ static int add_sw_filtering_rule_element(struct pf_ring_socket *pfr, sw_filterin
 
     if(entry->rule.rule_id > rule->rule.rule_id) {
       if(prev == NULL) {
-	list_add(&rule->list, &pfr->sw_filtering_rules);	/* Add as first entry */
+	list_add(&rule->list, &pfr->sw_filtering_rules); /* Add as first entry */
 	pfr->num_sw_filtering_rules++;
 	if(unlikely(enable_debug))
 	  printk("[PF_RING] SO_ADD_FILTERING_RULE: added rule %d as head rule\n",
@@ -2661,13 +2661,13 @@ static int add_sw_filtering_rule_element(struct pf_ring_socket *pfr, sw_filterin
 
   if(rule != NULL) {
     if(prev == NULL) {
-      list_add(&rule->list, &pfr->sw_filtering_rules);	/* Add as first entry */
+      list_add(&rule->list, &pfr->sw_filtering_rules); /* Add as first entry */
       pfr->num_sw_filtering_rules++;
       if(unlikely(enable_debug))
 	printk("[PF_RING] SO_ADD_FILTERING_RULE: added rule %d as first rule\n",
 	       rule->rule.rule_id);
     } else {
-      list_add_tail(&rule->list, &pfr->sw_filtering_rules);	/* Add as first entry */
+      list_add_tail(&rule->list, &pfr->sw_filtering_rules); /* Add as first entry */
       pfr->num_sw_filtering_rules++;
       if(unlikely(enable_debug))
 	printk("[PF_RING] SO_ADD_FILTERING_RULE: added rule %d as last rule\n",
@@ -5397,9 +5397,9 @@ static int ring_setsockopt(struct socket *sock,
       old_filter = pfr->bpfFilter;
 
       /* get the lock, set the filter, release the lock */
-      write_lock(&pfr->ring_rules_lock);
+      write_lock_bh(&pfr->ring_rules_lock);
       pfr->bpfFilter = filter;
-      write_unlock(&pfr->ring_rules_lock);
+      write_unlock_bh(&pfr->ring_rules_lock);
 
       if(old_filter != NULL)
         kfree(old_filter);
@@ -5413,14 +5413,14 @@ static int ring_setsockopt(struct socket *sock,
     break;
 
   case SO_DETACH_FILTER:
-    write_lock(&pfr->ring_rules_lock);
+    write_lock_bh(&pfr->ring_rules_lock);
     found = 1;
     if(pfr->bpfFilter != NULL) {
       kfree(pfr->bpfFilter);
       pfr->bpfFilter = NULL;
     } else
       ret = -ENONET;
-    write_unlock(&pfr->ring_rules_lock);
+    write_unlock_bh(&pfr->ring_rules_lock);
     break;
 
   case SO_ADD_TO_CLUSTER:
@@ -5430,15 +5430,15 @@ static int ring_setsockopt(struct socket *sock,
     if(copy_from_user(&cluster, optval, sizeof(cluster)))
       return -EFAULT;
 
-    write_lock(&pfr->ring_rules_lock);
+    write_lock_bh(&pfr->ring_rules_lock);
     ret = add_sock_to_cluster(sock->sk, pfr, &cluster);
-    write_unlock(&pfr->ring_rules_lock);
+    write_unlock_bh(&pfr->ring_rules_lock);
     break;
 
   case SO_REMOVE_FROM_CLUSTER:
-    write_lock(&pfr->ring_rules_lock);
+    write_lock_bh(&pfr->ring_rules_lock);
     ret = remove_from_cluster(sock->sk, pfr);
-    write_unlock(&pfr->ring_rules_lock);
+    write_unlock_bh(&pfr->ring_rules_lock);
     break;
 
   case SO_SET_CHANNEL_ID:
@@ -5530,9 +5530,9 @@ static int ring_setsockopt(struct socket *sock,
       return -EFAULT;
     else {
       if(rule_inactivity > 0) {
-	write_lock(&pfr->ring_rules_lock);
+	write_lock_bh(&pfr->ring_rules_lock);
 	purge_idle_hash_rules(pfr, rule_inactivity);
-	write_unlock(&pfr->ring_rules_lock);
+	write_unlock_bh(&pfr->ring_rules_lock);
       }
       ret = 0;
     }
@@ -5546,9 +5546,9 @@ static int ring_setsockopt(struct socket *sock,
       return -EFAULT;
     else {
       if(rule_inactivity > 0) {
-	write_lock(&pfr->ring_rules_lock);
+	write_lock_bh(&pfr->ring_rules_lock);
 	purge_idle_rules(pfr, rule_inactivity);
-	write_unlock(&pfr->ring_rules_lock);
+	write_unlock_bh(&pfr->ring_rules_lock);
       }
       ret = 0;
     }
@@ -5563,9 +5563,9 @@ static int ring_setsockopt(struct socket *sock,
       if(copy_from_user(&new_policy, optval, optlen))
 	return -EFAULT;
 
-      write_lock(&pfr->ring_rules_lock);
+      write_lock_bh(&pfr->ring_rules_lock);
       pfr->sw_filtering_rules_default_accept_policy = new_policy;
-      write_unlock(&pfr->ring_rules_lock);
+      write_unlock_bh(&pfr->ring_rules_lock);
       /*
 	if(unlikely(enable_debug))
 	printk("[PF_RING] SO_TOGGLE_FILTER_POLICY: default policy is %s\n",
@@ -5600,9 +5600,9 @@ static int ring_setsockopt(struct socket *sock,
 
       INIT_LIST_HEAD(&rule->list);
 
-      write_lock(&pfr->ring_rules_lock);
+      write_lock_bh(&pfr->ring_rules_lock);
       ret = add_sw_filtering_rule_element(pfr, rule);
-      write_unlock(&pfr->ring_rules_lock);
+      write_unlock_bh(&pfr->ring_rules_lock);
 
       if(ret != 0) { /* even if rc == -EEXIST */
         kfree(rule);
@@ -5622,9 +5622,9 @@ static int ring_setsockopt(struct socket *sock,
       if(copy_from_user(&rule->rule, optval, optlen))
 	return -EFAULT;
 
-      write_lock(&pfr->ring_rules_lock);
+      write_lock_bh(&pfr->ring_rules_lock);
       ret = handle_sw_filtering_hash_bucket(pfr, rule, 1 /* add */);
-      write_unlock(&pfr->ring_rules_lock);
+      write_unlock_bh(&pfr->ring_rules_lock);
 
       if(ret != 0) { /* even if rc == -EEXIST */
         kfree(rule);
@@ -5646,9 +5646,9 @@ static int ring_setsockopt(struct socket *sock,
       if(copy_from_user(&rule_id, optval, optlen))
 	return -EFAULT;
 
-      write_lock(&pfr->ring_rules_lock);
+      write_lock_bh(&pfr->ring_rules_lock);
       rc = remove_sw_filtering_rule_element(pfr, rule_id);
-      write_unlock(&pfr->ring_rules_lock);
+      write_unlock_bh(&pfr->ring_rules_lock);
       
       if (rc == 0) {
 	if(unlikely(enable_debug))
@@ -5663,9 +5663,9 @@ static int ring_setsockopt(struct socket *sock,
       if(copy_from_user(&rule.rule, optval, optlen))
 	return -EFAULT;
 
-      write_lock(&pfr->ring_rules_lock);
+      write_lock_bh(&pfr->ring_rules_lock);
       rc = handle_sw_filtering_hash_bucket(pfr, &rule, 0 /* delete */ );
-      write_unlock(&pfr->ring_rules_lock);
+      write_unlock_bh(&pfr->ring_rules_lock);
 
       if(rc != 0)
 	return(rc);
@@ -5767,9 +5767,9 @@ static int ring_setsockopt(struct socket *sock,
     if(copy_from_user(&ring_id, optval, sizeof(ring_id)))
       return -EFAULT;
 
-    write_lock(&pfr->ring_rules_lock);
+    write_lock_bh(&pfr->ring_rules_lock);
     ret = set_master_ring(sock->sk, pfr, ring_id);
-    write_unlock(&pfr->ring_rules_lock);
+    write_unlock_bh(&pfr->ring_rules_lock);
     break;
 
   case SO_ADD_HW_FILTERING_RULE:
@@ -6087,7 +6087,7 @@ static int ring_getsockopt(struct socket *sock,
 	if(pfr->sw_filtering_hash[hash_idx] != NULL) {
 	  sw_filtering_hash_bucket *bucket;
 
-	  read_lock(&pfr->ring_rules_lock);
+	  read_lock_bh(&pfr->ring_rules_lock);
 	  bucket = pfr->sw_filtering_hash[hash_idx];
 
 	  if(unlikely(enable_debug))
@@ -6124,7 +6124,7 @@ static int ring_getsockopt(struct socket *sock,
 	      bucket = bucket->next;
 	  }	/* while */
 
-	  read_unlock(&pfr->ring_rules_lock);
+	  read_unlock_bh(&pfr->ring_rules_lock);
 	} else {
 	  if(unlikely(enable_debug))
 	    printk("[PF_RING] so_get_hash_filtering_rule_stats(): entry not found [hash_idx=%d]\n",
@@ -6153,7 +6153,7 @@ static int ring_getsockopt(struct socket *sock,
 	printk("[PF_RING] SO_GET_FILTERING_RULE_STATS: rule_id=%d\n",
 	       rule_id);
 
-      read_lock(&pfr->ring_rules_lock);
+      read_lock_bh(&pfr->ring_rules_lock);
       list_for_each_safe(ptr, tmp_ptr, &pfr->sw_filtering_rules) {
 	sw_filtering_rule_element *rule;
 
@@ -6185,7 +6185,7 @@ static int ring_getsockopt(struct socket *sock,
 	}
       }
 
-      read_unlock(&pfr->ring_rules_lock);
+      read_unlock_bh(&pfr->ring_rules_lock);
       if(buffer != NULL)
 	kfree(buffer);
 
