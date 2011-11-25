@@ -2688,6 +2688,34 @@ static int add_sw_filtering_rule_element(struct pf_ring_socket *pfr, sw_filterin
   return(0);
 }
 
+/* ************************************* */
+
+static int remove_sw_filtering_rule_element(struct pf_ring_socket *pfr, u_int16_t rule_id)
+{
+  int rule_found = 0;
+  struct list_head *ptr, *tmp_ptr;
+
+  list_for_each_safe(ptr, tmp_ptr, &pfr->sw_filtering_rules) {
+    sw_filtering_rule_element *entry;
+    entry = list_entry(ptr, sw_filtering_rule_element, list);
+
+    if(entry->rule.rule_id == rule_id) {
+      list_del(ptr);
+      free_filtering_rule(entry);
+      kfree(entry);
+
+      pfr->num_sw_filtering_rules--;
+
+      if(unlikely(enable_debug))
+	printk("[PF_RING] SO_REMOVE_FILTERING_RULE: rule %d has been removed\n", rule_id);
+      rule_found = 1;
+      break;
+    }
+  }	/* for */
+
+  return(rule_found);
+}
+
 /* ********************************** */
 
 static int reflect_packet(struct sk_buff *skb,
@@ -2812,6 +2840,9 @@ int check_perfect_rules(struct sk_buff *skb,
       hash_found = 0;	/* This way we also evaluate the list of rules */
       break;
     case forward_packet_add_rule_and_stop_rule_evaluation:
+      *fwd_pkt = 1;
+      break;
+    case forward_packet_del_rule_and_stop_rule_evaluation:
       *fwd_pkt = 1;
       break;
     case reflect_packet_and_stop_rule_evaluation:
@@ -2951,6 +2982,46 @@ int check_wildcard_rules(struct sk_buff *skb,
 	  /* Negative return values are not handled by the caller, it is better to return 0.
 	   * Note: be careful with unlock code when moving this */
           return(0); 
+	}
+	break;
+      } else if(behaviour == forward_packet_del_rule_and_stop_rule_evaluation) {
+        u_int16_t rule_element_id;
+	sw_filtering_hash_bucket hash_bucket;
+	int rc = 0;
+	*fwd_pkt = 1;
+
+	if(*last_matched_plugin
+	   && plugin_registration[*last_matched_plugin] != NULL
+	   && plugin_registration[*last_matched_plugin]->pfring_plugin_del_rule != NULL) {
+
+	  rc = plugin_registration[*last_matched_plugin]->pfring_plugin_del_rule(
+	         entry, hdr, &rule_element_id, &hash_bucket,
+	         *last_matched_plugin, &parse_memory_buffer[*last_matched_plugin]);
+	  
+	  if(unlikely(enable_debug))
+	    printk("pfring_plugin_del_rule() returned %d\n", rc);
+
+
+          if(rc > 0) {
+	    /* we have done with rule evaluation, 
+	     * now we need a write_lock to del rules */
+	    read_unlock(&pfr->ring_rules_lock);
+
+	    if(rc | 1) {
+	      write_lock(&pfr->ring_rules_lock);
+	      handle_sw_filtering_hash_bucket(pfr, &hash_bucket, 0 /* del */);
+	      write_unlock(&pfr->ring_rules_lock);
+            }
+
+	    if(rc | 2) { 
+	      write_lock(&pfr->ring_rules_lock);
+	      remove_sw_filtering_rule_element(pfr, rule_element_id);
+	      write_unlock(&pfr->ring_rules_lock);
+	    }
+          
+	    /* Note: be careful with unlock code when moving this */
+            return(0); 
+	  }
 	}
 	break;
       } else if(behaviour == dont_forward_packet_and_stop_rule_evaluation) {
@@ -5280,34 +5351,6 @@ static void purge_idle_rules(struct pf_ring_socket *pfr,
   if(unlikely(enable_debug))
     printk("[PF_RING] Purged %d rules [tot_rules=%d]\n",
 	   num_purged_rules, pfr->num_sw_filtering_rules);
-}
-
-/* ************************************* */
-
-static int remove_sw_filtering_rule_element(struct pf_ring_socket *pfr, u_int16_t rule_id)
-{
-  int rule_found = 0;
-  struct list_head *ptr, *tmp_ptr;
-
-  list_for_each_safe(ptr, tmp_ptr, &pfr->sw_filtering_rules) {
-    sw_filtering_rule_element *entry;
-    entry = list_entry(ptr, sw_filtering_rule_element, list);
-
-    if(entry->rule.rule_id == rule_id) {
-      list_del(ptr);
-      free_filtering_rule(entry);
-      kfree(entry);
-
-      pfr->num_sw_filtering_rules--;
-
-      if(unlikely(enable_debug))
-	printk("[PF_RING] SO_REMOVE_FILTERING_RULE: rule %d has been removed\n", rule_id);
-      rule_found = 1;
-      break;
-    }
-  }	/* for */
-
-  return(rule_found);
 }
 
 /* ************************************* */

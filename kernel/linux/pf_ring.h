@@ -253,7 +253,8 @@ typedef enum {
   dont_forward_packet_and_stop_rule_evaluation,
   execute_action_and_continue_rule_evaluation,
   execute_action_and_stop_rule_evaluation,
-  forward_packet_add_rule_and_stop_rule_evaluation,
+  forward_packet_add_rule_and_stop_rule_evaluation, /* auto-filled hash rule or via plugin_add_rule() */
+  forward_packet_del_rule_and_stop_rule_evaluation, /* via plugin_del_rule() only */
   reflect_packet_and_stop_rule_evaluation,
   reflect_packet_and_continue_rule_evaluation,
   bounce_packet_and_stop_rule_evaluation,
@@ -935,14 +936,25 @@ typedef int (*plugin_get_stats)(struct pf_ring_socket *pfr,
 				u_char* stats_buffer, u_int stats_buffer_len);
 
 /* Build a new rule when forward_packet_add_rule_and_stop_rule_evaluation is specified
-   return 0 in case of success , an error code (< 0) otherwise.
-   sw_filtering_rule_element or sw_filtering_hash_bucket must be allocated by the plugin.*/
+   return 0 in case of success, an error code (< 0) otherwise.
+   Rule memory (sw_filtering_rule_element or sw_filtering_hash_bucket) must be allocated 
+   by the plugin, the non-NULL rule will be added. */
 typedef int (*plugin_add_rule)(sw_filtering_rule_element *rule,
 			       struct pfring_pkthdr *hdr,
 			       sw_filtering_rule_element **new_rule_element,
 			       sw_filtering_hash_bucket **new_hash_bucket,
 			       u_int16_t filter_plugin_id,
 			       struct parse_buffer **filter_rule_memory_storage);
+/* Build an hash rule or return the wildcard rule id when forward_packet_del_rule_and_stop_rule_evaluation 
+   is specified. Return values: 0 - no action, 1 - remove hash rule, 2 - remove wildcard rule, 3 - remove both,
+   an error code (< 0) otherwise. */
+typedef int (*plugin_del_rule)(sw_filtering_rule_element *rule,
+			       struct pfring_pkthdr *hdr,
+			       u_int16_t *zombie_rule_element_id,
+			       sw_filtering_hash_bucket *zombie_hash_bucket,
+			       u_int16_t filter_plugin_id,
+			       struct parse_buffer **filter_rule_memory_storage);
+
 typedef void (*plugin_register)(u_int8_t register_plugin);
 
 /* Called when a ring is disposed */
@@ -968,6 +980,7 @@ struct pfring_plugin_registration {
   plugin_get_stats     pfring_plugin_get_stats;
   plugin_free_ring_mem pfring_plugin_free_ring_mem;
   plugin_add_rule      pfring_plugin_add_rule;
+  plugin_del_rule      pfring_plugin_del_rule;
   plugin_register      pfring_plugin_register;
 
   /* ************** */
