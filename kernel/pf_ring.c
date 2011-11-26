@@ -5262,7 +5262,8 @@ static void purge_idle_hash_rules(struct pf_ring_socket *pfr,
           if(scan->rule.plugin_action.plugin_id > 0
              && plugin_registration[scan->rule.plugin_action.plugin_id]
              && plugin_registration[scan->rule.plugin_action.plugin_id]->pfring_plugin_purge_idle)
-            rc = plugin_registration[scan->rule.plugin_action.plugin_id]->pfring_plugin_purge_idle(pfr, NULL, scan);
+            rc = plugin_registration[scan->rule.plugin_action.plugin_id]->
+	           pfring_plugin_purge_idle(pfr, NULL, scan, rule_inactivity);
 
 	  if(scan->rule.internals.jiffies_last_match < expire_jiffies || rc > 0) {
 	    /* Expired rule: free it */
@@ -5336,7 +5337,8 @@ static void purge_idle_rules(struct pf_ring_socket *pfr,
       if(entry->rule.plugin_action.plugin_id > 0
          && plugin_registration[entry->rule.plugin_action.plugin_id]
          && plugin_registration[entry->rule.plugin_action.plugin_id]->pfring_plugin_get_stats)
-        rc = plugin_registration[entry->rule.plugin_action.plugin_id]->pfring_plugin_purge_idle(pfr, entry, NULL);
+        rc = plugin_registration[entry->rule.plugin_action.plugin_id]->
+               pfring_plugin_purge_idle(pfr, entry, NULL, rule_inactivity);
 
       if((!entry->rule.locked && entry->rule.internals.jiffies_last_match < expire_jiffies) || rc > 0) {
         /* Expired rule: free it */

@@ -938,7 +938,8 @@ typedef int (*plugin_get_stats)(struct pf_ring_socket *pfr,
 /* Check the expiration status. Return 1 if the rule must be removed, 0 otherwise. */
 typedef int (*plugin_purge_idle)(struct pf_ring_socket *pfr,
 				 sw_filtering_rule_element *rule,
-				 sw_filtering_hash_bucket  *hash_bucket);
+				 sw_filtering_hash_bucket  *hash_bucket,
+				 u_int16_t rule_inactivity);
 
 /* Build a new rule when forward_packet_add_rule_and_stop_rule_evaluation is specified
    return 0 in case of success, an error code (< 0) otherwise.
