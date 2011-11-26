@@ -2294,11 +2294,31 @@ static void free_parse_memory(struct parse_buffer *parse_memory_buffer[])
 
 /* ************************************* */
 
-static void free_filtering_rule(sw_filtering_rule_element * entry)
+static void free_filtering_rule(sw_filtering_rule_element * entry, u_int8_t freeing_ring)
 {
 #ifdef CONFIG_TEXTSEARCH
   int i;
+#endif
 
+  if(entry->rule.plugin_action.plugin_id > 0
+     && plugin_registration[entry->rule.plugin_action.plugin_id]
+     && plugin_registration[entry->rule.plugin_action.plugin_id]->pfring_plugin_free_rule_mem) {
+    /* "Freeing rule" callback. 
+     * Note: if you are freeing rule->plugin_data_ptr within this callback, please set it to NULL. */
+    plugin_registration[entry->rule.plugin_action.plugin_id]->pfring_plugin_free_rule_mem(entry);
+  }
+
+  if(freeing_ring){ /* tell the plugin to free global data structures */
+    if(entry->rule.plugin_action.plugin_id > 0
+       && plugin_registration[entry->rule.plugin_action.plugin_id]
+       && plugin_registration[entry->rule.plugin_action.plugin_id]->pfring_plugin_free_ring_mem) {
+      /* "Freeing ring" callback. 
+       * Note: if you are freeing rule->plugin_data_ptr within this callback, please set it to NULL. */
+      plugin_registration[entry->rule.plugin_action.plugin_id]->pfring_plugin_free_ring_mem(entry);
+    }
+  }
+
+#ifdef CONFIG_TEXTSEARCH
   for(i = 0; (i < MAX_NUM_PATTERN) && (entry->pattern[i] != NULL); i++)
     textsearch_destroy(entry->pattern[i]);
 #endif
@@ -2701,7 +2721,7 @@ static int remove_sw_filtering_rule_element(struct pf_ring_socket *pfr, u_int16_
 
     if(entry->rule.rule_id == rule_id) {
       list_del(ptr);
-      free_filtering_rule(entry);
+      free_filtering_rule(entry, 0);
       kfree(entry);
 
       pfr->num_sw_filtering_rules--;
@@ -2939,7 +2959,6 @@ int check_wildcard_rules(struct sk_buff *skb,
 	  hash_bucket->rule.internals.reflector_dev = NULL;
 	  hash_bucket->rule.plugin_action.plugin_id = NO_PLUGIN_ID;
 	}
-
 
         if(rc == 0) {
 	  /* we have done with rule evaluation, 
@@ -4256,17 +4275,9 @@ static int ring_release(struct socket *sock)
     list_for_each_safe(ptr, tmp_ptr, &pfr->sw_filtering_rules) {
       sw_filtering_rule_element *rule;
       rule = list_entry(ptr, sw_filtering_rule_element, list);
-
-      if(plugin_registration[rule->rule.plugin_action.plugin_id]
-	 && plugin_registration[rule->rule.plugin_action.plugin_id]->pfring_plugin_free_ring_mem) {
-	/* Custom free function */
-	plugin_registration[rule->rule.plugin_action.plugin_id]->pfring_plugin_free_ring_mem(rule);
-       /* Note: pfring_plugin_free_ring_mem() can be used to free global data structures.
-        * If it is used to free rule->plugin_data_ptr, rule->plugin_data_ptr must be set to NULL */
-      }
       
       list_del(ptr);
-      free_filtering_rule(rule);
+      free_filtering_rule(rule, 1);
       kfree(rule);
     }
 
@@ -5245,9 +5256,15 @@ static void purge_idle_hash_rules(struct pf_ring_socket *pfr,
 	sw_filtering_hash_bucket *scan = pfr->sw_filtering_hash[i], *next, *prev = NULL;
 
 	while(scan != NULL) {
+	  int rc = 0;
 	  next = scan->next;
 
-	  if(scan->rule.internals.jiffies_last_match < expire_jiffies) {
+          if(scan->rule.plugin_action.plugin_id > 0
+             && plugin_registration[scan->rule.plugin_action.plugin_id]
+             && plugin_registration[scan->rule.plugin_action.plugin_id]->pfring_plugin_purge_idle)
+            rc = plugin_registration[scan->rule.plugin_action.plugin_id]->pfring_plugin_purge_idle(pfr, NULL, scan);
+
+	  if(scan->rule.internals.jiffies_last_match < expire_jiffies || rc > 0) {
 	    /* Expired rule: free it */
 
 	    if(unlikely(enable_debug))
@@ -5312,11 +5329,16 @@ static void purge_idle_rules(struct pf_ring_socket *pfr,
   /* Free filtering rules inactive for more than rule_inactivity seconds */
   if(pfr->num_sw_filtering_rules > 0) {
     list_for_each_safe(ptr, tmp_ptr, &pfr->sw_filtering_rules) {
+      int rc = 0;
       sw_filtering_rule_element *entry;
       entry = list_entry(ptr, sw_filtering_rule_element, list);
 
-      if(!entry->rule.locked 
-         && entry->rule.internals.jiffies_last_match < expire_jiffies) {
+      if(entry->rule.plugin_action.plugin_id > 0
+         && plugin_registration[entry->rule.plugin_action.plugin_id]
+         && plugin_registration[entry->rule.plugin_action.plugin_id]->pfring_plugin_get_stats)
+        rc = plugin_registration[entry->rule.plugin_action.plugin_id]->pfring_plugin_purge_idle(pfr, entry, NULL);
+
+      if((!entry->rule.locked && entry->rule.internals.jiffies_last_match < expire_jiffies) || rc > 0) {
         /* Expired rule: free it */
 
 	if(unlikely(enable_debug))
@@ -5339,7 +5361,7 @@ static void purge_idle_rules(struct pf_ring_socket *pfr,
 		  pfr->num_sw_filtering_rules);
 
         list_del(ptr);
-        free_filtering_rule(entry);
+        free_filtering_rule(entry, 0);
         kfree(entry);
 
         pfr->num_sw_filtering_rules--;

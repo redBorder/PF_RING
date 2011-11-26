@@ -935,6 +935,11 @@ typedef int (*plugin_get_stats)(struct pf_ring_socket *pfr,
 				sw_filtering_hash_bucket  *hash_bucket,
 				u_char* stats_buffer, u_int stats_buffer_len);
 
+/* Check the expiration status. Return 1 if the rule must be removed, 0 otherwise. */
+typedef int (*plugin_purge_idle)(struct pf_ring_socket *pfr,
+				 sw_filtering_rule_element *rule,
+				 sw_filtering_hash_bucket  *hash_bucket);
+
 /* Build a new rule when forward_packet_add_rule_and_stop_rule_evaluation is specified
    return 0 in case of success, an error code (< 0) otherwise.
    Rule memory (sw_filtering_rule_element or sw_filtering_hash_bucket) must be allocated 
@@ -957,6 +962,9 @@ typedef int (*plugin_del_rule)(sw_filtering_rule_element *rule,
 
 typedef void (*plugin_register)(u_int8_t register_plugin);
 
+/* Called when a rule is removed */
+typedef void (*plugin_free_rule_mem)(sw_filtering_rule_element *rule);
+
 /* Called when a ring is disposed */
 typedef void (*plugin_free_ring_mem)(sw_filtering_rule_element *rule);
 
@@ -978,6 +986,8 @@ struct pfring_plugin_registration {
   plugin_filter_skb    pfring_plugin_filter_skb; /* Filter skb: 1=match, 0=no match */
   plugin_handle_skb    pfring_plugin_handle_skb;
   plugin_get_stats     pfring_plugin_get_stats;
+  plugin_purge_idle    pfring_plugin_purge_idle;
+  plugin_free_rule_mem pfring_plugin_free_rule_mem;
   plugin_free_ring_mem pfring_plugin_free_ring_mem;
   plugin_add_rule      pfring_plugin_add_rule;
   plugin_del_rule      pfring_plugin_del_rule;
