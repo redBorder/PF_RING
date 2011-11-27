@@ -5353,9 +5353,10 @@ static void purge_idle_rules(struct pf_ring_socket *pfr,
       sw_filtering_rule_element *entry;
       entry = list_entry(ptr, sw_filtering_rule_element, list);
 
+      /* Plugin callback is evaluated even if the rule has the "locked" field set. */
       if(entry->rule.plugin_action.plugin_id > 0
          && plugin_registration[entry->rule.plugin_action.plugin_id]
-         && plugin_registration[entry->rule.plugin_action.plugin_id]->pfring_plugin_get_stats)
+         && plugin_registration[entry->rule.plugin_action.plugin_id]->pfring_plugin_purge_idle)
         rc = plugin_registration[entry->rule.plugin_action.plugin_id]->
                pfring_plugin_purge_idle(pfr, entry, NULL, rule_inactivity);
 
