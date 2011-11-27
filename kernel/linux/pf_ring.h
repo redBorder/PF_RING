@@ -947,6 +947,7 @@ typedef int (*plugin_purge_idle)(struct pf_ring_socket *pfr,
    by the plugin, the non-NULL rule will be added. */
 typedef int (*plugin_add_rule)(sw_filtering_rule_element *rule,
 			       struct pfring_pkthdr *hdr,
+			       u_int16_t new_rule_element_id, /* next free rule id */
 			       sw_filtering_rule_element **new_rule_element,
 			       sw_filtering_hash_bucket **new_hash_bucket,
 			       u_int16_t filter_plugin_id,

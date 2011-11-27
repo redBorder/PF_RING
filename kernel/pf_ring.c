@@ -2924,84 +2924,103 @@ int check_wildcard_rules(struct sk_buff *skb,
       } else if(behaviour == forward_packet_add_rule_and_stop_rule_evaluation) {
         sw_filtering_rule_element *rule_element = NULL;
 	sw_filtering_hash_bucket  *hash_bucket  = NULL;
+	u_int16_t free_rule_element_id;
 	int rc = 0;
 	*fwd_pkt = 1;
+
+	/* we have done with rule evaluation, 
+	 * now we need a write_lock to add rules */
+	read_unlock(&pfr->ring_rules_lock);
 
 	if(*last_matched_plugin
 	   && plugin_registration[*last_matched_plugin] != NULL
 	   && plugin_registration[*last_matched_plugin]->pfring_plugin_add_rule != NULL) {
 
-	  rc = plugin_registration[*last_matched_plugin]->pfring_plugin_add_rule(
-	         entry, hdr, &rule_element, &hash_bucket,
-	         *last_matched_plugin, &parse_memory_buffer[*last_matched_plugin]);
-	  
-	  if(unlikely(enable_debug))
-	    printk("pfring_plugin_add_rule() returned %d\n", rc);
+          write_lock(&pfr->ring_rules_lock);
 
-	  if(rule_element == NULL && hash_bucket == NULL)
-	    break;
+	  /* retrieving the first free rule id (rules are ordered). 
+	   * (we can reuse entry, ptr, tmp_ptr because we will stop rule evaluation) */
+	  free_rule_element_id = 0;
+          list_for_each_safe(ptr, tmp_ptr, &pfr->sw_filtering_rules) {
+            entry = list_entry(ptr, sw_filtering_rule_element, list);
+            if(entry->rule.rule_id == free_rule_element_id)
+	      free_rule_element_id = entry->rule.rule_id + 1;
+	    else break; /* we found an hole */
+	  }
 
-	} else {
+	  /* safety check to make sure nothing is changed since the read_unlock() */
+          if(plugin_registration[*last_matched_plugin] != NULL
+	     && plugin_registration[*last_matched_plugin]->pfring_plugin_add_rule != NULL) {
 
+	    rc = plugin_registration[*last_matched_plugin]->pfring_plugin_add_rule(
+	           entry, hdr, free_rule_element_id, &rule_element, &hash_bucket,
+	           *last_matched_plugin, &parse_memory_buffer[*last_matched_plugin]);
+
+	    if(unlikely(enable_debug))
+	      printk("pfring_plugin_add_rule() returned %d\n", rc);
+
+	    if(rc == 0) {
+
+	      if(hash_bucket != NULL) {
+	        rc = handle_sw_filtering_hash_bucket(pfr, hash_bucket, 1 /* add_rule_from_plugin */);
+
+	        if(rc != 0){
+	          kfree(hash_bucket);
+	          hash_bucket = NULL;
+	        }
+              }
+
+	      if(rule_element != NULL) { 
+	        rc = add_sw_filtering_rule_element(pfr, rule_element);
+
+	        if(rc != 0){
+	          kfree(rule_element);
+	          rule_element = NULL;
+	        }
+	      }
+            }
+          }
+
+	  write_unlock(&pfr->ring_rules_lock);
+
+	} else { /* No plugin defined, creating an hash rule from packet headers */
 	  hash_bucket = (sw_filtering_hash_bucket *)kcalloc(1, sizeof(sw_filtering_hash_bucket), GFP_ATOMIC);
 	    
-	  if(hash_bucket == NULL)
-	    break;
-
-	  hash_bucket->rule.vlan_id = hdr->extended_hdr.parsed_pkt.vlan_id;
-	  hash_bucket->rule.proto = hdr->extended_hdr.parsed_pkt.l3_proto;
-	  hash_bucket->rule.host4_peer_a = hdr->extended_hdr.parsed_pkt.ipv4_src;
-	  hash_bucket->rule.host4_peer_b = hdr->extended_hdr.parsed_pkt.ipv4_dst;
-	  hash_bucket->rule.port_peer_a = hdr->extended_hdr.parsed_pkt.l4_src_port;
-	  hash_bucket->rule.port_peer_b = hdr->extended_hdr.parsed_pkt.l4_dst_port;
-	  hash_bucket->rule.rule_action = forward_packet_and_stop_rule_evaluation;
-	  hash_bucket->rule.reflector_device_name[0] = '\0';
-	  hash_bucket->rule.internals.reflector_dev = NULL;
-	  hash_bucket->rule.plugin_action.plugin_id = NO_PLUGIN_ID;
-	}
-
-        if(rc == 0) {
-	  /* we have done with rule evaluation, 
-	   * now we need a write_lock to add rules */
-	  read_unlock(&pfr->ring_rules_lock);
-
 	  if(hash_bucket != NULL) {
+	    hash_bucket->rule.vlan_id = hdr->extended_hdr.parsed_pkt.vlan_id;
+	    hash_bucket->rule.proto = hdr->extended_hdr.parsed_pkt.l3_proto;
+	    hash_bucket->rule.host4_peer_a = hdr->extended_hdr.parsed_pkt.ipv4_src;
+	    hash_bucket->rule.host4_peer_b = hdr->extended_hdr.parsed_pkt.ipv4_dst;
+	    hash_bucket->rule.port_peer_a = hdr->extended_hdr.parsed_pkt.l4_src_port;
+	    hash_bucket->rule.port_peer_b = hdr->extended_hdr.parsed_pkt.l4_dst_port;
+	    hash_bucket->rule.rule_action = forward_packet_and_stop_rule_evaluation;
+	    hash_bucket->rule.reflector_device_name[0] = '\0';
+	    hash_bucket->rule.internals.reflector_dev = NULL;
+	    hash_bucket->rule.plugin_action.plugin_id = NO_PLUGIN_ID;
 
-	    write_lock(&pfr->ring_rules_lock);
+            write_lock(&pfr->ring_rules_lock);
 	    rc = handle_sw_filtering_hash_bucket(pfr, hash_bucket, 1 /* add_rule_from_plugin */);
 	    write_unlock(&pfr->ring_rules_lock);
 
 	    if(rc != 0){
 	      kfree(hash_bucket);
 	      hash_bucket = NULL;
-	    }
-          }
-
-	  if(rule_element != NULL) { 
-
-	    write_lock(&pfr->ring_rules_lock);
-	    rc = add_sw_filtering_rule_element(pfr, rule_element);
-	    write_unlock(&pfr->ring_rules_lock);
-
-	    if(rc != 0){
-	      kfree(rule_element);
-	      rule_element = NULL;
+	    } else {
+	      if(unlikely(enable_debug))
+	        printk("[PF_RING] Added rule: [%d.%d.%d.%d:%d <-> %d.%d.%d.%d:%d][tot_rules=%d]\n",
+		       ((hash_bucket->rule.host4_peer_a >> 24) & 0xff), ((hash_bucket->rule.host4_peer_a >> 16) & 0xff),
+		       ((hash_bucket->rule.host4_peer_a >> 8) & 0xff), ((hash_bucket->rule.host4_peer_a >> 0) & 0xff),
+		       hash_bucket->rule.port_peer_a, ((hash_bucket->rule.host4_peer_b >> 24) & 0xff),
+		       ((hash_bucket->rule.host4_peer_b >> 16) & 0xff), ((hash_bucket->rule.host4_peer_b >> 8) & 0xff),
+		       ((hash_bucket->rule.host4_peer_b >> 0) & 0xff), hash_bucket->rule.port_peer_b, pfr->num_sw_filtering_rules);
 	    }
 	  }
- 
-	  if(unlikely(enable_debug) && rc == 0)
-	    if(hash_bucket != NULL)
-	      printk("[PF_RING] Added rule: [%d.%d.%d.%d:%d <-> %d.%d.%d.%d:%d][tot_rules=%d]\n",
-		     ((hash_bucket->rule.host4_peer_a >> 24) & 0xff), ((hash_bucket->rule.host4_peer_a >> 16) & 0xff),
-		     ((hash_bucket->rule.host4_peer_a >> 8) & 0xff), ((hash_bucket->rule.host4_peer_a >> 0) & 0xff),
-		     hash_bucket->rule.port_peer_a, ((hash_bucket->rule.host4_peer_b >> 24) & 0xff),
-		     ((hash_bucket->rule.host4_peer_b >> 16) & 0xff), ((hash_bucket->rule.host4_peer_b >> 8) & 0xff),
-		     ((hash_bucket->rule.host4_peer_b >> 0) & 0xff), hash_bucket->rule.port_peer_b, pfr->num_sw_filtering_rules);
-	    
-	  /* Negative return values are not handled by the caller, it is better to return 0.
-	   * Note: be careful with unlock code when moving this */
-          return(0); 
 	}
+
+        /* Negative return values are not handled by the caller, it is better to return always 0.
+	 * Note: be careful with unlock code when moving this */
+        return(0); 
+
 	break;
       } else if(behaviour == forward_packet_del_rule_and_stop_rule_evaluation) {
         u_int16_t rule_element_id;
