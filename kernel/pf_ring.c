@@ -2543,45 +2543,38 @@ static int add_sw_filtering_rule_element(struct pf_ring_socket *pfr, sw_filterin
   sw_filtering_rule_element *entry;
   struct list_head *prev = NULL;
 
-  /* Checking if a rule with the same id already exists */
-  list_for_each_safe(ptr, tmp_ptr, &pfr->sw_filtering_rules) {
-    sw_filtering_rule_element *entry;
+  /* Implement an ordered add looking backwards (probably we have incremental ids) */
+  prev = &pfr->sw_filtering_rules;
+  list_for_each_prev_safe(ptr, tmp_ptr, &pfr->sw_filtering_rules) {
     entry = list_entry(ptr, sw_filtering_rule_element, list);
 
     if(entry->rule.rule_id == rule->rule.rule_id)
       return(-EEXIST);
+
+    if(entry->rule.rule_id < rule->rule.rule_id)
+      break;
+
+    prev = ptr; /* position where to insert the new entry after checks */
   }
 
   /* Rule checks */
   if(rule->rule.extended_fields.filter_plugin_id != NO_PLUGIN_ID) {
-    int ret = 0;
-
-    if(rule->rule.extended_fields.filter_plugin_id >= MAX_PLUGIN_ID)
-      ret = -EFAULT;
-    else if(plugin_registration[rule->rule.extended_fields.filter_plugin_id] == NULL)
-      ret = -EFAULT;
-
-    if(ret != 0) {
+    if(rule->rule.extended_fields.filter_plugin_id >= MAX_PLUGIN_ID
+       || plugin_registration[rule->rule.extended_fields.filter_plugin_id] == NULL) {
       if(unlikely(enable_debug))
 	printk("[PF_RING] Invalid filtering plugin [id=%d]\n",
 	       rule->rule.extended_fields.filter_plugin_id);
-      return(ret);
+      return(-EFAULT);
     }
   }
 
   if(rule->rule.plugin_action.plugin_id != NO_PLUGIN_ID) {
-    int ret = 0;
-
-    if(rule->rule.plugin_action.plugin_id >= MAX_PLUGIN_ID)
-      ret = -EFAULT;
-    else if(plugin_registration[rule->rule.plugin_action.plugin_id] == NULL)
-      ret = -EFAULT;
-
-    if(ret != 0) {
+    if(rule->rule.plugin_action.plugin_id >= MAX_PLUGIN_ID
+       || plugin_registration[rule->rule.plugin_action.plugin_id] == NULL) {
       if(unlikely(enable_debug))
 	printk("[PF_RING] Invalid action plugin [id=%d]\n",
 	       rule->rule.plugin_action.plugin_id);
-      return(ret);
+      return(-EFAULT);
     }
   }
 
@@ -2605,6 +2598,10 @@ static int add_sw_filtering_rule_element(struct pf_ring_socket *pfr, sw_filterin
     }
   } else
     rule->rule.internals.reflector_dev = NULL;
+
+  if(unlikely(enable_debug))
+    printk("[PF_RING] SO_ADD_FILTERING_RULE: About to add rule %d\n",
+	   rule->rule.rule_id);
 
   /* Compile pattern if present */
   if(strlen(rule->rule.extended_fields.payload_pattern) > 0) {
@@ -2642,58 +2639,9 @@ static int add_sw_filtering_rule_element(struct pf_ring_socket *pfr, sw_filterin
 #endif
   }
 
-  if(unlikely(enable_debug))
-    printk("[PF_RING] SO_ADD_FILTERING_RULE: About to add rule %d\n",
-	   rule->rule.rule_id);
-
-  /* Avoid immediate rule purging */
-  rule->rule.internals.jiffies_last_match = jiffies;
-
-  /* Implement an ordered add */
-  list_for_each_safe(ptr, tmp_ptr, &pfr->sw_filtering_rules) {
-    entry = list_entry(ptr, sw_filtering_rule_element, list);
-
-    if(unlikely(enable_debug))
-      printk("[PF_RING] SO_ADD_FILTERING_RULE: [current rule %d][rule to add %d]\n",
-	     entry->rule.rule_id,
-	     rule->rule.rule_id);
-
-    if(entry->rule.rule_id > rule->rule.rule_id) {
-      if(prev == NULL) {
-	list_add(&rule->list, &pfr->sw_filtering_rules); /* Add as first entry */
-	pfr->num_sw_filtering_rules++;
-	if(unlikely(enable_debug))
-	  printk("[PF_RING] SO_ADD_FILTERING_RULE: added rule %d as head rule\n",
-		 rule->rule.rule_id);
-      } else {
-	list_add(&rule->list, prev);
-	pfr->num_sw_filtering_rules++;
-	if(unlikely(enable_debug))
-	  printk("[PF_RING] SO_ADD_FILTERING_RULE: added rule %d\n",
-		 rule->rule.rule_id);
-      }
-
-      rule = NULL;
-      break;
-    } else
-      prev = ptr;
-  } /* for */
-
-  if(rule != NULL) {
-    if(prev == NULL) {
-      list_add(&rule->list, &pfr->sw_filtering_rules); /* Add as first entry */
-      pfr->num_sw_filtering_rules++;
-      if(unlikely(enable_debug))
-	printk("[PF_RING] SO_ADD_FILTERING_RULE: added rule %d as first rule\n",
-	       rule->rule.rule_id);
-    } else {
-      list_add_tail(&rule->list, &pfr->sw_filtering_rules); /* Add as first entry */
-      pfr->num_sw_filtering_rules++;
-      if(unlikely(enable_debug))
-	printk("[PF_RING] SO_ADD_FILTERING_RULE: added rule %d as last rule\n",
-	       rule->rule.rule_id);
-    }
-  }
+  list_add_tail(&rule->list, prev);
+  pfr->num_sw_filtering_rules++;
+  rule->rule.internals.jiffies_last_match = jiffies; /* Avoid immediate rule purging */
 
   if(rule->rule.extended_fields.filter_plugin_id > 0) {
     if(plugin_registration[rule->rule.extended_fields.filter_plugin_id]->pfring_plugin_register)
