@@ -189,6 +189,7 @@ int redirector_add_filtering_rule(pfring *ring, filtering_rule* rule_to_add) {
   switch(rule_to_add->rule_action) {
   case forward_packet_and_stop_rule_evaluation:
   case forward_packet_add_rule_and_stop_rule_evaluation:
+  case forward_packet_del_rule_and_stop_rule_evaluation:
     if(ring->socket_default_accept_policy) return(0); /* Nothing to do */
     /*
       2 is the constant to add for connecting source with destination port
@@ -244,6 +245,7 @@ int redirector_add_hash_filtering_rule(pfring *ring, hash_filtering_rule* rule_t
   switch(rule_to_add->rule_action) {
   case forward_packet_and_stop_rule_evaluation:
   case forward_packet_add_rule_and_stop_rule_evaluation:
+  case forward_packet_del_rule_and_stop_rule_evaluation:
     if(ring->socket_default_accept_policy) return(0); /* Nothing to do */
     /*
       2 is the constant to add for connecting source with destination port
