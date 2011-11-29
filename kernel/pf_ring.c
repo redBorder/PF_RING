@@ -2538,14 +2538,14 @@ static int handle_sw_filtering_hash_bucket(struct pf_ring_socket *pfr,
 
 static int add_sw_filtering_rule_element(struct pf_ring_socket *pfr, sw_filtering_rule_element *rule)
 {
-  struct list_head *ptr, *tmp_ptr;
+  struct list_head *ptr;
   int idx = 0;
   sw_filtering_rule_element *entry;
   struct list_head *prev = NULL;
 
   /* Implement an ordered add looking backwards (probably we have incremental ids) */
   prev = &pfr->sw_filtering_rules;
-  list_for_each_prev_safe(ptr, tmp_ptr, &pfr->sw_filtering_rules) {
+  list_for_each_prev(ptr, &pfr->sw_filtering_rules) {
     entry = list_entry(ptr, sw_filtering_rule_element, list);
 
     if(entry->rule.rule_id == rule->rule.rule_id)
