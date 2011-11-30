@@ -4811,15 +4811,15 @@ static int ring_sendmsg(struct kiocb *iocb, struct socket *sock,
    */
 
   dev_queue_xmit(skb);
-  dev_put(pfr->ring_netdev->dev);
+  //dev_put(pfr->ring_netdev->dev);
   return(len);
 
  out_free:
   kfree_skb(skb);
 
  out_unlock:
-  if(pfr->ring_netdev)
-    dev_put(pfr->ring_netdev->dev);
+  //if(pfr->ring_netdev)
+  //  dev_put(pfr->ring_netdev->dev);
 
   return err;
 }
