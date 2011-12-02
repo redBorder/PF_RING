@@ -108,7 +108,7 @@ struct igb_adapter;
 #ifdef ENABLE_DNA
 #undef IGB_DEFAULT_TXD		  
 #undef IGB_DEFAULT_RXD
-#define DNA_DEFAULT                       256
+#define DNA_DEFAULT                      2048
 #define IGB_DEFAULT_RXD           DNA_DEFAULT
 #define IGB_DEFAULT_TXD           DNA_DEFAULT
 #endif

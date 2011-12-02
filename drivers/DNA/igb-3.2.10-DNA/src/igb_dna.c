@@ -36,11 +36,11 @@ MODULE_PARM_DESC(mtu, "Change the default Maximum Transmission Unit");
 
 static unsigned int num_rx_slots = IGB_DEFAULT_RXD;
 module_param(num_rx_slots, uint, 0644);
-MODULE_PARM_DESC(num_rx_slots, "Specify the number of RX slots. Default: 256");
+MODULE_PARM_DESC(num_rx_slots, "Specify the number of RX slots. Default: 2048");
 
 static unsigned int num_tx_slots = IGB_DEFAULT_TXD;
 module_param(num_tx_slots, uint, 0644);
-MODULE_PARM_DESC(num_tx_slots, "Specify the number of TX slots. Default: 256");
+MODULE_PARM_DESC(num_tx_slots, "Specify the number of TX slots. Default: 2048");
 
 /* Forward */
 static void igb_irq_enable(struct igb_adapter *adapter);
