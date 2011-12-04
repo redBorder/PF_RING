@@ -751,6 +751,13 @@ static int igb_set_ringparam(struct net_device *netdev,
 	int i, err = 0;
 	u16 new_rx_count, new_tx_count;
 
+#ifdef ENABLE_DNA
+        if(adapter->dna.dna_enabled) {
+		printk("[DNA] RX/TX slots are fixed, please use the num_rx_slots/num_tx_slots parameters.\n");
+		return -EINVAL;
+	}
+#endif
+
 	if ((ring->rx_mini_pending) || (ring->rx_jumbo_pending))
 		return -EINVAL;
 

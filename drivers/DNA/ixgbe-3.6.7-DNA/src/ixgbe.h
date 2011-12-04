@@ -87,16 +87,12 @@
 #define IXGBE_MIN_RXD			     64
 
 #ifdef ENABLE_DNA
-#undef IXGBE_DEFAULT_TXD		  
-#undef IXGBE_DEFAULT_RXD
 #undef IXGBE_MAX_RXD
 #undef IXGBE_MAX_TXD
-#define DNA_DEFAULT                        8192
-#define DNA_MAX                           32768
-#define IXGBE_DEFAULT_RXD           DNA_DEFAULT
-#define IXGBE_DEFAULT_TXD           DNA_DEFAULT
-#define IXGBE_MAX_RXD                   DNA_MAX
-#define IXGBE_MAX_TXD                   DNA_MAX
+#define IXGBE_MAX_RXD                     32768
+#define IXGBE_MAX_TXD                     32768
+#define DNA_IXGBE_DEFAULT_RXD              8192
+#define DNA_IXGBE_DEFAULT_TXD              8192
 #endif
 
 /* flow control */
@@ -749,6 +745,12 @@ struct ixgbe_adapter {
 	u32 vferr_refcount;
 #endif
 	struct ixgbe_mac_addr *mac_table;
+
+#ifdef ENABLE_DNA
+	struct {
+		u_int8_t dna_enabled;
+	} dna;
+#endif
 };
 
 struct ixgbe_fdir_filter {

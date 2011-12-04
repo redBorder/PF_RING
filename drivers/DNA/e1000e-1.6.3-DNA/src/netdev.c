@@ -948,8 +948,6 @@ static void e1000_alloc_rx_buffers(struct e1000_adapter *adapter,
 	struct pfring_hooks *hook = (struct pfring_hooks*)netdev->pfring_ptr;
 
 	if(hook && (hook->magic == PF_RING)) {
-	  dna_check_enable_adapter(adapter);
-
 	  if(adapter->dna.dna_enabled) {
 	    alloc_dna_memory(adapter);
 	    return;
@@ -7542,10 +7540,12 @@ static int __devinit e1000_probe(struct pci_dev *pdev,
 		e1000e_get_hw_control(adapter);
 
 #ifdef ENABLE_DNA
-	strncpy(netdev->name, "dna%d", sizeof(netdev->name) - 1);
-#else
-	strncpy(netdev->name, "eth%d", sizeof(netdev->name) - 1);
+	dna_check_enable_adapter(adapter);
+	if(adapter->dna.dna_enabled)
+	  strncpy(netdev->name, "dna%d", sizeof(netdev->name) - 1);
+	else
 #endif
+	strncpy(netdev->name, "eth%d", sizeof(netdev->name) - 1);
 
 	err = register_netdev(netdev);
 	if (err)

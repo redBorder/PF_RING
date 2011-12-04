@@ -106,11 +106,8 @@ struct igb_adapter;
 #define IGB_MAX_RXD                     4096
 
 #ifdef ENABLE_DNA
-#undef IGB_DEFAULT_TXD		  
-#undef IGB_DEFAULT_RXD
-#define DNA_DEFAULT                      2048
-#define IGB_DEFAULT_RXD           DNA_DEFAULT
-#define IGB_DEFAULT_TXD           DNA_DEFAULT
+#define DNA_IGB_DEFAULT_RXD             2048
+#define DNA_IGB_DEFAULT_TXD             2048
 #endif
 
 #define IGB_MIN_ITR_USECS                 10 /* 100k irq/sec */

@@ -1444,10 +1444,6 @@ static void igb_configure(struct igb_adapter *adapter)
 	struct net_device *netdev = adapter->netdev;
 	int i;
 
-#ifdef ENABLE_DNA
-	dna_check_enable_adapter(adapter);
-#endif
-
 	igb_get_hw_control(adapter);
 	igb_set_rx_mode(netdev);
 
@@ -1994,19 +1990,18 @@ static int __devinit igb_probe(struct pci_dev *pdev,
 	                      pci_resource_len(pdev, 0));
 #else
 	{
-	  unsigned long	mmio_start;
-	  int			mmio_len;
+		unsigned long	mmio_start;
+		int		mmio_len;
 
-	  hw->hw_addr =
-	    ioremap((mmio_start = pci_resource_start(pdev, 0)),
-		    (mmio_len = pci_resource_len(pdev, 0)));
+	  	hw->hw_addr = ioremap((mmio_start = pci_resource_start(pdev, 0)),
+			(mmio_len = pci_resource_len(pdev, 0)));
 
-	  netdev->mem_start = mmio_start;
-	  netdev->mem_end = mmio_start + mmio_len;
+		netdev->mem_start = mmio_start;
+		netdev->mem_end = mmio_start + mmio_len;
 
-	  if(unlikely(enable_debug)) {
-	    printk("[mmio_start=0x%lx][mmio_len=0x%x]\n", mmio_start, mmio_len);
-	  }
+		if(unlikely(enable_debug)) {
+			printk("[mmio_start=0x%lx][mmio_len=0x%x]\n", mmio_start, mmio_len);
+		}
 	}
 #endif
 
@@ -2239,10 +2234,12 @@ static int __devinit igb_probe(struct pci_dev *pdev,
 	igb_get_hw_control(adapter);
 
 #ifdef ENABLE_DNA
-	strncpy(netdev->name, "dna%d", IFNAMSIZ);
-#else
-	strncpy(netdev->name, "eth%d", IFNAMSIZ);
+	dna_check_enable_adapter(adapter);
+        if(adapter->dna.dna_enabled)
+		strncpy(netdev->name, "dna%d", IFNAMSIZ);
+	else
 #endif
+	strncpy(netdev->name, "eth%d", IFNAMSIZ);
 
 	err = register_netdev(netdev);
 	if (err)
@@ -2524,7 +2521,7 @@ static int __devinit igb_sw_init(struct igb_adapter *adapter)
 	if(    mtu != netdev->mtu
 	   &&  mtu >= 68 
 	   && (mtu + ETH_HLEN + ETH_FCS_LEN + VLAN_TAG_SIZE) <= MAX_JUMBO_FRAME_SIZE) {
-	  netdev->mtu = mtu;
+		netdev->mtu = mtu;
 	}
 #endif
 
@@ -2713,6 +2710,13 @@ int igb_setup_tx_resources(struct igb_ring *tx_ring)
 	struct device *dev = tx_ring->dev;
 	int orig_node = dev_to_node(dev);
 	int size;
+#ifdef ENABLE_DNA
+	int desc_copies = 1;
+	struct igb_adapter *adapter = netdev_priv(tx_ring->netdev);
+
+	if(adapter->dna.dna_enabled)
+		desc_copies = 2; /* Alloc shadow descriptors */
+#endif
 
 	size = sizeof(struct igb_tx_buffer) * tx_ring->count;
 	tx_ring->tx_buffer_info = vzalloc_node(size, tx_ring->numa_node);
@@ -2728,7 +2732,7 @@ int igb_setup_tx_resources(struct igb_ring *tx_ring)
 	set_dev_node(dev, tx_ring->numa_node);
 	tx_ring->desc = dma_alloc_coherent(dev,
 #ifdef ENABLE_DNA
-					   2 * /* Alloc shadow descriptors */
+					   desc_copies *
 #endif
 					   tx_ring->size,
 					   &tx_ring->dma,
@@ -2737,7 +2741,7 @@ int igb_setup_tx_resources(struct igb_ring *tx_ring)
 	if (!tx_ring->desc)
 		tx_ring->desc = dma_alloc_coherent(dev,
 #ifdef ENABLE_DNA
-					   2 * /* Alloc shadow descriptors */
+						   desc_copies *
 #endif
 						   tx_ring->size,
 						   &tx_ring->dma,
@@ -2873,6 +2877,13 @@ int igb_setup_rx_resources(struct igb_ring *rx_ring)
 	struct device *dev = rx_ring->dev;
 	int orig_node = dev_to_node(dev);
 	int size, desc_len;
+#ifdef ENABLE_DNA
+	int desc_copies = 1;
+	struct igb_adapter *adapter = netdev_priv(rx_ring->netdev);
+
+	if(adapter->dna.dna_enabled)
+		desc_copies = 2; /* Alloc shadow descriptors */
+#endif
 
 	size = sizeof(struct igb_rx_buffer) * rx_ring->count;
 	rx_ring->rx_buffer_info = vzalloc_node(size, rx_ring->numa_node);
@@ -2890,7 +2901,7 @@ int igb_setup_rx_resources(struct igb_ring *rx_ring)
 	set_dev_node(dev, rx_ring->numa_node);
 	rx_ring->desc = dma_alloc_coherent(dev,
 #ifdef ENABLE_DNA
-					   2 * /* Alloc shadow descriptors */
+					   desc_copies *
 #endif
 					   rx_ring->size,
 					   &rx_ring->dma,
@@ -2899,7 +2910,7 @@ int igb_setup_rx_resources(struct igb_ring *rx_ring)
 	if (!rx_ring->desc)
 		rx_ring->desc = dma_alloc_coherent(dev,
 #ifdef ENABLE_DNA
-						   2 * /* Alloc shadow descriptors */
+						   desc_copies *
 #endif
 						   rx_ring->size,
 						   &rx_ring->dma,
@@ -3290,7 +3301,7 @@ void igb_configure_rx_ring(struct igb_adapter *adapter,
 
 #ifdef ENABLE_DNA
 	if(adapter->dna.dna_enabled)
-	  srrctl |= E1000_SRRCTL_DROP_EN;
+		srrctl |= E1000_SRRCTL_DROP_EN;
 #endif
 
 	E1000_WRITE_REG(hw, E1000_SRRCTL(reg_idx), srrctl);
@@ -3335,6 +3346,13 @@ static void igb_configure_rx(struct igb_adapter *adapter)
  **/
 void igb_free_tx_resources(struct igb_ring *tx_ring)
 {
+#ifdef ENABLE_DNA
+	int desc_copies = 1;
+	struct igb_adapter *adapter = netdev_priv(tx_ring->netdev);
+
+	if(adapter->dna.dna_enabled)
+		desc_copies = 2; /* Alloc shadow descriptors */
+#endif
 	igb_clean_tx_ring(tx_ring);
 
 	vfree(tx_ring->tx_buffer_info);
@@ -3346,7 +3364,7 @@ void igb_free_tx_resources(struct igb_ring *tx_ring)
 
 	dma_free_coherent(tx_ring->dev, 
 #ifdef ENABLE_DNA
-			  2 * /* Alloc shadow descriptors */
+			  desc_copies *
 #endif
 			  tx_ring->size,
 			  tx_ring->desc, tx_ring->dma);
@@ -3372,7 +3390,10 @@ void igb_unmap_and_free_tx_resource(struct igb_ring *ring,
 				    struct igb_tx_buffer *tx_buffer)
 {
 #ifdef ENABLE_DNA
-  return;
+	struct igb_adapter *adapter = netdev_priv(ring->netdev);
+
+	if(adapter->dna.dna_enabled)
+		return;
 #endif
 
 	if (tx_buffer->skb) {
@@ -3443,6 +3464,13 @@ static void igb_clean_all_tx_rings(struct igb_adapter *adapter)
  **/
 void igb_free_rx_resources(struct igb_ring *rx_ring)
 {
+#ifdef ENABLE_DNA
+	int desc_copies = 1;
+	struct igb_adapter *adapter = netdev_priv(rx_ring->netdev);
+
+	if(adapter->dna.dna_enabled)
+		desc_copies = 2; /* Alloc shadow descriptors */
+#endif
 	igb_clean_rx_ring(rx_ring);
 
 	vfree(rx_ring->rx_buffer_info);
@@ -3454,7 +3482,7 @@ void igb_free_rx_resources(struct igb_ring *rx_ring)
 
 	dma_free_coherent(rx_ring->dev,
 #ifdef ENABLE_DNA
-			  2 * /* Alloc shadow descriptors */
+			  desc_copies *
 #endif
 			  rx_ring->size,
 			  rx_ring->desc, rx_ring->dma);
@@ -3489,6 +3517,9 @@ void igb_clean_rx_ring(struct igb_ring *rx_ring)
 	const int bufsz = IGB_RX_HDR_LEN;
 #endif
 	u16 i;
+#ifdef ENABLE_DNA
+	struct igb_adapter *adapter = netdev_priv(rx_ring->netdev);
+#endif
 
 	if (!rx_ring->rx_buffer_info)
 		return;
@@ -3509,8 +3540,10 @@ void igb_clean_rx_ring(struct igb_ring *rx_ring)
 			buffer_info->skb = NULL;
 		}
 
-#ifndef ENABLE_DNA
 #ifndef CONFIG_IGB_DISABLE_PACKET_SPLIT
+#ifdef ENABLE_DNA
+        	if(!adapter->dna.dna_enabled) {
+#endif
 		if (buffer_info->page_dma) {
 			dma_unmap_page(rx_ring->dev,
 			               buffer_info->page_dma,
@@ -3523,6 +3556,8 @@ void igb_clean_rx_ring(struct igb_ring *rx_ring)
 			buffer_info->page = NULL;
 			buffer_info->page_offset = 0;
 		}
+#ifdef ENABLE_DNA
+        	}
 #endif
 #endif
 	}
@@ -3537,8 +3572,7 @@ void igb_clean_rx_ring(struct igb_ring *rx_ring)
 	rx_ring->next_to_use = 0;
 
 #ifdef ENABLE_DNA
-	{
-	  struct igb_adapter *adapter = netdev_priv(rx_ring->netdev);
+        if(adapter->dna.dna_enabled) {
 	  struct igb_ring    *tx_ring = adapter->tx_ring[rx_ring->queue_index];
 	  struct pfring_hooks   *hook = (struct pfring_hooks*)rx_ring->netdev->pfring_ptr;
 	  u_int i;
@@ -4583,9 +4617,11 @@ static void igb_tx_map(struct igb_ring *tx_ring,
 	__le32 cmd_type;
 	u32 tx_flags = first->tx_flags;
 	u16 i = tx_ring->next_to_use;
-
 #ifdef ENABLE_DNA
-	return; /* We don't allow apps to send data */
+	struct igb_adapter *adapter = netdev_priv(tx_ring->netdev);
+
+        if(adapter->dna.dna_enabled)
+		return; /* We don't allow apps to send data */
 #endif
 
 	tx_desc = IGB_TX_DESC(tx_ring, i);
@@ -4751,14 +4787,14 @@ netdev_tx_t igb_xmit_frame_ring(struct sk_buff *skb,
 	u32 tx_flags = 0;
 	__be16 protocol = vlan_get_protocol(skb);
 	u8 hdr_len = 0;
-
 #ifdef ENABLE_DNA
 	struct pfring_hooks *hook = (struct pfring_hooks*)tx_ring->netdev->pfring_ptr;
+	struct igb_adapter *adapter = netdev_priv(tx_ring->netdev);
 
-        if(hook && (hook->magic == PF_RING)) {
-	  /* We don't allow legacy send when in DNA */
-	  dev_kfree_skb_any(skb);
-	  return NETDEV_TX_OK;
+        if(adapter->dna.dna_enabled && hook && (hook->magic == PF_RING)) {
+		/* We don't allow legacy send when in DNA */
+		dev_kfree_skb_any(skb);
+		return NETDEV_TX_OK;
 	}
 #endif
 
@@ -4943,8 +4979,10 @@ static int igb_change_mtu(struct net_device *netdev, int new_mtu)
 	}
 
 #ifdef ENABLE_DNA
-	printk("[DNA] MTU resize is not YET supported on DNA (TODO)\n");
-	return -EINVAL;
+        if(adapter->dna.dna_enabled) {
+		printk("[DNA] MTU resize is not YET supported on DNA (TODO)\n");
+		return -EINVAL;
+	}
 #endif
 
 	while (test_and_set_bit(__IGB_RESETTING, &adapter->state))
@@ -5058,9 +5096,13 @@ void igb_update_stats(struct igb_adapter *adapter)
 #endif
 	}
 
-#ifndef ENABLE_DNA
+#ifdef ENABLE_DNA
+        if(!adapter->dna.dna_enabled) {
+#endif
 	net_stats->rx_bytes = bytes;
 	net_stats->rx_packets = packets;
+#ifdef ENABLE_DNA
+	}
 #endif
 
 	bytes = 0;
@@ -5078,9 +5120,13 @@ void igb_update_stats(struct igb_adapter *adapter)
 #endif
 	}
 
-#ifndef ENABLE_DNA
+#ifdef ENABLE_DNA
+        if(!adapter->dna.dna_enabled) {
+#endif
 	net_stats->tx_bytes = bytes;
 	net_stats->tx_packets = packets;
+#ifdef ENABLE_DNA
+	}
 #endif
 
 	/* read stats registers */
@@ -5168,10 +5214,12 @@ void igb_update_stats(struct igb_adapter *adapter)
 	/* Avoid that the stats updated by DNA are cleared
 	   with those (wrong) that are inside the driver
 	*/
-	net_stats->rx_bytes = adapter->stats.gorc,
-	  net_stats->rx_packets = adapter->stats.gprc;
-	net_stats->tx_bytes = adapter->stats.gotc,
-	  net_stats->tx_packets = adapter->stats.gptc;
+        if(adapter->dna.dna_enabled) {
+		net_stats->rx_bytes = adapter->stats.gorc;
+		net_stats->rx_packets = adapter->stats.gprc;
+		net_stats->tx_bytes = adapter->stats.gotc;
+		net_stats->tx_packets = adapter->stats.gptc;
+	}
 #endif
 
 	/* Rx Errors */
@@ -6180,7 +6228,8 @@ static bool igb_clean_tx_irq(struct igb_q_vector *q_vector)
 	unsigned int i = tx_ring->next_to_clean;
 
 #ifdef ENABLE_DNA
-	return(TRUE);
+        if(adapter->dna.dna_enabled)
+		return(TRUE);
 #endif
 
 	if (test_bit(__IGB_DOWN, &adapter->state))
@@ -6948,9 +6997,11 @@ static bool igb_clean_rx_irq(struct igb_q_vector *q_vector, int budget)
 	unsigned int total_bytes = 0, total_packets = 0;
 	u16 cleaned_count = igb_desc_unused(rx_ring);
 	u16 i = rx_ring->next_to_clean;
-
 #ifdef ENABLE_DNA
-	return(dna_igb_clean_rx_irq(q_vector, rx_ring, budget) > 0 ? true : false);
+	struct igb_adapter *adapter = netdev_priv(rx_ring->netdev);
+
+        if(adapter->dna.dna_enabled)
+		return(dna_igb_clean_rx_irq(q_vector, rx_ring, budget) > 0 ? true : false);
 #endif
 
 	rx_desc = IGB_RX_DESC(rx_ring, i);
@@ -7183,11 +7234,14 @@ void igb_alloc_rx_buffers(struct igb_ring *rx_ring, u16 cleaned_count)
 	union e1000_adv_rx_desc *rx_desc;
 	struct igb_rx_buffer *bi;
 	u16 i = rx_ring->next_to_use;
-
 #ifdef ENABLE_DNA
-	if(!rx_ring->netdev) return;
-	dna_igb_alloc_rx_buffers(rx_ring, (struct pfring_hooks*)rx_ring->netdev->pfring_ptr);
-	return;
+	struct igb_adapter *adapter = netdev_priv(rx_ring->netdev);
+
+        if(adapter->dna.dna_enabled) {
+		if(rx_ring->netdev) 
+			dna_igb_alloc_rx_buffers(rx_ring, (struct pfring_hooks*)rx_ring->netdev->pfring_ptr);
+		return;
+	}
 #endif
 
 	rx_desc = IGB_RX_DESC(rx_ring, i);
@@ -7406,6 +7460,34 @@ static int igb_hwtstamp_ioctl(struct net_device *netdev,
 
 	/* define which PTP packets are time stamped */
 	E1000_WRITE_REG(hw, E1000_TSYNCRXCFG, tsync_rx_cfg);
+
+#if 0 //#ifdef ENABLE_DNA /* PER PACKET HW TIMESTAMP (ns) */
+	if(adapter->dna.dna_enabled) {
+        	if(hw->mac.type >= e1000_82580) {
+			int i, reg_idx;
+			u32 reg;
+
+        		for (i = 0; i < adapter->num_q_vectors; i++) {
+				reg_idx = adapter->q_vector[i]->rx.ring->reg_idx;
+				reg = E1000_READ_REG(hw, E1000_SRRCTL(reg_idx));
+
+        			/* Enable Timestamp Received packet
+				 * Timestamp is placed only in buffers of received packets that meet 
+				 * the criteria defined in the TSYNCRXCTL.Type field, 2-tuple filters 
+				 * or ETQF registers. A 40 bit timestamp generated from the value in 
+				 * SYSTIMH and SYSTIML registers is placed in the receive buffer. */
+				reg |= 0x40000000;
+  				E1000_WRITE_REG(hw, E1000_SRRCTL(reg_idx), reg);
+           
+				if(unlikely(enable_debug))
+					printk("[DNA][DEBUG] [tsync_tx_ctl=%d][tsync_rx_ctl=%d][rx_queue=%d][TSAUXC=%u][SRRCTL=%08X]\n",
+				               tsync_tx_ctl, tsync_rx_ctl, reg_idx,
+				               E1000_READ_REG(hw, E1000_TSAUXC),
+				               E1000_READ_REG(hw, E1000_SRRCTL(reg_idx)));
+			}
+        	}
+	}
+#endif
 
 	/* define ethertype filter for timestamped packets */
 	if (is_l2)

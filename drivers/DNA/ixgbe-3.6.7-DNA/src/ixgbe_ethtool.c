@@ -961,9 +961,10 @@ static int ixgbe_set_ringparam(struct net_device *netdev,
 	bool need_update = false;
 
 #ifdef ENABLE_DNA
-	printk("[DNA] RX/TX slots are fixed. If you need to change them edit ixgbe.h\n");
-	printk("[DNA] and modify DNA_DEFAULT, then recompile the driver\n");
-	return -EINVAL;
+	if(adapter->dna.dna_enabled) {
+		printk("[DNA] RX/TX slots are fixed, please use the num_rx_slots/num_tx_slots parameters.\n");
+		return -EINVAL;
+	}
 #endif
 
 	if ((ring->rx_mini_pending) || (ring->rx_jumbo_pending))

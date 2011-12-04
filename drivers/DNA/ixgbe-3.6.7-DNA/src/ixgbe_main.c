@@ -475,7 +475,8 @@ static bool ixgbe_clean_tx_irq(struct ixgbe_q_vector *q_vector,
 	unsigned int i = tx_ring->next_to_clean;
 
 #ifdef ENABLE_DNA
-	 return(true);
+	if(adapter->dna.dna_enabled)
+		return(true);
 #endif
 
 	if (test_bit(__IXGBE_DOWN, &adapter->state))
@@ -863,11 +864,14 @@ void ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring, u16 cleaned_count)
 	union ixgbe_adv_rx_desc *rx_desc;
 	struct ixgbe_rx_buffer *bi;
 	u16 i = rx_ring->next_to_use;
-
 #ifdef ENABLE_DNA
-	if(!rx_ring->netdev) return;
-	dna_ixgbe_alloc_rx_buffers(rx_ring);
-	return;
+	struct ixgbe_adapter *adapter = netdev_priv(rx_ring->netdev);
+
+	if(adapter->dna.dna_enabled) {
+		if(rx_ring->netdev) 
+			dna_ixgbe_alloc_rx_buffers(rx_ring);
+		return;
+	}
 #endif
 
 	/* nothing to do or no valid netdev defined */
@@ -1567,7 +1571,7 @@ static bool ixgbe_clean_rx_irq(struct ixgbe_q_vector *q_vector,
 			       struct ixgbe_ring *rx_ring)
 #endif
 {
-#if defined(DEBUG_STATS) || defined(IXGBE_FCOE)
+#if defined(DEBUG_STATS) || defined(IXGBE_FCOE) || defined(ENABLE_DNA)
 	struct ixgbe_adapter *adapter = q_vector->adapter;
 #endif
 	union ixgbe_adv_rx_desc *rx_desc;
@@ -1583,7 +1587,8 @@ static bool ixgbe_clean_rx_irq(struct ixgbe_q_vector *q_vector,
 	u16 cleaned_count = ixgbe_desc_unused(rx_ring);
 
 #ifdef ENABLE_DNA
-	return(dna_ixgbe_clean_rx_irq(q_vector, rx_ring, budget));
+	if(adapter->dna.dna_enabled)
+		return(dna_ixgbe_clean_rx_irq(q_vector, rx_ring, budget));
 #endif
 
 	rx_desc = IXGBE_RX_DESC(rx_ring, i);
@@ -2364,9 +2369,13 @@ static irqreturn_t ixgbe_msix_clean_rings(int irq, void *data)
 	if (adapter->flags & IXGBE_FLAG_DCA_ENABLED)
 		ixgbe_update_dca(q_vector);
 
-#ifndef ENABLE_DNA
+#ifdef ENABLE_DNA
+	if(!adapter->dna.dna_enabled) {
+#endif
 	for (ring = q_vector->tx.ring; ring != NULL; ring = ring->next)
 		clean_complete &= ixgbe_clean_tx_irq(q_vector, ring);
+#ifdef ENABLE_DNA
+	}
 #endif
 
 	for (ring = q_vector->rx.ring; ring != NULL; ring = ring->next)
@@ -3037,6 +3046,7 @@ static void ixgbe_configure_srrctl(struct ixgbe_adapter *adapter,
 		}
 	}
 #ifdef ENABLE_DNA
+	if(adapter->dna.dna_enabled) {
 	  if(adapter->num_rx_queues > 1) {
 	    /* We need to set DROPEN on all available queues so that
 	       when a queue is full, all other queues keep receiving packets
@@ -3067,6 +3077,7 @@ static void ixgbe_configure_srrctl(struct ixgbe_adapter *adapter,
 	      we maintain the dna_clean_rx_irq for 82598
 	    */
 	  }
+	}
 #endif
 		break;
 	case ixgbe_mac_82599EB:
@@ -3114,8 +3125,8 @@ static void ixgbe_configure_srrctl(struct ixgbe_adapter *adapter,
 
 #ifdef ENABLE_DNA
 	/* This is used for 82599 to drop packets when a queue is full */
-	if(adapter->hw.mac.type != ixgbe_mac_82598EB)
-	  srrctl |= IXGBE_SRRCTL_DROP_EN;
+	if(adapter->dna.dna_enabled && adapter->hw.mac.type != ixgbe_mac_82598EB)
+		srrctl |= IXGBE_SRRCTL_DROP_EN;
 #endif
 
 	IXGBE_WRITE_REG(hw, IXGBE_SRRCTL(reg_idx), srrctl);
@@ -3530,7 +3541,8 @@ static void ixgbe_set_rx_buffer_len(struct ixgbe_adapter *adapter)
 	u32 mhadd, hlreg0;
 
 #ifdef ENABLE_DNA
-        adapter->flags &= ~IXGBE_FLAG_RX_PS_ENABLED;
+	if(adapter->dna.dna_enabled)
+		adapter->flags &= ~IXGBE_FLAG_RX_PS_ENABLED;
 #else
 	/* Decide whether to use packet split mode or not */
 	if (netdev->mtu > ETH_DATA_LEN) {
@@ -3589,14 +3601,13 @@ static void ixgbe_set_rx_buffer_len(struct ixgbe_adapter *adapter)
 	/* set jumbo enable since MHADD.MFS is keeping size locked at max_frame */
 	hlreg0 |= IXGBE_HLREG0_JUMBOEN;
 #ifdef ENABLE_DNA
-        if(unlikely(enable_debug))
-	  printk("%s(): RX +JUMBOEN mtu=%d max_frame=%d rx_buf_len=%d\n",
-	         __FUNCTION__,
-	         netdev->mtu,
-	         max_frame,
-	         rx_buf_len);
+	if(adapter->dna.dna_enabled) {
+		if(unlikely(enable_debug))
+			printk("%s(): RX +JUMBOEN mtu=%d max_frame=%d rx_buf_len=%d\n",
+	         	       __FUNCTION__, netdev->mtu, max_frame, rx_buf_len);
 
-	hlreg0 &= ~IXGBE_HLREG0_RXCRCSTRP; /* Disable CRC strip */
+		hlreg0 &= ~IXGBE_HLREG0_RXCRCSTRP; /* Disable CRC strip */
+	}
 #endif
 	IXGBE_WRITE_REG(hw, IXGBE_HLREG0, hlreg0);
 
@@ -3663,7 +3674,8 @@ static void ixgbe_setup_rdrxctl(struct ixgbe_adapter *adapter)
 		rdrxctl |= (IXGBE_RDRXCTL_RSCACKC | IXGBE_RDRXCTL_FCOE_WRFIX);
 		rdrxctl |= IXGBE_RDRXCTL_CRCSTRIP;
 #ifndef ENABLE_DNA
-		rdrxctl |= IXGBE_RDRXCTL_CRCSTRIP; /* Disable CRC strip */
+		if(adapter->dna.dna_enabled)
+			rdrxctl |= IXGBE_RDRXCTL_CRCSTRIP; /* Disable CRC strip */
 #endif
 		break;
 	default:
@@ -3815,7 +3827,8 @@ void ixgbe_vlan_stripping_disable(struct ixgbe_adapter *adapter)
 	int i;
 
 #ifdef ENABLE_DNA
-	return;
+	if(adapter->dna.dna_enabled)
+		return;
 #endif
 	/* leave vlan tag stripping enabled for DCB */
 	if (adapter->flags & IXGBE_FLAG_DCB_ENABLED)
@@ -3853,7 +3866,8 @@ void ixgbe_vlan_stripping_enable(struct ixgbe_adapter *adapter)
 	int i;
 
 #ifdef ENABLE_DNA
-	return;
+	if(adapter->dna.dna_enabled)
+		return;
 #endif
 
 	switch (hw->mac.type) {
@@ -4924,6 +4938,9 @@ void ixgbe_clean_rx_ring(struct ixgbe_ring *rx_ring)
 	struct device *dev = rx_ring->dev;
 	unsigned long size;
 	u16 i;
+#ifdef ENABLE_DNA
+	struct ixgbe_adapter *adapter = netdev_priv(rx_ring->netdev);
+#endif
 
 	/* ring already cleared, nothing to do */
 	if (!rx_ring->rx_buffer_info)
@@ -4941,7 +4958,9 @@ void ixgbe_clean_rx_ring(struct ixgbe_ring *rx_ring)
 					 DMA_FROM_DEVICE);
 			rx_buffer_info->dma = 0;
 		}
-#ifndef ENABLE_DNA
+#ifdef ENABLE_DNA
+		if(!adapter->dna.dna_enabled) {
+#endif
 		if (rx_buffer_info->skb) {
 			struct sk_buff *skb = rx_buffer_info->skb;
 			rx_buffer_info->skb = NULL;
@@ -4970,6 +4989,8 @@ void ixgbe_clean_rx_ring(struct ixgbe_ring *rx_ring)
 		put_page(rx_buffer_info->page);
 		rx_buffer_info->page = NULL;
 		rx_buffer_info->page_offset = 0;
+#ifdef ENABLE_DNA
+		}
 #endif
 	}
 
@@ -4983,8 +5004,7 @@ void ixgbe_clean_rx_ring(struct ixgbe_ring *rx_ring)
 	rx_ring->next_to_use = 0;
 
 #ifdef ENABLE_DNA
-	{
-	  struct ixgbe_adapter  *adapter = netdev_priv(rx_ring->netdev);
+	if(adapter->dna.dna_enabled) {
 	  struct ixgbe_ring     *tx_ring = adapter->tx_ring[rx_ring->queue_index];
 	  struct pfring_hooks   *hook = (struct pfring_hooks*)rx_ring->netdev->pfring_ptr;
 	  struct ixgbe_hw *hw = &adapter->hw;
@@ -5072,6 +5092,9 @@ static void ixgbe_clean_tx_ring(struct ixgbe_ring *tx_ring)
 	struct ixgbe_tx_buffer *tx_buffer_info;
 	unsigned long size;
 	u16 i;
+#ifdef ENABLE_DNA
+	struct ixgbe_adapter *adapter = netdev_priv(tx_ring->netdev);
+#endif
 
 	/* ring already cleared, nothing to do */
 	if (!tx_ring->tx_buffer_info)
@@ -5080,9 +5103,10 @@ static void ixgbe_clean_tx_ring(struct ixgbe_ring *tx_ring)
 	/* Free all the Tx ring sk_buffs */
 	for (i = 0; i < tx_ring->count; i++) {
 		tx_buffer_info = &tx_ring->tx_buffer_info[i];
-#ifndef ENABLE_DNA
-		ixgbe_unmap_and_free_tx_resource(tx_ring, tx_buffer_info);
+#ifdef ENABLE_DNA
+		if(!adapter->dna.dna_enabled)
 #endif
+		ixgbe_unmap_and_free_tx_resource(tx_ring, tx_buffer_info);
 	}
 
 	size = sizeof(struct ixgbe_tx_buffer) * tx_ring->count;
@@ -6357,14 +6381,12 @@ static int __devinit ixgbe_sw_init(struct ixgbe_adapter *adapter)
 	if(    mtu != adapter->netdev->mtu
 	   &&  mtu >= 68 
 	   && (mtu + ETH_HLEN + ETH_FCS_LEN) <= IXGBE_MAX_JUMBO_FRAME_SIZE) {
+	
+        	if(unlikely(enable_debug))
+			printk("%s(): Setting mtu (%d) to %d\n",
+	        	       __FUNCTION__, adapter->netdev->mtu, mtu);
 
-          if(unlikely(enable_debug))
-	    printk("%s(): Setting mtu (%d) to %d\n",
-	           __FUNCTION__,
-	           adapter->netdev->mtu,
-	           mtu);
-
-	  adapter->netdev->mtu = mtu;
+		adapter->netdev->mtu = mtu;
 	}
 #endif
 
@@ -6531,6 +6553,13 @@ int ixgbe_setup_tx_resources(struct ixgbe_ring *tx_ring)
 	struct device *dev = tx_ring->dev;
 	int orig_node = dev_to_node(dev);
 	int size;
+#ifdef ENABLE_DNA
+        int desc_copies = 1;
+        struct ixgbe_adapter *adapter = netdev_priv(tx_ring->netdev);
+
+        if(adapter->dna.dna_enabled)
+		desc_copies = 2; /* Alloc shadow descriptors */
+#endif
 
 	size = sizeof(struct ixgbe_tx_buffer) * tx_ring->count;
 	tx_ring->tx_buffer_info = vzalloc_node(size, tx_ring->numa_node);
@@ -6546,7 +6575,7 @@ int ixgbe_setup_tx_resources(struct ixgbe_ring *tx_ring)
 	set_dev_node(dev, tx_ring->numa_node);
 	tx_ring->desc = dma_alloc_coherent(dev,
 #ifdef ENABLE_DNA
-					   2 * /* Alloc shadow descriptors */
+					   desc_copies *
 #endif
 					   tx_ring->size,
 					   &tx_ring->dma,
@@ -6609,6 +6638,13 @@ int ixgbe_setup_rx_resources(struct ixgbe_ring *rx_ring)
 	struct device *dev = rx_ring->dev;
 	int orig_node = dev_to_node(dev);
 	int size;
+#ifdef ENABLE_DNA
+        int desc_copies = 1;
+        struct ixgbe_adapter *adapter = netdev_priv(rx_ring->netdev);
+
+        if(adapter->dna.dna_enabled)
+		desc_copies = 2; /* Alloc shadow descriptors */
+#endif
 
 	size = sizeof(struct ixgbe_rx_buffer) * rx_ring->count;
 	rx_ring->rx_buffer_info = vzalloc_node(size, rx_ring->numa_node);
@@ -6624,7 +6660,7 @@ int ixgbe_setup_rx_resources(struct ixgbe_ring *rx_ring)
 	set_dev_node(dev, rx_ring->numa_node);
 	rx_ring->desc = dma_alloc_coherent(dev,
 #ifdef ENABLE_DNA
-					   2 * /* Alloc shadow descriptors */
+					   desc_copies *
 #endif
 					   rx_ring->size,
 					   &rx_ring->dma,
@@ -6684,6 +6720,13 @@ static int ixgbe_setup_all_rx_resources(struct ixgbe_adapter *adapter)
  **/
 void ixgbe_free_tx_resources(struct ixgbe_ring *tx_ring)
 {
+#ifdef ENABLE_DNA
+        int desc_copies = 1;
+        struct ixgbe_adapter *adapter = netdev_priv(tx_ring->netdev);
+
+        if(adapter->dna.dna_enabled)
+		desc_copies = 2; /* Alloc shadow descriptors */
+#endif
 	ixgbe_clean_tx_ring(tx_ring);
 
 	vfree(tx_ring->tx_buffer_info);
@@ -6695,7 +6738,7 @@ void ixgbe_free_tx_resources(struct ixgbe_ring *tx_ring)
 
 	dma_free_coherent(tx_ring->dev, 
 #ifdef ENABLE_DNA
-			  2 * /* Shadow descriptors */
+			  desc_copies *
 #endif
 			  tx_ring->size,
 			  tx_ring->desc, tx_ring->dma);
@@ -6726,6 +6769,13 @@ static void ixgbe_free_all_tx_resources(struct ixgbe_adapter *adapter)
  **/
 void ixgbe_free_rx_resources(struct ixgbe_ring *rx_ring)
 {
+#ifdef ENABLE_DNA
+        int desc_copies = 1;
+        struct ixgbe_adapter *adapter = netdev_priv(rx_ring->netdev);
+
+        if(adapter->dna.dna_enabled)
+		desc_copies = 2; /* Alloc shadow descriptors */
+#endif
 	ixgbe_clean_rx_ring(rx_ring);
 
 	vfree(rx_ring->rx_buffer_info);
@@ -6737,7 +6787,7 @@ void ixgbe_free_rx_resources(struct ixgbe_ring *rx_ring)
 
 	dma_free_coherent(rx_ring->dev, 
 #ifdef ENABLE_DNA
-			  2 * /* Alloc shadow descriptors */
+			  desc_copies *
 #endif
 			  rx_ring->size,
 			  rx_ring->desc, rx_ring->dma);
@@ -6774,8 +6824,10 @@ static int ixgbe_change_mtu(struct net_device *netdev, int new_mtu)
 	int max_frame = new_mtu + ETH_HLEN + ETH_FCS_LEN;
 
 #ifdef ENABLE_DNA
-	printk("[DNA] MTU resize is not YET supported on DNA (TODO)\n");
-	return -EINVAL;
+	if(adapter->dna.dna_enabled) {
+		printk("[DNA] MTU resize is not YET supported on DNA (TODO)\n");
+		return -EINVAL;
+	}
 #endif
 
 	/* MTU < 68 is an error and causes problems on some kernels */
@@ -7129,11 +7181,15 @@ void ixgbe_update_stats(struct ixgbe_adapter *adapter)
 	   Avoid that the stats updated by DNA are cleared 
 	   with those (wrong) that are inside the driver 
 	*/
-	net_stats->rx_bytes = hwstats->gorc, 
-	  net_stats->rx_packets = hwstats->gprc;
-#else
+	if(adapter->dna.dna_enabled) {
+		net_stats->rx_bytes = hwstats->gorc;
+		net_stats->rx_packets = hwstats->gprc;
+	} else {
+#endif
 	net_stats->rx_bytes = bytes;
 	net_stats->rx_packets = packets;
+#ifdef ENABLE_DNA
+	}
 #endif
 
 	bytes = 0;
@@ -7151,10 +7207,15 @@ void ixgbe_update_stats(struct ixgbe_adapter *adapter)
 
 #ifdef ENABLE_DNA
 	/* Avoid that the stats updated by DNA are cleared with those (wrong) that are inside the driver */
-	net_stats->tx_bytes = hwstats->gotc, net_stats->tx_packets = hwstats->gptc;
-#else
+	if(adapter->dna.dna_enabled) {
+		net_stats->tx_bytes = hwstats->gotc;
+		net_stats->tx_packets = hwstats->gptc;
+	} else {
+#endif
 	net_stats->tx_bytes = bytes;
 	net_stats->tx_packets = packets;
+#ifdef ENABLE_DNA
+	}
 #endif
 
 	for (i = 0; i < 16; i++) {
@@ -8080,9 +8141,11 @@ static void ixgbe_tx_map(struct ixgbe_ring *tx_ring,
 	unsigned int paylen = skb->len - hdr_len;
 	u32 tx_flags = first->tx_flags;
 	u16 i = tx_ring->next_to_use;
-
 #ifdef ENABLE_DNA
-	return; /* We don't allow apps to send data */	
+        struct ixgbe_adapter *adapter = netdev_priv(tx_ring->netdev);
+
+        if(adapter->dna.dna_enabled)
+		return; /* We don't allow apps to send data */	
 #endif
 
 	tx_desc = IXGBE_TX_DESC(tx_ring, i);
@@ -8347,8 +8410,10 @@ netdev_tx_t ixgbe_xmit_frame_ring(struct sk_buff *skb,
 
 #ifdef ENABLE_DNA
 	/* We don't allow legacy send when in DNA */
-	dev_kfree_skb_any(skb);
-	return NETDEV_TX_OK;
+        if(adapter->dna.dna_enabled) {
+		dev_kfree_skb_any(skb);
+		return NETDEV_TX_OK;
+	}
 #endif
 
 	/*
@@ -9488,10 +9553,12 @@ static int __devinit ixgbe_probe(struct pci_dev *pdev,
 
 
 #ifdef ENABLE_DNA
-	strcpy(netdev->name, "dna%d");
-#else
-	strcpy(netdev->name, "eth%d");
+	dna_check_enable_adapter(adapter);
+	if(adapter->dna.dna_enabled)
+		strcpy(netdev->name, "dna%d");
+	else
 #endif
+	strcpy(netdev->name, "eth%d");
 
 	err = register_netdev(netdev);
 	if (err)

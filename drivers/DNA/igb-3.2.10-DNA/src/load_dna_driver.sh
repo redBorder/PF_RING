@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # Configure here the network interfaces to activate
-IF[0]=dna2
-IF[1]=dna3
-IF[2]=
-IF[3]=
+IF[0]=dna0
+IF[1]=dna1
+IF[2]=dna2
+IF[3]=dna3
 
 #service udev start
 

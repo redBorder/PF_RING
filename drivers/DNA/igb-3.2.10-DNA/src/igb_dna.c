@@ -23,7 +23,7 @@
 char *adapters_to_enable[MAX_NUM_ADAPTERS] = { 0 };
 module_param_array(adapters_to_enable, charp, NULL, 0444);
 MODULE_PARM_DESC(adapters_to_enable,
-		 "Comma separated list of adapters where DNA "
+		 "Comma separated list of adapters (MAC address) where DNA "
 		 "will be enabled");
 
 static unsigned int enable_debug = 0;
@@ -34,11 +34,11 @@ static unsigned int mtu = 1500;
 module_param(mtu, uint, 0644);
 MODULE_PARM_DESC(mtu, "Change the default Maximum Transmission Unit");
 
-static unsigned int num_rx_slots = IGB_DEFAULT_RXD;
+static unsigned int num_rx_slots = DNA_IGB_DEFAULT_RXD;
 module_param(num_rx_slots, uint, 0644);
 MODULE_PARM_DESC(num_rx_slots, "Specify the number of RX slots. Default: 2048");
 
-static unsigned int num_tx_slots = IGB_DEFAULT_TXD;
+static unsigned int num_tx_slots = DNA_IGB_DEFAULT_TXD;
 module_param(num_tx_slots, uint, 0644);
 MODULE_PARM_DESC(num_tx_slots, "Specify the number of TX slots. Default: 2048");
 
@@ -51,12 +51,6 @@ static void igb_irq_disable(struct igb_adapter *adapter);
 void dna_check_enable_adapter(struct igb_adapter *adapter) {
   adapter->dna.dna_enabled = 0; /* Default */
   
-  if(strcmp(adapter->netdev->name, "eth0") == 0)
-    return; /*
-	      We never enable DNA on eth0 as this might be
-	      the management interface
-	    */
-
   if(adapters_to_enable[0] == NULL) {
     /* We enable all the adapters */
     adapter->dna.dna_enabled = 1;
@@ -64,7 +58,11 @@ void dna_check_enable_adapter(struct igb_adapter *adapter) {
     int i = 0;
 
     while((i < MAX_NUM_ADAPTERS) && (adapters_to_enable[i] != NULL)) {
-      if(!strcmp(adapters_to_enable[i], adapter->netdev->name)) {
+      u8 addr[ETH_ALEN];
+
+      if(sscanf(adapters_to_enable[i], "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+                &addr[0], &addr[1], &addr[2], &addr[3], &addr[4], &addr[5]) == 6
+	 && !memcmp(addr, adapter->hw.mac.addr, sizeof(addr))) {
 	adapter->dna.dna_enabled = 1;
 	break;
       }
@@ -73,6 +71,7 @@ void dna_check_enable_adapter(struct igb_adapter *adapter) {
     } /* while */
   }
 }
+
 /* ****************************** */
 
 void igb_irq_enable_queues(struct igb_adapter *adapter, u32 queue_id) {

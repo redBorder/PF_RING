@@ -24,7 +24,7 @@
 static char *adapters_to_enable[MAX_NUM_ADAPTERS] = { 0 };
 module_param_array(adapters_to_enable, charp, NULL, 0444);
 MODULE_PARM_DESC(adapters_to_enable,
-		 "Comma separated list of adapters where DNA "
+		 "Comma separated list of adapters (MAC address) where DNA "
 		 "will be enabled");
 
 static unsigned int enable_debug = 0;
@@ -40,12 +40,6 @@ static void e1000_irq_disable(struct e1000_adapter *adapter);
 void dna_check_enable_adapter(struct e1000_adapter *adapter) {
   adapter->dna.dna_enabled = 0; /* Default */
   
-  if(strcmp(adapter->netdev->name, "eth0") == 0)
-    return; /*
-	      We never enable DNA on eth0 as this might be
-	      the management interface
-	    */
-
   if(adapters_to_enable[0] == NULL) {
     /* We enable all the adapters */
     adapter->dna.dna_enabled = 1;
@@ -53,9 +47,13 @@ void dna_check_enable_adapter(struct e1000_adapter *adapter) {
     int i = 0;
 
     while((i < MAX_NUM_ADAPTERS) && (adapters_to_enable[i] != NULL)) {
-      if(!strcmp(adapters_to_enable[i], adapter->netdev->name)) {
-	adapter->dna.dna_enabled = 1;
-	break;
+      u8 addr[ETH_ALEN]; 
+      
+      if(sscanf(adapters_to_enable[i], "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+	         &addr[0], &addr[1], &addr[2], &addr[3], &addr[4], &addr[5]) == 6
+         && !memcmp(addr, adapter->hw.mac.addr, sizeof(addr))) {
+        adapter->dna.dna_enabled = 1;
+        break;
       }
       
       i++;
