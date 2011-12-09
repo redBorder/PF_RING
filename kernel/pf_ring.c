@@ -1046,7 +1046,22 @@ static int ring_proc_get_info(char *buf, char **start, off_t offset,
       fsi = pfr->slots_info;
 
       if(fsi) {
-	rlen = sprintf(buf,         "Bound Device       : %s\n", pfr->ring_netdev->dev->name);
+	int num = 0;
+	struct list_head *ptr, *tmp_ptr;
+	
+	rlen = sprintf(buf,         "Bound Device(s)    : ");
+
+	list_for_each_safe(ptr, tmp_ptr, &ring_aware_device_list) {
+	  ring_device_element *dev_ptr = list_entry(ptr, ring_device_element, device_list);
+	  
+	  if(test_bit(dev_ptr->dev->ifindex, pfr->netdev_mask)) {
+	    rlen += sprintf(buf + rlen, "%s%s", (num > 0) ? "," : "", dev_ptr->dev->name);
+	    num++;
+	  }
+	}
+
+	rlen += sprintf(buf + rlen, "\n");
+
 	rlen += sprintf(buf + rlen, "Slot Version       : %d [%s]\n", fsi->version, RING_VERSION);
 	rlen += sprintf(buf + rlen, "Active             : %d\n", pfr->ring_active);
 	rlen += sprintf(buf + rlen, "Breed              : %s\n", (pfr->dna_device_entry != NULL) ? "DNA" : "Non-DNA");
@@ -1411,7 +1426,7 @@ inline u_int32_t hash_pkt(u_int16_t vlan_id, u_int8_t proto,
 
 /* ********************************** */
 
-inline u_int32_t hash_pkt_header(struct pfring_pkthdr * hdr, u_char mask_src, u_char mask_dst, 
+inline u_int32_t hash_pkt_header(struct pfring_pkthdr * hdr, u_char mask_src, u_char mask_dst,
 				 u_char mask_port, u_char mask_proto, u_char mask_vlan)
 {
   if(hdr->extended_hdr.pkt_hash == 0)
@@ -1780,7 +1795,7 @@ inline int hash_filtering_rule_match(hash_filtering_rule * a,
 inline int match_ipv6(ip_addr *addr, ip_addr *rule_addr, ip_addr *rule_mask) {
   int i;
   if(rule_mask->v6.s6_addr32[0] != 0)
-    for(i=0; i<4; i++) 
+    for(i=0; i<4; i++)
       if((addr->v6.s6_addr32[i] & rule_mask->v6.s6_addr32[i]) != rule_addr->v6.s6_addr32[i])
         return(0);
   return(1);
@@ -1820,7 +1835,7 @@ static int match_filtering_rule(struct pf_ring_socket *pfr,
   if((memcmp(rule->rule.core_fields.smac, empty_mac, ETH_ALEN) != 0)
      && (memcmp(hdr->extended_hdr.parsed_pkt.smac, rule->rule.core_fields.smac, ETH_ALEN) != 0))
     goto swap_direction;
-    
+
   if(hdr->extended_hdr.parsed_pkt.ip_version == 6){
     /* IPv6 */
     if(!match_ipv6(&hdr->extended_hdr.parsed_pkt.ip_src, &rule->rule.core_fields.shost_mask, &rule->rule.core_fields.shost)
@@ -1857,7 +1872,7 @@ swap_direction:
   if((memcmp(rule->rule.core_fields.smac, empty_mac, ETH_ALEN) != 0)
      && (memcmp(hdr->extended_hdr.parsed_pkt.dmac, rule->rule.core_fields.smac, ETH_ALEN) != 0))
     return(0);
-  
+
   if(hdr->extended_hdr.parsed_pkt.ip_version == 6) {
     /* IPv6 */
     if(!match_ipv6(&hdr->extended_hdr.parsed_pkt.ip_src, &rule->rule.core_fields.dhost_mask, &rule->rule.core_fields.dhost)
@@ -2303,7 +2318,7 @@ static void free_filtering_rule(sw_filtering_rule_element * entry, u_int8_t free
   if(entry->rule.plugin_action.plugin_id > 0
      && plugin_registration[entry->rule.plugin_action.plugin_id]
      && plugin_registration[entry->rule.plugin_action.plugin_id]->pfring_plugin_free_rule_mem) {
-    /* "Freeing rule" callback. 
+    /* "Freeing rule" callback.
      * Note: if you are freeing rule->plugin_data_ptr within this callback, please set it to NULL. */
     plugin_registration[entry->rule.plugin_action.plugin_id]->pfring_plugin_free_rule_mem(entry);
   }
@@ -2312,7 +2327,7 @@ static void free_filtering_rule(sw_filtering_rule_element * entry, u_int8_t free
     if(entry->rule.plugin_action.plugin_id > 0
        && plugin_registration[entry->rule.plugin_action.plugin_id]
        && plugin_registration[entry->rule.plugin_action.plugin_id]->pfring_plugin_free_ring_mem) {
-      /* "Freeing ring" callback. 
+      /* "Freeing ring" callback.
        * Note: if you are freeing rule->plugin_data_ptr within this callback, please set it to NULL. */
       plugin_registration[entry->rule.plugin_action.plugin_id]->pfring_plugin_free_ring_mem(entry);
     }
@@ -2383,7 +2398,7 @@ static int handle_sw_filtering_hash_bucket(struct pf_ring_socket *pfr,
   if(unlikely(enable_debug))
     printk("[PF_RING] %s(vlan=%u, proto=%u, "
 	   "sip=%d.%d.%d.%d, sport=%u, dip=%d.%d.%d.%d, dport=%u, "
-	   "hash_value=%u, add_rule=%d) called\n", 
+	   "hash_value=%u, add_rule=%d) called\n",
 	   __FUNCTION__,
 	   rule->rule.vlan_id,
 	   rule->rule.proto, ((rule->rule.host4_peer_a >> 24) & 0xff),
@@ -2516,7 +2531,7 @@ static int handle_sw_filtering_hash_bucket(struct pf_ring_socket *pfr,
     }
   }
 
-  if(add_rule && rc == 0){ 
+  if(add_rule && rc == 0){
     pfr->num_sw_filtering_rules++;
 
     /* Avoid immediate rule purging */
@@ -2876,7 +2891,7 @@ int check_wildcard_rules(struct sk_buff *skb,
 	int rc = 0;
 	*fwd_pkt = 1;
 
-	/* we have done with rule evaluation, 
+	/* we have done with rule evaluation,
 	 * now we need a write_lock to add rules */
 	read_unlock(&pfr->ring_rules_lock);
 
@@ -2886,7 +2901,7 @@ int check_wildcard_rules(struct sk_buff *skb,
 
           write_lock(&pfr->ring_rules_lock);
 
-	  /* retrieving the first free rule id (rules are ordered). 
+	  /* retrieving the first free rule id (rules are ordered).
 	   * (we can reuse entry, ptr, tmp_ptr because we will stop rule evaluation) */
 	  free_rule_element_id = 0;
           list_for_each_safe(ptr, tmp_ptr, &pfr->sw_filtering_rules) {
@@ -2918,7 +2933,7 @@ int check_wildcard_rules(struct sk_buff *skb,
 	        }
               }
 
-	      if(rule_element != NULL) { 
+	      if(rule_element != NULL) {
 	        rc = add_sw_filtering_rule_element(pfr, rule_element);
 
 	        if(rc != 0){
@@ -2933,7 +2948,7 @@ int check_wildcard_rules(struct sk_buff *skb,
 
 	} else { /* No plugin defined, creating an hash rule from packet headers */
 	  hash_bucket = (sw_filtering_hash_bucket *)kcalloc(1, sizeof(sw_filtering_hash_bucket), GFP_ATOMIC);
-	    
+
 	  if(hash_bucket != NULL) {
 	    hash_bucket->rule.vlan_id = hdr->extended_hdr.parsed_pkt.vlan_id;
 	    hash_bucket->rule.proto = hdr->extended_hdr.parsed_pkt.l3_proto;
@@ -2967,7 +2982,7 @@ int check_wildcard_rules(struct sk_buff *skb,
 
         /* Negative return values are not handled by the caller, it is better to return always 0.
 	 * Note: be careful with unlock code when moving this */
-        return(0); 
+        return(0);
 
 	break;
       } else if(behaviour == forward_packet_del_rule_and_stop_rule_evaluation) {
@@ -2983,13 +2998,13 @@ int check_wildcard_rules(struct sk_buff *skb,
 	  rc = plugin_registration[*last_matched_plugin]->pfring_plugin_del_rule(
 	         entry, hdr, &rule_element_id, &hash_bucket,
 	         *last_matched_plugin, &parse_memory_buffer[*last_matched_plugin]);
-	  
+
 	  if(unlikely(enable_debug))
 	    printk("pfring_plugin_del_rule() returned %d\n", rc);
 
 
           if(rc > 0) {
-	    /* we have done with rule evaluation, 
+	    /* we have done with rule evaluation,
 	     * now we need a write_lock to del rules */
 	    read_unlock(&pfr->ring_rules_lock);
 
@@ -2999,14 +3014,14 @@ int check_wildcard_rules(struct sk_buff *skb,
 	      write_unlock(&pfr->ring_rules_lock);
             }
 
-	    if(rc | 2) { 
+	    if(rc | 2) {
 	      write_lock(&pfr->ring_rules_lock);
 	      remove_sw_filtering_rule_element(pfr, rule_element_id);
 	      write_unlock(&pfr->ring_rules_lock);
 	    }
-          
+
 	    /* Note: be careful with unlock code when moving this */
-            return(0); 
+            return(0);
 	  }
 	}
 	break;
@@ -3280,7 +3295,7 @@ static u_int hash_pkt_cluster(ring_cluster_element * cluster_ptr,
   u_int idx;
 
   switch(cluster_ptr->cluster.hashing_mode) {
-    case cluster_round_robin: 
+    case cluster_round_robin:
       idx = cluster_ptr->cluster.hashing_id++;
       break;
     case cluster_per_flow_2_tuple:
@@ -4242,7 +4257,7 @@ static int ring_release(struct socket *sock)
     list_for_each_safe(ptr, tmp_ptr, &pfr->sw_filtering_rules) {
       sw_filtering_rule_element *rule;
       rule = list_entry(ptr, sw_filtering_rule_element, list);
-      
+
       list_del(ptr);
       free_filtering_rule(rule, 1);
       kfree(rule);
@@ -5647,8 +5662,8 @@ static int ring_setsockopt(struct socket *sock,
       /* This is a hash rule */
       int ret;
       sw_filtering_hash_bucket *rule;
-      
-      rule = (sw_filtering_hash_bucket *) 
+
+      rule = (sw_filtering_hash_bucket *)
         kcalloc(1, sizeof(sw_filtering_hash_bucket), GFP_KERNEL);
 
       if(rule == NULL)
@@ -5684,7 +5699,7 @@ static int ring_setsockopt(struct socket *sock,
       write_lock_bh(&pfr->ring_rules_lock);
       rc = remove_sw_filtering_rule_element(pfr, rule_id);
       write_unlock_bh(&pfr->ring_rules_lock);
-      
+
       if (rc == 0) {
 	if(unlikely(enable_debug))
 	  printk("[PF_RING] SO_REMOVE_FILTERING_RULE: rule %d does not exist\n", rule_id);
@@ -5826,7 +5841,7 @@ static int ring_setsockopt(struct socket *sock,
     }
 
     ret = handle_hw_filtering_rule(pfr, &hw_rule, add_hw_rule);
- 
+
     if(ret != -1) {
       hw_filtering_rule_element *rule;
 

@@ -257,6 +257,7 @@ int pfring_mod_bind(pfring *ring, char *device_name) {
   if((device_name == NULL) || (strcmp(device_name, "none") == 0))
     return(-1);
 
+  /* FIX: in case of multiple interfaces the channel ID must be the same */
   at = strchr(device_name, '@');
   if(at != NULL) {
     char *tok, *pos = NULL;
@@ -302,7 +303,7 @@ int pfring_mod_bind(pfring *ring, char *device_name) {
     memset(&sa, 0, sizeof(sa));
     sa.sa_family = PF_RING;
     snprintf(sa.sa_data, sizeof(sa.sa_data), "%s", elem);
-    
+
     rc = bind(ring->fd, (struct sockaddr *)&sa, sizeof(sa));
     
     if(rc == 0) {
