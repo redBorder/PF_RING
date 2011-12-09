@@ -233,7 +233,7 @@ TIMESTAMP:
 
 /* ******************************* */
 
-int pfring_set_if_promisc(const char *device, int set_promisc) {
+static int pfring_promisc(const char *device, int set_promisc) {
   int sock_fd, ret = 0;
   struct ifreq ifr;
 
@@ -261,6 +261,30 @@ int pfring_set_if_promisc(const char *device, int set_promisc) {
     return(-1);
 
   close(sock_fd);
+  return(ret);
+}
+
+/* ******************************* */
+
+int pfring_set_if_promisc(const char *device, int set_promisc) {
+  char name_copy[256], *elem;
+  int ret = 0;
+  
+  snprintf(name_copy, sizeof(name_copy), "%s", device);
+  elem = strtok(name_copy, ";,");
+
+  while(elem != NULL) {
+    char *at = strchr(elem, '@');
+
+    if(at != NULL) at[0] = '\0';
+
+    ret = pfring_promisc(elem, set_promisc);
+    
+    if(ret < 0) return(ret);
+
+    elem = strtok(NULL, ";,");
+  }
+
   return(ret);
 }
 
