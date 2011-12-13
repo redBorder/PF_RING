@@ -138,7 +138,7 @@ int main(int argc, char* argv[]) {
 
   pd = pfring_open(in_dev, promisc, 1500 /* snaplen */, 0);
   if(pd == NULL) {
-    printf("pfring_open %s error\n", in_dev);
+    printf("pfring_open %s error [%s]\n", in_dev, strerror(errno));
     return(-1);
   } else {
     u_int32_t version;

@@ -267,7 +267,7 @@ int main(int argc, char* argv[])
 
   /* open devices */
   if((pd = pfring_open(in_dev, promisc, 1500, 0)) == NULL) {
-    printf("pfring_open error for %s\n", in_dev);
+    printf("pfring_open error for %s [%s]\n", in_dev, strerror(errno));
     return -1;
   }  else {
     pfring_set_application_name(pd, "forwarder");

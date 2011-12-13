@@ -80,7 +80,7 @@ int main(int argc, char* argv[]) {
   pd = pfring_open(device, 1,  128, 0);
 
   if(pd == NULL) {
-    printf("pfring_open error(%s)\n", device);
+    printf("pfring_open error(%s) [%s]\n", device, strerror(errno));
     return(-1);
   } else {
     u_int32_t version;

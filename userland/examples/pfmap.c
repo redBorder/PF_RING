@@ -402,7 +402,7 @@ int main(int argc, char* argv[]) {
   /* hardcode: promisc=1, to_ms=500 */
   promisc = 1;
   if((pd = pfring_open_dna(device, 0 /* we don't use threads */)) == NULL) {
-    printf("pfring_open_dna() error\n");
+    printf("pfring_open_dna() error [%s]\n", strerror(errno));
     return(-1);
   } else {
     u_int32_t version;

@@ -516,7 +516,7 @@ int main(int argc, char* argv[]) {
   pd = pfring_open(device, promisc,  snaplen, 0);
 
   if(pd == NULL) {
-    printf("pfring_open error\n");
+    printf("pfring_open error [%s]\n", strerror(errno));
     return(-1);
   } else {
     u_int32_t version;

@@ -717,8 +717,8 @@ int main(int argc, char* argv[]) {
   pd = pfring_open(device, promisc,  snaplen, (num_threads > 1) ? 1 : 0);
 
   if(pd == NULL) {
-    fprintf(stderr, "pfring_open error (pf_ring not loaded or perhaps you use quick mode and have already a socket bound to %s ?)\n",
-	   device);
+    fprintf(stderr, "pfring_open error [%s] (pf_ring not loaded or perhaps you use quick mode and have already a socket bound to %s ?)\n",
+	    strerror(errno), device);
     return(-1);
   } else {
     u_int32_t version;

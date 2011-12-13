@@ -4395,7 +4395,8 @@ static int packet_ring_bind(struct sock *sk, char *dev_name)
   if(dev->dev->ifindex >= MAX_NUM_IFIDX)
     return(-EINVAL);
 
-  /* printk("[PF_RING] DeviceId: %u\n", dev->dev->ifindex); */
+  if(!(dev->dev->flags & IFF_UP))
+    return(-ENETDOWN);
 
   if(unlikely(enable_debug))
     printk("[PF_RING] packet_ring_bind(%s, bucket_len=%d) called\n",

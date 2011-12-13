@@ -490,7 +490,8 @@ int main(int argc, char* argv[]) {
     ring[num_ring] = pfring_open(dev, promisc, snaplen, 0);
 
     if(ring[num_ring] == NULL) {
-      printf("pfring_open error (perhaps you use quick mode and have already a socket bound to %s ?)\n", dev);
+      printf("pfring_open error [%s] (perhaps you use quick mode and have already a socket bound to %s ?)\n", 
+	     strerror(errno), dev);
       return(-1);
     } 
     
