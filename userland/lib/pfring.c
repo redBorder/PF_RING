@@ -416,16 +416,27 @@ int pfring_bind(pfring *ring, char *device_name) {
 /* **************************************************** */
 
 int pfring_send(pfring *ring, char *pkt, u_int pkt_len, u_int8_t flush_packet) {
-  if(unlikely(pkt_len > 9000 /* Jumbo MTU */)) return(-1);
+  int rc = -1;
+
+  if(unlikely(pkt_len > 9000 /* Jumbo MTU */)) 
+    return rc;
   
   if(likely(ring
 	    && ring->enabled
 	    && (!ring->is_shutting_down)
 	    && ring->send
-	    && (ring->direction != rx_only_direction)))
-    return ring->send(ring, pkt, pkt_len, flush_packet);
+	    && (ring->direction != rx_only_direction))) {
 
-  return -1;
+    if(ring->reentrant) 
+      pthread_spin_lock(&ring->spinlock);
+
+    rc =  ring->send(ring, pkt, pkt_len, flush_packet);
+    
+    if(ring->reentrant) 
+      pthread_spin_unlock(&ring->spinlock);
+  }
+
+  return rc;
 }
 
 /* **************************************************** */
