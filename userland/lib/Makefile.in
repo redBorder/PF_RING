@@ -6,7 +6,7 @@
 #
 # Installation directory
 #
-INSTDIR   = @INSTALL_PREFIX@
+INSTDIR   = ${DESTDIR}/@INSTALL_PREFIX@
 
 #
 # Search directories
@@ -97,7 +97,9 @@ install-static: ${STATICLIB} install-includes
 install-shared:	${DYNAMICLIB} install-includes
 	mkdir -p ${INSTDIR}/lib
 	cp ${DYNAMICLIB} ${INSTDIR}/lib/
-	ldconfig
+	@if test "$(USER)" = "root"; then \
+		ldconfig; \
+	fi
 
 clean:
 	@rm -f ${TARGETS} *.o *~

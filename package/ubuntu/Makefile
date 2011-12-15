@@ -1,0 +1,47 @@
+#
+# PREREQUISITES
+#
+# apt-get install linux-headers-$(uname -r)
+# apt-get install build-essential devscripts ubuntu-dev-tools debhelper dh-make diff patch cdbs quilt gnupg fakeroot lintian  pbuilder piuparts
+#
+
+ifeq (,$(BUILD_KERNEL))
+BUILD_KERNEL=$(shell uname -r)
+endif
+HERE=$(shell pwd)
+PF_RING_HOME=$(HERE)/../../
+
+
+all: clean pre build
+
+pre:
+	-mv *.deb packages
+	cat /dev/null > debian/files
+	@echo "************************************************************"
+	@echo "- REMEMBER to upgrade dependency in debian/control"
+	@echo "- REMEMBER to set the kernel version in debian/control"
+	@echo "- Make sure you have updated the version in debian/changelog"
+	@echo "************************************************************"
+	mkdir -p debian/lib debian/usr/include/linux debian/usr/local/bin
+	cd $(PF_RING_HOME)/kernel; make; make install DESTDIR=$(HERE)/debian
+	cd $(PF_RING_HOME)/userland; ./configure; make
+	cd $(PF_RING_HOME)/userland/lib; make install DESTDIR=$(HERE)/debian
+	cd $(PF_RING_HOME)/userland/examples; cp pfcount pfsend $(HERE)/debian/usr/local/bin
+	@find ./debian -name "*~" -exec /bin/rm {} ';' 
+
+build:
+	dpkg-buildpackage -rfakeroot -b -us -uc #-d
+	@\rm -f ../pfring_*dsc ../pfring_*.gz ../pfring_*changes 
+	@/bin/mv ../pfring_*deb . 
+	@echo 
+	@echo "Package built." 
+	@/bin/ls  pfring_*deb 
+	@echo "-------------------------------" 
+	-dpkg --contents  pfring_*deb 
+	@echo "-------------------------------" 
+
+
+clean:
+	-rm -rf debian/tmp
+	-rm -rf debian/usr
+	-rm -rf debian/lib
