@@ -414,17 +414,15 @@ void* packet_consumer(void) {
 /* *************************************** */
 
 int main(int argc, char* argv[]) {
-  char *device = NULL, c, *string = NULL, *dev;
+  char *device = NULL, c, *dev;
   int promisc, snaplen = DEFAULT_SNAPLEN;
-  packet_direction direction = rx_and_tx_direction;
-  u_int16_t watermark = 0, rehash_rss = 0;
+  u_int16_t watermark = 0;
   u_int32_t version;
-  u_int16_t cpu_percentage = 0;
 
   startTime.tv_sec = 0;
   thiszone = gmt2local(0);
 
-  while((c = getopt(argc,argv,"hi:dl:vs:ae:w:b:r" /* "f:" */)) != '?') {
+  while((c = getopt(argc,argv,"hi:dl:vaw:" /* "f:" */)) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -434,15 +432,6 @@ int main(int argc, char* argv[]) {
       break;
     case 'a':
       wait_for_packet = 0;
-      break;
-    case 'e':
-      switch(atoi(optarg)) {
-      case rx_and_tx_direction:
-      case rx_only_direction:
-      case tx_only_direction:
-	direction = atoi(optarg);
-	break;
-      }
       break;
     case 'l':
       snaplen = atoi(optarg);
@@ -458,17 +447,8 @@ int main(int argc, char* argv[]) {
 	bpfFilter = strdup(optarg);
 	break;
       */
-    case 's':
-      string = strdup(optarg);
-      break;
     case 'w':
       watermark = atoi(optarg);
-      break;
-    case 'b':
-      cpu_percentage = atoi(optarg);
-      break;
-    case 'r':
-      rehash_rss = 1;
       break;
     }
   }

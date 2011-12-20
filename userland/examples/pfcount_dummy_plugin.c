@@ -398,7 +398,6 @@ void printHelp(void) {
 
   printf("-c <cluster id> cluster id\n");
   printf("-e <direction>  0=RX+TX, 1=RX only, 2=TX only\n");
-  printf("-s <string>     String to search on packets\n");
   printf("-l <len>        Capture length\n");
   printf("-a              Active packet wait\n");
   printf("-v              Verbose\n");
@@ -453,7 +452,7 @@ void* packet_consumer_thread(void* _id) {
 /* *************************************** */
 
 int main(int argc, char* argv[]) {
-  char *device = NULL, c, *string = NULL;
+  char *device = NULL, c;
   int promisc, snaplen = DEFAULT_SNAPLEN, rc;
   u_int clusterId = 0;
   packet_direction direction = rx_and_tx_direction;
@@ -463,7 +462,7 @@ int main(int argc, char* argv[]) {
   startTime.tv_sec = 0;
   thiszone = gmt2local(0);
 
-  while((c = getopt(argc,argv,"hi:c:l:vs:ae:" /* "f:" */)) != '?') {
+  while((c = getopt(argc,argv,"hi:c:l:vae:" /* "f:" */)) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -500,9 +499,6 @@ int main(int argc, char* argv[]) {
 	bpfFilter = strdup(optarg);
 	break;
       */
-    case 's':
-      string = strdup(optarg);
-      break;
     }
   }
 

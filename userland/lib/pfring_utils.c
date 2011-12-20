@@ -22,6 +22,7 @@
 
 #ifdef ENABLE_HW_TIMESTAMP
 #include <linux/net_tstamp.h>
+#include <linux/if.h>
 #endif
 
 int pfring_enable_hw_timestamp(pfring* ring, char *device_name) {

@@ -43,7 +43,6 @@ extern int pthread_spin_unlock (pthread_spinlock_t *__lock) __THROW;
 #include <errno.h>
 #include <sys/poll.h>
 #include <sys/socket.h>
-#include <linux/if.h>
 #include <linux/sockios.h>
 #endif
 

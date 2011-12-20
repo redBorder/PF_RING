@@ -486,7 +486,6 @@ void printHelp(void) {
 
   printf("-c <cluster id> cluster id\n");
   printf("-e <direction>  0=RX+TX, 1=RX only, 2=TX only\n");
-  printf("-s <string>     String to search on packets\n");
   printf("-l <len>        Capture length\n");
   printf("-g <core_id>    Bind this app to a code (only with -n 0)\n");
   printf("-w <watermark>  Watermark\n");
@@ -579,7 +578,7 @@ void* packet_consumer_thread(void* _id) {
 /* *************************************** */
 
 int main(int argc, char* argv[]) {
-  char *device = NULL, c, *string = NULL, buf[32];
+  char *device = NULL, c, buf[32];
   u_char mac_address[6] = { 0 };
   int promisc, snaplen = DEFAULT_SNAPLEN, rc;
   u_int clusterId = 0;
@@ -625,7 +624,7 @@ int main(int argc, char* argv[]) {
   startTime.tv_sec = 0;
   thiszone = gmt2local(0);
 
-  while((c = getopt(argc,argv,"hi:c:dl:vs:ae:n:w:p:b:rg:u:" /* "f:" */)) != '?') {
+  while((c = getopt(argc,argv,"hi:c:dl:vae:n:w:p:b:rg:u:" /* "f:" */)) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -665,9 +664,6 @@ int main(int argc, char* argv[]) {
 	bpfFilter = strdup(optarg);
 	break;
       */
-    case 's':
-      string = strdup(optarg);
-      break;
     case 'w':
       watermark = atoi(optarg);
       break;
