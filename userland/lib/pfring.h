@@ -185,7 +185,7 @@ extern "C" {
     int       (*enable_rss_rehash)            (pfring *);
     int       (*poll)                         (pfring *, u_int);
     int       (*is_pkt_available)             (pfring *);
-    int       (*next_pkt_time)                (pfring *, struct timeval *);
+    int       (*next_pkt_time)                (pfring *, struct timespec *);
     int       (*version)                      (pfring *, u_int32_t *);
     int       (*get_bound_device_address)     (pfring *, u_char [6]);
     u_int16_t (*get_slot_header_len)          (pfring *);
@@ -290,7 +290,7 @@ extern "C" {
   int pfring_enable_rss_rehash(pfring *ring);
   int pfring_poll(pfring *ring, u_int wait_duration);
   int pfring_is_pkt_available(pfring *ring);
-  int pfring_next_pkt_time(pfring *ring, struct timeval *ts);
+  int pfring_next_pkt_time(pfring *ring, struct timespec *ts);
   int pfring_version(pfring *ring, u_int32_t *version);
   int pfring_get_bound_device_address(pfring *ring, u_char mac_address[6]);
   u_int16_t pfring_get_slot_header_len(pfring *ring);

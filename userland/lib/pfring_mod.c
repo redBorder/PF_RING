@@ -67,27 +67,6 @@ inline int pfring_there_is_pkt_available(pfring *ring) {
 }
 
 /* **************************************************** */
-
-int pfring_mod_is_pkt_available(pfring *ring) {
-  return(pfring_there_is_pkt_available(ring));
-}
-
-/* **************************************************** */
-
-int pfring_mod_next_pkt_time(pfring *ring, struct timeval *ts) {
-  struct pfring_pkthdr *header = (struct pfring_pkthdr*) &ring->slots[ring->slots_info->remove_off];
-
-  if (!pfring_there_is_pkt_available(ring))
-    return -1;
-
-  if (!header->ts.tv_sec)
-    return -1;
-
-  memcpy(ts, &header->ts, sizeof(struct timeval));
-  return 0;
-}
-
-/* **************************************************** */
 /*     Functions part of the "specialized" subset       */
 /* **************************************************** */
 
@@ -379,6 +358,34 @@ int pfring_mod_stats(pfring *ring, pfring_stat *stats) {
   }
 
   return(-1);
+}
+
+/* **************************************************** */
+
+int pfring_mod_is_pkt_available(pfring *ring) {
+  return(pfring_there_is_pkt_available(ring));
+}
+
+/* **************************************************** */
+
+int pfring_mod_next_pkt_time(pfring *ring, struct timespec *ts) {
+  struct pfring_pkthdr *header = (struct pfring_pkthdr*) &ring->slots[ring->slots_info->remove_off];
+
+  if (!pfring_there_is_pkt_available(ring))
+    return PF_RING_ERROR_NO_PKT_AVAILABLE;
+
+  if (!header->ts.tv_sec)
+    return PF_RING_ERROR_WRONG_CONFIGURATION;
+
+  ts->tv_sec = header->ts.tv_sec;
+  ts->tv_nsec = header->ts.tv_usec * 1000;
+
+  /* TODO In order to use ns from hw ts we should make sure that
+   * hw ts is in sync with sys time. */
+  //if (header->extended_hdr.timestamp_ns)
+  //  ts->tv_nsec = header->extended_hdr.timestamp_ns % 1000000000;
+
+  return 0;
 }
 
 /* **************************************************** */
@@ -849,13 +856,11 @@ int pfring_bundle_poll(pfring_bundle *bundle, u_int wait_duration) {
 
 /* **************************************************** */
 
-inline int is_before(struct timeval *ts_a,  struct timeval *ts_b) {
-  if(ts_a->tv_sec < ts_b->tv_sec)
+inline int is_before(struct timespec *ts_a,  struct timespec *ts_b) {
+  if((ts_a->tv_sec < ts_b->tv_sec)
+     || ((ts_a->tv_sec == ts_b->tv_sec)
+         && (ts_a->tv_nsec < ts_b->tv_nsec)))
     return(1);
-  else if(ts_a->tv_sec == ts_b->tv_sec) {
-    if(ts_a->tv_usec < ts_b->tv_usec)
-      return(1);
-  }
 
   return(0);
 }
@@ -866,17 +871,18 @@ int pfring_bundle_read(pfring_bundle *bundle,
 		       u_char** buffer, u_int buffer_len,
 		       struct pfring_pkthdr *hdr,
 		       u_int8_t wait_for_incoming_packet) {
-  u_int i, sock_id = 0, num_found, rc;
-  struct timeval ts = { 0 };
+  int i, sock_id, found, rc, empty_rings, scans;
+  struct timespec ts = { 0 };
+  struct timespec tmpts;
 
- redo_pfring_bundle_read:
+redo_pfring_bundle_read:
 
   switch(bundle->policy) {
   case pick_round_robin:
     for(i=0; i<bundle->num_sockets; i++) {
       bundle->last_read_socket = (bundle->last_read_socket + 1) % bundle->num_sockets;
 
-      if(pfring_there_is_pkt_available(bundle->sockets[bundle->last_read_socket])) {
+      if(pfring_is_pkt_available(bundle->sockets[bundle->last_read_socket])) {
 	return(pfring_recv(bundle->sockets[bundle->last_read_socket], buffer,
 			   buffer_len, hdr, wait_for_incoming_packet));
       }
@@ -884,22 +890,35 @@ int pfring_bundle_read(pfring_bundle *bundle,
     break;
 
   case pick_fifo:
-    num_found = 0;
+    found = 0;
+    empty_rings = 0;
+    scans = 0;
 
+sockets_scan:
+
+    scans++;
     for(i=0; i<bundle->num_sockets; i++) {
       pfring *ring = bundle->sockets[i];
 
-      if(pfring_there_is_pkt_available(ring)) {
-	struct pfring_pkthdr *header = (struct pfring_pkthdr*)&ring->slots[ring->slots_info->remove_off];
+      rc = pfring_next_pkt_time(ring, &tmpts);
 
-	if((num_found == 0) || is_before(&header->ts, &ts)) {
-	  memcpy(&ts, &header->ts, sizeof(struct timeval));
-	  num_found++, sock_id = i;
+      if (rc == 0) {
+      	if(!found || is_before(&tmpts, &ts)) {
+	  memcpy(&ts, &tmpts, sizeof(struct timespec));
+	  found = 1;
+	  sock_id = i;
 	}
-      }
+      } else if (rc == PF_RING_ERROR_NO_PKT_AVAILABLE) {
+        empty_rings = 1;
+      } else {
+        /* error */
+      } 
     }
 
-    if(num_found > 0) {
+    if(found) {
+      if (empty_rings > 0 && scans == 1)
+        goto sockets_scan; /* scanning ring twice (safety check) */
+
       return(pfring_recv(bundle->sockets[sock_id], buffer,
 			 buffer_len, hdr, wait_for_incoming_packet));
     }

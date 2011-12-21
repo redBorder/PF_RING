@@ -7461,7 +7461,7 @@ static int igb_hwtstamp_ioctl(struct net_device *netdev,
 	/* define which PTP packets are time stamped */
 	E1000_WRITE_REG(hw, E1000_TSYNCRXCFG, tsync_rx_cfg);
 
-#if 0 //#ifdef ENABLE_DNA /* PER PACKET HW TIMESTAMP (ns) */
+#ifdef ENABLE_DNA /* PER PACKET HW TIMESTAMP (ns) */
 	if(adapter->dna.dna_enabled) {
         	if(hw->mac.type >= e1000_82580) {
 			int i, reg_idx;

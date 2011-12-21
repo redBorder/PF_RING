@@ -346,14 +346,13 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u
       pfring_parse_pkt((u_char*)p, (struct pfring_pkthdr*)h, 4, 1, 1);
     }
 
+    s = (h->ts.tv_sec + thiszone) % 86400;
+
     if(h->extended_hdr.timestamp_ns) {
-      s = ((h->ts.tv_sec + thiszone) / 60) * 60; /* precision up to 1 minute from sys time */
-      s+= (h->extended_hdr.timestamp_ns / 1000000000) % 60;
-      s%= 86400;
+      /* be careful with drifts mixing sys time and hw timestamp */
       usec = (h->extended_hdr.timestamp_ns / 1000) % 1000000;
       nsec = h->extended_hdr.timestamp_ns % 1000;
     } else {
-      s = (h->ts.tv_sec + thiszone) % 86400;
       usec = h->ts.tv_usec;
     }
 

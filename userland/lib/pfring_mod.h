@@ -17,6 +17,8 @@ int pfring_mod_open (pfring *ring);
 
 void pfring_mod_close(pfring *ring);
 int pfring_mod_stats(pfring *ring, pfring_stat *stats);
+int pfring_mod_is_pkt_available(pfring *ring);
+int pfring_mod_next_pkt_time(pfring *ring, struct timespec *ts);
 int pfring_mod_recv (pfring *ring, u_char** buffer, u_int buffer_len, 
 			  struct pfring_pkthdr *hdr, u_int8_t wait_for_incoming_packet);
 int pfring_mod_set_poll_watermark(pfring *ring, u_int16_t watermark);

@@ -805,7 +805,7 @@ int pfring_is_pkt_available(pfring *ring){
 
 /* **************************************************** */
 
-int pfring_next_pkt_time(pfring *ring, struct timeval *ts){
+int pfring_next_pkt_time(pfring *ring, struct timespec *ts){
   if(ring && ring->next_pkt_time) {
     return ring->next_pkt_time(ring, ts);
   }

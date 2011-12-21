@@ -87,6 +87,13 @@
 /* Map */
 #define SO_MAP_DNA_DEVICE                190
 
+/* Error codes */
+#define PF_RING_ERROR_GENERIC              -1
+#define PF_RING_ERROR_INVALID_ARGUMENT     -2
+#define PF_RING_ERROR_NO_PKT_AVAILABLE	   -3
+#define PF_RING_ERROR_NO_TX_SLOT_AVAILABLE -4
+#define PF_RING_ERROR_WRONG_CONFIGURATION  -5
+#define PF_RING_ERROR_END_OF_DEMO_MODE     -6
 
 #define REFLECTOR_NAME_LEN                 8
 

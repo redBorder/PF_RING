@@ -170,13 +170,14 @@ int pfring_dna_open(pfring *ring) {
 
   ring->close = pfring_dna_close;
   ring->stats = pfring_dna_stats;
+  /* ring->next_pkt_time set by the dna library */
   ring->recv  = pfring_dna_recv;
   ring->set_poll_watermark = pfring_mod_set_poll_watermark;
   ring->set_poll_duration = pfring_mod_set_poll_duration;
   ring->set_channel_id = pfring_mod_set_channel_id;
   ring->set_application_name = pfring_mod_set_application_name;
   ring->bind = pfring_mod_bind;
-  ring->send = NULL; /* Set by the dna library */
+  /* ring->send set by the dna library */
   ring->get_num_rx_channels = pfring_mod_get_num_rx_channels;
   ring->get_selectable_fd = pfring_mod_get_selectable_fd;
   ring->set_direction = pfring_mod_set_direction;

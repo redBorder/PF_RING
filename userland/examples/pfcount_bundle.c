@@ -264,12 +264,28 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, long th
     u_short eth_type, vlan_id;
     char buf1[32], buf2[32];
     struct ip ip;
-    int s = (h->ts.tv_sec + thiszone) % 86400;
-    u_int nsec = h->extended_hdr.timestamp_ns % 1000;
+    int s;
+    u_int usec;
+    u_int nsec = 0;
+
+    if(h->ts.tv_sec == 0) {
+      memset((void*)&h->extended_hdr.parsed_pkt, 0, sizeof(struct pkt_parsing_info));
+      pfring_parse_pkt((u_char*)p, (struct pfring_pkthdr*)h, 4, 1, 1);
+    }
+
+    s = (h->ts.tv_sec + thiszone) % 86400;
+
+    if (h->extended_hdr.timestamp_ns) {
+      /* be careful with drifts mixing sys time and hw timestamp */
+      usec = (h->extended_hdr.timestamp_ns / 1000) % 1000000;
+      nsec = h->extended_hdr.timestamp_ns % 1000;
+    } else {
+      usec = h->ts.tv_usec;
+    }
 
     printf("%02d:%02d:%02d.%06u%03u ",
 	   s / 3600, (s % 3600) / 60, s % 60,
-	   (unsigned)h->ts.tv_usec, nsec);
+	   usec, nsec);
 
 #if 0
     for(i=0; i<32; i++)
@@ -387,6 +403,7 @@ void printHelp(void) {
   printf("-b <cpu %%>      CPU pergentage priority (0-99)\n");
   printf("-r              Rehash RSS packets\n");
   printf("-a              Active packet wait\n");
+  printf("-q              Set FIFO policy (Default: Round Robin)\n");
   printf("-v              Verbose\n");
 }
 
@@ -414,15 +431,16 @@ void* packet_consumer(void) {
 /* *************************************** */
 
 int main(int argc, char* argv[]) {
-  char *device = NULL, c, *dev;
+  char *device = NULL, c, *dev, *pos = NULL;
   int promisc, snaplen = DEFAULT_SNAPLEN;
   u_int16_t watermark = 0;
+  bundle_read_policy bundle_policy = pick_round_robin;
   u_int32_t version;
 
   startTime.tv_sec = 0;
   thiszone = gmt2local(0);
 
-  while((c = getopt(argc,argv,"hi:dl:vaw:" /* "f:" */)) != '?') {
+  while((c = getopt(argc,argv,"hi:dl:vaw:q")) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -450,6 +468,8 @@ int main(int argc, char* argv[]) {
     case 'w':
       watermark = atoi(optarg);
       break;
+    case 'q':
+     bundle_policy = pick_fifo;   
     }
   }
 
@@ -460,9 +480,9 @@ int main(int argc, char* argv[]) {
 
   printf("Capturing from bundle %s\n", device);
   
-  dev = strtok(device, ";");
+  dev = strtok_r(device, ";", &pos);
   num_ring = 0;
-  init_pfring_bundle(&bundle, pick_round_robin);
+  init_pfring_bundle(&bundle, bundle_policy);
 
   while(dev != NULL) {
     printf("Adding %s to bundle\n", dev);
@@ -488,7 +508,7 @@ int main(int argc, char* argv[]) {
     add_to_pfring_bundle(&bundle, ring[num_ring]);
 
     num_ring++;    
-    dev = strtok(NULL, ";");
+    dev = strtok_r(NULL, ";", &pos);
   }
 
   
