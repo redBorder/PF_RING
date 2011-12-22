@@ -843,3 +843,23 @@ int pfring_set_filtering_mode(pfring *ring, filtering_mode mode){
   return 0;
 }
 
+/* **************************************************** */
+
+int pfring_set_device_clock(pfring *ring, struct timespec *ts) {
+  if(ring && ring->set_device_clock) {
+    return ring->set_device_clock(ring, ts);
+  }
+
+  return -1;
+}
+
+/* **************************************************** */
+
+int pfring_get_device_clock(pfring *ring, struct timespec *ts) {
+  if(ring && ring->get_device_clock) {
+    return ring->get_device_clock(ring, ts);
+  }
+
+  return -1;
+}
+

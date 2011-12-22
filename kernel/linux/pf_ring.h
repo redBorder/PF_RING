@@ -562,6 +562,7 @@ typedef enum {
 typedef enum {
   intel_e1000e = 0,
   intel_igb,
+  intel_igb_82580,
   intel_ixgbe,
   intel_ixgbe_82598,
   intel_ixgbe_82599

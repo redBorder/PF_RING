@@ -3575,6 +3575,7 @@ void igb_clean_rx_ring(struct igb_ring *rx_ring)
         if(adapter->dna.dna_enabled) {
 	  struct igb_ring    *tx_ring = adapter->tx_ring[rx_ring->queue_index];
 	  struct pfring_hooks   *hook = (struct pfring_hooks*)rx_ring->netdev->pfring_ptr;
+	  struct e1000_hw *hw = &adapter->hw;
 	  u_int i;
 	  mem_ring_info         rx_info = {0}; 
 	  mem_ring_info         tx_info = {0}; 
@@ -3642,7 +3643,7 @@ void igb_clean_rx_ring(struct igb_ring *rx_ring)
 					    rx_ring->netdev->mem_end - rx_ring->netdev->mem_start,
 					    rx_ring->queue_index, /* Channel Id */
 					    rx_ring->netdev,
-					    intel_igb,
+					    dna_model(hw),
 					    rx_ring->netdev->dev_addr,
 					    &rx_ring->dna.rx_tx.rx.packet_waitqueue,
 					    &rx_ring->dna.rx_tx.rx.interrupt_received,

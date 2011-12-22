@@ -195,6 +195,8 @@ extern "C" {
     int       (*disable_ring)                 (pfring *);
     int       (*set_bpf_filter)               (pfring *, char *);
     int       (*remove_bpf_filter)            (pfring *);
+    int       (*set_device_clock)             (pfring *, struct timespec *);
+    int       (*get_device_clock)             (pfring *, struct timespec *);
 
     /* DNA only */
     int      (*dna_init)             (pfring *);
@@ -301,6 +303,8 @@ extern "C" {
   int pfring_set_bpf_filter(pfring *ring, char *filter_buffer);
   int pfring_remove_bpf_filter(pfring *ring);
   int pfring_set_filtering_mode(pfring *ring, filtering_mode mode);
+  int pfring_set_device_clock(pfring *ring, struct timespec *ts);
+  int pfring_get_device_clock(pfring *ring, struct timespec *ts);
 
   /* PF_RING Socket bundle (defined in pfring_mod.c) */
   void init_pfring_bundle(pfring_bundle *bundle, bundle_read_policy p);

@@ -176,6 +176,18 @@ static void print_adv_rx_descr(union e1000_adv_rx_desc	*descr) {
 
 /* ********************************** */
 
+dna_device_model dna_model(struct e1000_hw *hw){
+  switch (hw->mac.type) {
+    case e1000_82580:
+    case e1000_i350:
+      return intel_igb_82580;
+    default:
+      return intel_igb;
+  }
+}
+
+/* ********************************** */
+
 /* Reset the ring when we shutdown */
 void dna_cleanup_rx_ring(struct igb_ring *rx_ring) {
   struct igb_adapter	  *adapter = netdev_priv(rx_ring->netdev);
@@ -448,8 +460,7 @@ void dna_igb_alloc_rx_buffers(struct igb_ring *rx_ring, struct pfring_hooks *hoo
   struct igb_adapter 	*adapter = netdev_priv(rx_ring->netdev);
   struct e1000_hw	*hw = &adapter->hw;
   u16			cache_line_size;
-  struct igb_ring    *tx_ring = adapter->tx_ring[rx_ring->queue_index];
-  dna_device_model	model = intel_igb;
+  struct igb_ring	*tx_ring = adapter->tx_ring[rx_ring->queue_index];
   mem_ring_info         rx_info = {0};
   mem_ring_info         tx_info = {0};
   int                   num_slots_per_page;
@@ -594,7 +605,7 @@ void dna_igb_alloc_rx_buffers(struct igb_ring *rx_ring, struct pfring_hooks *hoo
 				rx_ring->netdev->mem_end - rx_ring->netdev->mem_start,
 				rx_ring->queue_index, /* Channel Id */
 				rx_ring->netdev,
-				model,
+				dna_model(hw),
 				rx_ring->netdev->dev_addr,
 				&rx_ring->dna.rx_tx.rx.packet_waitqueue,
 				&rx_ring->dna.rx_tx.rx.interrupt_received,
