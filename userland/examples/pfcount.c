@@ -90,9 +90,10 @@ void print_stats() {
   double deltaMillisec;
   static u_int8_t print_all;
   static u_int64_t lastPkts = 0;
-  u_int64_t diff;
+  static u_int64_t lastBytes = 0;
+  u_int64_t diff, bytesDiff;
   static struct timeval lastTime;
-  char buf1[64], buf2[64];
+  char buf1[64], buf2[64], buf3[64];
 
   if(startTime.tv_sec == 0) {
     gettimeofday(&startTime, NULL);
@@ -136,14 +137,19 @@ void print_stats() {
     if(print_all && (lastTime.tv_sec > 0)) {
       deltaMillisec = delta_time(&endTime, &lastTime);
       diff = nPkts-lastPkts;
+      bytesDiff = nBytes - lastBytes;
+      bytesDiff /= (1000*1000*1000)/8;
+
       fprintf(stderr, "=========================\n"
-	      "Actual Stats: %llu pkts [%s ms][%s pkt/sec]\n",
+	      "Actual Stats: %llu pkts [%s ms][%s pps/%s Gbps]\n",
 	      (long long unsigned int)diff,
 	      pfring_format_numbers(deltaMillisec, buf1, sizeof(buf1), 1),
-	      pfring_format_numbers(((double)diff/(double)(deltaMillisec/1000)),  buf2, sizeof(buf2), 1));
+	      pfring_format_numbers(((double)diff/(double)(deltaMillisec/1000)),  buf2, sizeof(buf2), 1),
+	      pfring_format_numbers(((double)bytesDiff/(double)(deltaMillisec/1000)),  buf3, sizeof(buf3), 1)
+	      );
     }
 
-    lastPkts = nPkts;
+    lastPkts = nPkts, lastBytes = nBytes;
   }
 
   lastTime.tv_sec = endTime.tv_sec, lastTime.tv_usec = endTime.tv_usec;
@@ -435,7 +441,7 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u
     }
   }
 
-  numPkts[threadId]++, numBytes[threadId] += h->len;
+  numPkts[threadId]++, numBytes[threadId] += h->len+24 /* 8 Preamble + 4 CRC + 12 IFG */;
 
   if(add_drop_rule) {
     if(h->ts.tv_sec == 0)
