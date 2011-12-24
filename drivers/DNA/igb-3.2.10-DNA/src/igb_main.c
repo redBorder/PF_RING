@@ -7477,7 +7477,11 @@ static int igb_hwtstamp_ioctl(struct net_device *netdev,
 				 * the criteria defined in the TSYNCRXCTL.Type field, 2-tuple filters 
 				 * or ETQF registers. A 40 bit timestamp generated from the value in 
 				 * SYSTIMH and SYSTIML registers is placed in the receive buffer. */
-				reg |= 0x40000000;
+				if(tsync_rx_ctl != 0) /* enabling rx ts (Timestamp Reserved bit) */
+				  reg |= 0x40000000;
+				else /* disabling rx ts */
+				  reg &= ~0x40000000;
+				  
   				E1000_WRITE_REG(hw, E1000_SRRCTL(reg_idx), reg);
            
 				if(unlikely(enable_debug))

@@ -190,6 +190,7 @@ int pfring_dna_open(pfring *ring) {
   ring->disable_ring = pfring_mod_disable_ring;
   /* These functions are set by the dna library: (when supported by the device)
    * ring->send
+   * ring->send_get_time
    * ring->next_pkt_time
    * ring->set_device_clock
    * ring->get_device_clock
@@ -346,7 +347,7 @@ int pfring_dna_open(pfring *ring) {
     return rc;
   }
 
-  pfring_enable_hw_timestamp(ring, ring->device_name);
+  pfring_enable_hw_timestamp(ring, ring->device_name, 1, 0 /* TX timestamp disabled by default */);
 
 #ifdef DEBUG
   pfring_dump_dna_stats(ring);

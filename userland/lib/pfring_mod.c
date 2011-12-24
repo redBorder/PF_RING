@@ -198,7 +198,7 @@ int pfring_mod_open(pfring *ring) {
       ring->clear_promisc = 1;
   }
 
-  pfring_enable_hw_timestamp(ring, ring->device_name);
+  pfring_enable_hw_timestamp(ring, ring->device_name, 1, 0);
 
   ring->slot_header_len = pfring_get_slot_header_len(ring);
   if(ring->slot_header_len == (u_int16_t)-1) {

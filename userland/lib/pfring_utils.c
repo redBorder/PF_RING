@@ -26,7 +26,7 @@
 
 /* ******************************* */
 
-int pfring_enable_hw_timestamp(pfring* ring, char *device_name) {
+int pfring_enable_hw_timestamp(pfring* ring, char *device_name, u_int8_t enable_rx, u_int8_t enable_tx) {
 #ifdef ENABLE_HW_TIMESTAMP
   struct hwtstamp_config hwconfig;
   struct ifreq ifr;
@@ -37,9 +37,8 @@ int pfring_enable_hw_timestamp(pfring* ring, char *device_name) {
 
   memset(&hwconfig, 0, sizeof(hwconfig));
 
-  /* Enable RX/disable TX timestamps */
-  hwconfig.tx_type = HWTSTAMP_TX_OFF;
-  hwconfig.rx_filter = HWTSTAMP_FILTER_ALL;
+  hwconfig.rx_filter = (enable_rx ? HWTSTAMP_FILTER_ALL : HWTSTAMP_FILTER_NONE);
+  hwconfig.tx_type   = (enable_tx ? HWTSTAMP_TX_ON      : HWTSTAMP_TX_OFF);
 
   memset(&ifr, 0, sizeof(ifr));
   strcpy(ifr.ifr_name, device_name);

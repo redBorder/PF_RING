@@ -442,13 +442,47 @@ int pfring_send(pfring *ring, char *pkt, u_int pkt_len, u_int8_t flush_packet) {
 /* **************************************************** */
 
 int pfring_send_parsed(pfring *ring, char *pkt, struct pfring_pkthdr *hdr, u_int8_t flush_packet) {
-  if(likely(ring 
-	    && (!ring->is_shutting_down)
-	    && ring->enabled 
-	    && ring->send_parsed))
-    return ring->send_parsed(ring, pkt, hdr, flush_packet);
+  int rc = -1;
 
-  return -1;
+  if(likely(ring
+	    && ring->enabled
+	    && (!ring->is_shutting_down)
+	    && ring->send_parsed
+	    && (ring->direction != rx_only_direction))) {
+
+    if(ring->reentrant) 
+      pthread_spin_lock(&ring->spinlock);
+
+    rc =  ring->send_parsed(ring, pkt, hdr, flush_packet);
+    
+    if(ring->reentrant) 
+      pthread_spin_unlock(&ring->spinlock);
+  }
+
+  return rc;
+}
+
+/* **************************************************** */
+
+int pfring_send_get_time(pfring *ring, char *pkt, u_int pkt_len, struct timespec *ts) {
+  int rc = -1;
+
+  if(likely(ring
+	    && ring->enabled
+	    && (!ring->is_shutting_down)
+	    && ring->send_get_time
+	    && (ring->direction != rx_only_direction))) {
+
+    if(ring->reentrant) 
+      pthread_spin_lock(&ring->spinlock);
+
+    rc =  ring->send_get_time(ring, pkt, pkt_len, ts);
+    
+    if(ring->reentrant) 
+      pthread_spin_unlock(&ring->spinlock);
+  }
+
+  return rc;
 }
 
 /* **************************************************** */

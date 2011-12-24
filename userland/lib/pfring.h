@@ -162,6 +162,7 @@ extern "C" {
     int       (*bind)                         (pfring *, char *);
     int       (*send)                         (pfring *, char *, u_int, u_int8_t);
     int       (*send_parsed)                  (pfring *, char *, struct pfring_pkthdr *, u_int8_t);
+    int       (*send_get_time)                (pfring *, char *, u_int, struct timespec *);
     u_int8_t  (*get_num_rx_channels)          (pfring *);
     int       (*set_sampling_rate)            (pfring *, u_int32_t);
     int       (*get_selectable_fd)            (pfring *);
@@ -263,6 +264,7 @@ extern "C" {
   int pfring_bind(pfring *ring, char *device_name);
   int pfring_send(pfring *ring, char *pkt, u_int pkt_len, u_int8_t flush_packet);
   int pfring_send_parsed(pfring *ring, char *pkt, struct pfring_pkthdr *hdr, u_int8_t flush_packet);
+  int pfring_send_get_time(pfring *ring, char *pkt, u_int pkt_len, struct timespec *ts);
   u_int8_t pfring_get_num_rx_channels(pfring *ring);
   int pfring_set_sampling_rate(pfring *ring, u_int32_t rate /* 1 = no sampling */);
   int pfring_get_selectable_fd(pfring *ring);
@@ -322,7 +324,7 @@ extern "C" {
 		       u_int8_t add_timestamp /* 0,1 */, u_int8_t add_hash /* 0,1 */);
   int pfring_set_if_promisc(const char *device, int set_promisc);
   char* pfring_format_numbers(double val, char *buf, u_int buf_len, u_int8_t add_decimals);
-  int pfring_enable_hw_timestamp(pfring* ring, char *device_name);
+  int pfring_enable_hw_timestamp(pfring* ring, char *device_name, u_int8_t enable_rx, u_int8_t enable_tx);
 
   /* ********************************* */
 
