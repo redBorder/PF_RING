@@ -849,6 +849,16 @@ int pfring_next_pkt_time(pfring *ring, struct timespec *ts){
 
 /* **************************************************** */
 
+int pfring_next_pkt_raw_timestamp(pfring *ring, u_int64_t *timestamp_ns){
+  if(ring && ring->next_pkt_raw_timestamp) {
+    return ring->next_pkt_raw_timestamp(ring, timestamp_ns);
+  }
+
+  return -1;
+}
+
+/* **************************************************** */
+
 int pfring_set_bpf_filter(pfring *ring, char *filter_buffer){
   if(ring && ring->set_bpf_filter) {
     return ring->set_bpf_filter(ring, filter_buffer);

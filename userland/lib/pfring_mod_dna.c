@@ -192,6 +192,7 @@ int pfring_dna_open(pfring *ring) {
    * ring->send
    * ring->send_get_time
    * ring->next_pkt_time
+   * ring->next_pkt_raw_timestamp
    * ring->set_device_clock
    * ring->get_device_clock
    */
