@@ -27,13 +27,22 @@ Compilation and Installation
 - (as root) run ./load_dna_driver.sh
 
 Note that
+
 - you might need to change the interface names into your script
+
 - you can decide which adapters to enable as follows
 
-  insmod ./e1000e.ko adapters_to_enable=dna0
+  insmod ./ixgbe.ko adapters_to_enable=<MAC addresses>
 
-  where adapters_to_enable contains the list of adapters to enable with DNA
+  where adapters_to_enable contains the comma-separated list of adapters to enable with DNA
 
+- you can change the default number of rx/tx slots as follows
+
+  insmod ./ixgbe.ko num_rx_slots=8192 num_tx_slots=4096
+
+- you can change the MTU as follows
+
+  insmod ./ixgbe.ko mtu=9000
 
 Testing DNA
 -----------
