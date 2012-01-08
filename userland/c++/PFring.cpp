@@ -26,72 +26,42 @@
 
 /* *********************************************** */
 
-PFring::PFring(char* _device_name, u_int _snaplen, bool promisc, char *bpf) {
-  char errbuf[PCAP_ERRBUF_SIZE];
-  
+PFring::PFring(char* _device_name, u_int _snaplen, bool promisc, u_int8_t reentrant) {
   snaplen = _snaplen, device_name = NULL;
 
   if(_device_name == NULL)
-    _device_name = pcap_lookupdev(errbuf);
-
-  if(_device_name == NULL) 
-    pcapPtr = NULL;
+    ring = NULL;
   else {
-    pcapPtr = pcap_open_live(_device_name, snaplen, promisc ? 1 : 0, 500, errbuf);
-    if(pcapPtr) {
+    if((ring = pfring_open(_device_name, promisc, _snaplen, reentrant)) != NULL)
       device_name = strdup(_device_name);
-      if(bpf) add_bpf_filter(bpf);
-    }
   }
 }
 
 /* *********************************************** */
 
 PFring::~PFring() {
-  if(pcapPtr) {
+  if(ring) {
     if(device_name) free(device_name);
-    pcap_close(pcapPtr);
-    pcapPtr = NULL;
+    pfring_close(ring);
+    ring = NULL;
   }
 }
 
 /* *********************************************** */
 
 int PFring::add_bpf_filter(char *the_filter) {
-  struct bpf_program fcode;
-
-  if(pcapPtr == NULL) return(-1);
-  if(the_filter == NULL) return(0);
-
-  if(the_filter != NULL) {
-    if(pcap_compile(pcapPtr, &fcode, the_filter, 1, 0xFFFFFF00) < 0) {
-      return(-2);
-    } else {
-      if(pcap_setfilter(pcapPtr, &fcode) < 0) {
-	pcap_freecode(&fcode);
-	return(-3);
-      } else
-	pcap_freecode(&fcode);
-    }    
-  } else
-    return(0);
+  if(ring == NULL)
+    return(-1);
+  else
+    return(pfring_set_bpf_filter(ring, the_filter));
 }
 
 /* *********************************************** */
 
 int PFring::get_next_packet(struct pfring_pkthdr *hdr, const u_char *pkt, u_int pkt_len) {
-  if((!pcapPtr) || (!hdr) || (pkt_len < snaplen)) return(-1);
-  
-  if(pcapPtr->ring) {
-    return(pfring_recv(pcapPtr->ring, (u_char**)&pkt, pkt_len, hdr, 1 /* wait_for_incoming_packet */));
-  } else {
-    pcap_pkthdr *_hdr;
-    int rc;
+  if((!ring) || (!hdr) || (pkt_len < snaplen)) return(-1);
 
-    rc = pcap_next_ex(pcapPtr, &_hdr, &pkt);
-    memcpy(hdr, _hdr, sizeof(struct pcap_pkthdr));
-    return(rc);
-  }
+  return(pfring_recv(ring, (u_char**)&pkt, pkt_len, hdr, 1 /* wait_for_incoming_packet */));
 }
 
 /* *********************************************** */
@@ -107,9 +77,9 @@ bool PFring::wait_for_packets(int msec) {
 
   errno = 0;
   rc = poll(&pfd, 1, msec);
-    
+
   if(rc == -1)
     return(false);
   else
-    return((rc > 0) ? true : false);    
+    return((rc > 0) ? true : false);
 }

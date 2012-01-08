@@ -48,7 +48,7 @@ void sigproc(int sig) {
 
 void printHelp(void) {
 
-  printf("pcount\n(C) 2003-07 Deri Luca <deri@ntop.org>\n");
+  printf("pcount\n(C) 2003-12 Deri Luca <deri@ntop.org>\n");
   printf("-h              [Print help]\n");
   printf("-i <device>     [Device name]\n");
   printf("-w <dump file>  [Dump file path]\n");
@@ -58,7 +58,7 @@ void printHelp(void) {
 /* *************************************** */
 
 int main(int argc, char* argv[]) {
-  char *device = NULL, c, *bpfFilter = NULL;
+  char *device = NULL, c;
   int promisc;
 
 #if 0  
@@ -96,7 +96,7 @@ int main(int argc, char* argv[]) {
 #endif
 #endif
 
-  while((c = getopt(argc,argv,"hi:w:vf:")) != -1) {
+  while((c = getopt(argc,argv,"hi:w:v")) != -1) {
     switch(c) {
     case 'h':
       printHelp();
@@ -114,9 +114,6 @@ int main(int argc, char* argv[]) {
       break;
     case 'v':
       verbose = 1;
-      break;
-    case 'f':
-      bpfFilter = strdup(optarg);
       break;
     }
   }

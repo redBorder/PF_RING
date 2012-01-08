@@ -1,25 +1,44 @@
 #include "PFring.h"
 #include <string.h>
 
+/* ************************************* */
+
 struct simple_stats {
   u_int64_t num_pkts, num_bytes;
 };
 
+/* ************************************* */
+
 int main(int argc, char *argv[]) {
-  char *device_name = (char*)"eth0";
-  PFring *ring = new PFring(device_name, 128, 1);
+  char *device_name = (char*)"dna0";
+  PFring *ring;
   int rc;
   u_int16_t rule_id = 99;
+  u_int32_t num_pkts = 0;
   char stats[32];
+  u_char pkt[1500];
+  struct pfring_pkthdr hdr;
+  bool add_rule = false;
 
-  if(ring && ring->get_pcap())
+  if(argc != 2) {
+    printf("pf_test <device>\n");
+    return(-1);
+  } else
+    device_name = argv[1];
+
+  ring = new PFring(device_name, 128, 1);
+
+  if(ring)
     printf("Succesfully open device %s\n", device_name);
   else {
-    printf("Problems while opening device %s: %s\n", device_name, ring->get_last_error());
+    printf("Problems while opening device %s (pf_ring not loaded or perhaps you use quick mode and have already a socket bound to %s ?)\n", 
+	   device_name, device_name);
     return(0);
   }
 
-  if(true) {
+  ring->enable_ring();
+
+  if(add_rule) {
     filtering_rule the_rule;
 
     ring->toggle_filtering_policy(false); /* Default to drop */
@@ -34,31 +53,30 @@ int main(int argc, char *argv[]) {
     printf("Added filtering rule %d [rc=%d]\n", rule_id, rc);
   }
 
-
-
   while(true) {
-    u_char pkt[1500];
-    struct pfring_pkthdr hdr;
-    struct simple_stats *the_stats = (struct simple_stats*)stats;
+    hdr.len = 0;
 
     if(ring->get_next_packet(&hdr, pkt, sizeof(pkt)) > 0) {
-      u_int len;
+      printf("Got %d bytes packet [tot: %u]\n", hdr.len, ++num_pkts);
 
-      printf("Got %d bytes packet\n", hdr.len);
+      if(add_rule) {
+	struct simple_stats *the_stats = (struct simple_stats*)stats;
+	u_int len = sizeof(stats);
 
-      len = sizeof(stats);
-      rc = ring->get_filtering_rule_stats(rule_id, stats, &len);
-      if(rc == sizeof(struct simple_stats))
-	printf("Got stats for filtering rule %d [pkts=%u][bytes=%u]\n", 
-	       rule_id,
-	       (unsigned int)the_stats->num_pkts,
-	       (unsigned int)the_stats->num_bytes);
+	rc = ring->get_filtering_rule_stats(rule_id, stats, &len);
+	if(rc == sizeof(struct simple_stats))
+	  printf("Got stats for filtering rule %d [pkts=%u][bytes=%u]\n",
+		 rule_id,
+		 (unsigned int)the_stats->num_pkts,
+		 (unsigned int)the_stats->num_bytes);
+      }
     } else {
       printf("Error while calling get_next_packet()\n");
       break;
     }
   }
 
-      delete ring;
+  delete ring;
+
   return(0);
 }
