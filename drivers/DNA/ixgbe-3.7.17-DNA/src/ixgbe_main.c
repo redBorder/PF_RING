@@ -4131,9 +4131,9 @@ static void ixgbe_setup_rdrxctl(struct ixgbe_adapter *adapter)
 		/* hardware requires some bits to be set by default */
 		rdrxctl |= (IXGBE_RDRXCTL_RSCACKC | IXGBE_RDRXCTL_FCOE_WRFIX);
 		rdrxctl |= IXGBE_RDRXCTL_CRCSTRIP;
-#ifndef ENABLE_DNA
+#ifdef ENABLE_DNA
 		if(adapter->dna.dna_enabled)
-			rdrxctl |= IXGBE_RDRXCTL_CRCSTRIP; /* Disable CRC strip */
+			rdrxctl &= ~IXGBE_RDRXCTL_CRCSTRIP; /* Disable CRC strip */
 #endif
 		break;
 	default:
@@ -9793,19 +9793,17 @@ static int __devinit ixgbe_probe(struct pci_dev *pdev,
 			      pci_resource_len(pdev, 0));
 #else
 	{
-	  unsigned long	mmio_start;
-	  int			mmio_len;
+		unsigned long	mmio_start;
+		int		mmio_len;
 
-	  hw->hw_addr =
-	    ioremap((mmio_start = pci_resource_start(pdev, 0)),
-		    (mmio_len = pci_resource_len(pdev, 0)));
+		hw->hw_addr = ioremap((mmio_start = pci_resource_start(pdev, 0)),
+				      (mmio_len = pci_resource_len(pdev, 0)));
 
-	  netdev->mem_start = mmio_start;
-	  netdev->mem_end = mmio_start + mmio_len;
+		netdev->mem_start = mmio_start;
+		netdev->mem_end = mmio_start + mmio_len;
 
-	  if(unlikely(enable_debug)) {
-	    printk("[mmio_start=0x%lx][mmio_len=0x%x]\n", mmio_start, mmio_len);
-	  }
+		if(unlikely(enable_debug))
+			printk("[mmio_start=0x%lx][mmio_len=0x%x]\n", mmio_start, mmio_len);
 	}
 #endif
 	if (!hw->hw_addr) {
