@@ -441,7 +441,7 @@ void printHelp(void) {
   printf("-w <watermark>  Watermark\n");
   printf("-p <poll wait>  Poll wait (msec)\n");
   printf("-b <cpu %%>      CPU pergentage priority (0-99)\n");
-  printf("-a              Active packet wait\n");
+  printf("-s              Use poll instead of active wait\n");
 #ifdef VERBOSE_SUPPORT
   printf("-v              Verbose\n");
 #endif
