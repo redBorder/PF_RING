@@ -274,8 +274,8 @@ static int pfring_daq_set_filter(void *handle, const char *filter) {
 		  SO_ATTACH_FILTER, &fcode, sizeof(fcode)) == 0) {
       ret = DAQ_SUCCESS;
 
-      if(context->twin_ring_handle) {  
-	if(setsockopt(pfring_get_selectable_fd(context->ring_handle), 0,
+      if(context->twin_device) {  
+	if(setsockopt(pfring_get_selectable_fd(context->twin_ring_handle), 0,
 		      SO_ATTACH_FILTER, &fcode, sizeof(fcode)) == 0) {
           ret = DAQ_SUCCESS;
 
