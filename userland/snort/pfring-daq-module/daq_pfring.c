@@ -105,12 +105,7 @@ static pfring* pfring_daq_open(Pfring_Context_t *context, char *device, int td) 
   }
 
   context->netmask = htonl(default_net);
-
-  if(context->filter_string) {
-    if(pfring_daq_set_filter(ring_handle, context->filter_string))
-      return NULL;
-  }
-
+ 
   return(ring_handle);
 }
 
@@ -264,13 +259,13 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
 }
 
 static int pfring_daq_set_filter(void *handle, const char *filter) {
-  Pfring_Context_t *context =(Pfring_Context_t *) handle;
+  Pfring_Context_t *context = (Pfring_Context_t *) handle;
   int ret;
   struct sfbpf_program fcode;
 
   if(context->ring_handle) {
     if(sfbpf_compile(context->snaplen, DLT_EN10MB, &fcode,
-		     filter, 1, htonl(context->netmask)) < 0) {
+		     filter, 0 /* 1: optimize */, htonl(context->netmask)) < 0) {
       DPE(context->errbuf, "%s: BPF state machine compilation failed!", __FUNCTION__);
       return DAQ_ERROR;
     }
@@ -278,15 +273,21 @@ static int pfring_daq_set_filter(void *handle, const char *filter) {
     if(setsockopt(pfring_get_selectable_fd(context->ring_handle), 0,
 		  SO_ATTACH_FILTER, &fcode, sizeof(fcode)) == 0) {
       ret = DAQ_SUCCESS;
-    } else
-      ret = DAQ_ERROR;
+
+      if(context->twin_ring_handle) {  
+	if(setsockopt(pfring_get_selectable_fd(context->ring_handle), 0,
+		      SO_ATTACH_FILTER, &fcode, sizeof(fcode)) == 0) {
+          ret = DAQ_SUCCESS;
+
+        } else ret = DAQ_ERROR; 
+      }
+    } else ret = DAQ_ERROR;
 
     sfbpf_freecode(&fcode);
   } else {
     /* Just check if the filter is valid */
-
-    if(sfbpf_compile(context->snaplen, DLT_EN10MB,
-		     &fcode, filter, 1, htonl(0xFFFFFF00) /* /24 */) < 0) {
+    if(sfbpf_compile(context->snaplen, DLT_EN10MB, &fcode, 
+    		     filter, 0 /* 1: optimize */, 0 /* netmask */) < 0) {
       DPE(context->errbuf, "%s: BPF state machine compilation failed!", __FUNCTION__);
       return DAQ_ERROR;
     }
@@ -297,10 +298,11 @@ static int pfring_daq_set_filter(void *handle, const char *filter) {
       free(context->filter_string);
 
     context->filter_string = strdup(filter);
+
     if(!context->filter_string) {
       DPE(context->errbuf, "%s: Couldn't allocate memory for the filter string!",
 	  __FUNCTION__);
-      return DAQ_ERROR;
+      ret = DAQ_ERROR;
     }
 
     sfbpf_freecode(&fcode);
@@ -323,6 +325,11 @@ static int pfring_daq_start(void *handle) {
     context->twin_ring_handle = pfring_daq_open(context, context->twin_device, 1);
 
     if(context->twin_ring_handle == NULL)
+      return DAQ_ERROR;
+  }
+
+  if(context->filter_string) {
+    if(pfring_daq_set_filter(context, context->filter_string))
       return DAQ_ERROR;
   }
 

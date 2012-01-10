@@ -20,7 +20,7 @@ Compilation
 Installation
 ------------
 You can do:
-# sudo cp .libs/daq_pfring.so into /usr/local/lib/daq/
+# sudo cp .libs/daq_pfring.so /usr/local/lib/daq/
 or
 # sudo make install
 
