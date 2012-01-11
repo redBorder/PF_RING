@@ -312,6 +312,145 @@ void pfring_breakloop(pfring *ring) {
 }
 
 /* **************************************************** */
+
+void init_pfring_bundle(pfring_bundle *bundle, bundle_read_policy p) {
+  memset(bundle, 0, sizeof(pfring_bundle));
+  bundle->policy = p;
+}
+
+/* **************************************************** */
+
+int add_to_pfring_bundle(pfring_bundle *bundle, pfring *ring) {
+  if(bundle->num_sockets >= (MAX_NUM_BUNDLE_ELEMENTS-1))
+    return(-1);
+
+  bundle->sockets[bundle->num_sockets] = ring;
+  bundle->pfd[bundle->num_sockets].fd = pfring_get_selectable_fd(ring);
+  bundle->num_sockets++;
+
+  pfring_enable_ring(ring);
+
+  return(0);
+}
+
+/* **************************************************** */
+
+/* Returns the first bundle socket with something to read */
+int pfring_bundle_poll(pfring_bundle *bundle, u_int wait_duration) {
+  int i, rc;
+
+  for(i=0; i<bundle->num_sockets; i++) {
+    bundle->pfd[i].events  = POLLIN /* | POLLERR */;
+    bundle->pfd[i].revents = 0;
+  }
+
+  errno = 0;
+  rc = poll(bundle->pfd, bundle->num_sockets, wait_duration);
+
+  if(rc > 0) {
+    for(i=0; i<bundle->num_sockets; i++)
+      if(bundle->pfd[i].revents != 0)
+	return(i);
+  } else if(rc == 0)
+    return(-1);
+
+  return(-2); /* Default */
+}
+
+/* **************************************************** */
+
+inline int is_before(struct timespec *ts_a,  struct timespec *ts_b) {
+  if((ts_a->tv_sec < ts_b->tv_sec)
+     || ((ts_a->tv_sec == ts_b->tv_sec)
+         && (ts_a->tv_nsec < ts_b->tv_nsec)))
+    return(1);
+
+  return(0);
+}
+
+/* **************************************************** */
+
+int pfring_bundle_read(pfring_bundle *bundle,
+		       u_char** buffer, u_int buffer_len,
+		       struct pfring_pkthdr *hdr,
+		       u_int8_t wait_for_incoming_packet) {
+  int i, sock_id, found, rc, empty_rings, scans;
+  struct timespec ts = { 0 };
+  struct timespec tmpts;
+
+redo_pfring_bundle_read:
+
+  switch(bundle->policy) {
+  case pick_round_robin:
+    for(i=0; i<bundle->num_sockets; i++) {
+      bundle->last_read_socket = (bundle->last_read_socket + 1) % bundle->num_sockets;
+
+      if(pfring_is_pkt_available(bundle->sockets[bundle->last_read_socket])) {
+	return(pfring_recv(bundle->sockets[bundle->last_read_socket], buffer,
+			   buffer_len, hdr, wait_for_incoming_packet));
+      }
+    }
+    break;
+
+  case pick_fifo:
+    found = 0;
+    empty_rings = 0;
+    scans = 0;
+
+sockets_scan:
+
+    scans++;
+    for(i=0; i<bundle->num_sockets; i++) {
+      pfring *ring = bundle->sockets[i];
+
+      rc = pfring_next_pkt_time(ring, &tmpts);
+
+      if (rc == 0) {
+      	if(!found || is_before(&tmpts, &ts)) {
+	  memcpy(&ts, &tmpts, sizeof(struct timespec));
+	  found = 1;
+	  sock_id = i;
+	}
+      } else if (rc == PF_RING_ERROR_NO_PKT_AVAILABLE) {
+        empty_rings = 1;
+      } else {
+        /* error */
+      } 
+    }
+
+    if(found) {
+      if (empty_rings > 0 && scans == 1)
+        goto sockets_scan; /* scanning ring twice (safety check) */
+
+      return(pfring_recv(bundle->sockets[sock_id], buffer,
+			 buffer_len, hdr, wait_for_incoming_packet));
+    }
+    break;
+  }
+
+  if(wait_for_incoming_packet) {
+    rc = pfring_bundle_poll(bundle, bundle->sockets[0]->poll_duration);
+
+    if(rc > 0) {
+      goto redo_pfring_bundle_read;
+    } else
+      return(rc);
+  }
+
+  return(0);
+}
+
+/* **************************************************** */
+
+/* Returns the first bundle socket with something to read */
+void pfring_bundle_close(pfring_bundle *bundle) {
+  int i;
+
+  for(i=0; i<bundle->num_sockets; i++)
+    pfring_close(bundle->sockets[i]);
+}
+
+/* **************************************************** */
 /*                Module-specific functions             */
 /* **************************************************** */
 
@@ -319,7 +458,7 @@ int pfring_stats(pfring *ring, pfring_stat *stats) {
   if(ring && ring->stats)
     return ring->stats(ring, stats);
 
-  return -1;
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
@@ -334,7 +473,7 @@ int pfring_recv(pfring *ring, u_char** buffer, u_int buffer_len,
 	     && (ring->direction != tx_only_direction))))
     return ring->recv(ring, buffer, buffer_len, hdr, wait_for_incoming_packet);
 
-  return -1;
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
@@ -356,7 +495,7 @@ int pfring_set_poll_watermark(pfring *ring, u_int16_t watermark) {
   if(ring && ring->set_poll_watermark)
     return ring->set_poll_watermark(ring, watermark);
 
-  return(-1);
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
@@ -365,7 +504,7 @@ int pfring_set_poll_duration(pfring *ring, u_int duration) {
   if(ring && ring->set_poll_duration)
     return ring->set_poll_duration(ring, duration);
 
-  return -1;
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
@@ -392,7 +531,7 @@ int pfring_set_channel_id(pfring *ring, u_int32_t channel_id) {
   if(ring && ring->set_channel_id)
     return ring->set_channel_id(ring, channel_id);
 
-  return -1;
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
@@ -401,7 +540,7 @@ int pfring_set_application_name(pfring *ring, char *name) {
   if(ring && ring->set_application_name)
     return ring->set_application_name(ring, name);
 
-  return -1;
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
@@ -410,7 +549,7 @@ int pfring_bind(pfring *ring, char *device_name) {
   if(ring && ring->bind)
     return ring->bind(ring, device_name);
 
-  return -1;
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
@@ -457,7 +596,12 @@ int pfring_send_parsed(pfring *ring, char *pkt, struct pfring_pkthdr *hdr, u_int
     
     if(ring->reentrant) 
       pthread_spin_unlock(&ring->spinlock);
+
+    return rc;
   }
+
+  if(ring && !ring->send_parsed)
+    rc = PF_RING_ERROR_NOT_SUPPORTED;
 
   return rc;
 }
@@ -480,7 +624,12 @@ int pfring_send_get_time(pfring *ring, char *pkt, u_int pkt_len, struct timespec
     
     if(ring->reentrant) 
       pthread_spin_unlock(&ring->spinlock);
+
+    return rc;
   }
+
+  if(ring && !ring->send_get_time)
+    rc = PF_RING_ERROR_NOT_SUPPORTED;
 
   return rc;
 }
@@ -500,7 +649,7 @@ int pfring_set_sampling_rate(pfring *ring, u_int32_t rate /* 1 = no sampling */)
   if(ring && ring->set_sampling_rate)
     return ring->set_sampling_rate(ring, rate);
 
-  return(-1);
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
@@ -509,7 +658,7 @@ int pfring_get_selectable_fd(pfring *ring) {
   if(ring && ring->get_selectable_fd)
     return ring->get_selectable_fd(ring);
 
-  return -1;
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
@@ -524,7 +673,7 @@ int pfring_set_direction(pfring *ring, packet_direction direction) {
     return(rc);
   }
 
-  return -1;
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
@@ -533,7 +682,7 @@ int pfring_set_cluster(pfring *ring, u_int clusterId, cluster_type the_type) {
   if(ring && ring->set_cluster)
     return ring->set_cluster(ring, clusterId, the_type);
 
-  return -1;
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
@@ -542,7 +691,7 @@ int pfring_remove_from_cluster(pfring *ring) {
   if(ring && ring->remove_from_cluster)
     return ring->remove_from_cluster(ring);
 
-  return -1;
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
@@ -551,7 +700,7 @@ int pfring_set_master_id(pfring *ring, u_int32_t master_id) {
   if(ring && ring->set_master_id)
     return ring->set_master_id(ring, master_id);
 
-  return -1;
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
@@ -560,7 +709,7 @@ int pfring_set_master(pfring *ring, pfring *master) {
   if(ring && ring->set_master)
     return ring->set_master(ring, master);
 
-  return -1;
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
@@ -569,7 +718,7 @@ u_int16_t pfring_get_ring_id(pfring *ring) {
   if(ring && ring->get_ring_id)
     return ring->get_ring_id(ring);
 
-  return -1;
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
@@ -587,7 +736,7 @@ u_int8_t pfring_get_packet_consumer_mode(pfring *ring) {
   if(ring && ring->get_packet_consumer_mode)
     return ring->get_packet_consumer_mode(ring);
 
-  return -1;
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
@@ -597,7 +746,7 @@ int pfring_set_packet_consumer_mode(pfring *ring, u_int8_t plugin_id,
   if(ring && ring->set_packet_consumer_mode)
     return ring->set_packet_consumer_mode(ring, plugin_id, plugin_data, plugin_data_len);
 
-  return -1;
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
@@ -607,7 +756,7 @@ int pfring_get_hash_filtering_rule_stats(pfring *ring, hash_filtering_rule* rule
   if(ring && ring->get_hash_filtering_rule_stats)
     return ring->get_hash_filtering_rule_stats(ring, rule, stats, stats_len);
 
-  return -1;
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
@@ -640,7 +789,7 @@ int pfring_purge_idle_hash_rules(pfring *ring, u_int16_t inactivity_sec) {
   if(ring && ring->purge_idle_hash_rules)
     return ring->purge_idle_hash_rules(ring, inactivity_sec);
 
-  return -1;
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
@@ -649,7 +798,7 @@ int pfring_purge_idle_rules(pfring *ring, u_int16_t inactivity_sec) {
   if(ring && ring->purge_idle_rules)
     return ring->purge_idle_rules(ring, inactivity_sec);
 
-  return -1;
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
@@ -705,7 +854,7 @@ int pfring_get_filtering_rule_stats(pfring *ring, u_int16_t rule_id,
   if(ring && ring->get_filtering_rule_stats)
     return ring->get_filtering_rule_stats(ring, rule_id, stats, stats_len);
 
-  return -1;
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
@@ -735,7 +884,7 @@ int pfring_enable_rss_rehash(pfring *ring) {
   if(ring && ring->enable_rss_rehash)
     return ring->enable_rss_rehash(ring);
 
-  return -1;
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
@@ -744,7 +893,7 @@ int pfring_poll(pfring *ring, u_int wait_duration) {
   if(likely((ring && ring->poll)))
     return ring->poll(ring, wait_duration);
 
-  return -1;
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
@@ -754,7 +903,7 @@ int pfring_version(pfring *ring, u_int32_t *version) {
     return ring->version(ring, version);
 
   *version = RING_VERSION_NUM;
-  return 0;/*-1*/;
+  return 0;/*PF_RING_ERROR_NOT_SUPPORTED*/;
 }
 
 /* **************************************************** */
@@ -763,7 +912,7 @@ int pfring_get_bound_device_address(pfring *ring, u_char mac_address[6]) {
   if(ring && ring->get_bound_device_address)
     return ring->get_bound_device_address(ring, mac_address);
 
-  return -1;
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
@@ -772,7 +921,7 @@ u_int16_t pfring_get_slot_header_len(pfring *ring) {
   if(ring && ring->get_slot_header_len)
     return ring->get_slot_header_len(ring);
 
-  return -1;
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
@@ -781,7 +930,7 @@ int pfring_set_virtual_device(pfring *ring, virtual_filtering_device_info *info)
   if(ring && ring->set_virtual_device)
     return ring->set_virtual_device(ring, info);
 
-  return -1;
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
@@ -790,7 +939,7 @@ int pfring_loopback_test(pfring *ring, char *buffer, u_int buffer_len, u_int tes
   if(ring && ring->loopback_test)
     return ring->loopback_test(ring, buffer, buffer_len, test_len);
 
-  return -1;
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
@@ -807,7 +956,7 @@ int pfring_enable_ring(pfring *ring) {
     return rc;
   }
 
-  return -1;
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
@@ -824,7 +973,7 @@ int pfring_disable_ring(pfring *ring) {
     return rc;
   }
 
-  return -1;
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
@@ -834,7 +983,7 @@ int pfring_is_pkt_available(pfring *ring){
     return ring->is_pkt_available(ring);
   }
 
-  return -1;
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
@@ -844,7 +993,7 @@ int pfring_next_pkt_time(pfring *ring, struct timespec *ts){
     return ring->next_pkt_time(ring, ts);
   }
 
-  return -1;
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
@@ -854,7 +1003,7 @@ int pfring_next_pkt_raw_timestamp(pfring *ring, u_int64_t *timestamp_ns){
     return ring->next_pkt_raw_timestamp(ring, timestamp_ns);
   }
 
-  return -1;
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
@@ -864,7 +1013,7 @@ int pfring_set_bpf_filter(pfring *ring, char *filter_buffer){
     return ring->set_bpf_filter(ring, filter_buffer);
   }
 
-  return -1;
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
@@ -874,7 +1023,7 @@ int pfring_remove_bpf_filter(pfring *ring){
     return ring->remove_bpf_filter(ring);
   }
 
-  return -1;
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
@@ -889,21 +1038,21 @@ int pfring_set_filtering_mode(pfring *ring, filtering_mode mode){
 
 /* **************************************************** */
 
-int pfring_set_device_clock(pfring *ring, struct timespec *ts) {
-  if(ring && ring->set_device_clock) {
-    return ring->set_device_clock(ring, ts);
-  }
-
-  return -1;
-}
-
-/* **************************************************** */
-
 int pfring_get_device_clock(pfring *ring, struct timespec *ts) {
   if(ring && ring->get_device_clock) {
     return ring->get_device_clock(ring, ts);
   }
 
-  return -1;
+  return PF_RING_ERROR_NOT_SUPPORTED;
+}
+
+/* **************************************************** */
+
+int pfring_adjust_device_clock(pfring *ring, struct timespec *offset, int8_t sign) {
+  if(ring && ring->adjust_device_clock) {
+    return ring->adjust_device_clock(ring, offset, sign);
+  }
+
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 

@@ -53,6 +53,7 @@ extern int pthread_spin_unlock (pthread_spinlock_t *__lock) __THROW;
 #include <sys/un.h>
 #include <sys/time.h>
 #include <time.h>
+#include <poll.h>
 #include <string.h>
 #include <pthread.h>
 #include <linux/pf_ring.h>
@@ -116,6 +117,7 @@ extern "C" {
     bundle_read_policy policy;
     u_int16_t num_sockets, last_read_socket;
     pfring *sockets[MAX_NUM_BUNDLE_ELEMENTS];
+    struct pollfd pfd[MAX_NUM_BUNDLE_ELEMENTS];
   } pfring_bundle;
 
   /* ********************************* */
@@ -197,8 +199,9 @@ extern "C" {
     int       (*disable_ring)                 (pfring *);
     int       (*set_bpf_filter)               (pfring *, char *);
     int       (*remove_bpf_filter)            (pfring *);
-    int       (*set_device_clock)             (pfring *, struct timespec *);
     int       (*get_device_clock)             (pfring *, struct timespec *);
+    int       (*set_device_clock)             (pfring *, struct timespec *);
+    int       (*adjust_device_clock)          (pfring *, struct timespec *, int8_t);
 
     /* DNA only */
     int      (*dna_init)             (pfring *);
@@ -307,8 +310,9 @@ extern "C" {
   int pfring_set_bpf_filter(pfring *ring, char *filter_buffer);
   int pfring_remove_bpf_filter(pfring *ring);
   int pfring_set_filtering_mode(pfring *ring, filtering_mode mode);
-  int pfring_set_device_clock(pfring *ring, struct timespec *ts);
   int pfring_get_device_clock(pfring *ring, struct timespec *ts);
+  int pfring_set_device_clock(pfring *ring, struct timespec *ts);
+  int pfring_adjust_device_clock(pfring *ring, struct timespec *offset, int8_t sign);
 
   /* PF_RING Socket bundle (defined in pfring_mod.c) */
   void init_pfring_bundle(pfring_bundle *bundle, bundle_read_policy p);

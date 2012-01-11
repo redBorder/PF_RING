@@ -48,10 +48,6 @@
 #define wmb() gcc_mb()
 #endif
 
-/* **************************************************** */
-/*                  Static functions                    */
-/* **************************************************** */
-
 #if 0
 unsigned long long rdtsc() {
   unsigned long long a;
@@ -66,8 +62,6 @@ inline int pfring_there_is_pkt_available(pfring *ring) {
   return(ring->slots_info->tot_insert != ring->slots_info->tot_read);
 }
 
-/* **************************************************** */
-/*     Functions part of the "specialized" subset       */
 /* **************************************************** */
 
 int pfring_mod_open(pfring *ring) {
@@ -806,145 +800,4 @@ int pfring_mod_remove_bpf_filter(pfring *ring){
 
   return rc;
 }
-
-/* **************************************************** */
-/*                PF_RING-specific functions            */
-/* **************************************************** */
-
-void init_pfring_bundle(pfring_bundle *bundle, bundle_read_policy p) {
-  memset(bundle, 0, sizeof(pfring_bundle));
-  bundle->policy = p;
-}
-
-/* **************************************************** */
-
-int add_to_pfring_bundle(pfring_bundle *bundle, pfring *ring) {
-  if(bundle->num_sockets >= (MAX_NUM_BUNDLE_ELEMENTS-1))
-    return(-1);
-
-  pfring_enable_ring(ring);
-  bundle->sockets[bundle->num_sockets++] = ring;
-
-  return(0);
-}
-
-/* **************************************************** */
-
-/* Returns the first bundle socket with something to read */
-int pfring_bundle_poll(pfring_bundle *bundle, u_int wait_duration) {
-  int i, rc;
-  struct pollfd pfd[MAX_NUM_BUNDLE_ELEMENTS];
-
-  for(i=0; i<bundle->num_sockets; i++) {
-    pfd[i].fd = bundle->sockets[i]->fd;
-    pfd[i].events  = POLLIN /* | POLLERR */;
-    pfd[i].revents = 0;
-  }
-
-  errno = 0;
-  rc = poll(pfd, bundle->num_sockets, wait_duration);
-
-  if(rc > 0) {
-    for(i=0; i<bundle->num_sockets; i++)
-      if(pfd[i].revents != 0)
-	return(i);
-  } else if(rc == 0)
-    return(-1);
-
-  return(-2); /* Default */
-}
-
-/* **************************************************** */
-
-inline int is_before(struct timespec *ts_a,  struct timespec *ts_b) {
-  if((ts_a->tv_sec < ts_b->tv_sec)
-     || ((ts_a->tv_sec == ts_b->tv_sec)
-         && (ts_a->tv_nsec < ts_b->tv_nsec)))
-    return(1);
-
-  return(0);
-}
-
-/* **************************************************** */
-
-int pfring_bundle_read(pfring_bundle *bundle,
-		       u_char** buffer, u_int buffer_len,
-		       struct pfring_pkthdr *hdr,
-		       u_int8_t wait_for_incoming_packet) {
-  int i, sock_id, found, rc, empty_rings, scans;
-  struct timespec ts = { 0 };
-  struct timespec tmpts;
-
-redo_pfring_bundle_read:
-
-  switch(bundle->policy) {
-  case pick_round_robin:
-    for(i=0; i<bundle->num_sockets; i++) {
-      bundle->last_read_socket = (bundle->last_read_socket + 1) % bundle->num_sockets;
-
-      if(pfring_is_pkt_available(bundle->sockets[bundle->last_read_socket])) {
-	return(pfring_recv(bundle->sockets[bundle->last_read_socket], buffer,
-			   buffer_len, hdr, wait_for_incoming_packet));
-      }
-    }
-    break;
-
-  case pick_fifo:
-    found = 0;
-    empty_rings = 0;
-    scans = 0;
-
-sockets_scan:
-
-    scans++;
-    for(i=0; i<bundle->num_sockets; i++) {
-      pfring *ring = bundle->sockets[i];
-
-      rc = pfring_next_pkt_time(ring, &tmpts);
-
-      if (rc == 0) {
-      	if(!found || is_before(&tmpts, &ts)) {
-	  memcpy(&ts, &tmpts, sizeof(struct timespec));
-	  found = 1;
-	  sock_id = i;
-	}
-      } else if (rc == PF_RING_ERROR_NO_PKT_AVAILABLE) {
-        empty_rings = 1;
-      } else {
-        /* error */
-      } 
-    }
-
-    if(found) {
-      if (empty_rings > 0 && scans == 1)
-        goto sockets_scan; /* scanning ring twice (safety check) */
-
-      return(pfring_recv(bundle->sockets[sock_id], buffer,
-			 buffer_len, hdr, wait_for_incoming_packet));
-    }
-    break;
-  }
-
-  if(wait_for_incoming_packet) {
-    rc = pfring_bundle_poll(bundle, bundle->sockets[0]->poll_duration);
-
-    if(rc > 0) {
-      goto redo_pfring_bundle_read;
-    } else
-      return(rc);
-  }
-
-  return(0);
-}
-
-/* **************************************************** */
-
-/* Returns the first bundle socket with something to read */
-void pfring_bundle_close(pfring_bundle *bundle) {
-  int i;
-
-  for(i=0; i<bundle->num_sockets; i++)
-    pfring_close(bundle->sockets[i]);
-}
-
 
