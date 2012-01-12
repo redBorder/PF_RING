@@ -359,17 +359,6 @@ int pfring_bundle_poll(pfring_bundle *bundle, u_int wait_duration) {
 
 /* **************************************************** */
 
-inline int is_before(struct timespec *ts_a,  struct timespec *ts_b) {
-  if((ts_a->tv_sec < ts_b->tv_sec)
-     || ((ts_a->tv_sec == ts_b->tv_sec)
-         && (ts_a->tv_nsec < ts_b->tv_nsec)))
-    return(1);
-
-  return(0);
-}
-
-/* **************************************************** */
-
 int pfring_bundle_read(pfring_bundle *bundle,
 		       u_char** buffer, u_int buffer_len,
 		       struct pfring_pkthdr *hdr,
@@ -406,7 +395,7 @@ sockets_scan:
       rc = pfring_next_pkt_time(ring, &tmpts);
 
       if (rc == 0) {
-      	if(!found || is_before(&tmpts, &ts)) {
+      	if(!found || timespec_is_before(&tmpts, &ts)) {
 	  memcpy(&ts, &tmpts, sizeof(struct timespec));
 	  found = 1;
 	  sock_id = i;

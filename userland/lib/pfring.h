@@ -77,11 +77,8 @@ extern int pthread_spin_unlock (pthread_spinlock_t *__lock) __THROW;
 #define max(a, b) (a > b ? a : b)
 #endif
 
-/* Specialized error codes */
-#define INVALID_LIBRARY_VERSION     -10
-#define UNKNOWN_DNA_ADAPTER_TYPE    -11
-#define UNKNOWN_DNA_ADAPTER_MODEL   -12
-#define UNKNOWN_ERROR               -99
+#define timespec_is_before(a, b) \
+  ((((a)->tv_sec<(b)->tv_sec)||(((a)->tv_sec==(b)->tv_sec)&&((a)->tv_nsec<(b)->tv_nsec)))?1:0)
 
 /* ********************************* */
 
