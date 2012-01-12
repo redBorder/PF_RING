@@ -404,7 +404,7 @@ void dna_ixgbe_alloc_tx_buffers(struct ixgbe_ring *tx_ring, struct pfring_hooks 
 
     bi->dma = pci_map_single(to_pci_dev(tx_ring->dev), pkt,
 			     tx_ring->dna.packet_slot_len,
-			     PCI_DMA_TODEVICE);
+			     PCI_DMA_BIDIRECTIONAL /* PCI_DMA_TODEVICE */);
 
     tx_desc->read.buffer_addr = cpu_to_le64(bi->dma);
     shadow_tx_desc = IXGBE_TX_DESC(tx_ring, i + tx_ring->count);
@@ -531,7 +531,7 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
 
     bi->dma = pci_map_single(to_pci_dev(rx_ring->dev), pkt,
 			     rx_ring->dna.packet_slot_len,
-			     PCI_DMA_FROMDEVICE);
+			     PCI_DMA_BIDIRECTIONAL /* PCI_DMA_FROMDEVICE */);
 
     /* Packet Split disabled in DNA mode */
     //if (!ring_is_ps_enabled(rx_ring)) {

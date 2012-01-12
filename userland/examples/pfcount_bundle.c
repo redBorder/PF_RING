@@ -482,7 +482,7 @@ int main(int argc, char* argv[]) {
   
   dev = strtok_r(device, ";", &pos);
   num_ring = 0;
-  init_pfring_bundle(&bundle, bundle_policy);
+  pfring_bundle_init(&bundle, bundle_policy);
 
   while(dev != NULL) {
     printf("Adding %s to bundle\n", dev);
@@ -505,7 +505,7 @@ int main(int argc, char* argv[]) {
 	printf("pfring_set_poll_watermark returned [rc=%d][watermark=%d]\n", rc, watermark);
     }
     
-    add_to_pfring_bundle(&bundle, ring[num_ring]);
+    pfring_bundle_add(&bundle, ring[num_ring]);
 
     num_ring++;    
     dev = strtok_r(NULL, ";", &pos);

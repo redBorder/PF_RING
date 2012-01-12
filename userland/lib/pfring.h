@@ -119,6 +119,23 @@ extern "C" {
 
   /* ********************************* */
 
+  typedef int (*pfringBounceProcesssPacket)(u_int16_t pkt_len, u_char *pkt, const u_char *user_bytes);
+
+  typedef struct {
+    pfring *rx_socket, *tx_socket;
+    void *priv_data;
+    u_int8_t running, break_loop;
+    pthread_spinlock_t lock;
+
+    /* disabled functions */
+    int       (*recv)                         (pfring *, u_char**, u_int, struct pfring_pkthdr *, u_int8_t);
+    int       (*send)                         (pfring *, char *, u_int, u_int8_t);
+    int       (*send_parsed)                  (pfring *, char *, struct pfring_pkthdr *, u_int8_t);
+    int       (*send_get_time)                (pfring *, char *, u_int, struct timespec *);    
+  } pfring_bounce;
+
+  /* ********************************* */
+
   typedef struct {
     u_int64_t recv, drop;
   } pfring_stat;
@@ -199,6 +216,10 @@ extern "C" {
     int       (*get_device_clock)             (pfring *, struct timespec *);
     int       (*set_device_clock)             (pfring *, struct timespec *);
     int       (*adjust_device_clock)          (pfring *, struct timespec *, int8_t);
+
+    int       (*bounce_init)                  (pfring_bounce *);
+    int       (*bounce_loop)                  (pfring_bounce *, pfringBounceProcesssPacket, const u_char *, u_int8_t);
+    void      (*bounce_destroy)               (pfring_bounce *);
 
     /* DNA only */
     int      (*dna_init)             (pfring *);
@@ -311,16 +332,23 @@ extern "C" {
   int pfring_set_device_clock(pfring *ring, struct timespec *ts);
   int pfring_adjust_device_clock(pfring *ring, struct timespec *offset, int8_t sign);
 
-  /* PF_RING Socket bundle (defined in pfring_mod.c) */
-  void init_pfring_bundle(pfring_bundle *bundle, bundle_read_policy p);
-  int add_to_pfring_bundle(pfring_bundle *bundle, pfring *ring);
+  /* PF_RING Socket bundle */
+  void pfring_bundle_init(pfring_bundle *bundle, bundle_read_policy p);
+  int pfring_bundle_add(pfring_bundle *bundle, pfring *ring);
   int pfring_bundle_poll(pfring_bundle *bundle, u_int wait_duration);
   int pfring_bundle_read(pfring_bundle *bundle, 
 			 u_char** buffer, u_int buffer_len,
 			 struct pfring_pkthdr *hdr,
 			 u_int8_t wait_for_incoming_packet);
+  void pfring_bundle_destroy(pfring_bundle *bundle);
   void pfring_bundle_close(pfring_bundle *bundle);  
 
+  /* PF_RING Bounce */
+  int pfring_bounce_init(pfring_bounce *bounce, pfring *ingress_ring, pfring *egress_ring);
+  int pfring_bounce_loop(pfring_bounce *bounce, pfringBounceProcesssPacket looper, 
+                         const u_char *user_bytes, u_int8_t wait_for_packet);
+  void pfring_bounce_breakloop(pfring_bounce *bounce);
+  void pfring_bounce_destroy(pfring_bounce *bounce);
 
   /* Utils (defined in pfring_utils.c) */
   int pfring_parse_pkt(u_char *pkt, struct pfring_pkthdr *hdr, u_int8_t level /* 2..4 */, 

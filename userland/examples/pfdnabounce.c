@@ -1,6 +1,6 @@
 /*
  *
- * (C) 2005-11 - Luca Deri <deri@ntop.org>
+ * (C) 2005-12 - Luca Deri <deri@ntop.org>
  *
  *
  * This program is free software; you can redistribute it and/or modify
@@ -43,12 +43,19 @@
 
 #include "pfring.h"
 
-pfring  *pd;
-pfring_stat pfringStats;
-char *in_dev = NULL;
-u_int8_t wait_for_packet = 1, do_shutdown = 0;
+//#define USE_PFRING_BOUNCE
 
-#define DEFAULT_DEVICE     "eth0"
+#define ALARM_SLEEP             1
+
+pfring  *pd1, *pd2;
+pfring_stat pfringStats;
+char *in_dev = NULL, *out_dev = NULL;
+u_int8_t wait_for_packet = 1, do_shutdown = 0;
+static struct timeval startTime;
+unsigned long long numPkts = 0, numBytes = 0;
+#ifdef USE_PFRING_BOUNCE
+pfring_bounce bounce;
+#endif
 
 /* *************************************** */
 /*
@@ -75,6 +82,75 @@ double delta_time (struct timeval * now,
 
 /* ******************************** */
 
+void print_stats() {
+  struct timeval endTime;
+  double deltaMillisec;
+  static u_int8_t print_all;
+  static u_int64_t lastPkts = 0;
+  static u_int64_t lastBytes = 0;
+  u_int64_t diff, bytesDiff;
+  static struct timeval lastTime;
+  char buf1[64], buf2[64], buf3[64];
+  unsigned long long nBytes = 0, nPkts = 0;
+  double thpt;
+
+  if(startTime.tv_sec == 0) {
+    gettimeofday(&startTime, NULL);
+    print_all = 0;
+  } else
+    print_all = 1;
+
+  gettimeofday(&endTime, NULL);
+  deltaMillisec = delta_time(&endTime, &startTime);
+
+  nBytes = numBytes;
+  nPkts  = numPkts;
+
+  {
+    thpt = ((double)8*nBytes)/(deltaMillisec*1000);
+
+    fprintf(stderr, "---\nAbsolute Stats: %s pkts - %s bytes", 
+	    pfring_format_numbers((double)nPkts, buf1, sizeof(buf1), 0),
+	    pfring_format_numbers((double)nBytes, buf2, sizeof(buf2), 0));
+
+    if(print_all)
+      fprintf(stderr, " [%s pkt/sec - %s Mbit/sec]\n",
+	      pfring_format_numbers((double)(nPkts*1000)/deltaMillisec, buf1, sizeof(buf1), 1),
+	      pfring_format_numbers(thpt, buf2, sizeof(buf2), 1));
+    else
+      fprintf(stderr, "\n");
+
+    if(print_all && (lastTime.tv_sec > 0)) {
+      deltaMillisec = delta_time(&endTime, &lastTime);
+      diff = nPkts-lastPkts;
+      bytesDiff = nBytes - lastBytes;
+      bytesDiff /= (1000*1000*1000)/8;
+
+      fprintf(stderr, "Actual Stats: %llu pkts [%s ms][%s pps/%s Gbps]\n",
+	      (long long unsigned int)diff,
+	      pfring_format_numbers(deltaMillisec, buf1, sizeof(buf1), 1),
+	      pfring_format_numbers(((double)diff/(double)(deltaMillisec/1000)),  buf2, sizeof(buf2), 1),
+	      pfring_format_numbers(((double)bytesDiff/(double)(deltaMillisec/1000)),  buf3, sizeof(buf3), 1)
+	      );
+    }
+
+    lastPkts = nPkts, lastBytes = nBytes;
+  }
+
+  lastTime.tv_sec = endTime.tv_sec, lastTime.tv_usec = endTime.tv_usec;
+}
+
+/* ******************************** */
+
+void my_sigalarm(int sig) {
+  if(do_shutdown)
+    return;
+
+  print_stats();
+  alarm(ALARM_SLEEP);
+  signal(SIGALRM, my_sigalarm);
+}
+
 /* ******************************** */
 
 void sigproc(int sig) {
@@ -84,7 +160,12 @@ void sigproc(int sig) {
   if(called) return; else called = 1;
   do_shutdown = 1;
 
-  pfring_close(pd);
+#ifdef USE_PFRING_BOUNCE
+  pfring_bounce_breakloop(&bounce);
+#endif
+
+  pfring_close(pd1);
+  pfring_close(pd2);
 
   exit(0);
 }
@@ -96,7 +177,8 @@ void printHelp(void) {
 
   printf("pfdnabounce [-v] [-a] -i in_dev\n");
   printf("-h              Print this help\n");
-  printf("-i <device>     Device name. Use device\n");
+  printf("-i <device>     Device name (RX)\n");
+  printf("-o <device>     Device name (TX)\n");
   printf("-v              Verbose\n");
   printf("-a              Active packet wait\n");
   exit(0);
@@ -104,18 +186,33 @@ void printHelp(void) {
 
 /* *************************************** */
 
-void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u_char *user_bytes) {
-  /* Bounce back */
-  pfring_send(pd, (char*)p, h->caplen, 1 /* flush out */);
+#ifdef USE_PFRING_BOUNCE
+int dummyProcesssPacket(u_int16_t pkt_len, u_char *pkt, const u_char *user_bytes) {
+  numPkts++;
+  numBytes += pkt_len + 24 /* 8 Preamble + 4 CRC + 12 IFG */;
+
+  return 0; /* bounce back */
 }
+#else
+void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u_char *user_bytes) { 
+  /* Bounce back */
+  pfring_send(pd2, (char*)p, h->caplen, 1 /* flush out */);
+
+  numPkts++;
+  numBytes += h->len + 24 /* 8 Preamble + 4 CRC + 12 IFG */; 
+}
+#endif
 
 /* *************************************** */
 
 int main(int argc, char* argv[]) {
   char c;
   int promisc;
+  u_int32_t version;
 
-  while((c = getopt(argc,argv,"hai:")) != -1) {
+  startTime.tv_sec = 0;
+
+  while((c = getopt(argc,argv,"hai:o:")) != -1) {
     switch(c) {
     case 'h':
       printHelp();      
@@ -126,40 +223,64 @@ int main(int argc, char* argv[]) {
     case 'i':
       in_dev = strdup(optarg);
       break;
+    case 'o':
+      out_dev = strdup(optarg);
+      break;
     }
   }
 
   if(in_dev == NULL)  printHelp();
+  if(out_dev == NULL) out_dev = strdup(in_dev);
 
-  printf("Capturing from %s\n", in_dev);
+  printf("Bouncing packets from %s to %s\n", in_dev, out_dev);
 
   /* hardcode: promisc=1, to_ms=500 */
   promisc = 1;
 
-  pd = pfring_open(in_dev, promisc, 1500 /* snaplen */, 0);
-  if(pd == NULL) {
+  pd1 = pfring_open(in_dev, promisc, 1500 /* snaplen */, 0);
+  if(pd1 == NULL) {
     printf("pfring_open %s error [%s]\n", in_dev, strerror(errno));
     return(-1);
-  } else {
-    u_int32_t version;
-
-    pfring_set_application_name(pd, "pfdnabounce");
-    pfring_version(pd, &version);
-
-    printf("Using PF_RING v.%d.%d.%d\n", (version & 0xFFFF0000) >> 16, 
-	   (version & 0x0000FF00) >> 8, version & 0x000000FF);
   }
 
-  pfring_set_direction(pd, rx_and_tx_direction);
+  pfring_version(pd1, &version);
+  printf("Using PF_RING v.%d.%d.%d\n", (version & 0xFFFF0000) >> 16, 
+	 (version & 0x0000FF00) >> 8, version & 0x000000FF);
+
+  pfring_set_application_name(pd1, "pfdnabounce");
+
+  pd2 = pfring_open(out_dev, promisc, 1500 /* snaplen */, 0);
+  if(pd2 == NULL) {
+    printf("pfring_open %s error [%s]\n", in_dev, strerror(errno));
+    return(-1);
+  } 
+  
+  pfring_set_application_name(pd2, "pfdnabounce");
 
   signal(SIGINT, sigproc);
   signal(SIGTERM, sigproc);
   signal(SIGINT, sigproc);
 
-  pfring_enable_ring(pd);
-  pfring_loop(pd, dummyProcesssPacket, (u_char*)NULL, wait_for_packet);
+  signal(SIGALRM, my_sigalarm);
+  alarm(ALARM_SLEEP);
 
-  pfring_close(pd);
+#ifdef USE_PFRING_BOUNCE
+  if (pfring_bounce_init(&bounce, pd1, pd2) == 0) {
+    pfring_bounce_loop(&bounce, dummyProcesssPacket, (u_char *) NULL, wait_for_packet);
+    pfring_bounce_destroy(&bounce);
+  }
+#else
+  pfring_set_direction(pd1, rx_only_direction);
+  pfring_set_direction(pd2, tx_only_direction);
+
+  pfring_enable_ring(pd1);
+  pfring_enable_ring(pd2);
+
+  pfring_loop(pd1, dummyProcesssPacket, (u_char*) NULL, wait_for_packet);
+#endif
+
+  pfring_close(pd1);
+  pfring_close(pd2);
 
   sleep(3);
 

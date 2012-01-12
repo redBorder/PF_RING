@@ -313,14 +313,14 @@ void pfring_breakloop(pfring *ring) {
 
 /* **************************************************** */
 
-void init_pfring_bundle(pfring_bundle *bundle, bundle_read_policy p) {
+void pfring_bundle_init(pfring_bundle *bundle, bundle_read_policy p) {
   memset(bundle, 0, sizeof(pfring_bundle));
   bundle->policy = p;
 }
 
 /* **************************************************** */
 
-int add_to_pfring_bundle(pfring_bundle *bundle, pfring *ring) {
+int pfring_bundle_add(pfring_bundle *bundle, pfring *ring) {
   if(bundle->num_sockets >= (MAX_NUM_BUNDLE_ELEMENTS-1))
     return(-1);
 
@@ -431,12 +431,121 @@ sockets_scan:
 
 /* **************************************************** */
 
-/* Returns the first bundle socket with something to read */
+void pfring_bundle_destroy(pfring_bundle *bundle) {
+  int i;
+
+  for(i=0; i<bundle->num_sockets; i++) {
+    pfring_disable_ring(bundle->sockets[i]);
+  }
+
+  memset(bundle, 0, sizeof(pfring_bundle)); 
+}
+
+/* **************************************************** */
+
 void pfring_bundle_close(pfring_bundle *bundle) {
   int i;
 
-  for(i=0; i<bundle->num_sockets; i++)
+  for(i=0; i<bundle->num_sockets; i++) {
     pfring_close(bundle->sockets[i]);
+  }
+
+  memset(bundle, 0, sizeof(pfring_bundle));
+}
+
+/* **************************************************** */
+
+int pfring_bounce_init(pfring_bounce *bounce, pfring *ingress_ring, pfring *egress_ring) {
+ 
+  if (bounce == NULL || ingress_ring == NULL || egress_ring == NULL || 
+      ingress_ring->bounce_init == NULL)
+    return -1;
+
+  if (pfring_set_direction(ingress_ring, rx_only_direction) != 0 ||
+      pfring_set_direction(egress_ring, tx_only_direction) != 0)
+    return -1;
+
+  bounce->rx_socket = ingress_ring;
+  bounce->tx_socket = egress_ring;
+
+  if(ingress_ring->bounce_init(bounce) != 0) {
+    bounce->rx_socket = NULL;
+    bounce->tx_socket = NULL; 
+    return -1;
+  }
+
+  /* disabling harmful functions / backing up func ptrs */
+  bounce->recv          = ingress_ring->recv,         ingress_ring->recv         = NULL;
+  bounce->send          = egress_ring->send,          egress_ring->send          = NULL;
+  bounce->send_parsed   = egress_ring->send_parsed,   egress_ring->send_parsed   = NULL;
+  bounce->send_get_time = egress_ring->send_get_time, egress_ring->send_get_time = NULL;
+
+  if (pfring_enable_ring(ingress_ring) != 0 ||
+      pfring_enable_ring(egress_ring) != 0) {
+    pfring_bounce_destroy(bounce);
+    return -1;
+  }
+
+  pthread_spin_init(&bounce->lock, PTHREAD_PROCESS_PRIVATE); 
+  
+  return 0;
+}
+
+/* **************************************************** */
+
+int pfring_bounce_loop(pfring_bounce *bounce, pfringBounceProcesssPacket looper, 
+                       const u_char *user_bytes, u_int8_t wait_for_packet) {
+  int rc;
+
+  if (bounce == NULL || bounce->rx_socket == NULL || bounce->tx_socket == NULL || 
+      bounce->rx_socket->bounce_loop == NULL)
+    return -1;
+
+  pthread_spin_lock(&bounce->lock);
+  if (bounce->running) { pthread_spin_unlock(&bounce->lock); return -1; }
+  bounce->running = 1;
+  pthread_spin_unlock(&bounce->lock);
+
+  bounce->break_loop = 0;
+
+  rc = bounce->rx_socket->bounce_loop(bounce, looper, user_bytes, wait_for_packet);
+
+  pthread_spin_lock(&bounce->lock);
+  bounce->running = 0;
+  pthread_spin_unlock(&bounce->lock);
+
+  return rc;
+}
+
+/* **************************************************** */
+
+void pfring_bounce_breakloop(pfring_bounce *bounce) {
+  if(!bounce)
+    return;
+
+  bounce->break_loop = 1;
+}
+
+/* **************************************************** */
+
+void pfring_bounce_destroy(pfring_bounce *bounce) {
+
+  if (bounce == NULL || bounce->rx_socket == NULL || bounce->tx_socket == NULL)
+    return;
+
+  pfring_disable_ring(bounce->rx_socket);
+  pfring_disable_ring(bounce->tx_socket);
+
+  /* restoring func ptrs */
+  bounce->rx_socket->recv          = bounce->recv; 
+  bounce->tx_socket->send          = bounce->send;
+  bounce->tx_socket->send_parsed   = bounce->send_parsed;
+  bounce->tx_socket->send_get_time = bounce->send_get_time;
+
+  if (bounce->rx_socket->bounce_destroy)
+    bounce->rx_socket->bounce_destroy(bounce);
+
+  memset(bounce, 0, sizeof(pfring_bounce));
 }
 
 /* **************************************************** */

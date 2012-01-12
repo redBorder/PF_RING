@@ -770,7 +770,11 @@ int main(int argc, char* argv[]) {
     alarm(ALARM_SLEEP);
   }
 
-  pfring_enable_ring(pd);
+  if (pfring_enable_ring(pd) != 0) {
+    printf("Unable to enable ring :-(\n");
+    pfring_close(pd);
+    return(-1);
+  }
 
   if(0) {
     filtering_rule rule;
