@@ -54,6 +54,7 @@
 //#define VERBOSE_SUPPORT
 
 pfring  *pd[MAX_NUM_DEVS];
+struct pollfd pfd[MAX_NUM_DEVS];
 int num_devs = 0;
 #ifdef VERBOSE_SUPPORT
 int verbose = 0;
@@ -468,24 +469,15 @@ int bind2core(u_int core_id) {
 /* *************************************** */
 
 inline int bundlePoll() {
-  int i, rc;
-  struct pollfd pfd[MAX_NUM_DEVS];
+  int i;
 
   for(i=0; i<num_devs; i++) {
-    pfd[i].fd = pd[i]->fd;
     pfd[i].events  = POLLIN;
     pfd[i].revents = 0;
   }
   errno = 0;
 
-  rc = poll(pfd, num_devs, poll_duration);
-
-  if(rc > 0)
-    for(i=0; i<num_devs; i++)
-      if(pfd[i].revents != 0)
-	return i;
-
-  return -1;
+  return poll(pfd, num_devs, poll_duration);
 }
 
 /* *************************************** */
@@ -494,23 +486,25 @@ void packetConsumer() {
   u_char *buffer;
   struct pfring_pkthdr hdr;
   memset(&hdr, 0, sizeof(hdr));
-  int next = 0, hunger = 0, i;
+  int next = 0, hunger = 0;
 
-  while(!do_shutdown) {
+  while (!do_shutdown) {
 
-    if(pfring_recv(pd[next], &buffer, 0, &hdr, 0 /* wait_for_packet */) > 0) {
+    if (pfring_is_pkt_available(pd[next])) {
+      if (pfring_recv(pd[next], &buffer, 0, &hdr, 0 /* wait_for_packet */) > 0) {
 #ifdef VERBOSE_SUPPORT
-      if (verbose)
-        verboseProcessing(&hdr, buffer);
+        if (verbose)
+          verboseProcessing(&hdr, buffer);
 #endif
-      numPkts++, numBytes += hdr.len+24 /* 8 Preamble + 4 CRC + 12 IFG */;
+        numPkts++;
+	numBytes += hdr.len + 24 /* 8 Preamble + 4 CRC + 12 IFG */;
+      }
 
       hunger = 0;
     } else hunger++;
     
     if (wait_for_packet && hunger >= num_devs) {
-      if ((i = bundlePoll()) >= 0)
-        next = i-1;
+      bundlePoll();
       hunger = 0;
     }
 
@@ -631,6 +625,8 @@ int main(int argc, char* argv[]) {
       if((rc = pfring_set_poll_watermark(pd[i], watermark)) != 0)
         fprintf(stderr, "pfring_set_poll_watermark returned [rc=%d][watermark=%d]\n", rc, watermark);
     }
+
+    pfd[i].fd = pfring_get_selectable_fd(pd[i]);
 
     pfring_enable_ring(pd[i]);
 
