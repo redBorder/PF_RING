@@ -171,6 +171,8 @@ int pfring_dna_open(pfring *ring) {
   ring->close = pfring_dna_close;
   ring->stats = pfring_dna_stats;
   ring->recv  = pfring_dna_recv;
+  ring->enable_ring = pfring_dna_enable_ring;
+
   ring->set_poll_watermark = pfring_mod_set_poll_watermark;
   ring->set_poll_duration = pfring_mod_set_poll_duration;
   ring->set_channel_id = pfring_mod_set_channel_id;
@@ -186,7 +188,6 @@ int pfring_dna_open(pfring *ring) {
   ring->get_slot_header_len = pfring_mod_get_slot_header_len;
   ring->set_virtual_device = pfring_mod_set_virtual_device;
   ring->loopback_test = pfring_mod_loopback_test;
-  ring->enable_ring = pfring_mod_enable_ring;
   ring->disable_ring = pfring_mod_disable_ring;
   /* These functions are set by the dna library: (when supported by the device)
    * ring->send
@@ -365,8 +366,7 @@ int pfring_dna_enable_ring(pfring *ring) {
   if(rc < 0)
     return rc;
 
-  if(ring->dna_enable)
-    rc = ring->dna_enable(ring);
+  rc = ring->dna_enable(ring);
 
   return rc;
 }

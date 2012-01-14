@@ -5745,8 +5745,9 @@ static int ring_setsockopt(struct socket *sock,
       for(i=0; i<MAX_NUM_DNA_BOUND_SOCKETS; i++) {
 	if((pfr->dna_device_entry->bound_sockets[i] != NULL)
 	   && pfr->dna_device_entry->bound_sockets[i]->ring_active) {
-	  if((pfr->dna_device_entry->bound_sockets[i]->direction == pfr->direction)
-	     || (pfr->dna_device_entry->bound_sockets[i]->direction == rx_and_tx_direction)) {
+	  if(   pfr->dna_device_entry->bound_sockets[i]->direction == pfr->direction
+	     || pfr->dna_device_entry->bound_sockets[i]->direction == rx_and_tx_direction
+	     || pfr->direction == rx_and_tx_direction) {
 	    printk("[PF_RING] Unable to activate two or more DNA sockets on the same interface %s/direction\n",
 		   pfr->ring_netdev->dev->name);
 

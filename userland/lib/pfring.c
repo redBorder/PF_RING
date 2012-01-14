@@ -763,6 +763,10 @@ int pfring_get_selectable_fd(pfring *ring) {
 
 int pfring_set_direction(pfring *ring, packet_direction direction) {
   if(ring && ring->set_direction) {
+    
+    if(ring->enabled)
+      return -1; /* direction must be set before pfring_enable() */
+
     int rc = ring->set_direction(ring, direction);
 
     if(rc == 0)
