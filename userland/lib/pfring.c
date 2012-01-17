@@ -520,10 +520,11 @@ int pfring_bounce_loop(pfring_bounce *bounce, pfringBounceProcesssPacket looper,
 /* **************************************************** */
 
 void pfring_bounce_breakloop(pfring_bounce *bounce) {
-  if(!bounce)
+  if(!bounce || !bounce->running)
     return;
 
   bounce->break_loop = 1;
+  pfring_breakloop(bounce->rx_socket);
 }
 
 /* **************************************************** */

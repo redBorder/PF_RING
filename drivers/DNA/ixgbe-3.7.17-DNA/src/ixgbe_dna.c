@@ -177,22 +177,25 @@ dna_device_model dna_model(struct ixgbe_hw *hw){
 
 /* ********************************** */
 
-/* Reset the ring when we shutdown */
+#if 0 /* Currently ring cleanup happens in userspace */
+
 void dna_cleanup_rx_ring(struct ixgbe_ring *rx_ring) {
   struct ixgbe_adapter	  *adapter = netdev_priv(rx_ring->netdev);
   struct ixgbe_hw	  *hw = &adapter->hw;
   union ixgbe_adv_rx_desc *rx_desc, *shadow_rx_desc;
-  u32 tail = IXGBE_READ_REG(hw, IXGBE_RDT(rx_ring->reg_idx)), count = rx_ring->count;
+  u32 tail;
   u32 head = IXGBE_READ_REG(hw, IXGBE_RDH(rx_ring->reg_idx));
+  u32 i;
 
-  if(unlikely(enable_debug))
-    printk("[DNA] dna_cleanup_rx_ring(%d): [head=%u][tail=%u]\n", rx_ring->queue_index, head, tail);
+  /*  
+  tail = IXGBE_READ_REG(hw, IXGBE_RDT(rx_ring->reg_idx));
+  u32 count = rx_ring->count;
 
-  /* We now point to the next slot where packets will be received */
+  // We now point to the next slot where packets will be received
   if(++tail == rx_ring->count) tail = 0;
 
   while(count > 0) {
-    if(tail == head) break; /* Do not go beyond head */
+    if(tail == head) break; // Do not go beyond head
 
     rx_desc = IXGBE_RX_DESC(rx_ring, tail);
     shadow_rx_desc = IXGBE_RX_DESC(rx_ring, tail + rx_ring->count);
@@ -202,24 +205,64 @@ void dna_cleanup_rx_ring(struct ixgbe_ring *rx_ring) {
       break;
     }
 
-    /* Writeback */
     rx_desc->wb.upper.status_error = 0;
     rx_desc->read.hdr_addr = shadow_rx_desc->read.hdr_addr, rx_desc->read.pkt_addr = shadow_rx_desc->read.pkt_addr;
     IXGBE_WRITE_REG(hw, IXGBE_RDT(rx_ring->reg_idx), tail);
 
-    if(unlikely(enable_debug))
-      printk("[DNA] dna_cleanup_rx_ring(%d): idx=%d\n", rx_ring->queue_index, tail);
-
     if(++tail == rx_ring->count) tail = 0;
     count--;
   }
+  */
+
+  /* resetting all */
+
+  for (i=0; i<rx_ring->count; i++) {
+    rx_desc = IXGBE_RX_DESC(rx_ring, i);
+    shadow_rx_desc = IXGBE_RX_DESC(rx_ring, i + rx_ring->count);
+
+    rx_desc->wb.upper.status_error = 0;
+    rx_desc->read.hdr_addr = shadow_rx_desc->read.hdr_addr;
+    rx_desc->read.pkt_addr = shadow_rx_desc->read.pkt_addr;
+  }
+
+  if (head == 0) tail = rx_ring->count - 1;
+  else tail = head - 1;
+
+  IXGBE_WRITE_REG(hw, IXGBE_RDT(rx_ring->reg_idx), tail);
 }
+
+/* ********************************** */
+
+void dna_cleanup_tx_ring(struct ixgbe_ring *tx_ring) {
+  struct ixgbe_adapter	  *adapter = netdev_priv(tx_ring->netdev);
+  struct ixgbe_hw	  *hw = &adapter->hw;
+  union ixgbe_adv_tx_desc *tx_desc, *shadow_tx_desc;
+  u32 tail;
+  u32 head = IXGBE_READ_REG(hw, IXGBE_TDH(tx_ring->reg_idx));
+  u32 i;
+
+  /* resetting all */
+  for (i=0; i<tx_ring->count; i++) {
+    tx_desc = IXGBE_TX_DESC(tx_ring, i);
+    shadow_tx_desc = IXGBE_TX_DESC(tx_ring, i + tx_ring->count);
+
+    tx_desc->read.olinfo_status = 0;
+    tx_desc->read.buffer_addr = shadow_tx_desc->read.buffer_addr;
+  }
+
+  tail = head; //(head + 1) % tx_ring->count;
+
+  IXGBE_WRITE_REG(hw, IXGBE_TDT(tx_ring->reg_idx), tail);
+}
+
+#endif
 
 /* ********************************** */
 
 void notify_function_ptr(void *data, u_int8_t device_in_use) {
   struct ixgbe_ring	*rx_ring = (struct ixgbe_ring*)data;
   struct ixgbe_adapter	*adapter = netdev_priv(rx_ring->netdev);
+  //struct ixgbe_ring     *tx_ring = adapter->tx_ring[rx_ring->queue_index];
 
   if(unlikely(enable_debug))
     printk("%s(): device_in_use = %d\n",__FUNCTION__, device_in_use);
@@ -241,7 +284,11 @@ void notify_function_ptr(void *data, u_int8_t device_in_use) {
   } else {
     /* We're done using this device */
 
+    /* resetting the ring */
+    /* we *must* reset the right direction only (doing this in userspace)
     dna_cleanup_rx_ring(rx_ring);
+    dna_cleanup_tx_ring(tx_ring);
+    */
 
     module_put(THIS_MODULE);  /* -- */
 
@@ -404,7 +451,7 @@ void dna_ixgbe_alloc_tx_buffers(struct ixgbe_ring *tx_ring, struct pfring_hooks 
 
     bi->dma = pci_map_single(to_pci_dev(tx_ring->dev), pkt,
 			     tx_ring->dna.packet_slot_len,
-			     PCI_DMA_BIDIRECTIONAL /* PCI_DMA_TODEVICE */);
+			     PCI_DMA_BIDIRECTIONAL /* PCI_DMA_TODEVICE */ );
 
     tx_desc->read.buffer_addr = cpu_to_le64(bi->dma);
     shadow_tx_desc = IXGBE_TX_DESC(tx_ring, i + tx_ring->count);
@@ -412,18 +459,6 @@ void dna_ixgbe_alloc_tx_buffers(struct ixgbe_ring *tx_ring, struct pfring_hooks 
   } /* for */
 
   tx_ring->dna.memory_allocated = 1;
-}
-
-/* ********************************** */
-
-void dna_reset_rx_ring(struct ixgbe_ring *rx_ring) {
-  /*
-    rx_ring->next_to_use   = the slot where the next incoming packet will be copied
-    rx_ring->next_to_clean = the slot where the next incoming packet will be read
-  */
-  ixgbe_release_rx_desc(rx_ring, rx_ring->count-1 /* 0 */);
-
-  rx_ring->next_to_clean = 0;
 }
 
 /* ********************************** */
@@ -531,7 +566,7 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
 
     bi->dma = pci_map_single(to_pci_dev(rx_ring->dev), pkt,
 			     rx_ring->dna.packet_slot_len,
-			     PCI_DMA_BIDIRECTIONAL /* PCI_DMA_FROMDEVICE */);
+			     PCI_DMA_BIDIRECTIONAL /* PCI_DMA_FROMDEVICE */ );
 
     /* Packet Split disabled in DNA mode */
     //if (!ring_is_ps_enabled(rx_ring)) {
@@ -555,11 +590,16 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
     ixgbe_release_rx_desc(rx_ring, i);
   } /* for */
 
-    /* Shadow */
+  /* Shadow */
   rx_desc = IXGBE_RX_DESC(rx_ring, 0);
 
+  /* Resetting index
+     rx_ring->next_to_use   = the last slot where the next incoming packets can be copied (tail) */
+  ixgbe_release_rx_desc(rx_ring, rx_ring->count-1);
+  /* rx_ring->next_to_clean = the slot where the next incoming packet will be read (head) */
+  rx_ring->next_to_clean = 0;
+
   /* Register with PF_RING */
-  dna_reset_rx_ring(rx_ring);
 
   if(unlikely(enable_debug))
     printk("[DNA] next_to_clean=%u/next_to_use=%u [register=%d]\n",

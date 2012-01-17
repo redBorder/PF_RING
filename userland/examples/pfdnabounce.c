@@ -162,12 +162,9 @@ void sigproc(int sig) {
 
 #ifdef USE_PFRING_BOUNCE
   pfring_bounce_breakloop(&bounce);
+#else
+  pfring_breakloop(pd1);
 #endif
-
-  pfring_close(pd1);
-  pfring_close(pd2);
-
-  exit(0);
 }
 
 /* *************************************** */
