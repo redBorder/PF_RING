@@ -14,22 +14,6 @@
 #define _PFRING_H_
 
 #include <sys/types.h>
-
-#ifndef __USE_XOPEN2K
-typedef volatile int pthread_spinlock_t;
-extern int pthread_spin_init (pthread_spinlock_t *__lock,
-			      int __pshared) __THROW;
-
-/* Destroy the spinlock LOCK.  */
-extern int pthread_spin_destroy (pthread_spinlock_t *__lock) __THROW;
-
-/* Wait until spinlock LOCK is retrieved.  */
-extern int pthread_spin_lock (pthread_spinlock_t *__lock) __THROW;
-
-/* Release spinlock LOCK.  */
-extern int pthread_spin_unlock (pthread_spinlock_t *__lock) __THROW;
-#endif
-
 #include <stdio.h>
 #include <stdarg.h>
 #include <sys/types.h>
@@ -125,7 +109,7 @@ extern "C" {
     pfring *rx_socket, *tx_socket;
     void *priv_data;
     u_int8_t running, break_loop;
-    pthread_spinlock_t lock;
+    pthread_rwlock_t lock;
 
     /* disabled functions */
     int       (*recv)                         (pfring *, u_char**, u_int, struct pfring_pkthdr *, u_int8_t);
@@ -247,7 +231,7 @@ extern "C" {
     u_int16_t poll_duration;
     u_int8_t promisc, clear_promisc, reentrant, break_recv_loop;
     u_long num_poll_calls;
-    pthread_spinlock_t spinlock;
+    pthread_rwlock_t lock;
 
     struct sockaddr_ll sock_tx;
   };

@@ -104,11 +104,11 @@ int pfring_dna_recv(pfring *ring, u_char** buffer, u_int buffer_len,
   if(ring->is_shutting_down) return(-1);
 
   ring->break_recv_loop = 0;
-  if(ring->reentrant) pthread_spin_lock(&ring->spinlock);
+  if(ring->reentrant) pthread_rwlock_wrlock(&ring->lock);
 
   redo_pfring_recv:
     if(ring->is_shutting_down || ring->break_recv_loop) {
-      if(ring->reentrant) pthread_spin_unlock(&ring->spinlock);
+      if(ring->reentrant) pthread_rwlock_unlock(&ring->lock);
       return(-1);
     }
 
@@ -123,7 +123,7 @@ int pfring_dna_recv(pfring *ring, u_char** buffer, u_int buffer_len,
 
       hdr->extended_hdr.rx_direction = 1;
 
-      if(ring->reentrant) pthread_spin_unlock(&ring->spinlock);
+      if(ring->reentrant) pthread_rwlock_unlock(&ring->lock);
       return(1);
     }
 
@@ -134,7 +134,7 @@ int pfring_dna_recv(pfring *ring, u_char** buffer, u_int buffer_len,
         goto redo_pfring_recv;
     }
 
-    if(ring->reentrant) pthread_spin_unlock(&ring->spinlock);
+    if(ring->reentrant) pthread_rwlock_unlock(&ring->lock);
     return(0);
  }
 

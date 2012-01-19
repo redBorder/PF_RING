@@ -143,7 +143,7 @@ pfring* pfring_open(char *device_name, u_int8_t promisc,
   }
 
   if(ring->reentrant)
-    pthread_spin_init(&ring->spinlock, PTHREAD_PROCESS_PRIVATE);
+    pthread_rwlock_init(&ring->lock, PTHREAD_PROCESS_PRIVATE);
 
   ring->socket_default_accept_policy = 1; /* Accept (default) */
 
@@ -237,7 +237,7 @@ void pfring_close(pfring *ring) {
     ring->close(ring);
  
   if(ring->reentrant)
-    pthread_spin_destroy(&ring->spinlock);
+    pthread_rwlock_destroy(&ring->lock);
 
   free(ring->device_name);
   free(ring);
@@ -486,7 +486,7 @@ int pfring_bounce_init(pfring_bounce *bounce, pfring *ingress_ring, pfring *egre
     return -1;
   }
 
-  pthread_spin_init(&bounce->lock, PTHREAD_PROCESS_PRIVATE); 
+  pthread_rwlock_init(&bounce->lock, PTHREAD_PROCESS_PRIVATE); 
   
   return 0;
 }
@@ -501,18 +501,18 @@ int pfring_bounce_loop(pfring_bounce *bounce, pfringBounceProcesssPacket looper,
       bounce->rx_socket->bounce_loop == NULL)
     return -1;
 
-  pthread_spin_lock(&bounce->lock);
-  if (bounce->running) { pthread_spin_unlock(&bounce->lock); return -1; }
+  pthread_rwlock_wrlock(&bounce->lock);
+  if (bounce->running) { pthread_rwlock_unlock(&bounce->lock); return -1; }
   bounce->running = 1;
-  pthread_spin_unlock(&bounce->lock);
+  pthread_rwlock_unlock(&bounce->lock);
 
   bounce->break_loop = 0;
 
   rc = bounce->rx_socket->bounce_loop(bounce, looper, user_bytes, wait_for_packet);
 
-  pthread_spin_lock(&bounce->lock);
+  pthread_rwlock_wrlock(&bounce->lock);
   bounce->running = 0;
-  pthread_spin_unlock(&bounce->lock);
+  pthread_rwlock_unlock(&bounce->lock);
 
   return rc;
 }
@@ -666,12 +666,12 @@ int pfring_send(pfring *ring, char *pkt, u_int pkt_len, u_int8_t flush_packet) {
 	    && (ring->direction != rx_only_direction))) {
 
     if(ring->reentrant) 
-      pthread_spin_lock(&ring->spinlock);
+      pthread_rwlock_wrlock(&ring->lock);
 
     rc =  ring->send(ring, pkt, pkt_len, flush_packet);
     
     if(ring->reentrant) 
-      pthread_spin_unlock(&ring->spinlock);
+      pthread_rwlock_unlock(&ring->lock);
   }
 
   return rc;
@@ -689,12 +689,12 @@ int pfring_send_parsed(pfring *ring, char *pkt, struct pfring_pkthdr *hdr, u_int
 	    && (ring->direction != rx_only_direction))) {
 
     if(ring->reentrant) 
-      pthread_spin_lock(&ring->spinlock);
+      pthread_rwlock_wrlock(&ring->lock);
 
     rc =  ring->send_parsed(ring, pkt, hdr, flush_packet);
     
     if(ring->reentrant) 
-      pthread_spin_unlock(&ring->spinlock);
+      pthread_rwlock_unlock(&ring->lock);
 
     return rc;
   }
@@ -717,12 +717,12 @@ int pfring_send_get_time(pfring *ring, char *pkt, u_int pkt_len, struct timespec
 	    && (ring->direction != rx_only_direction))) {
 
     if(ring->reentrant) 
-      pthread_spin_lock(&ring->spinlock);
+      pthread_rwlock_wrlock(&ring->lock);
 
     rc =  ring->send_get_time(ring, pkt, pkt_len, ts);
     
     if(ring->reentrant) 
-      pthread_spin_unlock(&ring->spinlock);
+      pthread_rwlock_unlock(&ring->lock);
 
     return rc;
   }

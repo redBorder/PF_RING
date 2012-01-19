@@ -399,7 +399,7 @@ int pfring_mod_recv(pfring *ring, u_char** buffer, u_int buffer_len,
       return(0);
 
     if(ring->reentrant)
-      pthread_spin_lock(&ring->spinlock);
+      pthread_rwlock_wrlock(&ring->lock);
 
     //rmb();
 
@@ -442,12 +442,12 @@ int pfring_mod_recv(pfring *ring, u_char** buffer, u_int buffer_len,
 	ring->slots_info->remove_off = ring->slots_info->insert_off;
       }
 
-      if(ring->reentrant) pthread_spin_unlock(&ring->spinlock);
+      if(ring->reentrant) pthread_rwlock_unlock(&ring->lock);
       return(1);
     }
 
     /* Nothing to do: we need to wait */
-    if(ring->reentrant) pthread_spin_unlock(&ring->spinlock);
+    if(ring->reentrant) pthread_rwlock_unlock(&ring->lock);
 
     if(wait_for_incoming_packet) {
       rc = pfring_poll(ring, ring->poll_duration);
