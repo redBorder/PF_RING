@@ -482,13 +482,11 @@ int32_t gmt2local(time_t t) {
 /* *************************************** */
 
 void printHelp(void) {
-  printf("pfcount\n(C) 2005-11 Deri Luca <deri@ntop.org>\n\n");
+  printf("pfcount\n(C) 2005-12 Deri Luca <deri@ntop.org>\n\n");
   printf("-h              Print this help\n");
   printf("-i <device>     Device name. Use ethX@Y for channels, dna:ethX for DNA, dag:dagX:Y for DAG cards\n");
   printf("-n <threads>    Number of polling threads (default %d)\n", num_threads);
-
-  /* printf("-f <filter>     [pfring filter]\n"); */
-
+  printf("-f <filter>     [BPF filter]\n"); 
   printf("-c <cluster id> cluster id\n");
   printf("-e <direction>  0=RX+TX, 1=RX only, 2=TX only\n");
   printf("-l <len>        Capture length\n");
@@ -590,6 +588,7 @@ int main(int argc, char* argv[]) {
   int bind_core = -1;
   packet_direction direction = rx_and_tx_direction;
   u_int16_t watermark = 0, poll_duration = 0, cpu_percentage = 0, rehash_rss = 0;
+  char *bpfFilter = NULL;
 
 #if 0
   struct sched_param schedparam;
@@ -629,7 +628,7 @@ int main(int argc, char* argv[]) {
   startTime.tv_sec = 0;
   thiszone = gmt2local(0);
 
-  while((c = getopt(argc,argv,"hi:c:dl:vae:n:w:p:b:rg:u:" /* "f:" */)) != '?') {
+  while((c = getopt(argc,argv,"hi:c:dl:vae:n:w:p:b:rg:u:f:")) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -664,11 +663,9 @@ int main(int argc, char* argv[]) {
     case 'v':
       verbose = 1;
       break;
-      /*
-	case 'f':
-	bpfFilter = strdup(optarg);
-	break;
-      */
+    case 'f':
+      bpfFilter = strdup(optarg);
+      break;      
     case 'w':
       watermark = atoi(optarg);
       break;
@@ -740,6 +737,14 @@ int main(int argc, char* argv[]) {
 
   printf("# Device RX channels: %d\n", pfring_get_num_rx_channels(pd));
   printf("# Polling threads:    %d\n", num_threads);
+
+  if(bpfFilter != NULL) {
+    rc = pfring_set_bpf_filter(pd, bpfFilter);
+    if(rc != 0)
+      printf("pfring_set_bpf_filter(%s) returned %d\n", bpfFilter, rc);
+    else
+      printf("Successfully set BPF filter '%s'\n", bpfFilter);
+  }
 
   if(clusterId > 0) {
     rc = pfring_set_cluster(pd, clusterId, cluster_round_robin);
