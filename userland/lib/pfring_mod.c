@@ -124,7 +124,7 @@ int pfring_mod_open(pfring *ring) {
   if(ring->caplen > MAX_CAPLEN) ring->caplen = MAX_CAPLEN;
   rc = setsockopt(ring->fd, 0, SO_RING_BUCKET_LEN, &ring->caplen, sizeof(ring->caplen));
 
-  if (rc < 0) {
+  if(rc < 0) {
     close(ring->fd);
     return -1;
   }
@@ -365,10 +365,10 @@ int pfring_mod_is_pkt_available(pfring *ring) {
 int pfring_mod_next_pkt_time(pfring *ring, struct timespec *ts) {
   struct pfring_pkthdr *header = (struct pfring_pkthdr*) &ring->slots[ring->slots_info->remove_off];
 
-  if (!pfring_there_is_pkt_available(ring))
+  if(!pfring_there_is_pkt_available(ring))
     return PF_RING_ERROR_NO_PKT_AVAILABLE;
 
-  if (!header->ts.tv_sec)
+  if(!header->ts.tv_sec)
     return PF_RING_ERROR_WRONG_CONFIGURATION;
 
   ts->tv_sec = header->ts.tv_sec;
@@ -376,7 +376,7 @@ int pfring_mod_next_pkt_time(pfring *ring, struct timespec *ts) {
 
   /* TODO In order to use ns from hw ts we should make sure that
    * hw ts is in sync with sys time. */
-  //if (header->extended_hdr.timestamp_ns)
+  //if(header->extended_hdr.timestamp_ns)
   //  ts->tv_nsec = header->extended_hdr.timestamp_ns % 1000000000;
 
   return 0;
@@ -550,7 +550,7 @@ int pfring_mod_poll(pfring *ring, u_int wait_duration) {
     int rc;
 
     /* Userspace RING: enabling interrupts */
-    if (ring->slots_info != NULL)
+    if(ring->slots_info != NULL)
       ring->slots_info->userspace_ring_flags &= ~USERSPACE_RING_NO_INTERRUPT; 
     //gcc_mb();
 
@@ -759,7 +759,7 @@ int pfring_mod_set_bpf_filter(pfring *ring, char *filter_buffer){
   struct bpf_program filter;
   struct sock_fprog  fcode;
 
-  if (!filter_buffer)
+  if(!filter_buffer)
     return -1;
 
   if(pcap_compile_nopcap(ring->caplen,  /* snaplen_arg */
@@ -771,16 +771,17 @@ int pfring_mod_set_bpf_filter(pfring *ring, char *filter_buffer){
                          ) == -1)
     return -1;
 
-  if (filter.bf_insns == NULL)
+  if(filter.bf_insns == NULL)
     return (-1);
 
   fcode.len    = filter.bf_len;
-  fcode.filter = filter.bf_insns;
+  fcode.filter = (struct sock_filter*)filter.bf_insns;
 
   rc = setsockopt(ring->fd, 0, SO_ATTACH_FILTER, &fcode, sizeof(fcode));
 
-  if (rc == -1) {
+  if(rc == -1) {
     int dummy = 0;
+
     setsockopt(ring->fd, SOL_SOCKET, SO_DETACH_FILTER, &dummy, sizeof(dummy));
   }
 #endif
