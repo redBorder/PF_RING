@@ -4,6 +4,11 @@ API for packet processing applications.
 
 Compilation
 -----------
+You need to have installed the basic compilation tools and libraries.
+On Ubuntu you can do
+# apt-get install build-essential bison flex linux-headers-$(uname -r)
+
+At this point you can compile the module
 # make
 
 Installation
