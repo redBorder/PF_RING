@@ -2117,6 +2117,7 @@ static void e1000_clean_rx_ring(struct e1000_adapter *adapter)
 					    adapter->netdev->mem_end-adapter->netdev->mem_start,
 					    0, /* Channel Id */
 					    adapter->netdev,
+				    	    &pdev->dev,
 					    intel_e1000e,
 					    adapter->netdev->dev_addr,
 					    &adapter->dna.packet_waitqueue,

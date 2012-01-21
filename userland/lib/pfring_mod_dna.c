@@ -53,22 +53,24 @@ static int pfring_map_dna_device(pfring *ring,
 /* **************************************************** */
 
 void pfring_dna_close(pfring *ring) {
+  int i;
+
   if(ring->dna_term)
     ring->dna_term(ring);
 
-  if(ring->dna_dev.rx_packet_memory != 0)
-    munmap((void*)ring->dna_dev.rx_packet_memory,
-	     ring->dna_dev.mem_info.rx.packet_memory_chunk_len * 
-	     ring->dna_dev.mem_info.rx.packet_memory_num_chunks);
+  for(i=0; i<ring->dna_dev.mem_info.rx.packet_memory_num_chunks; i++)
+    if(ring->dna_dev.rx_packet_memory[i] != 0)
+      munmap((void*)ring->dna_dev.rx_packet_memory[i],
+	     ring->dna_dev.mem_info.rx.packet_memory_chunk_len); 
 
   if(ring->dna_dev.rx_descr_packet_memory != NULL)
     munmap(ring->dna_dev.rx_descr_packet_memory, 
 	   ring->dna_dev.mem_info.rx.descr_packet_memory_tot_len);
   
-  if(ring->dna_dev.tx_packet_memory != 0)
-    munmap((void*)ring->dna_dev.tx_packet_memory,
-	     ring->dna_dev.mem_info.tx.packet_memory_chunk_len *
-	     ring->dna_dev.mem_info.tx.packet_memory_num_chunks);
+  for(i=0; i<ring->dna_dev.mem_info.tx.packet_memory_num_chunks; i++)
+    if(ring->dna_dev.tx_packet_memory[i] != 0)
+      munmap((void*)ring->dna_dev.tx_packet_memory,
+	     ring->dna_dev.mem_info.tx.packet_memory_chunk_len);
 
   if(ring->dna_dev.tx_descr_packet_memory != NULL)
     munmap(ring->dna_dev.tx_descr_packet_memory, 
@@ -197,6 +199,12 @@ int pfring_dna_open(pfring *ring) {
    * ring->set_device_clock
    * ring->get_device_clock
    */
+
+#ifdef HAVE_NITRO
+  ring->bounce_init = dna_bounce_init;
+  ring->bounce_loop = dna_bounce_loop;
+  ring->bounce_destroy = dna_bounce_destroy;
+#endif
 
   ring->last_dna_operation = remove_device_mapping;
   ring->fd = socket(PF_RING, SOCK_RAW, htons(ETH_P_ALL));

@@ -104,6 +104,7 @@
 #endif
 #include <net/ip.h>
 #include <net/ipv6.h>
+#include <linux/pci.h>
 
 #if(LINUX_VERSION_CODE > KERNEL_VERSION(2,6,30))
 #include <linux/eventfd.h>
@@ -4178,6 +4179,151 @@ static int userspace_ring_remove(struct pf_userspace_ring *usr,
   return ret;
 }
 
+/* ************************************* */
+
+void reserve_memory(unsigned long base, unsigned long mem_len) {
+  struct page *page, *page_end;
+
+  page_end = virt_to_page(base + mem_len - 1);
+  for(page = virt_to_page(base); page <= page_end; page++)
+    SetPageReserved(page);
+}
+
+void unreserve_memory(unsigned long base, unsigned long mem_len) {
+  struct page *page, *page_end;
+
+  page_end = virt_to_page(base + mem_len - 1);
+  for(page = virt_to_page(base); page <= page_end; page++)
+    ClearPageReserved(page);
+}
+
+static void free_contiguous_memory(unsigned long mem, u_int mem_len) {
+  if(mem != 0) {
+    unreserve_memory(mem, mem_len);
+    free_pages(mem, get_order(mem_len));
+  }
+}
+
+static unsigned long alloc_contiguous_memory(u_int mem_len) {
+  unsigned long mem = 0;
+
+  mem = __get_free_pages(GFP_KERNEL, get_order(mem_len));
+
+  if(mem)
+    reserve_memory(mem, mem_len);
+  else
+    if(unlikely(enable_debug)) 
+      printk("[PF_RING] %s() Failure (len=%d, order=%d)\n", __FUNCTION__, mem_len, get_order(mem_len));
+
+  return(mem);
+}
+
+static int allocate_extra_dma_memory(struct pf_ring_socket *pfr, struct device *hwdev, 
+                                     u_int32_t num_slots, u_int32_t slot_len, u_int32_t chunk_len)
+{
+  u_int i, num_slots_per_chunk;
+
+  pfr->extra_dma_memory_chunk_len = chunk_len;
+  pfr->extra_dma_memory_num_slots = num_slots;
+  pfr->extra_dma_memory_slot_len = slot_len;
+  pfr->extra_dma_memory_hwdev = hwdev;
+  num_slots_per_chunk = pfr->extra_dma_memory_chunk_len / pfr->extra_dma_memory_slot_len;
+  pfr->extra_dma_memory_num_chunks = pfr->extra_dma_memory_num_slots / num_slots_per_chunk;
+
+  if(pfr->extra_dma_memory || pfr->extra_dma_memory_addr) /* already called */
+    return -EINVAL;
+
+  if((pfr->extra_dma_memory = kcalloc(1, sizeof(unsigned long) * pfr->extra_dma_memory_num_chunks, GFP_KERNEL)) == NULL)
+    return -ENOMEM;
+
+  if ((pfr->extra_dma_memory_addr = kcalloc(1, sizeof(u_int64_t) * pfr->extra_dma_memory_num_slots, GFP_KERNEL)) == NULL) {
+    kfree(pfr->extra_dma_memory);
+    pfr->extra_dma_memory = NULL;
+    return -ENOMEM;
+  }
+
+  if(unlikely(enable_debug)) 
+    printk("[PF_RING] %s() Allocating %d chunks of %d bytes [slots per chunk=%d]\n", 
+           __FUNCTION__, pfr->extra_dma_memory_num_chunks, pfr->extra_dma_memory_chunk_len, num_slots_per_chunk);
+
+  /* Allocating memory chunks */
+  for(i=0; i < pfr->extra_dma_memory_num_chunks; i++) {
+    pfr->extra_dma_memory[i] = alloc_contiguous_memory(pfr->extra_dma_memory_chunk_len);
+
+    if(!pfr->extra_dma_memory[i]) {
+      printk("[PF_RING] %s() Warning: no more free memory available! Allocated %d of %d chunks.\n", 
+	     __FUNCTION__, i + 1, pfr->extra_dma_memory_num_chunks);
+
+      pfr->extra_dma_memory_num_chunks = i;
+      break;
+    }
+  }
+
+  /* Mapping DMA slots */
+  for(i=0; i < pfr->extra_dma_memory_num_slots; i++) {
+    u_int chunk_id = i / num_slots_per_chunk;
+    u_int offset = (i % num_slots_per_chunk) * pfr->extra_dma_memory_slot_len;
+    char *slot;
+
+    if(!pfr->extra_dma_memory[chunk_id])
+      break;
+
+    slot = (char *) (pfr->extra_dma_memory[chunk_id] + offset);
+
+    if(unlikely(enable_debug))
+      printk("[PF_RING] %s() Mapping DMA slot %d of %d [slot addr=%p][offset=%u]\n",
+             __FUNCTION__, i + 1, pfr->extra_dma_memory_num_slots, slot, offset);
+
+      pfr->extra_dma_memory_addr[i] = cpu_to_le64(
+        pci_map_single(to_pci_dev(pfr->extra_dma_memory_hwdev), slot,
+                       pfr->extra_dma_memory_slot_len,
+                       PCI_DMA_BIDIRECTIONAL));
+
+      if(dma_mapping_error(pfr->extra_dma_memory_hwdev, pfr->extra_dma_memory_addr[i])) {
+        printk("[PF_RING] %s() Error mapping DMA slot %d of %d \n", __FUNCTION__, i + 1, pfr->extra_dma_memory_num_slots);
+	pfr->extra_dma_memory_addr[i] = 0;
+        break;
+      }
+  }
+
+  return 0;
+}
+
+static void free_extra_dma_memory(struct pf_ring_socket *pfr) {
+  u_int i;
+
+  if(!pfr->extra_dma_memory)
+    return;
+  
+  /* Unmapping DMA addresses */
+  if(pfr->extra_dma_memory_addr) {
+    for(i=0; i < pfr->extra_dma_memory_num_slots; i++) {
+      if(pfr->extra_dma_memory_addr[i]) {
+        dma_unmap_single(pfr->extra_dma_memory_hwdev, pfr->extra_dma_memory_addr[i], 
+	                 pfr->extra_dma_memory_slot_len, 
+	                 PCI_DMA_BIDIRECTIONAL);
+	pfr->extra_dma_memory_addr[i] = 0;
+      }
+    }
+    kfree(pfr->extra_dma_memory_addr);
+    pfr->extra_dma_memory_addr = NULL;
+  }
+
+  /* Freeing memory */
+  for(i=0; i < pfr->extra_dma_memory_num_chunks; i++) {
+    if(pfr->extra_dma_memory[i]) {
+      if(unlikely(enable_debug)) 
+        printk("[PF_RING] %s() Freeing chunk %d of %d\n", __FUNCTION__, i, pfr->extra_dma_memory_num_chunks);
+
+      free_contiguous_memory(pfr->extra_dma_memory[i], pfr->extra_dma_memory_chunk_len); 
+      pfr->extra_dma_memory[i] = 0;
+    }
+  }
+
+  pfr->extra_dma_memory_num_chunks = 0;
+  kfree(pfr->extra_dma_memory);
+  pfr->extra_dma_memory = NULL;
+}
 
 /* *********************************************** */
 
@@ -4331,7 +4477,7 @@ static int ring_release(struct socket *sock)
 
   if(ring_memory_ptr != NULL && free_ring_memory)
     vfree(ring_memory_ptr);
-
+    
   if(pfr->dna_device_entry != NULL) {
     dna_device_mapping mapping;
 
@@ -4340,6 +4486,9 @@ static int ring_release(struct socket *sock)
     mapping.channel_id = pfr->dna_device_entry->dev.channel_id;
     ring_map_dna_device(pfr, &mapping);
   }
+
+  if(pfr->extra_dma_memory)
+    free_extra_dma_memory(pfr);
 
   kfree(pfr);
 
@@ -4616,9 +4765,7 @@ static int ring_mmap(struct file *file,
 
       if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->rx_packet_memory[mem_id], VM_LOCKED, 1)) < 0)
         return(rc);
-
-      return(0);
-    } else {
+    } else if(mem_id < pfr->dna_device->mem_info.rx.packet_memory_num_chunks + pfr->dna_device->mem_info.tx.packet_memory_num_chunks) {
       /* DNA: TX packet memory */
 
       mem_id -= pfr->dna_device->mem_info.rx.packet_memory_num_chunks;
@@ -4628,9 +4775,23 @@ static int ring_mmap(struct file *file,
 
       if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->tx_packet_memory[mem_id], VM_LOCKED, 1)) < 0)
         return(rc);
+    } else {
+      /* Extra DMA memory */
 
-      return(0);
+      mem_id -= pfr->dna_device->mem_info.rx.packet_memory_num_chunks;
+      mem_id -= pfr->dna_device->mem_info.tx.packet_memory_num_chunks;
+
+      if(mem_id >= pfr->extra_dma_memory_num_chunks)
+        return -EINVAL;
+
+      if(pfr->extra_dma_memory == NULL)
+        return -EINVAL;
+      
+      if((rc = do_memory_mmap(vma, size, (void *)pfr->extra_dma_memory[mem_id], VM_LOCKED, 1)) < 0)
+        return(rc); 
     }
+
+    return(0);
   }
 
   switch(mem_id) {
@@ -6260,6 +6421,38 @@ static int ring_getsockopt(struct socket *sock,
       break;
     }
 
+  case SO_GET_EXTRA_DMA_MEMORY:
+    {
+      u_int64_t num_slots;
+
+      if(pfr->dna_device == NULL || pfr->dna_device->hwdev == NULL)
+        return -EINVAL;
+
+      if(len < sizeof(u_int64_t))
+        return -EINVAL;
+
+      if(copy_from_user(&num_slots, optval, sizeof(num_slots)))
+        return -EFAULT;
+
+      if(num_slots > MAX_EXTRA_DMA_SLOTS)
+        num_slots = MAX_EXTRA_DMA_SLOTS;
+
+      if(len < (sizeof(u_int64_t) * num_slots))
+        return -EINVAL;
+
+      if(allocate_extra_dma_memory(pfr, pfr->dna_device->hwdev, num_slots, 
+                                   pfr->dna_device->mem_info.rx.packet_memory_slot_len, 
+                                   pfr->dna_device->mem_info.rx.packet_memory_chunk_len) < 0)
+        return -EFAULT;
+	
+      if(copy_to_user(optval, pfr->extra_dma_memory_addr, (sizeof(u_int64_t) * num_slots))) {
+        free_extra_dma_memory(pfr);
+        return -EFAULT;
+      }
+
+      break;
+    }
+
   case SO_GET_NUM_RX_CHANNELS:
     {
       u_int8_t num_rx_channels;
@@ -6442,6 +6635,7 @@ void dna_device_handler(dna_device_operation operation,
 			u_int          phys_card_memory_len,
 			u_int channel_id,
 			struct net_device *netdev,
+			struct device *hwdev,
 			dna_device_model device_model,
 			u_char *device_address,
 			wait_queue_head_t *packet_waitqueue,
@@ -6490,6 +6684,7 @@ void dna_device_handler(dna_device_operation operation,
 
       next->dev.channel_id = channel_id;
       next->dev.netdev = netdev;
+      next->dev.hwdev = hwdev;
       next->dev.mem_info.device_model = device_model;
       memcpy(next->dev.device_address, device_address, 6);
       next->dev.packet_waitqueue = packet_waitqueue;

@@ -622,6 +622,10 @@ DNA_DEP
 DNA_OBJS
 DNA_LIB
 HAVE_DNA
+NITRO_DEP
+NITRO_OBJS
+NITRO_LIB
+HAVE_NITRO
 EGREP
 GREP
 CPP
@@ -3230,11 +3234,26 @@ CFLAGS=""
 SYS_LIBS=""
 
 MACHINE=`uname -m`
+NITRO_LIB="libs/libpfring_nitro_$MACHINE.a"
 DNA_LIB="libs/libpfring_dna_$MACHINE.a"
 VIRTUAL_LIB="libs/libpfring_mod_virtual_$MACHINE.a"
 VIRTUAL_HDR="pfring_mod_virtual.h"
 USERSPACE_RING_LIB="libs/libpfring_mod_usring_$MACHINE.a"
 USERSPACE_RING_HDR="pfring_mod_usring.h"
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking Nitro support" >&5
+$as_echo_n "checking Nitro support... " >&6; }
+if test -f $NITRO_LIB; then
+  HAVE_NITRO="-D HAVE_NITRO"
+  NITRO_OBJS=`ar t $NITRO_LIB | tr '\n' ' '`
+  NITRO_DEP="extract_nitro_lib"
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+else
+  NITRO_LIB=""
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking DNA support" >&5
 $as_echo_n "checking DNA support... " >&6; }
@@ -3455,6 +3474,10 @@ if test ".${prefix}" = ".NONE"; then
 else
    INSTALL_PREFIX=${prefix};
 fi
+
+
+
+
 
 
 

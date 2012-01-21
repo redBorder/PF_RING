@@ -605,6 +605,7 @@ void dna_igb_alloc_rx_buffers(struct igb_ring *rx_ring, struct pfring_hooks *hoo
 				rx_ring->netdev->mem_end - rx_ring->netdev->mem_start,
 				rx_ring->queue_index, /* Channel Id */
 				rx_ring->netdev,
+				rx_ring->dev,
 				dna_model(hw),
 				rx_ring->netdev->dev_addr,
 				&rx_ring->dna.rx_tx.rx.packet_waitqueue,

@@ -10,11 +10,23 @@ CFLAGS=""
 SYS_LIBS=""
 
 MACHINE=`uname -m`
+NITRO_LIB="libs/libpfring_nitro_$MACHINE.a"
 DNA_LIB="libs/libpfring_dna_$MACHINE.a"
 VIRTUAL_LIB="libs/libpfring_mod_virtual_$MACHINE.a"
 VIRTUAL_HDR="pfring_mod_virtual.h"
 USERSPACE_RING_LIB="libs/libpfring_mod_usring_$MACHINE.a"
 USERSPACE_RING_HDR="pfring_mod_usring.h"
+
+AC_MSG_CHECKING([Nitro support])
+if test -f $NITRO_LIB; then
+  HAVE_NITRO="-D HAVE_NITRO"
+  NITRO_OBJS=`ar t $NITRO_LIB | tr '\n' ' '`
+  NITRO_DEP="extract_nitro_lib"
+  AC_MSG_RESULT(yes)
+else
+  NITRO_LIB=""
+  AC_MSG_RESULT(no)
+fi
 
 AC_MSG_CHECKING([DNA support])
 if test -f $DNA_LIB; then
@@ -99,6 +111,10 @@ else
 fi
 
 AC_SUBST(CFLAGS)
+AC_SUBST(HAVE_NITRO)
+AC_SUBST(NITRO_LIB)
+AC_SUBST(NITRO_OBJS)
+AC_SUBST(NITRO_DEP)
 AC_SUBST(HAVE_DNA)
 AC_SUBST(DNA_LIB)
 AC_SUBST(DNA_OBJS)

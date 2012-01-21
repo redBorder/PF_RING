@@ -23,6 +23,12 @@ int  pfring_dna_send(pfring *ring, char *pkt, u_int pkt_len);
 int  pfring_dna_enable_ring(pfring *ring);
 
 /* DNA */
-extern int dna_init(pfring* ring, u_short len);
+int dna_init(pfring* ring, u_int len);
+
+#ifdef HAVE_NITRO
+int dna_bounce_init(pfring_bounce *bounce);
+int dna_bounce_loop(pfring_bounce *bounce, pfringBounceProcesssPacket looper, const u_char *user_bytes, u_int8_t wait_for_packet);
+void dna_bounce_destroy(pfring_bounce *bounce);
+#endif
 
 #endif /* _PFRING_DNA_H_ */

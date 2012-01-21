@@ -361,6 +361,7 @@ void alloc_dna_memory(struct e1000_adapter *adapter) {
 				    netdev->mem_end-netdev->mem_start,
 				    0, /* Channel Id */
 				    netdev,
+				    &pdev->dev,
 				    intel_e1000e,
 				    adapter->netdev->dev_addr,
 				    &adapter->dna.packet_waitqueue,

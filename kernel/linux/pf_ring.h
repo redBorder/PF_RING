@@ -83,6 +83,7 @@
 #define SO_GET_LOOPBACK_TEST             180
 #define SO_GET_BUCKET_LEN                181
 #define SO_GET_DEVICE_TYPE               182
+#define SO_GET_EXTRA_DMA_MEMORY          183
 
 /* Map */
 #define SO_MAP_DNA_DEVICE                190
@@ -519,7 +520,8 @@ typedef struct flowSlotInfo {
 /* **************************************** */
 
 #define DNA_MAX_CHUNK_ORDER		5
-#define DNA_MAX_NUM_CHUNKS		512
+#define DNA_MAX_NUM_CHUNKS		4096
+#define MAX_EXTRA_DMA_SLOTS		524288
 
 /* *********************************** */
 
@@ -615,6 +617,7 @@ typedef struct {
   void *tx_descr_packet_memory; /* Invalid in userland */
   char *phys_card_memory;       /* Invalid in userland */
   struct net_device *netdev;    /* Invalid in userland */
+  struct device *hwdev;         /* Invalid in userland */
   u_char device_address[6];
 #ifdef __KERNEL__
   wait_queue_head_t *packet_waitqueue;
@@ -828,6 +831,13 @@ struct pf_ring_socket {
   dna_device *dna_device;
   dna_device_list *dna_device_entry;
 
+  /* Extra DMA memory */
+  u_int32_t extra_dma_memory_num_chunks, extra_dma_memory_chunk_len;
+  u_int32_t extra_dma_memory_num_slots,  extra_dma_memory_slot_len;
+  unsigned long *extra_dma_memory;  /* chunks pointers */
+  u_int64_t *extra_dma_memory_addr; /* per-slot DMA adresses */
+  struct device *extra_dma_memory_hwdev; /* dev for DMA mapping */
+
   /* Cluster */
   u_short cluster_id; /* 0 = no cluster */
 
@@ -836,7 +846,7 @@ struct pf_ring_socket {
   u_int16_t num_channels_per_ring;
 
   /* Ring Slots */
-  char* ring_memory;
+  char *ring_memory;
   u_int16_t slot_header_len;
   u_int32_t bucket_len;
   FlowSlotInfo *slots_info; /* Points to ring_memory */
@@ -1020,14 +1030,15 @@ typedef void  (*handle_ring_dna_device)(dna_device_operation operation,
 					dna_version version,
 					mem_ring_info *rx_info,
 					mem_ring_info *tx_info,
-					unsigned long  rx_packet_memory[DNA_MAX_NUM_CHUNKS],
+					unsigned long *rx_packet_memory,
 					void          *rx_descr_packet_memory,
-					unsigned long  tx_packet_memory[DNA_MAX_NUM_CHUNKS],
+					unsigned long *tx_packet_memory,
 					void          *tx_descr_packet_memory,
 					void          *phys_card_memory,
 					u_int          phys_card_memory_len,
 					u_int channel_id,
 					struct net_device *netdev,
+					struct device *hwdev,
 					dna_device_model device_model,
 					u_char *device_address,
 					wait_queue_head_t *packet_waitqueue,
@@ -1055,14 +1066,15 @@ extern void set_ring_dna_device_handler(handle_ring_dna_device
 extern void do_ring_dna_device_handler(dna_device_operation operation,
 				       mem_ring_info *rx_info,
 				       mem_ring_info *tx_info,
-			 	       unsigned long  rx_packet_memory[DNA_MAX_NUM_CHUNKS],
+			 	       unsigned long *rx_packet_memory,
 				       void          *rx_descr_packet_memory,
-				       unsigned long  tx_packet_memory[DNA_MAX_NUM_CHUNKS],
+				       unsigned long *tx_packet_memory,
 				       void          *tx_descr_packet_memory,
 				       void          *phys_card_memory,
 				       u_int          phys_card_memory_len,
 				       u_int channel_id,
 				       struct net_device *netdev,
+				       struct device *hwdev,
 				       dna_device_model device_model,
 				       u_char *device_address,
 				       wait_queue_head_t * packet_waitqueue,
