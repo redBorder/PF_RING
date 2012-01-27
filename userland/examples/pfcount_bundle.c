@@ -1,6 +1,6 @@
 /*
  *
- * (C) 2005-11 - Luca Deri <deri@ntop.org>
+ * (C) 2005-12 - Luca Deri <deri@ntop.org>
  *
  *
  * This program is free software; you can redistribute it and/or modify
@@ -390,7 +390,7 @@ int32_t gmt2local(time_t t) {
 /* *************************************** */
 
 void printHelp(void) {
-  printf("pfcount\n(C) 2005-11 Deri Luca <deri@ntop.org>\n\n");
+  printf("pfcount\n(C) 2005-12 Deri Luca <deri@ntop.org>\n\n");
   printf("-h              Print this help\n");
   printf("-i <device>     Device name. Use device@channel for channels\n");
 
@@ -400,7 +400,7 @@ void printHelp(void) {
   printf("-s <string>     String to search on packets\n");
   printf("-l <len>        Capture length\n");
   printf("-w <watermark>  Watermark\n");
-  printf("-b <cpu %%>      CPU pergentage priority (0-99)\n");
+  printf("-b <cpu %%>     CPU pergentage priority (0-99)\n");
   printf("-r              Rehash RSS packets\n");
   printf("-a              Active packet wait\n");
   printf("-q              Set FIFO policy (Default: Round Robin)\n");
@@ -431,7 +431,7 @@ void* packet_consumer(void) {
 /* *************************************** */
 
 int main(int argc, char* argv[]) {
-  char *device = NULL, c, *dev, *pos = NULL;
+  char *device = NULL, c, *dev, *pos = NULL, *separator = ";,";
   int promisc, snaplen = DEFAULT_SNAPLEN;
   u_int16_t watermark = 0;
   bundle_read_policy bundle_policy = pick_round_robin;
@@ -469,18 +469,18 @@ int main(int argc, char* argv[]) {
       watermark = atoi(optarg);
       break;
     case 'q':
-     bundle_policy = pick_fifo;   
+      bundle_policy = pick_fifo;   
     }
   }
 
-  if(device == NULL) device = DEFAULT_DEVICE;
+  if(device == NULL) device = strdup(DEFAULT_DEVICE);
 
   /* hardcode: promisc=1, to_ms=500 */
   promisc = 1;
 
   printf("Capturing from bundle %s\n", device);
   
-  dev = strtok_r(device, ";", &pos);
+  dev = strtok_r(device, separator, &pos);
   num_ring = 0;
   pfring_bundle_init(&bundle, bundle_policy);
 
@@ -508,9 +508,8 @@ int main(int argc, char* argv[]) {
     pfring_bundle_add(&bundle, ring[num_ring]);
 
     num_ring++;    
-    dev = strtok_r(NULL, ";", &pos);
+    dev = strtok_r(NULL, separator, &pos);
   }
-
   
   printf("Using PF_RING v.%d.%d.%d\n",
 	 (version & 0xFFFF0000) >> 16,

@@ -525,13 +525,15 @@ int main(int argc, char* argv[]) {
   /* hardcode: promisc=1, to_ms=500 */
   promisc = 1;
 
-
   num_channels = pfring_open_multichannel(device,  promisc, snaplen, 0, ring);
   
   if(num_channels <= 0) {
     fprintf(stderr, "pfring_open_multichannel() returned %d [%s]\n", num_channels, strerror(errno));
     return(-1);
   }
+
+  num_channels = 8;
+  printf("Found %d channels\n",num_channels);
 
   pfring_version(ring[0], &version);  
   printf("Using PF_RING v.%d.%d.%d\n",

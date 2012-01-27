@@ -808,7 +808,7 @@ typedef int (*do_add_raw_packet_to_ring)(struct pf_ring_socket *pfr,
  * Ring options
  */
 struct pf_ring_socket {
-  u_int8_t ring_active, ring_shutdown, num_rx_channels, rehash_rss;
+  u_int8_t ring_active, ring_shutdown, num_rx_channels, rehash_rss, num_bound_devices;
   ring_device_element *ring_netdev;
 
   DECLARE_BITMAP(netdev_mask, MAX_NUM_DEVICES_ID /* bits */);

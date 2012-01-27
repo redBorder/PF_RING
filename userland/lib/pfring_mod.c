@@ -280,10 +280,12 @@ int pfring_mod_bind(pfring *ring, char *device_name) {
     rc = bind(ring->fd, (struct sockaddr *)&sa, sizeof(sa));
     
     if(rc == 0) {
-      rc = pfring_set_channel_id(ring, channel_id);
-      
-      if(rc != 0)
-	printf("pfring_set_channel_id() failed: %d\n", rc);
+      if(channel_id != RING_ANY_CHANNEL) {
+	rc = pfring_set_channel_id(ring, channel_id);
+	
+	if(rc != 0)
+	  printf("pfring_set_channel_id() failed: %d\n", rc);
+      }
     }
     
     elem = strtok(NULL, ";,");

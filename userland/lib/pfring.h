@@ -92,6 +92,7 @@ extern "C" {
   typedef enum {
     pick_round_robin = 0,
     pick_fifo,
+    pick_any
   } bundle_read_policy;
 
   typedef struct {

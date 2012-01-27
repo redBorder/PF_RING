@@ -1354,7 +1354,7 @@ static inline void ring_insert(struct sock *sk)
 
   pfr = (struct pf_ring_socket *)ring_sk(sk);
   pfr->ring_pid = current->pid;
-  bitmap_zero(pfr->netdev_mask, MAX_NUM_DEVICES_ID);
+  bitmap_zero(pfr->netdev_mask, MAX_NUM_DEVICES_ID), pfr->num_bound_devices = 0;
 }
 
 /* ********************************** */
@@ -2095,9 +2095,15 @@ inline int copy_data_to_ring(struct sk_buff *skb,
 			     void *raw_data, uint raw_data_len) {
   char *ring_bucket;
   u_int32_t off;
-  u_short do_lock = ((!quick_mode) || (pfr->num_channels_per_ring > 0)) ? 1 : 0;
+  u_short do_lock = ((pfr->num_bound_devices > 1) || (pfr->num_channels_per_ring > 1)) ? 1 : 0;
+
+  // do_lock = 0;
 
   if(pfr->ring_slots == NULL) return(0);
+
+  if(unlikely(enable_debug)) 
+    printk("[PF_RING] do_lock=%d [num_channels_per_ring=%d][num_bound_devices=%d]\n", 
+	   do_lock, pfr->num_channels_per_ring, pfr->num_bound_devices);
 
   /* We need to lock as two ksoftirqd might put data onto the same ring */
 
@@ -3629,9 +3635,7 @@ static int skb_ring_handler(struct sk_buff *skb,
 
     if(unlikely(enable_debug)) printk("[PF_RING] Expecting channel %d [%p]\n", channel_id, pfr);
 
-    if((pfr != NULL)
-       && is_valid_skb_direction(pfr->direction, recv_packet)
-       ) {
+    if((pfr != NULL) && is_valid_skb_direction(pfr->direction, recv_packet)) {
       /* printk("==>>> [%d][%d]\n", skb->dev->ifindex, channel_id); */
 
       rc = 1, hdr.caplen = min_val(hdr.caplen, pfr->bucket_len);
@@ -4542,7 +4546,7 @@ static int packet_ring_bind(struct sock *sk, char *dev_name)
 	   dev->dev->name, pfr->bucket_len);
 
   /* Set for all devices */
-  set_bit(dev->dev->ifindex, pfr->netdev_mask);
+  set_bit(dev->dev->ifindex, pfr->netdev_mask), pfr->num_bound_devices++;
 
   /* We set the master device only when we have not yet set a device */
   if(pfr->ring_netdev == &none_device_element) {

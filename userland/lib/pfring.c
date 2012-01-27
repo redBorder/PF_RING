@@ -1,6 +1,6 @@
 /*
  *
- * (C) 2005-11 - Luca Deri <deri@ntop.org>
+ * (C) 2005-12 - Luca Deri <deri@ntop.org>
  *
  *
  * This program is free software; you can redistribute it and/or modify
@@ -376,7 +376,7 @@ redo_pfring_bundle_read:
 
       if(pfring_is_pkt_available(bundle->sockets[bundle->last_read_socket])) {
 	return(pfring_recv(bundle->sockets[bundle->last_read_socket], buffer,
-			   buffer_len, hdr, wait_for_incoming_packet));
+			   buffer_len, hdr, 0));
       }
     }
     break;
@@ -386,8 +386,7 @@ redo_pfring_bundle_read:
     empty_rings = 0;
     scans = 0;
 
-sockets_scan:
-
+  sockets_scan:
     scans++;
     for(i=0; i<bundle->num_sockets; i++) {
       pfring *ring = bundle->sockets[i];
@@ -411,8 +410,15 @@ sockets_scan:
       if (empty_rings > 0 && scans == 1)
         goto sockets_scan; /* scanning ring twice (safety check) */
 
-      return(pfring_recv(bundle->sockets[sock_id], buffer,
-			 buffer_len, hdr, wait_for_incoming_packet));
+      return(pfring_recv(bundle->sockets[sock_id], buffer, buffer_len, hdr, 0));
+    }
+    break;
+
+  case pick_any:
+    for(i=0; i<bundle->num_sockets; i++) {
+      if(pfring_is_pkt_available(bundle->sockets[i])) {
+	return(pfring_recv(bundle->sockets[i], buffer, buffer_len, hdr, 0));
+      }
     }
     break;
   }
