@@ -1,6 +1,6 @@
  /* ***************************************************************
  *
- * (C) 2004-11 - Luca Deri <deri@ntop.org>
+ * (C) 2004-12 - Luca Deri <deri@ntop.org>
  *
  * This code includes contributions courtesy of
  * - Amit D. Chaudhary <amit_ml@rajgad.com>
@@ -420,7 +420,7 @@ static inline char* get_slot(struct pf_ring_socket *pfr, u_int32_t off) { return
 
 /* ********************************** */
 
-static inline int get_next_slot_offset(struct pf_ring_socket *pfr, u_int32_t off, u_int32_t *real_off)
+static inline int get_next_slot_offset(struct pf_ring_socket *pfr, u_int32_t off)
 {
   struct pfring_pkthdr *hdr;
   u_int32_t real_slot_size;
@@ -435,11 +435,9 @@ static inline int get_next_slot_offset(struct pf_ring_socket *pfr, u_int32_t off
     real_slot_size += hdr->extended_hdr.parsed_header_len;
 
   if((off + real_slot_size + pfr->slots_info->slot_len) > (pfr->slots_info->tot_mem - sizeof(FlowSlotInfo))) {
-    *real_off = pfr->slots_info->tot_mem - sizeof(FlowSlotInfo) - off;
     return 0;
   }
 
-  *real_off = real_slot_size;
   return (off + real_slot_size);
 }
 
@@ -497,11 +495,8 @@ static inline int check_and_init_free_slot(struct pf_ring_socket *pfr, int off)
 
     if(pfr->slots_info->insert_off < pfr->slots_info->remove_off) {
 
-#if 1 /* Zero-copy recv: this prevents from overwriting packets while apps are processing them */
+      /* Zero-copy recv: this prevents from overwriting packets while apps are processing them */
       if((pfr->slots_info->remove_off - pfr->slots_info->insert_off) < (2 * pfr->slots_info->slot_len))
-#else
-      if((pfr->slots_info->remove_off - pfr->slots_info->insert_off) <      pfr->slots_info->slot_len )
-#endif
 	return(0);
     } else {
       /* We have enough room for the incoming packet as after we insert a packet, the insert_off
@@ -509,15 +504,14 @@ static inline int check_and_init_free_slot(struct pf_ring_socket *pfr, int off)
 	 (i.e. the memory needed to accommodate a packet)
       */
 
-#if 1 /* Zero-copy recv: this prevents from overwriting packets while apps are processing them */
+      /* Zero-copy recv: this prevents from overwriting packets while apps are processing them */
       if((pfr->slots_info->tot_mem - sizeof(FlowSlotInfo) - pfr->slots_info->insert_off) < (2 * pfr->slots_info->slot_len) &&
-          pfr->slots_info->remove_off == 0)
+	 pfr->slots_info->remove_off == 0)
 	return(0);
-#endif
     }
   }
 
-  return 1;
+  return(1);
 }
 
 /* ********************************** */
@@ -1609,18 +1603,9 @@ static int parse_pkt(struct sk_buff *skb,
 		     struct pfring_pkthdr *hdr,
 		     u_int8_t reset_all)
 {
-  char pkt_header[78] = { 0 };
-  int rc, len = sizeof(pkt_header);
+  int rc;
 
-  if(len > (skb->len + skb_displ))
-    len = skb->len + skb_displ;
-
-  if(real_skb)
-    skb_copy_bits(skb, -skb_displ, pkt_header, len);
-  else
-    memcpy(pkt_header, skb->data, len);
-
-  rc = parse_raw_pkt(pkt_header, len, hdr, reset_all);
+  rc = parse_raw_pkt(&skb->data[real_skb ? -skb_displ : 0], (skb->len + skb_displ), hdr, reset_all);
   hdr->extended_hdr.parsed_pkt.offset.eth_offset = -skb_displ;
 
   return(rc);
@@ -2109,7 +2094,7 @@ inline int copy_data_to_ring(struct sk_buff *skb,
 			     int displ, int offset, void *plugin_mem,
 			     void *raw_data, uint raw_data_len) {
   char *ring_bucket;
-  u_int32_t off, taken;
+  u_int32_t off;
   u_short do_lock = ((!quick_mode) || (pfr->num_channels_per_ring > 0)) ? 1 : 0;
 
   if(pfr->ring_slots == NULL) return(0);
@@ -2177,7 +2162,7 @@ inline int copy_data_to_ring(struct sk_buff *skb,
 
   memcpy(ring_bucket, hdr, pfr->slot_header_len); /* Copy extended packet header */
 
-  pfr->slots_info->insert_off = get_next_slot_offset(pfr, off, &taken);
+  pfr->slots_info->insert_off = get_next_slot_offset(pfr, off);
 
   if(unlikely(enable_debug))
     printk("[PF_RING] ==> insert_off=%d\n", pfr->slots_info->insert_off);
@@ -4373,23 +4358,21 @@ static int ring_release(struct socket *sock)
   else {
     if(pfr->ring_netdev
        && (pfr->ring_netdev->dev->ifindex < MAX_NUM_IFIDX)) {
+      int i;
+
       if(num_rings_per_device[pfr->ring_netdev->dev->ifindex] > 0)
 	num_rings_per_device[pfr->ring_netdev->dev->ifindex]--;
 
-      if(quick_mode) {
-	int i;
-
-	for(i=0; i<MAX_NUM_RX_CHANNELS; i++) {
-	  u_int32_t the_bit = 1 << i;
-
-	  if((pfr->channel_id & the_bit) == the_bit) {
-	    if(device_rings[pfr->ring_netdev->dev->ifindex][i] == pfr) {
-	      /*
-		We must make sure that this is really us and not that by some chance
-		(e.g. bind failed) another ring
-	      */
-	      device_rings[pfr->ring_netdev->dev->ifindex][i] = NULL;
-	    }
+      for(i=0; i<MAX_NUM_RX_CHANNELS; i++) {
+	u_int32_t the_bit = 1 << i;
+	
+	if((pfr->channel_id & the_bit) == the_bit) {
+	  if(device_rings[pfr->ring_netdev->dev->ifindex][i] == pfr) {
+	    /*
+	      We must make sure that this is really us and not that by some chance
+	      (e.g. bind failed) another ring
+	    */
+	    device_rings[pfr->ring_netdev->dev->ifindex][i] = NULL;	  
 	  }
 	}
       }
@@ -5541,7 +5524,7 @@ static int ring_setsockopt(struct socket *sock,
 			   int optlen)
 {
   struct pf_ring_socket *pfr = ring_sk(sock->sk);
-  int val, found, ret = 0 /* OK */;
+  int val, found, ret = 0 /* OK */, i;
   u_int32_t ring_id;
   struct add_to_cluster cluster;
   u_int32_t channel_id;
@@ -5667,37 +5650,34 @@ static int ring_setsockopt(struct socket *sock,
     if(copy_from_user(&channel_id, optval, sizeof(channel_id)))
       return -EFAULT;
 
-    if(quick_mode) {
-      /*
-	 We need to set the device_rings[] for all channels set
-	 in channel_id
-      */
-      int i;
+    /*
+      We need to set the device_rings[] for all channels set
+      in channel_id
+    */
+    pfr->num_channels_per_ring = 0;
 
-      pfr->num_channels_per_ring = 0;
+    for(i=0; i<pfr->num_rx_channels; i++) {
+      u_int32_t the_bit = 1 << i;
 
-      for(i=0; i<pfr->num_rx_channels; i++) {
-	u_int32_t the_bit = 1 << i;
-
-	if((channel_id & the_bit) == the_bit) {
-	  if(device_rings[pfr->ring_netdev->dev->ifindex][i] != NULL)
-	    return(-EINVAL); /* Socket already bound on this device */
-	}
-      }
-
-      /* Everything seems to work thus let's set the values */
-
-      for(i=0; i<pfr->num_rx_channels; i++) {
-	u_int32_t the_bit = 1 << i;
-
-	if((channel_id & the_bit) == the_bit) {
-	  if(unlikely(enable_debug)) printk("[PF_RING] Setting channel %d\n", i);
-
-	  device_rings[pfr->ring_netdev->dev->ifindex][i] = pfr;
-	  pfr->num_channels_per_ring++;
-	}
+      if((channel_id & the_bit) == the_bit) {
+	if(device_rings[pfr->ring_netdev->dev->ifindex][i] != NULL)
+	  return(-EINVAL); /* Socket already bound on this device */
       }
     }
+
+    /* Everything seems to work thus let's set the values */
+
+    for(i=0; i<pfr->num_rx_channels; i++) {
+      u_int32_t the_bit = 1 << i;
+
+      if((channel_id & the_bit) == the_bit) {
+	if(unlikely(enable_debug)) printk("[PF_RING] Setting channel %d\n", i);
+
+	device_rings[pfr->ring_netdev->dev->ifindex][i] = pfr;
+	pfr->num_channels_per_ring++;
+      }
+    }
+    
 
     pfr->channel_id = channel_id;
     if(unlikely(enable_debug))
@@ -5911,8 +5891,8 @@ static int ring_setsockopt(struct socket *sock,
 	if((pfr->dna_device_entry->bound_sockets[i] != NULL)
 	   && pfr->dna_device_entry->bound_sockets[i]->ring_active) {
 	  if(   pfr->dna_device_entry->bound_sockets[i]->direction == pfr->direction
-	     || pfr->dna_device_entry->bound_sockets[i]->direction == rx_and_tx_direction
-	     || pfr->direction == rx_and_tx_direction) {
+		|| pfr->dna_device_entry->bound_sockets[i]->direction == rx_and_tx_direction
+		|| pfr->direction == rx_and_tx_direction) {
 	    printk("[PF_RING] Unable to activate two or more DNA sockets on the same interface %s/direction\n",
 		   pfr->ring_netdev->dev->name);
 
@@ -6161,13 +6141,13 @@ static int ring_setsockopt(struct socket *sock,
       return -EINVAL;
 
     if(copy_from_user(&eventfd_i, optval, sizeof(eventfd_i)))
-       return -EFAULT;
+      return -EFAULT;
 
     if(IS_ERR(eventfp = eventfd_fget(eventfd_i.fd)))
       return -EFAULT;
 
-      /* We don't need to check the id (we have only one event)
-       * eventfd_i.id == VPFRING_HOST_EVENT_RX_INT */
+    /* We don't need to check the id (we have only one event)
+     * eventfd_i.id == VPFRING_HOST_EVENT_RX_INT */
 
     pfr->vpfring_host_eventfd_ctx = eventfd_ctx_fileget(eventfp);
     break;
