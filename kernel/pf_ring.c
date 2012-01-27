@@ -4279,7 +4279,11 @@ static int allocate_extra_dma_memory(struct pf_ring_socket *pfr, struct device *
                        pfr->extra_dma_memory_slot_len,
                        PCI_DMA_BIDIRECTIONAL));
 
-      if(dma_mapping_error(pfr->extra_dma_memory_hwdev, pfr->extra_dma_memory_addr[i])) {
+      if(dma_mapping_error(
+#if(LINUX_VERSION_CODE > KERNEL_VERSION(2,6,26))
+                           pfr->extra_dma_memory_hwdev, 
+#endif
+			   pfr->extra_dma_memory_addr[i])) {
         printk("[PF_RING] %s() Error mapping DMA slot %d of %d \n", __FUNCTION__, i + 1, pfr->extra_dma_memory_num_slots);
 	pfr->extra_dma_memory_addr[i] = 0;
         break;
