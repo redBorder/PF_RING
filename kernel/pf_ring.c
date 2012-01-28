@@ -4222,6 +4222,9 @@ static int allocate_extra_dma_memory(struct pf_ring_socket *pfr, struct device *
   if(pfr->extra_dma_memory || pfr->extra_dma_memory_addr) /* already called */
     return -EINVAL;
 
+  if(pfr->extra_dma_memory_num_chunks == 0)
+    return -EINVAL;
+
   if((pfr->extra_dma_memory = kcalloc(1, sizeof(unsigned long) * pfr->extra_dma_memory_num_chunks, GFP_KERNEL)) == NULL)
     return -ENOMEM;
 
