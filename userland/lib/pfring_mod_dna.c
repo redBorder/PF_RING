@@ -200,7 +200,7 @@ int pfring_dna_open(pfring *ring) {
    * ring->get_device_clock
    */
 
-#ifdef HAVE_NITRO
+#if defined(HAVE_NITRO) && defined(NITRO_TOOLKIT_BOUNCE)
   ring->bounce_init = dna_bounce_init;
   ring->bounce_loop = dna_bounce_loop;
   ring->bounce_destroy = dna_bounce_destroy;

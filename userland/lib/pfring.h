@@ -353,4 +353,8 @@ extern "C" {
 }
 #endif
 
+#ifdef HAVE_NITRO
+#include "pfring_nitro_toolkit.h"
+#endif
+
 #endif /* _PFRING_H_ */

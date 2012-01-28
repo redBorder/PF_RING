@@ -20,7 +20,7 @@ USERSPACE_RING_HDR="pfring_mod_usring.h"
 AC_MSG_CHECKING([Nitro support])
 if test -f $NITRO_LIB; then
   HAVE_NITRO="-D HAVE_NITRO"
-  NITRO_OBJS=`ar t $NITRO_LIB | tr '\n' ' '`
+  NITRO_OBJS=`ar t $NITRO_LIB | grep -F .o | tr '\n' ' '`
   NITRO_DEP="extract_nitro_lib"
   AC_MSG_RESULT(yes)
 else

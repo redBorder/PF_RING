@@ -3245,7 +3245,7 @@ USERSPACE_RING_HDR="pfring_mod_usring.h"
 $as_echo_n "checking Nitro support... " >&6; }
 if test -f $NITRO_LIB; then
   HAVE_NITRO="-D HAVE_NITRO"
-  NITRO_OBJS=`ar t $NITRO_LIB | tr '\n' ' '`
+  NITRO_OBJS=`ar t $NITRO_LIB | grep -F .o | tr '\n' ' '`
   NITRO_DEP="extract_nitro_lib"
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
