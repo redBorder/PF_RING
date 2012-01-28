@@ -25,7 +25,7 @@
 
 #define RING_MAGIC
 #define RING_MAGIC_VALUE             0x88
-#define RING_FLOWSLOT_VERSION          13
+#define RING_FLOWSLOT_VERSION          14
 
 #define DEFAULT_BUCKET_LEN            128
 #define MAX_NUM_DEVICES               256
@@ -37,8 +37,8 @@
 #define pfring_ptr ec_ptr
 
 /* Versioning */
-#define RING_VERSION                "5.2.3"
-#define RING_VERSION_NUM           0x050203
+#define RING_VERSION                "5.3.0"
+#define RING_VERSION_NUM           0x050300
 
 /* Set */
 #define SO_ADD_TO_CLUSTER                 99
@@ -493,14 +493,22 @@ typedef struct _sw_filtering_hash_bucket {
 
 /* *********************************** */
 
+#ifndef __KERNEL__
+/* Missing type in userland */
+typedef struct {
+  int counter;
+} atomic_t;
+#endif
+
 /* False sharing reference: http://en.wikipedia.org/wiki/False_sharing */
 
 typedef struct flowSlotInfo {
   /* first page, managed by kernel */
   u_int16_t version, sample_rate;
   u_int32_t min_num_slots, slot_len, data_len, tot_mem;
-  u_int32_t insert_off /* managed by kernel */;
-  u_int64_t tot_pkts, tot_lost, tot_insert;
+  atomic_t shadow_insert_off /* managed by kernel (necessary for atomic ring insert) */;
+  atomic_t insert_off /* managed by kernel */;
+  atomic_t tot_pkts, tot_lost, tot_insert;
   u_int64_t tot_fwd_ok, tot_fwd_notok;
   /* <-- 64 bytes here, should be enough to avoid some L1 VIVT coherence issues (32 ~ 64bytes lines) */
   char padding[128];
@@ -848,7 +856,7 @@ struct pf_ring_socket {
   /* Ring Slots */
   char *ring_memory;
   u_int16_t slot_header_len;
-  u_int32_t bucket_len, slot_tot_mem;
+  u_int32_t bucket_len;
   FlowSlotInfo *slots_info; /* Points to ring_memory */
   char *ring_slots;         /* Points to ring_memory+sizeof(FlowSlotInfo) */
 

@@ -361,7 +361,7 @@ u_int get_num_rx_queues(struct net_device *dev) {
   return(1);
 #else
 #if(LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,38)) && defined(CONFIG_RPS)
-  return(min_val(dev->real_num_rx_queues, dev->real_num_tx_queues));
+  return(dev->real_num_rx_queues);
 #else
   return(dev->real_num_tx_queues);
   // return(1);
@@ -420,19 +420,12 @@ static inline char* get_slot(struct pf_ring_socket *pfr, u_int32_t off) { return
 
 /* ********************************** */
 
-static inline int get_next_slot_offset(struct pf_ring_socket *pfr, u_int32_t off)
+/* ********************************** */
+
+static inline int get_next_slot_offset(struct pf_ring_socket *pfr, u_int32_t off, 
+				       u_int32_t caplen, u_int32_t parsed_header_len)
 {
-  struct pfring_pkthdr *hdr;
-  u_int32_t real_slot_size;
-
-  // smp_rmb();
-
-  hdr = (struct pfring_pkthdr*)get_slot(pfr, off);
-
-  real_slot_size = pfr->slot_header_len + hdr->caplen;
-
-  if(!quick_mode)
-    real_slot_size += hdr->extended_hdr.parsed_header_len;
+  u_int32_t real_slot_size = pfr->slot_header_len + caplen + parsed_header_len;
 
   if((off + real_slot_size + pfr->slots_info->slot_len) > (pfr->slots_info->tot_mem - sizeof(FlowSlotInfo))) {
     return 0;
@@ -448,7 +441,7 @@ static inline u_int32_t num_queued_pkts(struct pf_ring_socket *pfr)
   // smp_rmb();
 
   if(pfr->ring_slots != NULL) {
-    u_int32_t tot_insert = pfr->slots_info->tot_insert, tot_read = pfr->slots_info->tot_read;
+    u_int32_t tot_insert = atomic_read(&pfr->slots_info->tot_insert), tot_read = pfr->slots_info->tot_read;
 
     if(tot_insert >= tot_read) {
       return(tot_insert - tot_read);
@@ -478,11 +471,11 @@ inline u_int get_num_ring_free_slots(struct pf_ring_socket * pfr)
 
 /* ********************************** */
 
-static inline int check_and_init_free_slot(struct pf_ring_socket *pfr, int off)
+static inline int check_free_slot(struct pf_ring_socket *pfr, int off)
 {
   // smp_rmb();
 
-  if(pfr->slots_info->insert_off == pfr->slots_info->remove_off) {
+  if(atomic_read(&pfr->slots_info->insert_off) == pfr->slots_info->remove_off) {
     /*
       Both insert and remove offset are set on the same slot.
       We need to find out whether the memory is full or empty
@@ -493,10 +486,10 @@ static inline int check_and_init_free_slot(struct pf_ring_socket *pfr, int off)
   } else {
     /* There are packets in the ring. We have to check whether we have enough to accommodate a new packet */
 
-    if(pfr->slots_info->insert_off < pfr->slots_info->remove_off) {
+    if(atomic_read(&pfr->slots_info->insert_off) < pfr->slots_info->remove_off) {
 
       /* Zero-copy recv: this prevents from overwriting packets while apps are processing them */
-      if((pfr->slots_info->remove_off - pfr->slots_info->insert_off) < (2 * pfr->slots_info->slot_len))
+      if((pfr->slots_info->remove_off - atomic_read(&pfr->slots_info->insert_off)) < (2 * pfr->slots_info->slot_len))
 	return(0);
     } else {
       /* We have enough room for the incoming packet as after we insert a packet, the insert_off
@@ -505,7 +498,7 @@ static inline int check_and_init_free_slot(struct pf_ring_socket *pfr, int off)
       */
 
       /* Zero-copy recv: this prevents from overwriting packets while apps are processing them */
-      if((pfr->slots_info->tot_mem - sizeof(FlowSlotInfo) - pfr->slots_info->insert_off) < (2 * pfr->slots_info->slot_len) &&
+      if((pfr->slots_info->tot_mem - sizeof(FlowSlotInfo) - atomic_read(&pfr->slots_info->insert_off)) < (2 * pfr->slots_info->slot_len) &&
 	 pfr->slots_info->remove_off == 0)
 	return(0);
     }
@@ -667,7 +660,7 @@ static int ring_proc_dev_get_info(char *buf, char **start, off_t offset,
     }
 
 #if(LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,31))
-    rlen += sprintf(buf+rlen, "Max # TX Queues:   %d\n", dev->real_num_tx_queues);
+    rlen += sprintf(buf+rlen, "Max # TX Queues:   %d\n", dev->num_tx_queues);
 #endif
 
     rlen += sprintf(buf+rlen, "# Used RX Queues:  %d\n",
@@ -1092,11 +1085,11 @@ static int ring_proc_get_info(char *buf, char **start, off_t offset,
 	  rlen += sprintf(buf + rlen, "Bucket Len         : %d\n", fsi->data_len);
 	  rlen += sprintf(buf + rlen, "Slot Len           : %d [bucket+header]\n", fsi->slot_len);
 	  rlen += sprintf(buf + rlen, "Tot Memory         : %d\n", fsi->tot_mem);
-	  rlen += sprintf(buf + rlen, "Tot Packets        : %lu\n", (unsigned long)fsi->tot_pkts);
-	  rlen += sprintf(buf + rlen, "Tot Pkt Lost       : %lu\n", (unsigned long)fsi->tot_lost);
-	  rlen += sprintf(buf + rlen, "Tot Insert         : %lu\n", (unsigned long)fsi->tot_insert);
+	  rlen += sprintf(buf + rlen, "Tot Packets        : %lu\n", (unsigned long)atomic_read(&fsi->tot_pkts));
+	  rlen += sprintf(buf + rlen, "Tot Pkt Lost       : %lu\n", (unsigned long)atomic_read(&fsi->tot_lost));
+	  rlen += sprintf(buf + rlen, "Tot Insert         : %lu\n", (unsigned long)atomic_read(&fsi->tot_insert));
 	  rlen += sprintf(buf + rlen, "Tot Read           : %lu\n", (unsigned long)fsi->tot_read);
-	  rlen += sprintf(buf + rlen, "Insert Offset      : %lu\n", (unsigned long)fsi->insert_off);
+	  rlen += sprintf(buf + rlen, "Insert Offset      : %lu\n", (unsigned long)atomic_read(&fsi->insert_off));
 	  rlen += sprintf(buf + rlen, "Remove Offset      : %lu\n", (unsigned long)fsi->remove_off);
 	  rlen += sprintf(buf + rlen, "Tot Fwd Ok         : %lu\n", (unsigned long)fsi->tot_fwd_ok);
 	  rlen += sprintf(buf + rlen, "Tot Fwd Errors     : %lu\n", (unsigned long)fsi->tot_fwd_notok);
@@ -2094,37 +2087,50 @@ inline int copy_data_to_ring(struct sk_buff *skb,
 			     int displ, int offset, void *plugin_mem,
 			     void *raw_data, uint raw_data_len) {
   char *ring_bucket;
-  u_int32_t off;
-  u_short do_lock = ((pfr->num_bound_devices > 1) || (pfr->num_channels_per_ring > 1)) ? 1 : 0;
+  // u_short do_lock = ((pfr->num_bound_devices > 1) || (pfr->num_channels_per_ring > 1)) ? 1 : 0;
+  volatile u_int32_t off, next_offset;
 
-  // do_lock = 0;
-
-  if(pfr->ring_slots == NULL) return(0);
-
-  if(unlikely(enable_debug)) 
-    printk("[PF_RING] do_lock=%d [num_channels_per_ring=%d][num_bound_devices=%d]\n", 
-	   do_lock, pfr->num_channels_per_ring, pfr->num_bound_devices);
-
-  /* We need to lock as two ksoftirqd might put data onto the same ring */
-
-  if(do_lock) write_lock(&pfr->ring_index_lock);
-  // smp_rmb();
-
-  off = pfr->slots_info->insert_off;
-  pfr->slots_info->tot_pkts++;
-
-  if(!check_and_init_free_slot(pfr, off)) /* Full */ {
-    /* No room left */
-    pfr->slots_info->tot_lost++;
-
-    if(unlikely(enable_debug))
-      printk("[PF_RING] ==> slot(off=%d) is full [insert_off=%u][remove_off=%u][slot_len=%u][num_queued_pkts=%u]\n",
-	     off, pfr->slots_info->insert_off, pfr->slots_info->remove_off, pfr->slots_info->slot_len, num_queued_pkts(pfr));
-
-   if(do_lock) write_unlock(&pfr->ring_index_lock);
-    return(0);
+  if(skb == NULL) {
+    raw_data_len = min_val(raw_data_len, pfr->bucket_len); /* Avoid overruns */
+    hdr->len = hdr->caplen = raw_data_len;
   }
 
+ try_again:
+  if(pfr->ring_slots == NULL) return(0);
+  
+  // smp_rmb();
+  
+  off = atomic_read(&pfr->slots_info->shadow_insert_off);
+  
+  if(!check_free_slot(pfr, off)) /* Full */ {
+    /* No room left */
+    atomic_inc((atomic_t *)&pfr->slots_info->tot_lost);
+    
+    if(unlikely(enable_debug))
+      printk("[PF_RING] ==> slot(off=%d) is full [shadow_insert_off=%u][insert_off=%u][remove_off=%u][slot_len=%u][num_queued_pkts=%u]\n",
+	     off, (unsigned int)atomic_read(&pfr->slots_info->shadow_insert_off), atomic_read(&pfr->slots_info->insert_off), 
+	     pfr->slots_info->remove_off, pfr->slots_info->slot_len, num_queued_pkts(pfr));
+    
+    return(0);
+  }
+  
+  /* Compute next offset */
+  next_offset = get_next_slot_offset(pfr, off, hdr->caplen, hdr->extended_hdr.parsed_header_len);
+  
+  /*
+  if(!do_lock)
+    atomic_set(&pfr->slots_info->shadow_insert_off, next_offset);
+    else */ {
+    if(atomic_cmpxchg(&pfr->slots_info->shadow_insert_off, off /* old value */, next_offset /* new value */) != off)
+      goto try_again;
+  }
+
+  if(unlikely(enable_debug))
+    printk("[PF_RING] ==> slot(off=%d) [shadow_insert_off=%u][insert_off=%u][remove_off=%u][slot_len=%u][num_queued_pkts=%u]\n",
+	   off, (unsigned int)atomic_read(&pfr->slots_info->shadow_insert_off), atomic_read(&pfr->slots_info->insert_off), 
+	   pfr->slots_info->remove_off, pfr->slots_info->slot_len, num_queued_pkts(pfr));
+  
+  atomic_inc((atomic_t *)&pfr->slots_info->tot_pkts);
   ring_bucket = get_slot(pfr, off);
 
   if(skb != NULL) {
@@ -2133,10 +2139,8 @@ inline int copy_data_to_ring(struct sk_buff *skb,
     if(hdr->ts.tv_sec == 0)
       set_skb_time(skb, hdr);
 
-    if(!quick_mode) {
-      if((plugin_mem != NULL) && (offset > 0))
-	memcpy(&ring_bucket[pfr->slot_header_len], plugin_mem, offset);
-    }
+    if((plugin_mem != NULL) && (offset > 0))
+      memcpy(&ring_bucket[pfr->slot_header_len], plugin_mem, offset);
 
     if(hdr->caplen > 0) {
       if(unlikely(enable_debug))
@@ -2144,6 +2148,7 @@ inline int copy_data_to_ring(struct sk_buff *skb,
 	       hdr->caplen, hdr->len, displ, hdr->extended_hdr.parsed_header_len, pfr->bucket_len,
 	       pfr->slot_header_len);
 
+      /* Copy packet payload */
       skb_copy_bits(skb, -displ, &ring_bucket[pfr->slot_header_len + offset], hdr->caplen);
     } else {
       if(hdr->extended_hdr.parsed_header_len >= pfr->bucket_len) {
@@ -2158,20 +2163,32 @@ inline int copy_data_to_ring(struct sk_buff *skb,
     }
   } else {
     /* Raw data copy mode */
-    raw_data_len = min_val(raw_data_len, pfr->bucket_len); /* Avoid overruns */
     memcpy(&ring_bucket[pfr->slot_header_len], raw_data, raw_data_len); /* Copy raw data if present */
-    hdr->len = hdr->caplen = raw_data_len;
-    if(!quick_mode)
-      hdr->extended_hdr.if_index = FAKE_PACKET;
+    hdr->extended_hdr.if_index = FAKE_PACKET;
     /* printk("[PF_RING] Copied raw data at slot with offset %d [len=%d]\n", off, raw_data_len); */
   }
 
+  // hdr->extended_hdr.reserved = 0; /* Packet not yet consumed (just to be safe) */
   memcpy(ring_bucket, hdr, pfr->slot_header_len); /* Copy extended packet header */
 
-  pfr->slots_info->insert_off = get_next_slot_offset(pfr, off);
+  /* 
+     Wait until the value of atomic_read(&pfr->slots_info->insert_off) is the same
+     as the pfr->slots_info->shadow_insert_off value that we have seen
+     at the beginning of this function
+  */
+  while(atomic_read(&pfr->slots_info->insert_off) != off) {
+    u_int num_loops = 0;
+    
+    if(unlikely(enable_debug))
+      printk("[PF_RING] pfr->slots_info->insert_off != off (%u/%u) [loops: %u]\n",
+	     atomic_read(&pfr->slots_info->insert_off), off, ++num_loops);
+  }
+
+  /* We now update the insert_off */
+  atomic_set(&pfr->slots_info->insert_off, next_offset);
 
   if(unlikely(enable_debug))
-    printk("[PF_RING] ==> insert_off=%d\n", pfr->slots_info->insert_off);
+    printk("[PF_RING] ==> insert_off=%d\n", atomic_read(&pfr->slots_info->insert_off));
 
   /*
     NOTE: smp_* barriers are _compiler_ barriers on UP, mandatory barriers on SMP
@@ -2180,18 +2197,16 @@ inline int copy_data_to_ring(struct sk_buff *skb,
   smp_mb();
   //wmb();
 
-  pfr->slots_info->tot_insert++;
+  atomic_inc((atomic_t *)&pfr->slots_info->tot_insert);
 
- if(do_lock) write_unlock(&pfr->ring_index_lock);
-
- if(num_queued_pkts(pfr) >= pfr->poll_num_pkts_watermark)
+  if(num_queued_pkts(pfr) >= pfr->poll_num_pkts_watermark)
     wake_up_interruptible(&pfr->ring_slots_waitqueue);
-
+ 
 #ifdef VPFRING_SUPPORT
   if(pfr->vpfring_host_eventfd_ctx && !(pfr->slots_info->vpfring_guest_flags & VPFRING_GUEST_NO_INTERRUPT))
-     eventfd_signal(pfr->vpfring_host_eventfd_ctx, 1);
+    eventfd_signal(pfr->vpfring_host_eventfd_ctx, 1);
 #endif //VPFRING_SUPPORT
-
+ 
   return(1);
 }
 
@@ -2233,7 +2248,7 @@ inline int add_pkt_to_ring(struct sk_buff *skb,
      && plugin_registration[pfr->kernel_consumer_plugin_id]->pfring_packet_reader) {
     write_lock(&pfr->ring_index_lock); /* Serialize */
     plugin_registration[pfr->kernel_consumer_plugin_id]->pfring_packet_reader(pfr, skb, channel_id, hdr, displ);
-    pfr->slots_info->tot_pkts++;
+    atomic_inc(&pfr->slots_info->tot_pkts);
     write_unlock(&pfr->ring_index_lock);
     return(0);
   }
@@ -3105,8 +3120,8 @@ int bpf_filter_skb(struct sk_buff *skb,
       if(unlikely(enable_debug))
 	printk("[PF_RING] add_skb_to_ring(skb): Filter failed [len=%d][tot=%llu]"
 	       "[insert_off=%d][pkt_type=%d][cloned=%d]\n",
-	       (int)skb->len, pfr->slots_info->tot_pkts,
-	       pfr->slots_info->insert_off, skb->pkt_type,
+	       (int)skb->len, (long long unsigned int)atomic_read(&pfr->slots_info->tot_pkts),
+	       (int)atomic_read(&pfr->slots_info->insert_off), skb->pkt_type,
 	       skb->cloned);
 
       return(0);
@@ -3218,7 +3233,7 @@ static int add_skb_to_ring(struct sk_buff *skb,
     /* [3] Packet sampling */
     if(pfr->sample_rate > 1) {
       write_lock(&pfr->ring_index_lock);
-      pfr->slots_info->tot_pkts++;
+      atomic_inc(&pfr->slots_info->tot_pkts);
 
       if(pfr->pktToSample <= 1) {
 	pfr->pktToSample = pfr->sample_rate;
@@ -3228,8 +3243,8 @@ static int add_skb_to_ring(struct sk_buff *skb,
 	if(unlikely(enable_debug))
 	  printk("[PF_RING] add_skb_to_ring(skb): sampled packet [len=%d]"
 		 "[tot=%llu][insert_off=%d][pkt_type=%d][cloned=%d]\n",
-		 (int)skb->len, pfr->slots_info->tot_pkts,
-		 pfr->slots_info->insert_off, skb->pkt_type,
+		 (int)skb->len, (long long unsigned int)atomic_read(&pfr->slots_info->tot_pkts),
+		 (int)atomic_read(&pfr->slots_info->insert_off), skb->pkt_type,
 		 skb->cloned);
 
 	write_unlock(&pfr->ring_index_lock);
@@ -3272,7 +3287,7 @@ static int add_skb_to_ring(struct sk_buff *skb,
 
   if(unlikely(enable_debug))
     printk("[PF_RING] [pfr->slots_info->insert_off=%d]\n",
-	   pfr->slots_info->insert_off);
+	   atomic_read(&pfr->slots_info->insert_off));
 
   if(free_parse_mem)
     free_parse_memory(parse_memory_buffer);
@@ -3731,7 +3746,7 @@ static int skb_ring_handler(struct sk_buff *skb,
 		       && (pfr->ring_netdev->dev == skb->dev->master)))
 	       && is_valid_skb_direction(pfr->direction, recv_packet)
 	       ) {
-	      if(check_and_init_free_slot(pfr, pfr->slots_info->insert_off) /* Not full */) {
+	      if(check_free_slot(pfr, atomic_read(&pfr->slots_info->insert_off)) /* Not full */) {
 		/* We've found the ring where the packet can be stored */
 		room_available |= add_skb_to_ring(skb, real_skb, pfr, &hdr, is_ip_pkt,
 						  displ, channel_id, num_rx_channels);
@@ -3741,7 +3756,7 @@ static int skb_ring_handler(struct sk_buff *skb,
 	      } else if((cluster_ptr->cluster.hashing_mode != cluster_round_robin)
 			/* We're the last element of the cluster so no further cluster element to check */
 			|| ((num_iterations + 1) > cluster_ptr->cluster.num_cluster_elements)) {
-		pfr->slots_info->tot_pkts++, pfr->slots_info->tot_lost++;
+		atomic_inc(&pfr->slots_info->tot_pkts), atomic_inc(&pfr->slots_info->tot_lost);
 	      }
 	    }
 	  }
@@ -6250,8 +6265,8 @@ static int ring_getsockopt(struct socket *sock,
       if(len < sizeof(struct tpacket_stats))
 	return -EINVAL;
 
-      st.tp_packets = pfr->slots_info->tot_insert;
-      st.tp_drops = pfr->slots_info->tot_lost;
+      st.tp_packets = atomic_read(&pfr->slots_info->tot_insert);
+      st.tp_drops = atomic_read(&pfr->slots_info->tot_lost);
 
       if(copy_to_user(optval, &st, len))
 	return -EFAULT;
@@ -6693,7 +6708,7 @@ void dna_device_handler(dna_device_operation operation,
 	  ring_device_element *dev_ptr = list_entry(ptr, ring_device_element, device_list);
 
 	  if(strcmp(dev_ptr->dev->name, netdev->name) == 0) {
-	    dev_ptr->num_dna_rx_queues = min_val(max_val(dev_ptr->num_dna_rx_queues, channel_id+1), get_num_rx_queues(dev_ptr->dev));
+	    dev_ptr->num_dna_rx_queues = max_val(dev_ptr->num_dna_rx_queues, channel_id+1);
 	    dev_ptr->is_dna_device = 1, dev_ptr->dna_device_model = device_model;
 
 	    if(unlikely(enable_debug))
