@@ -603,7 +603,7 @@ typedef struct {
 } tnapi_indexes;
 
 typedef struct {
-  u_int16_t pkt_len;  /* 0 = no packet received */
+  volatile u_int16_t pkt_len;  /* 0 = no packet received */
   u_int32_t pkt_hash; /* RSS */
   /* TODO We need to add the timestamp at some point */
 } dna_descriptor;
