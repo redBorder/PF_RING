@@ -567,10 +567,14 @@ typedef enum {
 typedef enum {
   intel_e1000e = 0,
   intel_igb,
-  intel_igb_82580,
   intel_ixgbe,
+  /* IMPORTANT NOTE
+     add new family types ALWAYS at the end
+     (i.e. append) of this datatype 
+  */
   intel_ixgbe_82598,
-  intel_ixgbe_82599
+  intel_ixgbe_82599,
+  intel_igb_82580,
 } dna_device_model;
 
 typedef struct {
