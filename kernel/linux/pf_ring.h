@@ -599,15 +599,15 @@ typedef struct {
 } dna_memory_slots;
 
 typedef struct {
-  u_int16_t rx_descr_head, rx_descr_tail, rx_descr_next;
+  u_int64_t rx_descr_head, rx_descr_tail, rx_descr_next;
 } dna_indexes;
 
 typedef struct {
-  u_int16_t rx_descr_head, rx_descr_tail;
+  u_int64_t rx_descr_head, rx_descr_tail;
 } tnapi_indexes;
 
 typedef struct {
-  volatile u_int16_t pkt_len;  /* 0 = no packet received */
+  volatile u_int32_t pkt_len;  /* 0 = no packet received */
   u_int32_t pkt_hash; /* RSS */
   /* TODO We need to add the timestamp at some point */
 } dna_descriptor;
