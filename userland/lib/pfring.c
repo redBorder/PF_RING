@@ -337,7 +337,7 @@ int pfring_bundle_add(pfring_bundle *bundle, pfring *ring) {
 
 /* Returns the first bundle socket with something to read */
 int pfring_bundle_poll(pfring_bundle *bundle, u_int wait_duration) {
-  int i, rc;
+  int i;
 
   for(i=0; i<bundle->num_sockets; i++) {
     pfring_sync_indexes_with_kernel(bundle->sockets[i]);
@@ -346,16 +346,7 @@ int pfring_bundle_poll(pfring_bundle *bundle, u_int wait_duration) {
   }
 
   errno = 0;
-  rc = poll(bundle->pfd, bundle->num_sockets, wait_duration);
-
-  if(rc > 0) {
-    for(i=0; i<bundle->num_sockets; i++)
-      if(bundle->pfd[i].revents != 0)
-	return(i);
-  } else if(rc == 0)
-    return(-1);
-
-  return(-2); /* Default */
+  return poll(bundle->pfd, bundle->num_sockets, wait_duration);
 }
 
 /* **************************************************** */
@@ -414,23 +405,13 @@ redo_pfring_bundle_read:
       return(pfring_recv(bundle->sockets[sock_id], buffer, buffer_len, hdr, 0));
     }
     break;
-
-  case pick_any:
-    for(i=0; i<bundle->num_sockets; i++) {
-      if(pfring_is_pkt_available(bundle->sockets[i])) {
-	return(pfring_recv(bundle->sockets[i], buffer, buffer_len, hdr, 0));
-      }
-    }
-    break;
   }
 
   if(wait_for_incoming_packet) {
     rc = pfring_bundle_poll(bundle, bundle->sockets[0]->poll_duration);
 
-    if(rc > 0) {
-      goto redo_pfring_bundle_read;
-    } else
-      return(rc);
+    if(rc > 0) goto redo_pfring_bundle_read;
+    else return(rc);
   }
 
   return(0);
