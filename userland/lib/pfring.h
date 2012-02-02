@@ -201,7 +201,7 @@ extern "C" {
     int       (*get_device_clock)             (pfring *, struct timespec *);
     int       (*set_device_clock)             (pfring *, struct timespec *);
     int       (*adjust_device_clock)          (pfring *, struct timespec *, int8_t);
-
+    void      (*sync_indexes_with_kernel)     (pfring *);
     int       (*bounce_init)                  (pfring_bounce *);
     int       (*bounce_loop)                  (pfring_bounce *, pfringBounceProcesssPacket, const u_char *, u_int8_t);
     void      (*bounce_destroy)               (pfring_bounce *);
@@ -316,6 +316,7 @@ extern "C" {
   int pfring_get_device_clock(pfring *ring, struct timespec *ts);
   int pfring_set_device_clock(pfring *ring, struct timespec *ts);
   int pfring_adjust_device_clock(pfring *ring, struct timespec *offset, int8_t sign);
+  void pfring_sync_indexes_with_kernel(pfring *ring);
 
   /* PF_RING Socket bundle */
   void pfring_bundle_init(pfring_bundle *bundle, bundle_read_policy p);

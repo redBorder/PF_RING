@@ -340,6 +340,7 @@ int pfring_bundle_poll(pfring_bundle *bundle, u_int wait_duration) {
   int i, rc;
 
   for(i=0; i<bundle->num_sockets; i++) {
+    pfring_sync_indexes_with_kernel(bundle->sockets[i]);
     bundle->pfd[i].events  = POLLIN /* | POLLERR */;
     bundle->pfd[i].revents = 0;
   }
@@ -1133,6 +1134,13 @@ int pfring_remove_bpf_filter(pfring *ring){
   }
 
   return PF_RING_ERROR_NOT_SUPPORTED;
+}
+
+/* **************************************************** */
+
+void pfring_sync_indexes_with_kernel(pfring *ring) {
+  if(ring && ring->sync_indexes_with_kernel)
+    ring->sync_indexes_with_kernel(ring);
 }
 
 /* **************************************************** */
