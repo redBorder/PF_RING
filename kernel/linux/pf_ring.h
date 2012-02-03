@@ -194,7 +194,7 @@ struct pfring_extended_pkthdr {
   u_int64_t timestamp_ns; /* Packet timestamp at ns precision. Note that if your NIC supports
 			     hardware timestamp, this is the place to read timestamp from */
   u_int8_t rx_direction;  /* 1=RX: packet received by the NIC, 0=TX: packet transmitted by the NIC */
-  int if_index;           /* index of the interface on which the packet has been received.
+  int32_t  if_index;      /* index of the interface on which the packet has been received.
                              It can be also used to report other information */
   u_int32_t pkt_hash;     /* Hash based on the packet header */
   u_int16_t parsed_header_len; /* Extra parsing data before packet */
