@@ -11,7 +11,7 @@ LIBS=../lib/libpfring.a -lpthread @SYSLIBS@ @SILICOM_LIBS@
 all: $(LIBPFRING_CPP) pf_test
 
 pf_test: pf_test.cpp $(LIBPFRING_CPP)
-	$(CPP) $(INCLUDE) $< $(LIBPFRING_CPP) $(LIBPCAP_DIR)/libpcap.a -o $@ $(LIBS)
+	$(CPP) $(INCLUDE) $< $(LIBPFRING_CPP) -o $@ $(LIBS) $(LIBPCAP_DIR)/libpcap.a
 
 $(LIBPFRING_CPP): $(OBJ)
 	@rm -f $@
