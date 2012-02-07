@@ -2,7 +2,7 @@
  *
  * Definitions for packet ring
  *
- * 2004-11 Luca Deri <deri@ntop.org>
+ * 2004-12 Luca Deri <deri@ntop.org>
  *
  */
 
@@ -164,6 +164,24 @@ typedef union {
   struct pkt_aggregation_info aggregation; /* Future or plugin use */
 } packet_user_detail;
 
+#define GTP_SIGNALING_PORT         2123
+#define GTP_U_DATA_PORT            2152
+#define NO_GTP_TUNNEL_ID     0xFFFFFFFF
+
+typedef enum {
+  ignore_gtp_version = 0,
+  gtp_version_0,
+  gtp_version_1,
+  gtp_version_2
+} gtp_version;
+
+/* GPRS Tunneling Protocol */
+typedef struct {
+  gtp_version version;
+  u_int8_t message_type;
+  u_int32_t tunnel_id;          /* GTP tunnelId or NO_GTP_TUNNEL_ID for no filtering */
+} gtp_parsing;
+
 struct pkt_parsing_info {
   /* Core fields (also used by NetFlow) */
   u_int8_t dmac[ETH_ALEN], smac[ETH_ALEN];  /* MAC src/dst addresses */
@@ -177,7 +195,8 @@ struct pkt_parsing_info {
     u_int8_t flags;   /* TCP flags (0 if not available) */
     u_int32_t seq_num, ack_num; /* TCP sequence number */
   } tcp;
-  u_int32_t gtp_tunnel_id;/* GTP tunnelID or NO_GTP_TUNNEL_ID for no tunnel */
+
+  gtp_parsing gtp;
   u_int16_t last_matched_plugin_id; /* If > 0 identifies a plugin to that matched the packet */
   u_int16_t last_matched_rule_id; /* If > 0 identifies a rule that matched the packet */
   struct pkt_offset offset; /* Offsets of L3/L4/payload elements */
@@ -191,9 +210,6 @@ struct pkt_parsing_info {
 					 is faked, and that the info is basically
 					 a message from PF_RING
 				      */
-
-#define GTP_SIGNALING_PORT         2123
-#define NO_GTP_TUNNEL_ID            0x0
 
 struct pfring_extended_pkthdr {
   u_int64_t timestamp_ns; /* Packet timestamp at ns precision. Note that if your NIC supports
@@ -245,7 +261,11 @@ typedef struct {
 #define FILTER_PLUGIN_DATA_LEN   256
 
 typedef struct {
-  u_int32_t gtp_tunnel_id;          /* GTP tunnelId or NO_GTP_TUNNEL_ID for not filtering */
+  struct {
+    u_int8_t  version, message_type_low, message_type_high;
+    u_int32_t tunnel_id;          /* GTP tunnelId or NO_GTP_TUNNEL_ID for no filtering */
+  } gtp;
+
   char payload_pattern[32];         /* If strlen(payload_pattern) > 0, the packet payload
 				       must match the specified pattern */
   u_int16_t filter_plugin_id;       /* If > 0 identifies a plugin to which the datastructure

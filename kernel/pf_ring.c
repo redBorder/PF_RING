@@ -1046,12 +1046,12 @@ static int ring_proc_get_info(char *buf, char **start, off_t offset,
       if(fsi) {
 	int num = 0;
 	struct list_head *ptr, *tmp_ptr;
-	
+
 	rlen = sprintf(buf,         "Bound Device(s)    : ");
 
 	list_for_each_safe(ptr, tmp_ptr, &ring_aware_device_list) {
 	  ring_device_element *dev_ptr = list_entry(ptr, ring_device_element, device_list);
-	  
+
 	  if(test_bit(dev_ptr->dev->ifindex, pfr->netdev_mask)) {
 	    rlen += sprintf(buf + rlen, "%s%s", (num > 0) ? "," : "", dev_ptr->dev->name);
 	    num++;
@@ -1479,6 +1479,9 @@ static int parse_raw_pkt(char *data, u_int data_len,
   if(unlikely(enable_debug))
     printk("[PF_RING] [eth_type=%04X]\n", hdr->extended_hdr.parsed_pkt.eth_type);
 
+  /* Default */
+  hdr->extended_hdr.parsed_pkt.gtp.tunnel_id = NO_GTP_TUNNEL_ID;
+
   if(hdr->extended_hdr.parsed_pkt.eth_type == ETH_P_IP /* IPv4 */ ) {
     struct iphdr *ip;
 
@@ -1533,6 +1536,7 @@ static int parse_raw_pkt(char *data, u_int data_len,
 	  hdr->extended_hdr.parsed_pkt.l3_proto == NEXTHDR_ESP	   ||
 	  hdr->extended_hdr.parsed_pkt.l3_proto == NEXTHDR_FRAGMENT) {
 	struct ipv6_opt_hdr *ipv6_opt;
+
 	ipv6_opt = (struct ipv6_opt_hdr *)(&data[hdr->extended_hdr.parsed_pkt.offset.l3_offset+ip_len]);
 	ip_len += 8;
 	if(hdr->extended_hdr.parsed_pkt.l3_proto == NEXTHDR_AUTH)
@@ -1580,12 +1584,15 @@ static int parse_raw_pkt(char *data, u_int data_len,
       hdr->extended_hdr.parsed_pkt.l4_src_port = ntohs(udp->source), hdr->extended_hdr.parsed_pkt.l4_dst_port = ntohs(udp->dest);
       hdr->extended_hdr.parsed_pkt.offset.payload_offset = hdr->extended_hdr.parsed_pkt.offset.l4_offset + sizeof(struct udphdr);
 
-
       if(data_len > (hdr->extended_hdr.parsed_pkt.offset.payload_offset+4)) {
-	if((hdr->extended_hdr.parsed_pkt.l4_src_port == GTP_SIGNALING_PORT)
-	   || (hdr->extended_hdr.parsed_pkt.l4_dst_port == GTP_SIGNALING_PORT)) {
-	  memcpy(&hdr->extended_hdr.parsed_pkt.gtp_tunnel_id, &data[hdr->extended_hdr.parsed_pkt.offset.payload_offset+4], 4);
-	  hdr->extended_hdr.parsed_pkt.gtp_tunnel_id = ntohl(hdr->extended_hdr.parsed_pkt.gtp_tunnel_id);
+	/* GTPv1 */
+	if((hdr->extended_hdr.parsed_pkt.l4_src_port == GTP_SIGNALING_PORT) || (hdr->extended_hdr.parsed_pkt.l4_dst_port == GTP_SIGNALING_PORT)
+	   || (hdr->extended_hdr.parsed_pkt.l4_src_port == GTP_U_DATA_PORT) || (hdr->extended_hdr.parsed_pkt.l4_dst_port == GTP_U_DATA_PORT)
+	   ) {
+	  hdr->extended_hdr.parsed_pkt.gtp.version = gtp_version_1; /* data[hdr->extended_hdr.parsed_pkt.offset.payload_offset] & 0xE0 -> shift 5 bits right */
+	  hdr->extended_hdr.parsed_pkt.gtp.message_type = data[hdr->extended_hdr.parsed_pkt.offset.payload_offset+1];
+	  memcpy(&hdr->extended_hdr.parsed_pkt.gtp.tunnel_id, &data[hdr->extended_hdr.parsed_pkt.offset.payload_offset+4], 4);
+	  hdr->extended_hdr.parsed_pkt.gtp.tunnel_id = ntohl(hdr->extended_hdr.parsed_pkt.gtp.tunnel_id);
 	  /* printk("[PF_RING] 0x%08X\n", hdr->extended_hdr.parsed_pkt.gtp_tunnel_id); */
 	}
       }
@@ -1827,9 +1834,22 @@ static int match_filtering_rule(struct pf_ring_socket *pfr,
      && (hdr->extended_hdr.parsed_pkt.l3_proto != rule->rule.core_fields.proto))
     return(0);
 
-  if((rule->rule.extended_fields.gtp_tunnel_id != NO_GTP_TUNNEL_ID)
-     && (hdr->extended_hdr.parsed_pkt.gtp_tunnel_id != rule->rule.extended_fields.gtp_tunnel_id))
-    return(0);
+  if(rule->rule.extended_fields.gtp.version != ignore_gtp_version) {
+    if(unlikely(enable_debug))
+      printk("[PF_RING] [version=%02X][TEID=0x%08X][MsgType=0x%02X]\n",
+	     hdr->extended_hdr.parsed_pkt.gtp.version,
+	     rule->rule.extended_fields.gtp.tunnel_id,
+	     hdr->extended_hdr.parsed_pkt.gtp.message_type);
+
+    if((hdr->extended_hdr.parsed_pkt.gtp.version != rule->rule.extended_fields.gtp.version)
+       || ((hdr->extended_hdr.parsed_pkt.gtp.message_type < rule->rule.extended_fields.gtp.message_type_low)
+	   || (hdr->extended_hdr.parsed_pkt.gtp.message_type > rule->rule.extended_fields.gtp.message_type_high)))
+      return(0);
+
+    if((rule->rule.extended_fields.gtp.tunnel_id != NO_GTP_TUNNEL_ID)
+       && (hdr->extended_hdr.parsed_pkt.gtp.tunnel_id != rule->rule.extended_fields.gtp.tunnel_id))
+      return(0);
+  }
 
   if((memcmp(rule->rule.core_fields.dmac, empty_mac, ETH_ALEN) != 0)
      && (memcmp(hdr->extended_hdr.parsed_pkt.dmac, rule->rule.core_fields.dmac, ETH_ALEN) != 0))
@@ -2115,8 +2135,8 @@ inline int copy_data_to_ring(struct sk_buff *skb,
 
   if(pfr->ring_slots == NULL) return(0);
 
-  if(unlikely(enable_debug)) 
-    printk("[PF_RING] do_lock=%d [num_channels_per_ring=%d][num_bound_devices=%d]\n", 
+  if(unlikely(enable_debug))
+    printk("[PF_RING] do_lock=%d [num_channels_per_ring=%d][num_bound_devices=%d]\n",
 	   do_lock, pfr->num_channels_per_ring, pfr->num_bound_devices);
 
   /* We need to lock as two ksoftirqd might put data onto the same ring */
@@ -4215,13 +4235,13 @@ static unsigned long alloc_contiguous_memory(u_int mem_len) {
   if(mem)
     reserve_memory(mem, mem_len);
   else
-    if(unlikely(enable_debug)) 
+    if(unlikely(enable_debug))
       printk("[PF_RING] %s() Failure (len=%d, order=%d)\n", __FUNCTION__, mem_len, get_order(mem_len));
 
   return(mem);
 }
 
-static int allocate_extra_dma_memory(struct pf_ring_socket *pfr, struct device *hwdev, 
+static int allocate_extra_dma_memory(struct pf_ring_socket *pfr, struct device *hwdev,
                                      u_int32_t num_slots, u_int32_t slot_len, u_int32_t chunk_len)
 {
   u_int i, num_slots_per_chunk;
@@ -4248,8 +4268,8 @@ static int allocate_extra_dma_memory(struct pf_ring_socket *pfr, struct device *
     return -ENOMEM;
   }
 
-  if(unlikely(enable_debug)) 
-    printk("[PF_RING] %s() Allocating %d chunks of %d bytes [slots per chunk=%d]\n", 
+  if(unlikely(enable_debug))
+    printk("[PF_RING] %s() Allocating %d chunks of %d bytes [slots per chunk=%d]\n",
            __FUNCTION__, pfr->extra_dma_memory_num_chunks, pfr->extra_dma_memory_chunk_len, num_slots_per_chunk);
 
   /* Allocating memory chunks */
@@ -4257,7 +4277,7 @@ static int allocate_extra_dma_memory(struct pf_ring_socket *pfr, struct device *
     pfr->extra_dma_memory[i] = alloc_contiguous_memory(pfr->extra_dma_memory_chunk_len);
 
     if(!pfr->extra_dma_memory[i]) {
-      printk("[PF_RING] %s() Warning: no more free memory available! Allocated %d of %d chunks.\n", 
+      printk("[PF_RING] %s() Warning: no more free memory available! Allocated %d of %d chunks.\n",
 	     __FUNCTION__, i + 1, pfr->extra_dma_memory_num_chunks);
 
       pfr->extra_dma_memory_num_chunks = i;
@@ -4287,7 +4307,7 @@ static int allocate_extra_dma_memory(struct pf_ring_socket *pfr, struct device *
 
       if(dma_mapping_error(
 #if(LINUX_VERSION_CODE > KERNEL_VERSION(2,6,26))
-                           pfr->extra_dma_memory_hwdev, 
+                           pfr->extra_dma_memory_hwdev,
 #endif
 			   pfr->extra_dma_memory_addr[i])) {
         printk("[PF_RING] %s() Error mapping DMA slot %d of %d \n", __FUNCTION__, i + 1, pfr->extra_dma_memory_num_slots);
@@ -4304,13 +4324,13 @@ static void free_extra_dma_memory(struct pf_ring_socket *pfr) {
 
   if(!pfr->extra_dma_memory)
     return;
-  
+
   /* Unmapping DMA addresses */
   if(pfr->extra_dma_memory_addr) {
     for(i=0; i < pfr->extra_dma_memory_num_slots; i++) {
       if(pfr->extra_dma_memory_addr[i]) {
-        dma_unmap_single(pfr->extra_dma_memory_hwdev, pfr->extra_dma_memory_addr[i], 
-	                 pfr->extra_dma_memory_slot_len, 
+        dma_unmap_single(pfr->extra_dma_memory_hwdev, pfr->extra_dma_memory_addr[i],
+	                 pfr->extra_dma_memory_slot_len,
 	                 PCI_DMA_BIDIRECTIONAL);
 	pfr->extra_dma_memory_addr[i] = 0;
       }
@@ -4322,10 +4342,10 @@ static void free_extra_dma_memory(struct pf_ring_socket *pfr) {
   /* Freeing memory */
   for(i=0; i < pfr->extra_dma_memory_num_chunks; i++) {
     if(pfr->extra_dma_memory[i]) {
-      if(unlikely(enable_debug)) 
+      if(unlikely(enable_debug))
         printk("[PF_RING] %s() Freeing chunk %d of %d\n", __FUNCTION__, i, pfr->extra_dma_memory_num_chunks);
 
-      free_contiguous_memory(pfr->extra_dma_memory[i], pfr->extra_dma_memory_chunk_len); 
+      free_contiguous_memory(pfr->extra_dma_memory[i], pfr->extra_dma_memory_chunk_len);
       pfr->extra_dma_memory[i] = 0;
     }
   }
@@ -4386,14 +4406,14 @@ static int ring_release(struct socket *sock)
 
       for(i=0; i<MAX_NUM_RX_CHANNELS; i++) {
 	u_int32_t the_bit = 1 << i;
-	
+
 	if((pfr->channel_id & the_bit) == the_bit) {
 	  if(device_rings[pfr->ring_netdev->dev->ifindex][i] == pfr) {
 	    /*
 	      We must make sure that this is really us and not that by some chance
 	      (e.g. bind failed) another ring
 	    */
-	    device_rings[pfr->ring_netdev->dev->ifindex][i] = NULL;	  
+	    device_rings[pfr->ring_netdev->dev->ifindex][i] = NULL;
 	  }
 	}
       }
@@ -4485,7 +4505,7 @@ static int ring_release(struct socket *sock)
 
   if(ring_memory_ptr != NULL && free_ring_memory)
     vfree(ring_memory_ptr);
-    
+
   if(pfr->dna_device_entry != NULL) {
     dna_device_mapping mapping;
 
@@ -4794,9 +4814,9 @@ static int ring_mmap(struct file *file,
 
       if(pfr->extra_dma_memory == NULL)
         return -EINVAL;
-      
+
       if((rc = do_memory_mmap(vma, size, (void *)pfr->extra_dma_memory[mem_id], VM_LOCKED, 1)) < 0)
-        return(rc); 
+        return(rc);
     }
 
     return(0);
@@ -5698,7 +5718,7 @@ static int ring_setsockopt(struct socket *sock,
 	pfr->num_channels_per_ring++;
       }
     }
-    
+
 
     pfr->channel_id = channel_id;
     if(unlikely(enable_debug))
@@ -6445,11 +6465,11 @@ static int ring_getsockopt(struct socket *sock,
       if(len < (sizeof(u_int64_t) * num_slots))
         return -EINVAL;
 
-      if(allocate_extra_dma_memory(pfr, pfr->dna_device->hwdev, num_slots, 
-                                   pfr->dna_device->mem_info.rx.packet_memory_slot_len, 
+      if(allocate_extra_dma_memory(pfr, pfr->dna_device->hwdev, num_slots,
+                                   pfr->dna_device->mem_info.rx.packet_memory_slot_len,
                                    pfr->dna_device->mem_info.rx.packet_memory_chunk_len) < 0)
         return -EFAULT;
-	
+
       if(copy_to_user(optval, pfr->extra_dma_memory_addr, (sizeof(u_int64_t) * num_slots))) {
         free_extra_dma_memory(pfr);
         return -EFAULT;
