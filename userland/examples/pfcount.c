@@ -415,6 +415,10 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u
       printf("[%s:%d ", intoa(ntohl(ip.ip_src.s_addr)), h->extended_hdr.parsed_pkt.l4_src_port);
       printf("-> %s:%d] ", intoa(ntohl(ip.ip_dst.s_addr)), h->extended_hdr.parsed_pkt.l4_dst_port);
 
+      if((ip.ip_p == IPPROTO_UDP) 
+	 && (h->extended_hdr.parsed_pkt.gtp_tunnel_id != NO_GTP_TUNNEL_ID))
+	printf("[GTP TEID=0x%08X]", h->extended_hdr.parsed_pkt.gtp_tunnel_id);
+
       printf("[hash=%u][tos=%d][tcp_seq_num=%u][caplen=%d][len=%d][parsed_header_len=%d]"
 	     "[eth_offset=%d][l3_offset=%d][l4_offset=%d][payload_offset=%d]\n",
 	     h->extended_hdr.pkt_hash,
@@ -795,9 +799,26 @@ int main(int argc, char* argv[]) {
     // rule.extended_fields.filter_plugin_id = DUMMY_PLUGIN_ID; /* Enable packet parsing/filtering */
 
     if(pfring_add_filtering_rule(pd, &rule) < 0)
-      fprintf(stderr, "pfring_add_hash_filtering_rule(2) failed\n");
+      fprintf(stderr, "pfring_add_filtering_rule(2) failed\n");
     else
       printf("Rule added successfully...\n");
+  }
+
+  if(0) {
+    filtering_rule rule;
+
+    memset(&rule, 0, sizeof(rule));
+
+    rule.rule_id = 5;
+    rule.rule_action = forward_packet_and_stop_rule_evaluation;
+    rule.core_fields.proto = 17 /* UDP */;
+    rule.extended_fields.gtp_tunnel_id = 0x00633cb0;
+    if(pfring_add_filtering_rule(pd, &rule) < 0)
+      fprintf(stderr, "pfring_add_filtering_rule(3) failed\n");
+    else
+      printf("Rule added successfully...\n");
+
+    pfring_toggle_filtering_policy(pd, 0); /* Default to drop */
   }
 
   if(num_threads > 1) {

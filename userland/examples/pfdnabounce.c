@@ -43,7 +43,7 @@
 
 #include "pfring.h"
 
-//#define USE_PFRING_BOUNCE
+#define USE_PFRING_BOUNCE
 
 #define ALARM_SLEEP             1
 

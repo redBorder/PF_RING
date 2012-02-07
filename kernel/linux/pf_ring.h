@@ -177,6 +177,7 @@ struct pkt_parsing_info {
     u_int8_t flags;   /* TCP flags (0 if not available) */
     u_int32_t seq_num, ack_num; /* TCP sequence number */
   } tcp;
+  u_int32_t gtp_tunnel_id;/* GTP tunnelID or NO_GTP_TUNNEL_ID for no tunnel */
   u_int16_t last_matched_plugin_id; /* If > 0 identifies a plugin to that matched the packet */
   u_int16_t last_matched_rule_id; /* If > 0 identifies a rule that matched the packet */
   struct pkt_offset offset; /* Offsets of L3/L4/payload elements */
@@ -190,6 +191,10 @@ struct pkt_parsing_info {
 					 is faked, and that the info is basically
 					 a message from PF_RING
 				      */
+
+#define GTP_SIGNALING_PORT         2123
+#define NO_GTP_TUNNEL_ID            0x0
+
 struct pfring_extended_pkthdr {
   u_int64_t timestamp_ns; /* Packet timestamp at ns precision. Note that if your NIC supports
 			     hardware timestamp, this is the place to read timestamp from */
@@ -227,10 +232,10 @@ struct pfring_pkthdr {
 typedef struct {
   u_int8_t smac[ETH_ALEN], dmac[ETH_ALEN]; /* Use '0' (zero-ed MAC address) for any MAC address.
 					      This is applied to both source and destination. */
-  u_int16_t vlan_id;                 /* Use '0' for any vlan */
-  u_int8_t  proto;                   /* Use 0 for 'any' protocol */
-  ip_addr   shost, dhost;            /* User '0' for any host. This is applied to both source and destination. */
-  ip_addr   shost_mask, dhost_mask;  /* IPv4/6 network mask */
+  u_int16_t vlan_id;                   /* Use '0' for any vlan */
+  u_int8_t  proto;                     /* Use 0 for 'any' protocol */
+  ip_addr   shost, dhost;              /* User '0' for any host. This is applied to both source and destination. */
+  ip_addr   shost_mask, dhost_mask;    /* IPv4/6 network mask */
   u_int16_t sport_low, sport_high;     /* All ports between port_low...port_high means 'any' port */
   u_int16_t dport_low, dport_high;     /* All ports between port_low...port_high means 'any' port */
 } filtering_rule_core_fields;
@@ -240,6 +245,7 @@ typedef struct {
 #define FILTER_PLUGIN_DATA_LEN   256
 
 typedef struct {
+  u_int32_t gtp_tunnel_id;          /* GTP tunnelId or NO_GTP_TUNNEL_ID for not filtering */
   char payload_pattern[32];         /* If strlen(payload_pattern) > 0, the packet payload
 				       must match the specified pattern */
   u_int16_t filter_plugin_id;       /* If > 0 identifies a plugin to which the datastructure

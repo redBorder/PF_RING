@@ -1579,6 +1579,16 @@ static int parse_raw_pkt(char *data, u_int data_len,
 
       hdr->extended_hdr.parsed_pkt.l4_src_port = ntohs(udp->source), hdr->extended_hdr.parsed_pkt.l4_dst_port = ntohs(udp->dest);
       hdr->extended_hdr.parsed_pkt.offset.payload_offset = hdr->extended_hdr.parsed_pkt.offset.l4_offset + sizeof(struct udphdr);
+
+
+      if(data_len > (hdr->extended_hdr.parsed_pkt.offset.payload_offset+4)) {
+	if((hdr->extended_hdr.parsed_pkt.l4_src_port == GTP_SIGNALING_PORT)
+	   || (hdr->extended_hdr.parsed_pkt.l4_dst_port == GTP_SIGNALING_PORT)) {
+	  memcpy(&hdr->extended_hdr.parsed_pkt.gtp_tunnel_id, &data[hdr->extended_hdr.parsed_pkt.offset.payload_offset+4], 4);
+	  hdr->extended_hdr.parsed_pkt.gtp_tunnel_id = ntohl(hdr->extended_hdr.parsed_pkt.gtp_tunnel_id);
+	  /* printk("[PF_RING] 0x%08X\n", hdr->extended_hdr.parsed_pkt.gtp_tunnel_id); */
+	}
+      }
     } else
       hdr->extended_hdr.parsed_pkt.offset.payload_offset = hdr->extended_hdr.parsed_pkt.offset.l4_offset;
 
@@ -1815,6 +1825,10 @@ static int match_filtering_rule(struct pf_ring_socket *pfr,
 
   if((rule->rule.core_fields.proto > 0)
      && (hdr->extended_hdr.parsed_pkt.l3_proto != rule->rule.core_fields.proto))
+    return(0);
+
+  if((rule->rule.extended_fields.gtp_tunnel_id != NO_GTP_TUNNEL_ID)
+     && (hdr->extended_hdr.parsed_pkt.gtp_tunnel_id != rule->rule.extended_fields.gtp_tunnel_id))
     return(0);
 
   if((memcmp(rule->rule.core_fields.dmac, empty_mac, ETH_ALEN) != 0)
