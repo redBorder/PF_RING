@@ -5691,18 +5691,21 @@ static int ring_setsockopt(struct socket *sock,
     if(copy_from_user(&channel_id, optval, sizeof(channel_id)))
       return -EFAULT;
 
+    pfr->num_channels_per_ring = 0;
+
     /*
       We need to set the device_rings[] for all channels set
       in channel_id
     */
-    pfr->num_channels_per_ring = 0;
 
-    for(i=0; i<pfr->num_rx_channels; i++) {
-      u_int32_t the_bit = 1 << i;
+    if (quick_mode) {
+      for(i=0; i<pfr->num_rx_channels; i++) {
+        u_int32_t the_bit = 1 << i;
 
-      if((channel_id & the_bit) == the_bit) {
-	if(device_rings[pfr->ring_netdev->dev->ifindex][i] != NULL)
-	  return(-EINVAL); /* Socket already bound on this device */
+        if((channel_id & the_bit) == the_bit) {
+	  if(device_rings[pfr->ring_netdev->dev->ifindex][i] != NULL)
+	    return(-EINVAL); /* Socket already bound on this device */
+        }
       }
     }
 
@@ -5712,13 +5715,15 @@ static int ring_setsockopt(struct socket *sock,
       u_int32_t the_bit = 1 << i;
 
       if((channel_id & the_bit) == the_bit) {
-	if(unlikely(enable_debug)) printk("[PF_RING] Setting channel %d\n", i);
+        if(unlikely(enable_debug)) printk("[PF_RING] Setting channel %d\n", i);
+        
+	if (quick_mode) {
+	  device_rings[pfr->ring_netdev->dev->ifindex][i] = pfr;
+	}
 
-	device_rings[pfr->ring_netdev->dev->ifindex][i] = pfr;
 	pfr->num_channels_per_ring++;
       }
     }
-
 
     pfr->channel_id = channel_id;
     if(unlikely(enable_debug))
