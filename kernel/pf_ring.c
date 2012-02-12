@@ -1016,6 +1016,18 @@ static char* direction2string(packet_direction d) {
 
 /* ********************************** */
 
+static char* sockmode2string(socket_mode m) {
+  switch(m) {
+  case send_and_recv_mode: return("RX+TX");
+  case send_only_mode:     return("RX only");
+  case recv_only_mode:     return("TX only");
+  }
+
+  return("???");
+}
+
+/* ********************************** */
+
 static int ring_proc_get_info(char *buf, char **start, off_t offset,
 			      int len, int *unused, void *data)
 {
@@ -1065,6 +1077,7 @@ static int ring_proc_get_info(char *buf, char **start, off_t offset,
 	rlen += sprintf(buf + rlen, "Breed              : %s\n", (pfr->dna_device_entry != NULL) ? "DNA" : "Non-DNA");
 	rlen += sprintf(buf + rlen, "Sampling Rate      : %d\n", pfr->sample_rate);
 	rlen += sprintf(buf + rlen, "Capture Direction  : %s\n", direction2string(pfr->direction));
+	rlen += sprintf(buf + rlen, "Socket Mode        : %s\n", sockmode2string(pfr->mode));
 	rlen += sprintf(buf + rlen, "Appl. Name         : %s\n", pfr->appl_name ? pfr->appl_name : "<unknown>");
 	rlen += sprintf(buf + rlen, "IP Defragment      : %s\n", enable_ip_defrag ? "Yes" : "No");
 	rlen += sprintf(buf + rlen, "BPF Filtering      : %s\n", pfr->bpfFilter ? "Enabled" : "Disabled");
@@ -3154,7 +3167,7 @@ int bpf_filter_skb(struct sk_buff *skb,
 
 /*
  * add_skb_to_ring()
- *xo
+ *
  * Add the specified skb to the ring so that userland apps/plugins
  * can use the packet.
  *
@@ -5389,7 +5402,7 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 	  if(unlikely(enable_debug))
 	    printk("[PF_RING] ring_map_dna_device(add_device_mapping, %s, %u, %s): "
 		   "something got wrong (too many DNA devices open)\n",
-		   mapping->device_name, mapping->channel_id, direction2string(pfr->direction));
+		   mapping->device_name, mapping->channel_id, direction2string(pfr->mode));
 
 	  return(-1); /* Something got wrong: too many mappings */
 	}
@@ -5594,6 +5607,7 @@ static int ring_setsockopt(struct socket *sock,
   char applName[32 + 1] = { 0 };
   u_int16_t rule_id, rule_inactivity;
   packet_direction direction;
+  socket_mode sockmode;
   hw_filtering_rule hw_rule;
   struct list_head *ptr, *tmp_ptr;
 #ifdef VPFRING_SUPPORT
@@ -5789,6 +5803,21 @@ static int ring_setsockopt(struct socket *sock,
     ret = 0;
     break;
 
+  case SO_SET_SOCKET_MODE:
+    if(optlen != sizeof(sockmode))
+      return -EINVAL;
+
+    if(copy_from_user(&sockmode, optval, sizeof(sockmode)))
+      return -EFAULT;
+
+    pfr->mode = sockmode;
+    if(unlikely(enable_debug))
+      printk("[PF_RING] SO_SET_LINK_DIRECTION [pfr->mode=%s][mode=%s]\n",
+	     sockmode2string(pfr->mode), sockmode2string(sockmode));
+
+    ret = 0;
+    break;
+
   case SO_PURGE_IDLE_HASH_RULES:
     if(optlen != sizeof(rule_inactivity))
       return -EINVAL;
@@ -5958,10 +5987,10 @@ static int ring_setsockopt(struct socket *sock,
       for(i=0; i<MAX_NUM_DNA_BOUND_SOCKETS; i++) {
 	if((pfr->dna_device_entry->bound_sockets[i] != NULL)
 	   && pfr->dna_device_entry->bound_sockets[i]->ring_active) {
-	  if(   pfr->dna_device_entry->bound_sockets[i]->direction == pfr->direction
-		|| pfr->dna_device_entry->bound_sockets[i]->direction == rx_and_tx_direction
-		|| pfr->direction == rx_and_tx_direction) {
-	    printk("[PF_RING] Unable to activate two or more DNA sockets on the same interface %s/direction\n",
+	  if(   pfr->dna_device_entry->bound_sockets[i]->mode == pfr->mode
+		|| pfr->dna_device_entry->bound_sockets[i]->mode == send_and_recv_mode
+		|| pfr->mode == send_and_recv_mode) {
+	    printk("[PF_RING] Unable to activate two or more DNA sockets on the same interface %s/link direction\n",
 		   pfr->ring_netdev->dev->name);
 
 	    return -EFAULT; /* No way: we can't have two sockets that are doing the same thing with DNA */

@@ -68,6 +68,7 @@
 #define SO_ATTACH_USERSPACE_RING         123
 #define SO_SHUTDOWN_RING                 124
 #define SO_PURGE_IDLE_RULES              125 /* inactivity (sec) */
+#define SO_SET_SOCKET_MODE               126
 
 /* Get */
 #define SO_GET_RING_VERSION              170
@@ -310,11 +311,16 @@ typedef enum {
 } packet_direction;
 
 typedef enum {
+  send_and_recv_mode = 0,
+  send_only_mode,
+  recv_only_mode  
+} socket_mode;
+
+typedef enum {
   standard_linux_path = 0,           /* Business as usual */
   driver2pf_ring_transparent = 1,    /* Packets are still delivered to the kernel */
   driver2pf_ring_non_transparent = 2 /* Packets not delivered to the kernel */
 } direct2pf_ring;
-
 
 typedef struct {
   unsigned long jiffies_last_match;  /* Jiffies of the last rule match (updated by pf_ring) */
@@ -529,9 +535,9 @@ typedef struct flowSlotInfo {
   u_int64_t tot_pkts, tot_lost, tot_insert;
   u_int64_t tot_fwd_ok, tot_fwd_notok;
   /* <-- 64 bytes here, should be enough to avoid some L1 VIVT coherence issues (32 ~ 64bytes lines) */
-  char padding[128];
+  char padding[128-64];
   /* <-- 128 bytes here, should be enough to avoid false sharing in most L2 (64 ~ 128bytes lines) */
-  char k_padding[3904];
+  char k_padding[4096-128];
   /* <-- 4096 bytes here, to get a page aligned block writable by kernel side only */
 
   /* second page, managed by userland */
@@ -539,7 +545,7 @@ typedef struct flowSlotInfo {
   u_int32_t remove_off /* managed by userland */;
   u_int32_t vpfring_guest_flags; /* used by vPFRing */
   u_int32_t userspace_ring_flags;
-  char u_padding[4076];
+  char u_padding[4096-20];
   /* <-- 8192 bytes here, to get a page aligned block writable by userland only */
 } FlowSlotInfo;
 
@@ -625,7 +631,9 @@ typedef struct {
 } dna_memory_slots;
 
 typedef struct {
-  u_int64_t rx_descr_head, rx_descr_tail, rx_descr_next;
+  u_int64_t rx_descr_head, rx_descr_tail;
+  u_char __cacheline_padding[128-16];
+  u_int64_t rx_descr_next;
 } dna_indexes;
 
 typedef struct {
@@ -846,6 +854,7 @@ struct pf_ring_socket {
   u_int32_t ring_id;
   char *appl_name; /* String that identifies the application bound to the socket */
   packet_direction direction; /* Specify the capture direction for packets */
+  socket_mode mode; /* Specify the link direction to enable (RX, TX, both) */
 
   /* /proc */
   char sock_proc_name[64];

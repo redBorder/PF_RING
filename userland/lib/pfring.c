@@ -100,6 +100,8 @@ pfring* pfring_open(char *device_name, u_int8_t promisc,
   ring->caplen      = caplen;
   ring->reentrant   = _reentrant;
   ring->direction   = rx_and_tx_direction;
+  ring->mode        = send_and_recv_mode;
+
 
 #ifdef RING_DEBUG
   printf("pfring_open: device_name=%s\n", device_name);
@@ -449,8 +451,8 @@ int pfring_bounce_init(pfring_bounce *bounce, pfring *ingress_ring, pfring *egre
       ingress_ring->bounce_init == NULL)
     return -1;
 
-  if (pfring_set_direction(ingress_ring, rx_only_direction) != 0 ||
-      pfring_set_direction(egress_ring, tx_only_direction) != 0)
+  if (pfring_set_socket_mode(ingress_ring, recv_only_mode) != 0 ||
+      pfring_set_socket_mode(egress_ring, send_only_mode) != 0)
     return -1;
 
   bounce->rx_socket = ingress_ring;
@@ -557,7 +559,7 @@ int pfring_recv(pfring *ring, u_char** buffer, u_int buffer_len,
 	     && ring->enabled 
 	     && (!ring->is_shutting_down)
 	     && ring->recv
-	     && (ring->direction != tx_only_direction))))
+	     && (ring->mode != send_only_mode))))
     return ring->recv(ring, buffer, buffer_len, hdr, wait_for_incoming_packet);
 
   return PF_RING_ERROR_NOT_SUPPORTED;
@@ -646,12 +648,12 @@ int pfring_send(pfring *ring, char *pkt, u_int pkt_len, u_int8_t flush_packet) {
 
   if(unlikely(pkt_len > 9000 /* Jumbo MTU */)) 
     return rc;
-  
+
   if(likely(ring
 	    && ring->enabled
 	    && (!ring->is_shutting_down)
 	    && ring->send
-	    && (ring->direction != rx_only_direction))) {
+	    && (ring->mode != recv_only_mode))) {
 
     if(ring->reentrant) 
       pthread_rwlock_wrlock(&ring->lock);
@@ -674,7 +676,7 @@ int pfring_send_parsed(pfring *ring, char *pkt, struct pfring_pkthdr *hdr, u_int
 	    && ring->enabled
 	    && (!ring->is_shutting_down)
 	    && ring->send_parsed
-	    && (ring->direction != rx_only_direction))) {
+	    && (ring->mode != recv_only_mode))) {
 
     if(ring->reentrant) 
       pthread_rwlock_wrlock(&ring->lock);
@@ -702,7 +704,7 @@ int pfring_send_get_time(pfring *ring, char *pkt, u_int pkt_len, struct timespec
 	    && ring->enabled
 	    && (!ring->is_shutting_down)
 	    && ring->send_get_time
-	    && (ring->direction != rx_only_direction))) {
+	    && (ring->mode != recv_only_mode))) {
 
     if(ring->reentrant) 
       pthread_rwlock_wrlock(&ring->lock);
@@ -760,6 +762,25 @@ int pfring_set_direction(pfring *ring, packet_direction direction) {
 
     if(rc == 0)
       ring->direction = direction;
+
+    return(rc);
+  }
+
+  return PF_RING_ERROR_NOT_SUPPORTED;
+}
+
+/* **************************************************** */
+
+int pfring_set_socket_mode(pfring *ring, socket_mode mode) {
+  if(ring && ring->set_socket_mode) {
+    
+    if(ring->enabled)
+      return -1; /* direction must be set before pfring_enable() */
+
+    int rc = ring->set_socket_mode(ring, mode);
+
+    if(rc == 0)
+      ring->mode = mode;
 
     return(rc);
   }

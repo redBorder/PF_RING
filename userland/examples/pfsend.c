@@ -407,7 +407,7 @@ int main(int argc, char* argv[]) {
   tosend = pkt_head;
   i = 0;
 
-  pfring_set_direction(pd, tx_only_direction);
+  pfring_set_socket_mode(pd, send_only_mode);
 
   if(pfring_enable_ring(pd) != 0) {
     printf("Unable to enable ring :-(\n");
@@ -432,7 +432,7 @@ int main(int argc, char* argv[]) {
 	  if(bind_core >= 0)
 	    usleep(1);
 	  else
-	    pfring_poll(pd, 0);
+	    pfring_poll(pd, 0); //sched_yield();
 	}
       } else {
 	/* Just waste some time */

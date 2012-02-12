@@ -170,10 +170,13 @@ int pfring_dna_open(pfring *ring) {
   int   i;
   char *at;
 
+  ring->direction = rx_only_direction;
+
   ring->close = pfring_dna_close;
   ring->stats = pfring_dna_stats;
   ring->recv  = pfring_dna_recv;
   ring->enable_ring = pfring_dna_enable_ring;
+  ring->set_direction = pfring_dna_set_direction;
 
   ring->set_poll_watermark = pfring_mod_set_poll_watermark;
   ring->set_poll_duration = pfring_mod_set_poll_duration;
@@ -182,7 +185,7 @@ int pfring_dna_open(pfring *ring) {
   ring->bind = pfring_mod_bind;
   ring->get_num_rx_channels = pfring_mod_get_num_rx_channels;
   ring->get_selectable_fd = pfring_mod_get_selectable_fd;
-  ring->set_direction = pfring_mod_set_direction;
+  ring->set_socket_mode = pfring_mod_set_socket_mode;
   ring->get_ring_id = pfring_mod_get_ring_id;
   ring->poll = pfring_mod_poll;
   ring->version = pfring_mod_version;
@@ -364,6 +367,15 @@ int pfring_dna_open(pfring *ring) {
 #endif
 
   return 0;
+}
+
+/* ******************************* */
+
+int pfring_dna_set_direction(pfring *ring, packet_direction direction) {
+  if (direction != rx_only_direction)
+    return -1;
+
+  return pfring_mod_set_direction(ring, direction);
 }
 
 /* *********************************** */

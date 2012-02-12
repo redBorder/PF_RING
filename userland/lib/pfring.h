@@ -137,6 +137,7 @@ extern "C" {
   struct __pfring {
     u_int8_t initialized, enabled;
     packet_direction direction; /* Specify the capture direction for packets */
+    socket_mode mode;
 
     /* TODO these fields should be moved in ->priv_data */
     /* DNA (Direct NIC Access) */
@@ -167,6 +168,7 @@ extern "C" {
     int       (*set_sampling_rate)            (pfring *, u_int32_t);
     int       (*get_selectable_fd)            (pfring *);
     int       (*set_direction)                (pfring *, packet_direction);
+    int       (*set_socket_mode)              (pfring *, socket_mode);
     int       (*set_cluster)                  (pfring *, u_int, cluster_type);
     int       (*remove_from_cluster)          (pfring *);
     int       (*set_master_id)                (pfring *, u_int32_t);
@@ -275,6 +277,7 @@ extern "C" {
   int pfring_set_sampling_rate(pfring *ring, u_int32_t rate /* 1 = no sampling */);
   int pfring_get_selectable_fd(pfring *ring);
   int pfring_set_direction(pfring *ring, packet_direction direction);
+  int pfring_set_socket_mode(pfring *ring, socket_mode mode);
   int pfring_set_cluster(pfring *ring, u_int clusterId, cluster_type the_type);
   int pfring_remove_from_cluster(pfring *ring);
   int pfring_set_master_id(pfring *ring, u_int32_t master_id);

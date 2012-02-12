@@ -82,6 +82,7 @@ int pfring_mod_open(pfring *ring) {
   ring->set_sampling_rate = pfring_mod_set_sampling_rate;
   ring->get_selectable_fd = pfring_mod_get_selectable_fd;
   ring->set_direction = pfring_mod_set_direction;
+  ring->set_socket_mode = pfring_mod_set_socket_mode;
   ring->set_cluster = pfring_mod_set_cluster;
   ring->remove_from_cluster = pfring_mod_remove_from_cluster;
   ring->set_master_id = pfring_mod_set_master_id;
@@ -473,6 +474,12 @@ int pfring_mod_get_selectable_fd(pfring *ring) {
 
 int pfring_mod_set_direction(pfring *ring, packet_direction direction) {
   return(setsockopt(ring->fd, 0, SO_SET_PACKET_DIRECTION, &direction, sizeof(direction)));
+}
+
+/* ******************************* */
+
+int pfring_mod_set_socket_mode(pfring *ring, socket_mode mode) {
+  return(setsockopt(ring->fd, 0, SO_SET_SOCKET_MODE, &mode, sizeof(mode)));
 }
 
 /* ******************************* */

@@ -621,6 +621,9 @@ int main(int argc, char* argv[]) {
     if((rc = pfring_set_direction(pd[i], direction)) != 0)
       fprintf(stderr, "pfring_set_direction returned [rc=%d][direction=%d]\n", rc, direction);
 
+    if((rc = pfring_set_socket_mode(pd[i], recv_only_mode)) != 0)
+      fprintf(stderr, "pfring_set_socket_mode returned [rc=%d]\n", rc);
+
     if(watermark > 0) {
       if((rc = pfring_set_poll_watermark(pd[i], watermark)) != 0)
         fprintf(stderr, "pfring_set_poll_watermark returned [rc=%d][watermark=%d]\n", rc, watermark);
