@@ -52,7 +52,6 @@ typedef struct _pfring_context
   char *device, *twin_device;
   char *filter_string;
   int snaplen;
-  int device_index, twin_device_index;
   pfring *ring_handle, *twin_ring_handle;
   char errbuf[1024];
   u_char *pkt_buffer;
@@ -93,6 +92,14 @@ static pfring* pfring_daq_open(Pfring_Context_t *context, char *device, int td) 
       DPE(context->errbuf, "pfring_open(): unable to open device '%s'. Please use -i <device>", device);
       return NULL;
     }
+  }
+
+  if (context->twin_device == NULL) { /* passive mode */
+    /* default direction: rx_and_tx_direction */
+    pfring_set_socket_mode(ring_handle, recv_only_mode);
+  } else { /* inline mode */
+    pfring_set_direction(ring_handle, rx_only_direction);
+    /* default mode: recv_and_send_mode */
   }
 
   if(context->clusterid > 0) {
@@ -173,38 +180,8 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
     char *column = strchr(context->device, ':');
 
     if(column != NULL) {
-      char pathname[256]   = { 0 };
-      char proc_text[256]  = { 0 };
-      char dummy_text[256] = { 0 };
-      char *ptr, *ptr1;
-      int  fd;
-
       column[0] = '\0';
       context->twin_device = &column[1];
-
-      sprintf(pathname, "/proc/net/pf_ring/dev/%s/info", context->device);
-      printf("getting /proc/net/pf_ring/dev/%s/info\n", context->device);
-      fd = open(pathname, O_RDONLY);
-      if(read(fd, proc_text, 256)) {
-	ptr = strstr(proc_text, "Index");
-	ptr1 = strchr(ptr, '\n');
-	*ptr1 = 0;
-	sscanf(ptr, "%s %d", dummy_text, &context->device_index);
-	printf("index=%d\n", context->device_index);
-      }
-      close(fd);
-
-      sprintf(pathname, "/proc/net/pf_ring/dev/%s/info", context->twin_device);
-      printf("getting /proc/net/pf_ring/dev/%s/info\n", context->twin_device);
-      fd = open(pathname, O_RDONLY);
-      if(read(fd, proc_text, 256)) {
-	ptr = strstr(proc_text, "Index");
-	ptr1 = strchr(ptr, '\n');
-	*ptr1 = 0;
-	sscanf(ptr, "%s %d", dummy_text, &context->twin_device_index);
-	printf("index=%d\n", context->twin_device_index);
-      }
-      close(fd);
     }
   }
 
@@ -213,9 +190,7 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
       snprintf(errbuf, len,
 	       "%s: variable needs value(%s)\n", __FUNCTION__, entry->key);
       return DAQ_ERROR;
-    }
-
-    else if(!strcmp(entry->key, "clusterid")) {
+    } else if(!strcmp(entry->key, "clusterid")) {
       char* end = entry->value;
       context->clusterid =(int)strtol(entry->value, &end, 0);
       if(*end
@@ -367,7 +342,7 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
   if(context->twin_ring_handle != NULL)
     pfring_enable_ring(context->twin_ring_handle);
 
-  while((!context->breakloop) &&((cnt == -1) ||(cnt > 0))) {
+  while((!context->breakloop) && ((cnt == -1) || (cnt > 0))) {
     struct pfring_pkthdr phdr;
     DAQ_PktHdr_t hdr;
     DAQ_Verdict verdict;
@@ -457,7 +432,7 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
 
       case DAQ_VERDICT_PASS:    /* Pass the packet */
       case DAQ_VERDICT_REPLACE: /* Pass a packet that has been modified in-place.(No resizing allowed!) */
-	send_ring =(current_ring == context->ring_handle) ? context->twin_ring_handle : context->ring_handle;
+	send_ring = (current_ring == context->ring_handle) ? context->twin_ring_handle : context->ring_handle;
 	pfring_daq_send_packet(context, send_ring, hdr.caplen);
 	break;
 
