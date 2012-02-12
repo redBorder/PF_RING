@@ -3154,7 +3154,7 @@ int bpf_filter_skb(struct sk_buff *skb,
 
 /*
  * add_skb_to_ring()
- *
+ *xo
  * Add the specified skb to the ring so that userland apps/plugins
  * can use the packet.
  *
@@ -3244,6 +3244,10 @@ static int add_skb_to_ring(struct sk_buff *skb,
       printk("[PF_RING] check_wildcard_rules() completed: fwd_pkt=%d\n", fwd_pkt);
   }
 
+  if(unlikely(enable_debug))
+    printk("[PF_RING] add_skb_to_ring() verdict: fwd_pkt=%d [default=%u]\n",
+	   fwd_pkt, pfr->sw_filtering_rules_default_accept_policy);
+
   if(fwd_pkt) {
     /* We accept the packet: it needs to be queued */
     if(unlikely(enable_debug))
@@ -3312,6 +3316,9 @@ static int add_skb_to_ring(struct sk_buff *skb,
     free_parse_memory(parse_memory_buffer);
 
   atomic_set(&pfr->num_ring_users, 0);
+
+  if(unlikely(enable_debug))
+    printk("[PF_RING] add_skb_to_ring() returned %d\n", rc);
 
   return(rc);
 }
@@ -3586,8 +3593,10 @@ static int skb_ring_handler(struct sk_buff *skb,
   /* Check if there's at least one PF_RING ring defined that
      could receive the packet: if none just stop here */
 
-  if(ring_table_size == 0)
+  if(ring_table_size == 0) {
+    if(unlikely(enable_debug)) printk("[PF_RING] (0) skb_ring_handler returned %d\n", rc);
     return(rc);
+  }
 
   if(recv_packet) {
     /* Hack for identifying a packet received by the e1000 */
@@ -3607,8 +3616,10 @@ static int skb_ring_handler(struct sk_buff *skb,
   if((num_any_rings == 0)
      && (skb->dev
 	 && (skb->dev->ifindex < MAX_NUM_IFIDX)
-	 && (num_rings_per_device[skb->dev->ifindex] == 0)))
+	 && (num_rings_per_device[skb->dev->ifindex] == 0))) {
+    if(unlikely(enable_debug)) printk("[PF_RING] (1) skb_ring_handler returned %d\n", rc);
     return(rc);
+  }
 
 #ifdef PROFILING
   uint64_t rdt = _rdtsc(), rdt1, rdt2;
@@ -3627,6 +3638,9 @@ static int skb_ring_handler(struct sk_buff *skb,
       but we decided not to handle transmitted
       packets.
     */
+    rc = 0;
+
+    if(unlikely(enable_debug)) printk("[PF_RING] (2) skb_ring_handler returned %d\n", rc);
     return(0);
   }
 
@@ -3684,8 +3698,11 @@ static int skb_ring_handler(struct sk_buff *skb,
 	 && recv_packet) {
 	skb = skk = defrag_skb(skb, displ, &hdr, &defragmented_skb);
 
-	if(skb == NULL)
+	if(skb == NULL) {
+	  rc = 0;
+	  if(unlikely(enable_debug)) printk("[PF_RING] (3) skb_ring_handler returned %d\n", rc);
 	  return(0);
+	}
       }
     }
 
@@ -3801,9 +3818,10 @@ static int skb_ring_handler(struct sk_buff *skb,
   }
 
   if(rc == 1) {
-    if(transparent_mode != driver2pf_ring_non_transparent /* 2 */)
-      rc = 0;
-    else {
+    if(transparent_mode != driver2pf_ring_non_transparent /* 2 */) {
+      /* CHECK: I commented the line below as I have no idea why it has been put there */
+      /* rc = 0; */
+    } else {
       if(recv_packet && real_skb) {
 	if(unlikely(enable_debug))
 	  printk("[PF_RING] kfree_skb()\n");
@@ -3824,10 +3842,10 @@ static int skb_ring_handler(struct sk_buff *skb,
 	   (int)((float)(rdt2 * 100) / (float)rdt));
 #endif
 
-  //printk("[PF_RING] Returned %d\n", rc);
-
   if((rc == 1) && (room_available == 0))
     rc = 2;
+
+  if(unlikely(enable_debug)) printk("[PF_RING] (4) skb_ring_handler returned %d\n", rc);
 
   return(rc); /*  0 = packet not handled */
 }
@@ -5057,10 +5075,14 @@ unsigned int ring_poll(struct file *file,
     pfr->ring_active = 1;
     // smp_rmb();
 
+    /* printk("Before [num_queued_pkts(pfr)=%u]\n", num_queued_pkts(pfr)); */
+
     if(num_queued_pkts(pfr) < pfr->poll_num_pkts_watermark) {
       poll_wait(file, &pfr->ring_slots_waitqueue, wait);
       // smp_mb();
     }
+
+    /* printk("After [num_queued_pkts(pfr)=%u]\n", num_queued_pkts(pfr)); */
 
     if(num_queued_pkts(pfr) >= pfr->poll_num_pkts_watermark)
       mask |= POLLIN | POLLRDNORM;
