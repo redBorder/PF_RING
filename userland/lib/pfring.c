@@ -357,7 +357,7 @@ int pfring_bundle_read(pfring_bundle *bundle,
 		       u_char** buffer, u_int buffer_len,
 		       struct pfring_pkthdr *hdr,
 		       u_int8_t wait_for_incoming_packet) {
-  int i, sock_id, found, rc, empty_rings, scans;
+  int i, sock_id = -1, found, rc, empty_rings, scans;
   struct timespec ts = { 0 };
   struct timespec tmpts;
 

@@ -193,7 +193,7 @@ int dummyProcesssPacket(u_int16_t pkt_len, u_char *pkt, const u_char *user_bytes
 #else
 void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u_char *user_bytes) { 
   /* Bounce back */
-  pfring_send(pd2, (char*)p, h->caplen, 1 /* flush out */);
+  pfring_send(pd2, (char*)p, h->caplen, 0 /* !flush out */);
 
   numPkts++;
   numBytes += h->len + 24 /* 8 Preamble + 4 CRC + 12 IFG */; 
