@@ -43,8 +43,6 @@
 
 #include "pfring.h"
 
-// #define USE_PFRING_BOUNCE
-
 #define ALARM_SLEEP             1
 
 pfring  *pd1, *pd2;
@@ -53,7 +51,7 @@ char *in_dev = NULL, *out_dev = NULL;
 u_int8_t wait_for_packet = 1, do_shutdown = 0;
 static struct timeval startTime;
 unsigned long long numPkts = 0, numBytes = 0;
-#ifdef USE_PFRING_BOUNCE
+#ifdef HAVE_NITRO
 pfring_bounce bounce;
 #endif
 
@@ -160,7 +158,7 @@ void sigproc(int sig) {
   if(called) return; else called = 1;
   do_shutdown = 1;
 
-#ifdef USE_PFRING_BOUNCE
+#ifdef HAVE_NITRO
   pfring_bounce_breakloop(&bounce);
 #else
   pfring_breakloop(pd1);
@@ -183,7 +181,7 @@ void printHelp(void) {
 
 /* *************************************** */
 
-#ifdef USE_PFRING_BOUNCE
+#ifdef HAVE_NITRO
 int dummyProcesssPacket(u_int16_t pkt_len, u_char *pkt, const u_char *user_bytes) {
   numPkts++;
   numBytes += pkt_len + 24 /* 8 Preamble + 4 CRC + 12 IFG */;
@@ -261,7 +259,7 @@ int main(int argc, char* argv[]) {
   signal(SIGALRM, my_sigalarm);
   alarm(ALARM_SLEEP);
 
-#ifdef USE_PFRING_BOUNCE
+#ifdef HAVE_NITRO
   if (pfring_bounce_init(&bounce, pd1, pd2) == 0) {
     pfring_bounce_loop(&bounce, dummyProcesssPacket, (u_char *) NULL, wait_for_packet);
     pfring_bounce_destroy(&bounce);
