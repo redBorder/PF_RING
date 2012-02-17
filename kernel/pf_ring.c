@@ -3607,7 +3607,7 @@ static int skb_ring_handler(struct sk_buff *skb,
      could receive the packet: if none just stop here */
 
   if(ring_table_size == 0) {
-    if(unlikely(enable_debug)) printk("[PF_RING] (0) skb_ring_handler returned %d\n", rc);
+    /* if(unlikely(enable_debug)) printk("[PF_RING] (0) skb_ring_handler returned %d\n", rc); */
     return(rc);
   }
 
@@ -5049,7 +5049,9 @@ static int ring_sendmsg(struct kiocb *iocb, struct socket *sock,
    *	Now send it
    */
 
-  dev_queue_xmit(skb);
+  if (dev_queue_xmit(skb) != NETDEV_TX_OK)
+    goto out_unlock;
+
   //dev_put(pfr->ring_netdev->dev);
   return(len);
 
