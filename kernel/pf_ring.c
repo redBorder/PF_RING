@@ -2474,8 +2474,10 @@ static int handle_sw_filtering_hash_bucket(struct pf_ring_socket *pfr,
 
     /* Checking reflector device */
     if(rule->rule.reflector_device_name[0] != '\0') {
-      if((pfr->ring_netdev->dev != NULL)
-         && (strcmp(rule->rule.reflector_device_name, pfr->ring_netdev->dev->name) == 0)) {
+      if((pfr->ring_netdev->dev != NULL) &&
+         rule->rule.rule_action != bounce_packet_and_stop_rule_evaluation &&
+         rule->rule.rule_action != bounce_packet_and_continue_rule_evaluation &&
+         (strcmp(rule->rule.reflector_device_name, pfr->ring_netdev->dev->name) == 0)) {
 	if(unlikely(enable_debug))
 	  printk("[PF_RING] You cannot use as reflection device the same device on "
 	       "which this ring is bound\n");
@@ -2636,8 +2638,10 @@ static int add_sw_filtering_rule_element(struct pf_ring_socket *pfr, sw_filterin
   }
 
   if(rule->rule.reflector_device_name[0] != '\0') {
-    if((pfr->ring_netdev->dev != NULL)
-       && (strcmp(rule->rule.reflector_device_name, pfr->ring_netdev->dev->name) == 0)) {
+    if((pfr->ring_netdev->dev != NULL) &&
+       rule->rule.rule_action != bounce_packet_and_stop_rule_evaluation &&
+       rule->rule.rule_action != bounce_packet_and_continue_rule_evaluation &&
+       (strcmp(rule->rule.reflector_device_name, pfr->ring_netdev->dev->name) == 0)) {
       if(unlikely(enable_debug))
 	printk("[PF_RING] You cannot use as reflection device the same device on which this ring is bound\n");
       return(-EFAULT);
