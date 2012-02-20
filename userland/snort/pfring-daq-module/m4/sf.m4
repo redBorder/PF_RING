@@ -160,39 +160,3 @@ AC_DEFUN([AC_CHECK_PCAP_VER],
         AC_MSG_RESULT(yes)
     fi
 ])
-
-AC_DEFUN([AC_CHECK_DAQ_API],
-[
-    AC_ARG_WITH(libdaq_includes,
-                [  --with-libdaq-includes=DIR    libdaq include directory],
-                [with_daq_includes="$withval"], [with_daq_includes="no"])
-
-    if test "x$with_daq_includes" != "xno"; then
-        CPPFLAGS="${CPPFLAGS} -I${with_daq_includes}"
-    fi
-
-    AC_CHECK_HEADER([daq_api.h], [], [AC_MSG_ERROR([Could not find daq_api.h!])])
-])
-
-AC_DEFUN([AC_CHECK_SFBPF],
-[
-    AC_ARG_WITH(libsfbpf_includes,
-                [  --with-libsfbpf-includes=DIR    libsfbpf include directory],
-                [with_sfbpf_includes="$withval"], [with_sfbpf_includes="no"])
-
-    AC_ARG_WITH(libsfbpf_libraries,
-                [  --with-libsfbpf-libraries=DIR    libsfbpf library directory],
-                [with_sfbpf_libraries="$withval"], [with_sfbpf_libraries="no"])
-
-    if test "x$with_sfbpf_includes" != "xno"; then
-        CPPFLAGS="${CPPFLAGS} -I${with_sfbpf_includes}"
-    fi
-
-    if test "x$with_sfbpf_libraries" != "xno"; then
-        LDFLAGS="${LDFLAGS} -L${with_sfbpf_libraries}"
-    fi
-
-    AC_CHECK_HEADER([sfbpf.h], [], [AC_MSG_ERROR([Could not find sfbpf.h!])])
-    AC_CHECK_LIB([sfbpf], [sfbpf_compile], [], [AC_MSG_ERROR([Could not link against the SFBPF library!])])
-])
-

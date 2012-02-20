@@ -2,8 +2,8 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.62)
-AC_INIT([pfring-daq-module], [0.1], [deri@ntop.org])
-AM_INIT_AUTOMAKE([daq], [0.1])
+AC_INIT([pfring-daq-module], [0.2], [deri@ntop.org])
+AM_INIT_AUTOMAKE([daq], [0.2])
 AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_SRCDIR([daq_pfring.c])
 AC_CONFIG_HEADERS([config.h])
@@ -18,8 +18,8 @@ AC_ENABLE_VISIBILITY()
 AC_SF_COMPILER_SETUP()
 
 # Checks for the DAQ API headers and the SFBPF headers/library.
-AC_CHECK_DAQ_API
-AC_CHECK_SFBPF
+#AC_CHECK_DAQ_API
+#AC_CHECK_SFBPF
 
 # Checks for PF_RING
 AC_ARG_WITH(libpfring_includes,
