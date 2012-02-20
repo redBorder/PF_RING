@@ -4301,6 +4301,10 @@ void ixgbe_vlan_stripping_enable(struct ixgbe_adapter *adapter)
 	u32 vlnctrl;
 	int i;
 
+#ifdef HAVE_PF_RING
+	return; /* We like VLAN tags */
+#endif
+
 	switch (hw->mac.type) {
 	case ixgbe_mac_82598EB:
 		vlnctrl = IXGBE_READ_REG(hw, IXGBE_VLNCTRL);
