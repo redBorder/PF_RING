@@ -168,7 +168,7 @@ void sigproc(int sig) {
 /* *************************************** */
 
 void printHelp(void) {
-  printf("pfdnabounce\n(C) 2011 Deri Luca <deri@ntop.org>\n\n");
+ printf("pfdnabounce - (C) 2011-12 ntop.org\n\n");
 
   printf("pfdnabounce [-v] [-a] -i in_dev\n");
   printf("-h              Print this help\n");
@@ -260,6 +260,8 @@ int main(int argc, char* argv[]) {
   alarm(ALARM_SLEEP);
 
 #ifdef HAVE_NITRO
+  printf("Using PF_RING zero-copy library\n");
+
   if (pfring_bounce_init(&bounce, pd1, pd2) == 0) {
     pfring_bounce_loop(&bounce, dummyProcesssPacket, (u_char *) NULL, wait_for_packet);
     pfring_bounce_destroy(&bounce);
