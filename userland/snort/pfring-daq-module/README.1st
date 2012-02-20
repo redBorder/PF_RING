@@ -42,5 +42,5 @@ Running snort in IPS mode
 # snort --daq-dir=/usr/local/lib/daq --daq pfring  -i ethX:ethY -e -Q
 
 ----
-Luca Deri <deri@ntop.org> - September 2011
+Luca Deri <deri@ntop.org> - February 2012
 
