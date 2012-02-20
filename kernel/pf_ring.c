@@ -2768,7 +2768,8 @@ static int reflect_packet(struct sk_buff *skb,
       has not been incremented
     */
     atomic_inc(&skb->users);
-    if(displ > 0) skb->data -= displ, skb->len += displ;
+
+    if(displ > 0) skb_push(skb, displ);
 
     if(behaviour == bounce_packet_and_stop_rule_evaluation) {
       char dst_mac[6];
@@ -2785,7 +2786,9 @@ static int reflect_packet(struct sk_buff *skb,
       which means it can't be called with spinlocks held.
     */
     ret = dev_queue_xmit(skb);
-    if(displ > 0) skb->data += displ, skb->len -= displ;
+
+    if(displ > 0) skb_pull(skb, displ);
+
     atomic_set(&pfr->num_ring_users, 0);	/* Done */
     /* printk("[PF_RING] --> ret=%d\n", ret); */
 
@@ -2799,6 +2802,9 @@ static int reflect_packet(struct sk_buff *skb,
       */
       atomic_dec(&skb->users);
     }
+
+    if(unlikely(enable_debug))
+      printk("[PF_RING] dev_queue_xmit(%s) returned %d\n", reflector_dev->name, ret);
 
     /* yield(); */
     return(ret == NETDEV_TX_OK ? 0 : -ENETDOWN);
