@@ -141,8 +141,9 @@ void print_stats() {
 /* ******************************** */
 
 void my_sigalarm(int sig) {
-  if(do_shutdown)
-    return;
+  if(do_shutdown) {
+    exit(0);
+  }
 
   print_stats();
   alarm(ALARM_SLEEP);
@@ -181,14 +182,16 @@ void printHelp(void) {
 
 /* *************************************** */
 
-#ifdef HAVE_NITRO
-int dummyProcesssPacket(u_int16_t pkt_len, u_char *pkt, const u_char *user_bytes) {
+
+int dummyProcesssPacketNitro(u_int16_t pkt_len, u_char *pkt, const u_char *user_bytes) {
   numPkts++;
   numBytes += pkt_len + 24 /* 8 Preamble + 4 CRC + 12 IFG */;
 
   return 0; /* bounce back */
 }
-#else
+
+/* *************************************** */
+
 void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u_char *user_bytes) { 
   /* Bounce back */
   pfring_send(pd2, (char*)p, h->caplen, 0 /* !flush out */);
@@ -196,7 +199,6 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u
   numPkts++;
   numBytes += h->len + 24 /* 8 Preamble + 4 CRC + 12 IFG */; 
 }
-#endif
 
 /* *************************************** */
 
@@ -260,13 +262,15 @@ int main(int argc, char* argv[]) {
   alarm(ALARM_SLEEP);
 
 #ifdef HAVE_NITRO
-  printf("Using PF_RING zero-copy library\n");
-
   if (pfring_bounce_init(&bounce, pd1, pd2) == 0) {
-    pfring_bounce_loop(&bounce, dummyProcesssPacket, (u_char *) NULL, wait_for_packet);
+    printf("Using PF_RING zero-copy library\n");
+    pfring_bounce_loop(&bounce, dummyProcesssPacketNitro, (u_char *) NULL, wait_for_packet);
     pfring_bounce_destroy(&bounce);
+    goto end;
   }
-#else
+#endif
+
+  printf("Using PF_RING 1-copy library\n");
   pfring_set_direction(pd1, rx_only_direction);
   pfring_set_direction(pd2, tx_only_direction);
 
@@ -274,8 +278,8 @@ int main(int argc, char* argv[]) {
   pfring_enable_ring(pd2);
 
   pfring_loop(pd1, dummyProcesssPacket, (u_char*) NULL, wait_for_packet);
-#endif
 
+ end:
   pfring_close(pd1);
   pfring_close(pd2);
 
