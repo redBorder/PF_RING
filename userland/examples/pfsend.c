@@ -196,11 +196,12 @@ static __inline__ ticks getticks(void)
 
 int main(int argc, char* argv[]) {
   char c, *pcap_in = NULL, mac_address[6];
-  int promisc, i, verbose = 0, active_poll = 0, reforge_mac = 0;
+  int promisc, i, verbose = 0, active_poll = 0;
+  int reforge_mac = 0, to_go, to_go_threshold = 256, use_zero_copy_tx = 0;
   u_int mac_a, mac_b, mac_c, mac_d, mac_e, mac_f;
   char buffer[9000];
   int send_len = 60;
-  u_int32_t num = 1;
+  u_int32_t num = 0;
   int bind_core = -1;
   u_int16_t cpu_percentage = 0;
   double gbit_s = 0, td, pps;
@@ -415,11 +416,41 @@ int main(int argc, char* argv[]) {
     return(-1);
   }
 
+  use_zero_copy_tx = 0;
+
+  if(pd->dna_copy_tx_packet_into_slot != NULL) {
+    u_int num_tx_slots = pd->dna_get_num_tx_slots(pd);
+
+    if(num_tx_slots > 0) {
+      int i, ret;
+           
+      for(i=0; i<num_tx_slots; i++) {
+	ret = pfring_copy_tx_packet_into_slot(pd, i, tosend->pkt, tosend->len);
+	if(ret < 0)
+	  break;
+      }
+
+      if(num == 0) {
+	use_zero_copy_tx = 1;
+      }
+    }
+  }
+
+  if(use_zero_copy_tx)
+    printf("Using zero-copy TX\n");
+
+  to_go = to_go_threshold;
+
   while(!num || i < num) {
     int rc;
 
   redo:
-    rc = pfring_send(pd, tosend->pkt, tosend->len, 0 /* Don't flush (it does PF_RING automatically) */);
+
+    if(use_zero_copy_tx) {
+      /* We pre-filled the TX slots */
+      rc = pfring_send(pd, NULL, 0, 0 /* Don't flush (it does PF_RING automatically) */);
+    } else
+      rc = pfring_send(pd, tosend->pkt, tosend->len, 0 /* Don't flush (it does PF_RING automatically) */);
 
     if(verbose)
       printf("[%d] pfring_send(%d) returned %d\n", i, tosend->len, rc);
@@ -431,12 +462,15 @@ int main(int argc, char* argv[]) {
 	if(!active_poll) {
 	  if(bind_core >= 0)
 	    usleep(1);
-	  else
+	  else {
+	    // printf("pfring_poll()\n");
 	    pfring_poll(pd, 0); //sched_yield();
+	  }
 	}
       } else {
 	/* Just waste some time */
 	while((getticks() - tick_start) < (num_pkt_good_sent * tick_delta)) ;
+	// printf("waste time\n");
       }
 
       goto redo;
@@ -444,6 +478,12 @@ int main(int argc, char* argv[]) {
       num_pkt_good_sent++, num_bytes_good_sent += tosend->len+24 /* 8 Preamble + 4 CRC + 12 IFG */, tosend = tosend->next;
 
     if(num > 0) i++;
+
+    if(to_go > 0)
+      to_go--;
+    else {
+      to_go = to_go_threshold;
+    }
   } /* for */
 
   print_stats(0);

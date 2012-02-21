@@ -215,6 +215,10 @@ extern "C" {
     u_int8_t (*dna_check_packet_to_read) (pfring *, u_int8_t);
     u_char*  (*dna_next_packet)      (pfring *, u_char **, u_int, struct pfring_pkthdr *);
 
+    u_int    (*dna_get_num_tx_slots)(pfring* ring);
+    u_int    (*dna_get_num_rx_slots)(pfring* ring);
+    int      (*dna_copy_tx_packet_into_slot)(pfring* ring, u_int16_t tx_slot_id, char* buffer, u_int len);
+
     /* Silicom Redirector Only */
     struct {
       int8_t device_id, port_id;
@@ -320,6 +324,10 @@ extern "C" {
   int pfring_set_device_clock(pfring *ring, struct timespec *ts);
   int pfring_adjust_device_clock(pfring *ring, struct timespec *offset, int8_t sign);
   void pfring_sync_indexes_with_kernel(pfring *ring);
+
+  u_int pfring_get_num_tx_slots(pfring* ring);
+  u_int pfring_dna_get_num_rx_slots(pfring* ring);
+  int   pfring_copy_tx_packet_into_slot(pfring* ring, u_int16_t tx_slot_id, char* buffer, u_int len);
 
   /* PF_RING Socket bundle */
   void pfring_bundle_init(pfring_bundle *bundle, bundle_read_policy p);

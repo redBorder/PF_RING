@@ -1175,3 +1175,34 @@ int pfring_adjust_device_clock(pfring *ring, struct timespec *offset, int8_t sig
   return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
+/* **************************************************** */
+
+u_int pfring_get_num_tx_slots(pfring* ring) {
+  if(ring && ring->dna_get_num_tx_slots) {
+    return ring->dna_get_num_tx_slots(ring);
+  }
+
+  return PF_RING_ERROR_NOT_SUPPORTED;
+}
+
+/* **************************************************** */
+
+u_int pfring_get_num_rx_slots(pfring* ring) {
+  if(ring && ring->dna_get_num_rx_slots) {
+    return ring->dna_get_num_rx_slots(ring);
+  }
+
+  return PF_RING_ERROR_NOT_SUPPORTED;
+}
+
+/* **************************************************** */
+
+int pfring_copy_tx_packet_into_slot(pfring* ring, u_int16_t tx_slot_id, char* buffer, u_int len) {
+  if(ring && ring->dna_copy_tx_packet_into_slot) {
+    return ring->dna_copy_tx_packet_into_slot(ring, tx_slot_id, buffer, len);
+  }
+
+  return PF_RING_ERROR_NOT_SUPPORTED;
+}
+
+/* **************************************************** */
