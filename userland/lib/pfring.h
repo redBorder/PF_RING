@@ -145,6 +145,7 @@ extern "C" {
     u_int16_t num_rx_pkts_before_dns_sync, num_tx_pkts_before_dns_sync, dna_sync_watermark;
     u_int64_t tot_dna_read_pkts, tot_dna_lost_pkts;
     u_int32_t rx_reg, tx_reg, last_rx_slot_read;
+    u_int32_t num_rx_slots_per_chunk, num_tx_slots_per_chunk;
     dna_device dna_dev;    
     dna_indexes *indexes_ptr;
     u_int32_t *rx_reg_ptr, *tx_reg_ptr, *mpc_reg_ptr, *qprdc_reg_ptr, 
