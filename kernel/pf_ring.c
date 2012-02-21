@@ -2759,25 +2759,25 @@ static int reflect_packet(struct sk_buff *skb,
   if((reflector_dev != NULL)
      && (reflector_dev->flags & IFF_UP) /* Interface is up */ ) {
     int ret;
+    struct sk_buff *cloned;
 
-    skb->pkt_type = PACKET_OUTGOING, skb->dev = reflector_dev;
-    /*
-      Avoid others to free the skb and crash
-      this because dev_queue_xmit (if successfull) is gonna
-      call kfree_skb that will free the skb if users (see below)
-      has not been incremented
-    */
-    atomic_inc(&skb->users);
+    if ((cloned = skb_clone(skb, GFP_ATOMIC)) == NULL)
+      return -ENOMEM;
 
-    if(displ > 0) skb_push(skb, displ);
+    cloned->pkt_type = PACKET_OUTGOING;
+    cloned->dev = reflector_dev;
 
-    if(behaviour == bounce_packet_and_stop_rule_evaluation) {
+    if(displ > 0) skb_push(cloned, displ);
+    skb_reset_network_header(skb);
+
+    if(behaviour == bounce_packet_and_stop_rule_evaluation ||
+       behaviour == bounce_packet_and_continue_rule_evaluation) {
       char dst_mac[6];
 
-      /* Swap mac addresses */
-      memcpy(dst_mac, skb->data, 6);
-      memcpy(skb->data, &skb->data[6], 6);
-      memcpy(&skb->data[6], dst_mac, 6);
+      /* Swap mac addresses (be aware that data is also forwarded to userspace) */
+      memcpy(dst_mac, cloned->data, 6);
+      memcpy(cloned->data, &cloned->data[6], 6);
+      memcpy(&cloned->data[6], dst_mac, 6);
     }
 
     /*
@@ -2785,23 +2785,12 @@ static int reflect_packet(struct sk_buff *skb,
       dev_queue_xmit() must be called with interrupts enabled
       which means it can't be called with spinlocks held.
     */
-    ret = dev_queue_xmit(skb);
-
-    if(displ > 0) skb_pull(skb, displ);
-
-    atomic_set(&pfr->num_ring_users, 0);	/* Done */
-    /* printk("[PF_RING] --> ret=%d\n", ret); */
+    ret = dev_queue_xmit(cloned);
 
     if(ret == NETDEV_TX_OK)
       pfr->slots_info->tot_fwd_ok++;
-    else {
+    else 
       pfr->slots_info->tot_fwd_notok++;
-      /*
-	Do not put the statement below in case of success
-	as dev_queue_xmit has already decremented users
-      */
-      atomic_dec(&skb->users);
-    }
 
     if(unlikely(enable_debug))
       printk("[PF_RING] dev_queue_xmit(%s) returned %d\n", reflector_dev->name, ret);
@@ -3338,11 +3327,10 @@ static int add_skb_to_ring(struct sk_buff *skb,
   if(free_parse_mem)
     free_parse_memory(parse_memory_buffer);
 
-  atomic_set(&pfr->num_ring_users, 0);
-
   if(unlikely(enable_debug))
     printk("[PF_RING] add_skb_to_ring() returned %d\n", rc);
 
+  atomic_set(&pfr->num_ring_users, 0);
   return(rc);
 }
 
@@ -3632,15 +3620,15 @@ static int skb_ring_handler(struct sk_buff *skb,
 
   if(unlikely(enable_debug)) {
     if(skb->dev && (skb->dev->ifindex < MAX_NUM_IFIDX))
-      printk("[PF_RING] --> skb_ring_handler(%s): %d rings [num_any_rings=%d]\n",
-	     skb->dev->name, num_rings_per_device[skb->dev->ifindex], num_any_rings);
+      printk("[PF_RING] (1) skb_ring_handler(): [%d rings on %s (idx=%d), %d 'any' rings]\n",
+	     num_rings_per_device[skb->dev->ifindex], skb->dev->name, skb->dev->ifindex, num_any_rings);
   }
 
   if((num_any_rings == 0)
      && (skb->dev
 	 && (skb->dev->ifindex < MAX_NUM_IFIDX)
 	 && (num_rings_per_device[skb->dev->ifindex] == 0))) {
-    if(unlikely(enable_debug)) printk("[PF_RING] (1) skb_ring_handler returned %d\n", rc);
+    /* if(unlikely(enable_debug)) printk("[PF_RING] (1) skb_ring_handler returned %d\n", rc); */
     return(rc);
   }
 
@@ -4965,34 +4953,37 @@ static int ring_sendmsg(struct kiocb *iocb, struct socket *sock,
         pfr->slots_info->userspace_ring_flags |= USERSPACE_RING_NO_INTERRUPT;
         wake_up_interruptible(pfr->userspace_ring->consumer_ring_slots_waitqueue);
     }
-    return (len);
+    return(len);
   }
 
   /*
    *	Get and verify the address.
    */
   saddr=(struct sockaddr_pkt *)msg->msg_name;
-  if(saddr)
-    {
+  if(saddr) {
       if(saddr == NULL) proto = htons(ETH_P_ALL);
 
-      if(msg->msg_namelen < sizeof(struct sockaddr))
-	return(-EINVAL);
+      if(msg->msg_namelen < sizeof(struct sockaddr)) {
+	err = -EINVAL;
+	goto out;
+      }
+
       if(msg->msg_namelen == sizeof(struct sockaddr_pkt))
 	proto = saddr->spkt_protocol;
-    }
-  else
-    return(-ENOTCONN);	/* SOCK_PACKET must be sent giving an address */
+  } else {
+    err = -ENOTCONN;	/* SOCK_PACKET must be sent giving an address */
+    goto out;
+  }
 
   /*
    *	Find the device first to size check it
    */
   if(pfr->ring_netdev->dev == NULL)
-    goto out_unlock;
+    goto out;
 
   err = -ENETDOWN;
   if(!(pfr->ring_netdev->dev->flags & IFF_UP))
-    goto out_unlock;
+    goto out;
 
   /*
    *	You may not queue a frame bigger than the mtu. This is the lowest level
@@ -5000,7 +4991,7 @@ static int ring_sendmsg(struct kiocb *iocb, struct socket *sock,
    */
   err = -EMSGSIZE;
   if(len > pfr->ring_netdev->dev->mtu + pfr->ring_netdev->dev->hard_header_len)
-    goto out_unlock;
+    goto out;
 
   err = -ENOBUFS;
   skb = sock_wmalloc(sock->sk, len + LL_RESERVED_SPACE(pfr->ring_netdev->dev), 0, GFP_KERNEL);
@@ -5012,7 +5003,7 @@ static int ring_sendmsg(struct kiocb *iocb, struct socket *sock,
    */
 
   if(skb == NULL)
-    goto out_unlock;
+    goto out;
 
   /*
    *	Fill it in
@@ -5060,18 +5051,14 @@ static int ring_sendmsg(struct kiocb *iocb, struct socket *sock,
    */
 
   if (dev_queue_xmit(skb) != NETDEV_TX_OK)
-    goto out_unlock;
+    goto out;
 
-  //dev_put(pfr->ring_netdev->dev);
   return(len);
 
  out_free:
   kfree_skb(skb);
 
- out_unlock:
-  //if(pfr->ring_netdev)
-  //  dev_put(pfr->ring_netdev->dev);
-
+ out:
   return err;
 }
 
@@ -5083,8 +5070,8 @@ unsigned int ring_poll(struct file *file,
   struct pf_ring_socket *pfr = ring_sk(sock->sk);
   int rc, mask = 0;
 
-  if(unlikely(enable_debug))
-    printk("[PF_RING] -- poll called\n");
+  /* if(unlikely(enable_debug))
+    printk("[PF_RING] -- poll called\n"); */
 
   pfr->num_poll_calls++;
 
@@ -5094,8 +5081,8 @@ unsigned int ring_poll(struct file *file,
   if(pfr->dna_device == NULL) {
     /* PF_RING mode (No DNA) */
 
-    if(unlikely(enable_debug))
-      printk("[PF_RING] poll called (non DNA device)\n");
+    /* if(unlikely(enable_debug))
+      printk("[PF_RING] poll called (non DNA device)\n"); */
 
     pfr->ring_active = 1;
     // smp_rmb();
