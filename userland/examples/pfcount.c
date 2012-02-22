@@ -91,7 +91,7 @@ void print_stats() {
   static u_int8_t print_all;
   static u_int64_t lastPkts = 0;
   static u_int64_t lastBytes = 0;
-  u_int64_t diff, bytesDiff;
+  double diff, bytesDiff;
   static struct timeval lastTime;
   char buf1[64], buf2[64], buf3[64];
 
