@@ -278,8 +278,9 @@ int main(int argc, char* argv[]) {
   pfring_enable_ring(pd2);
 
   pfring_loop(pd1, dummyProcesssPacket, (u_char*) NULL, wait_for_packet);
-
+#ifdef HAVE_NITRO
  end:
+#endif
   pfring_close(pd1);
   pfring_close(pd2);
 

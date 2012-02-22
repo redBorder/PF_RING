@@ -188,22 +188,27 @@ dna_device_model dna_model(struct e1000_hw *hw){
 
 /* ********************************** */
 
-/* Reset the ring when we shutdown */
+#if 0 /* Currently ring cleanup happens in userspace */
+
 void dna_cleanup_rx_ring(struct igb_ring *rx_ring) {
   struct igb_adapter	  *adapter = netdev_priv(rx_ring->netdev);
   struct e1000_hw	  *hw = &adapter->hw;
   union e1000_adv_rx_desc *rx_desc, *shadow_rx_desc;
-  u32 tail = E1000_READ_REG(hw, E1000_RDT(rx_ring->reg_idx)), count = rx_ring->count;
   u32 head = E1000_READ_REG(hw, E1000_RDH(rx_ring->reg_idx));
+  u32 tail;
+  
+  /*
+  tail = E1000_READ_REG(hw, E1000_RDT(rx_ring->reg_idx))
+  u32 count = rx_ring->count;
   
   if(unlikely(enable_debug))
     printk("[DNA] dna_cleanup_rx_ring(%d): [head=%u][tail=%u]\n", rx_ring->queue_index, head, tail);
 
-  /* We now point to the next slot where packets will be received */
+  // We now point to the next slot where packets will be received
   if(++tail == rx_ring->count) tail = 0;
 
   while(count > 0) {
-    if(tail == head) break; /* Do not go beyond head */
+    if(tail == head) break; // Do not go beyond head
 
     rx_desc = IGB_RX_DESC(rx_ring, tail);
     shadow_rx_desc = IGB_RX_DESC(rx_ring, tail + rx_ring->count);
@@ -213,7 +218,7 @@ void dna_cleanup_rx_ring(struct igb_ring *rx_ring) {
       break;
     }
 
-    /* Writeback */
+    // Writeback
     rx_desc->wb.upper.status_error = 0;
     rx_desc->read.hdr_addr = shadow_rx_desc->read.hdr_addr, rx_desc->read.pkt_addr = shadow_rx_desc->read.pkt_addr;
     E1000_WRITE_REG(hw, E1000_RDT(rx_ring->reg_idx), tail);
@@ -224,7 +229,52 @@ void dna_cleanup_rx_ring(struct igb_ring *rx_ring) {
     if(++tail == rx_ring->count) tail = 0;
     count--;
   }
+  */
+
+
+  /* resetting all */
+
+  for (i=0; i<rx_ring->count; i++) {
+    rx_desc = IGB_RX_DESC(rx_ring, i);
+    shadow_rx_desc = IGB_RX_DESC(rx_ring, i + rx_ring->count);
+
+    rx_desc->wb.upper.status_error = 0;
+    rx_desc->read.hdr_addr = shadow_rx_desc->read.hdr_addr;
+    rx_desc->read.pkt_addr = shadow_rx_desc->read.pkt_addr;
+  }
+
+  if (head == 0) tail = rx_ring->count - 1;
+  else tail = head - 1;
+
+  E1000_WRITE_REG(hw, E1000_RDT(rx_ring->reg_idx), tail);
 }
+
+/* ********************************** */
+
+void dna_cleanup_tx_ring(struct ixgbe_ring *tx_ring) {
+  struct igb_adapter	  *adapter = netdev_priv(tx_ring->netdev);
+  struct e1000_hw	  *hw = &adapter->hw;
+  union e1000_adv_tx_desc *tx_desc, *shadow_tx_desc;
+  u32 tail;
+  u32 head = E1000_READ_REG(hw, E1000_TDH(tx_ring->reg_idx));
+  u32 i;
+
+  /* resetting all */
+  for (i=0; i<tx_ring->count; i++) {
+    tx_desc = IGB_TX_DESC(tx_ring, i);
+    shadow_tx_desc = IGB_TX_DESC(tx_ring, i + tx_ring->count);
+
+    tx_desc->read.olinfo_status = 0;
+    tx_desc->read.buffer_addr = shadow_tx_desc->read.buffer_addr;
+  }
+
+  tail = head; //(head + 1) % tx_ring->count;
+
+  E1000_WRITE_REG(hw, E1000_TDT(tx_ring->reg_idx), tail);
+}
+
+#endif
+
 /* ********************************** */
 
 void notify_function_ptr(void *data, u_int8_t device_in_use) {
@@ -249,8 +299,12 @@ void notify_function_ptr(void *data, u_int8_t device_in_use) {
     igb_irq_disable_queues(adapter, ((u64)1 << rx_ring->queue_index));
   } else {
     /* We're done using this device */
-
+    
+    /* resetting the ring */
+    /* we *must* reset the right direction only (doing this in userspace)
     dna_cleanup_rx_ring(rx_ring);
+    dna_cleanup_tx_ring(tx_ring);
+    */
 
     module_put(THIS_MODULE);  /* -- */
 

@@ -217,7 +217,7 @@ extern "C" {
 
     u_int    (*dna_get_num_tx_slots)(pfring* ring);
     u_int    (*dna_get_num_rx_slots)(pfring* ring);
-    int      (*dna_copy_tx_packet_into_slot)(pfring* ring, u_int16_t tx_slot_id, char* buffer, u_int len);
+    int      (*dna_copy_tx_packet_into_slot)(pfring* ring, u_int32_t tx_slot_id, char* buffer, u_int len);
 
     /* Silicom Redirector Only */
     struct {
