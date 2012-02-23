@@ -1,6 +1,6 @@
 /*
  *
- * (C) 2011 - Luca Deri <deri@ntop.org>
+ * (C) 2012 - Luca Deri <deri@ntop.org>
  *
  *
  * This program is free software; you can redistribute it and/or modify
@@ -308,7 +308,7 @@ int32_t gmt2local(time_t t) {
 /* *************************************** */
 
 void printHelp(void) {
-  printf("pfcount\n(C) 2005-11 Deri Luca <deri@ntop.org>\n");
+  printf("pfcount\n(C) 2005-12 Deri Luca <deri@ntop.org>\n");
   printf("-h              [Print help]\n");
   printf("-i <device>     [Device name]\n");
   printf("-p <protocol>   [Dummy protocol filter (6=tcp, 17=udp, 1=icmp)]\n");

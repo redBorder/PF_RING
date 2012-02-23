@@ -52,6 +52,9 @@ int pfring_mod_usring_open(pfring *ring) {
   ring->dna_sync_watermark = DEFAULT_MIN_PKT_QUEUED;
 #endif
 
+  if(strncmp(ring->device_name, "usr", 3))
+    return -1; /* Device name must me usrX */
+
   ring->fd = socket(PF_RING, SOCK_RAW, htons(ETH_P_ALL));
 
   if(ring->fd < 0)

@@ -4135,8 +4135,12 @@ static struct pf_userspace_ring* userspace_ring_create(char *u_dev_name, userspa
   struct pf_userspace_ring *entry;
   struct pf_userspace_ring *usr = NULL;
 
-  if(strncmp(u_dev_name, "usr", 3) != 0)
+  if(strncmp(u_dev_name, "usr", 3) != 0) {
+    if(unlikely(enable_debug))
+      printk("[PF_RING] userspace_ring_create(%s) failed (1)\n", u_dev_name);
+    
     return NULL;
+  }
 
   id = simple_strtol(&u_dev_name[3], &c_p, 10);
 
@@ -4159,13 +4163,25 @@ static struct pf_userspace_ring* userspace_ring_create(char *u_dev_name, userspa
   if(usr == NULL) {
     /* Note: a userspace ring can be created by a consumer only,
      * (however a producer can keep it if the consumer dies) */
-    if(type == userspace_ring_producer)
+
+    if(unlikely(enable_debug))
+      printk("[PF_RING] userspace_ring_create(%s): attempting to creare ring\n", u_dev_name);
+
+    if(type == userspace_ring_producer) {
+      if(unlikely(enable_debug))
+	printk("[PF_RING] userspace_ring_create(%s) failed (2)\n", u_dev_name);
+      
       goto unlock;
+    }
 
     usr = kmalloc(sizeof(struct pf_userspace_ring), GFP_ATOMIC);
 
-    if(usr == NULL)
+    if(usr == NULL) {
+      if(unlikely(enable_debug))
+	printk("[PF_RING] userspace_ring_create(%s) failed (3)\n", u_dev_name);
+      
       goto unlock;
+    }
 
     memset(usr, 0, sizeof(struct pf_userspace_ring));
 
@@ -4184,9 +4200,12 @@ static struct pf_userspace_ring* userspace_ring_create(char *u_dev_name, userspa
 unlock:
   write_unlock(&userspace_ring_lock);
 
-  if(unlikely(enable_debug))
+  if(unlikely(enable_debug)) {
     if(usr != NULL)
       printk("[PF_RING] userspace_ring_create() Userspace ring found or created.\n");
+    else
+      printk("[PF_RING] userspace_ring_create(): NULL ring returned.\n");
+  }
 
   return usr;
 }
@@ -4604,8 +4623,13 @@ static int packet_ring_bind(struct sock *sk, char *dev_name)
   if(dev->dev->ifindex >= MAX_NUM_IFIDX)
     return(-EINVAL);
 
-  if(!(dev->dev->flags & IFF_UP))
+  if(strcmp(dev->dev->name, "none")
+     && (!(dev->dev->flags & IFF_UP))) {
+    if(unlikely(enable_debug))
+      printk("[PF_RING] packet_ring_bind(%s): down\n", dev->dev->name);
+    
     return(-ENETDOWN);
+  }
 
   if(unlikely(enable_debug))
     printk("[PF_RING] packet_ring_bind(%s, bucket_len=%d) called\n",
@@ -6268,14 +6292,22 @@ static int ring_setsockopt(struct socket *sock,
 
       u_dev_name[sizeof(u_dev_name) - 1] = '\0';
 
-      if(pfr->ring_memory != NULL)
+      if(pfr->ring_memory != NULL) {
+	if(unlikely(enable_debug))
+	  printk("[PF_RING] SO_ATTACH_USERSPACE_RING (1)\n");
+	
         return -EINVAL; /* TODO mmap() already called */
+      }
 
       /* Checks if the userspace ring exists */
       pfr->userspace_ring = userspace_ring_create(u_dev_name, userspace_ring_producer, NULL);
 
-      if(pfr->userspace_ring == NULL)
+      if(pfr->userspace_ring == NULL) {
+	if(unlikely(enable_debug))
+	  printk("[PF_RING] SO_ATTACH_USERSPACE_RING (2)\n");
+
         return -EINVAL;
+      }
 
       pfr->userspace_ring_type = userspace_ring_producer;
 

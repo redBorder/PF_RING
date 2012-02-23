@@ -28,9 +28,7 @@
 
 #include "pfring_mod.h"
 
-#ifdef HAVE_USERSPACE_RING
 #include "pfring_mod_usring.h"
-#endif
 
 #ifdef HAVE_DAG
 #include "pfring_mod_dag.h"
@@ -67,12 +65,10 @@ static pfring_module_info pfring_module_list[] = {
     .open = pfring_dna_open,
   },
 #endif
-#ifdef HAVE_USERSPACE_RING
   {
     .name = "userspace",
     .open = pfring_mod_usring_open,
   },
-#endif
   {0}
 };
 

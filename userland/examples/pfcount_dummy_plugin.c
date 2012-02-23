@@ -1,6 +1,6 @@
 /*
  *
- * (C) 2005-11 - Luca Deri <deri@ntop.org>
+ * (C) 2005-12 - Luca Deri <deri@ntop.org>
  *
  *
  * This program is free software; you can redistribute it and/or modify
@@ -390,7 +390,7 @@ int32_t gmt2local(time_t t) {
 /* *************************************** */
 
 void printHelp(void) {
-  printf("pfcount_dummy_plugin\n(C) 2005-11 Deri Luca <deri@ntop.org>\n\n");
+  printf("pfcount_dummy_plugin\n(C) 2005-12 Deri Luca <deri@ntop.org>\n\n");
   printf("-h              Print this help\n");
   printf("-i <device>     Device name. Use device@channel for channels\n");
 

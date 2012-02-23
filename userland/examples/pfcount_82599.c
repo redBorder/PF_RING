@@ -433,7 +433,7 @@ int32_t gmt2local(time_t t) {
 /* *************************************** */
 
 void printHelp(void) {
-  printf("pfcount_82599\n(C) 2011 Deri Luca <deri@ntop.org>\n\n");
+  printf("pfcount_82599\n(C) 2011-12 Deri Luca <deri@ntop.org>\n\n");
   printf("-h              Print this help\n");
   printf("-i <device>     Device name. Use device@channel for channels\n");
   printf("-n <threads>    Number of polling threads (default %d)\n", num_threads);
