@@ -14,8 +14,6 @@ NITRO_LIB="libs/libpfring_nitro_$MACHINE.a"
 DNA_LIB="libs/libpfring_dna_$MACHINE.a"
 VIRTUAL_LIB="libs/libpfring_mod_virtual_$MACHINE.a"
 VIRTUAL_HDR="pfring_mod_virtual.h"
-USERSPACE_RING_LIB="libs/libpfring_mod_usring_$MACHINE.a"
-USERSPACE_RING_HDR="pfring_mod_usring.h"
 
 AC_MSG_CHECKING([Nitro support])
 if test -f $NITRO_LIB; then
@@ -53,17 +51,6 @@ fi
 
 
 AC_CHECK_HEADERS([librdi.h])
-
-AC_MSG_CHECKING([Userspace ring support])
-if test -f $USERSPACE_RING_LIB && test -f $USERSPACE_RING_HDR; then
-  HAVE_USERSPACE_RING="-D HAVE_USERSPACE_RING"
-  USERSPACE_RING_OBJS=`ar t $USERSPACE_RING_LIB | tr '\n' ' '`
-  USERSPACE_RING_DEP="extract_userspace_ring_lib"
-  AC_MSG_RESULT(yes)
-else
-  USERSPACE_RING_LIB=""
-  AC_MSG_RESULT(no)
-fi
 
 dnl> Silicom Redirector NIC
 if test "x$ac_cv_header_librdi_h" = x""yes; then :
@@ -124,10 +111,6 @@ AC_SUBST(HAVE_VIRTUAL)
 AC_SUBST(VIRTUAL_LIB)
 AC_SUBST(VIRTUAL_OBJS)
 AC_SUBST(VIRTUAL_DEP)
-AC_SUBST(HAVE_USERSPACE_RING)
-AC_SUBST(USERSPACE_RING_LIB)
-AC_SUBST(USERSPACE_RING_OBJS)
-AC_SUBST(USERSPACE_RING_DEP)
 AC_SUBST(HAVE_DAG)
 AC_SUBST(DAG_OBJS)
 AC_SUBST(HAVE_BPF)

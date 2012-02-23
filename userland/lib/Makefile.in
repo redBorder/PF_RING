@@ -34,14 +34,9 @@ VIRTUAL_OBJS = @VIRTUAL_OBJS@
 DAG_OBJS  = @DAG_OBJS@
 
 #
-# UserSpace PF_RING
-#
-USERSPACE_RING_OBJS = @USERSPACE_RING_OBJS@
-
-#
 # Object files
 #
-OBJS      = pfring.o pfring_mod.o pfring_utils.o pfring_hw_filtering.o ${NITRO_OBJS} ${DNA_OBJS} ${VIRTUAL_OBJS} ${DAG_OBJS} ${USERSPACE_RING_OBJS}
+OBJS      = pfring.o pfring_mod.o pfring_utils.o pfring_mod_usring.o pfring_hw_filtering.o ${NITRO_OBJS} ${DNA_OBJS} ${VIRTUAL_OBJS} ${DAG_OBJS}
 
 #
 # C compiler and flags
@@ -50,7 +45,7 @@ OBJS      = pfring.o pfring_mod.o pfring_utils.o pfring_hw_filtering.o ${NITRO_O
 # CROSS_COMPILE=arm-mv5sft-linux-gnueabi-
 #
 CC        = ${CROSS_COMPILE}gcc
-CFLAGS    = -g  -Wall -fPIC ${INCLUDE} @HAVE_NITRO@ @HAVE_DNA@ @HAVE_VIRTUAL@ @HAVE_DAG@ @HAVE_BPF@ @HAVE_USERSPACE_RING@ @CFLAGS@ @HAVE_REDIRECTOR@
+CFLAGS    = -g  -Wall -fPIC ${INCLUDE} @HAVE_NITRO@ @HAVE_DNA@ @HAVE_VIRTUAL@ @HAVE_DAG@ @HAVE_BPF@ @CFLAGS@ @HAVE_REDIRECTOR@
 LDFLAGS   = -g -shared
 
 SYSLIBS   = -lpthread @SYSLIBS@
@@ -70,12 +65,12 @@ RING_H     = ../../kernel/linux/pf_ring.h
 
 all: ${TARGETS}
 
-${STATICLIB}: Makefile @NITRO_DEP@ @DNA_DEP@ @VIRTUAL_DEP@ @USERSPACE_RING_DEP@ ${OBJS} pfring.h ${RING_H}
+${STATICLIB}: Makefile @NITRO_DEP@ @DNA_DEP@ @VIRTUAL_DEP@ ${OBJS} pfring.h ${RING_H}
 	@echo "=*= making library $@ =*="
 	ar rs $@ ${OBJS}
 	ranlib $@
 
-${DYNAMICLIB}: ${OBJS} @NITRO_DEP@ @DNA_DEP@ @VIRTUAL_DEP@ @USERSPACE_RING_DEP@ pfring.h ${RING_H} Makefile
+${DYNAMICLIB}: ${OBJS} @NITRO_DEP@ @DNA_DEP@ @VIRTUAL_DEP@ pfring.h ${RING_H} Makefile
 	@echo "=*= making library $@ =*="
 	${CC} ${LDFLAGS} ${OBJS} ${SYSLIBS} -o $@
 

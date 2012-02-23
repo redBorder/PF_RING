@@ -609,10 +609,6 @@ BPF_INCLUDE
 HAVE_BPF
 DAG_OBJS
 HAVE_DAG
-USERSPACE_RING_DEP
-USERSPACE_RING_OBJS
-USERSPACE_RING_LIB
-HAVE_USERSPACE_RING
 VIRTUAL_DEP
 VIRTUAL_OBJS
 VIRTUAL_LIB
@@ -3238,8 +3234,6 @@ NITRO_LIB="libs/libpfring_nitro_$MACHINE.a"
 DNA_LIB="libs/libpfring_dna_$MACHINE.a"
 VIRTUAL_LIB="libs/libpfring_mod_virtual_$MACHINE.a"
 VIRTUAL_HDR="pfring_mod_virtual.h"
-USERSPACE_RING_LIB="libs/libpfring_mod_usring_$MACHINE.a"
-USERSPACE_RING_HDR="pfring_mod_usring.h"
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking Nitro support" >&5
 $as_echo_n "checking Nitro support... " >&6; }
@@ -3297,20 +3291,6 @@ fi
 
 done
 
-
-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking Userspace ring support" >&5
-$as_echo_n "checking Userspace ring support... " >&6; }
-if test -f $USERSPACE_RING_LIB && test -f $USERSPACE_RING_HDR; then
-  HAVE_USERSPACE_RING="-D HAVE_USERSPACE_RING"
-  USERSPACE_RING_OBJS=`ar t $USERSPACE_RING_LIB | tr '\n' ' '`
-  USERSPACE_RING_DEP="extract_userspace_ring_lib"
-  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
-$as_echo "yes" >&6; }
-else
-  USERSPACE_RING_LIB=""
-  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
-$as_echo "no" >&6; }
-fi
 
 if test "x$ac_cv_header_librdi_h" = x""yes; then :
    { $as_echo "$as_me:${as_lineno-$LINENO}: checking for rdi_init in -lrdi" >&5
@@ -3474,10 +3454,6 @@ if test ".${prefix}" = ".NONE"; then
 else
    INSTALL_PREFIX=${prefix};
 fi
-
-
-
-
 
 
 
