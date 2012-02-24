@@ -6817,7 +6817,7 @@ void dna_device_handler(dna_device_operation operation,
 	  ring_device_element *dev_ptr = list_entry(ptr, ring_device_element, device_list);
 
 	  if(strcmp(dev_ptr->dev->name, netdev->name) == 0) {
-	    dev_ptr->num_dna_rx_queues = min_val(max_val(dev_ptr->num_dna_rx_queues, channel_id+1), get_num_rx_queues(dev_ptr->dev));
+	    dev_ptr->num_dna_rx_queues = max_val(dev_ptr->num_dna_rx_queues, channel_id+1);
 	    dev_ptr->is_dna_device = 1, dev_ptr->dna_device_model = device_model;
 
 	    if(unlikely(enable_debug))
