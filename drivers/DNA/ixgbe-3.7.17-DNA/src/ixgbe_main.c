@@ -5978,7 +5978,11 @@ static inline bool ixgbe_set_fdir_queues(struct ixgbe_adapter *adapter)
 	bool ret = false;
 	struct ixgbe_ring_feature *f_fdir = &adapter->ring_feature[RING_F_FDIR];
 
+#ifdef ENABLE_DNA
+	f_fdir->indices = min((int)IXGBE_MAX_RSS_INDICES, f_fdir->indices);
+#else
 	f_fdir->indices = min((int)num_online_cpus(), f_fdir->indices);
+#endif
 	f_fdir->mask = 0;
 
 	/*
@@ -6610,7 +6614,11 @@ static int ixgbe_set_interrupt_capability(struct ixgbe_adapter *adapter)
 	 * the default is to use pairs of vectors
 	 */
 	v_budget = max(adapter->num_rx_queues, adapter->num_tx_queues);
+#ifdef ENABLE_DNA
+	v_budget = min(v_budget, (int)IXGBE_MAX_RSS_INDICES);
+#else
 	v_budget = min(v_budget, (int)num_online_cpus());
+#endif
 	v_budget += NON_Q_VECTORS;
 
 	/*

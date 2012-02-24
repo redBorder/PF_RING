@@ -15,17 +15,16 @@ rmmod pf_ring
 # We assume that you have compiled PF_RING
 insmod ../../../../kernel/pf_ring.ko
 
-# Set <id> as many times as the number of processors
-# Default
-#insmod ./ixgbe.ko
+# Default (as many queues as the number of processors)
+insmod ./ixgbe.ko RSS=1,1,1,1
 
 # Disable multiqueue
-insmod ./ixgbe.ko RSS=0,0,0,0
+#insmod ./ixgbe.ko RSS=0,0,0,0
 
 # Configure the number of TX slots
 #insmod ./ixgbe.ko RSS=0,0,0,0 num_tx_slots=4096
 
-# Enable 8 queues (you need 8 or more CPU cores)
+# Enable 8 queues
 #insmod ./ixgbe.ko MQ=1,1 RSS=8,8 FdirMode=0,0
 
 # Enable hw filters
