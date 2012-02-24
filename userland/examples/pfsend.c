@@ -405,9 +405,6 @@ int main(int argc, char* argv[]) {
   if(gbit_s > 0)
     tick_start = getticks();
 
-  tosend = pkt_head;
-  i = 0;
-
   pfring_set_socket_mode(pd, send_only_mode);
 
   if(pfring_enable_ring(pd) != 0) {
@@ -419,15 +416,19 @@ int main(int argc, char* argv[]) {
   use_zero_copy_tx = 0;
 
   if(pd->dna_copy_tx_packet_into_slot != NULL) {
+    tosend = pkt_head;
+
     u_int num_tx_slots = pd->dna_get_num_tx_slots(pd);
 
     if(num_tx_slots > 0) {
-      int i, ret;
-           
+      int ret;
+
       for(i=0; i<num_tx_slots; i++) {
 	ret = pfring_copy_tx_packet_into_slot(pd, i, tosend->pkt, tosend->len);
 	if(ret < 0)
 	  break;
+
+	tosend = tosend->next;
       }
 
       if(num == 0) {
@@ -440,6 +441,9 @@ int main(int argc, char* argv[]) {
     printf("Using zero-copy TX\n");
 
   to_go = to_go_threshold;
+
+  tosend = pkt_head;
+  i = 0;
 
   while(!num || i < num) {
     int rc;
