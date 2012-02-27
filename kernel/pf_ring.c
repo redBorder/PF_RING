@@ -307,7 +307,7 @@ static unsigned int enable_ip_defrag = 0;
 static unsigned int quick_mode = 0;
 static unsigned int enable_debug = 0;
 static unsigned int transparent_mode = standard_linux_path;
-static u_int32_t ring_id_serial = 0;
+static atomic_t ring_id_serial = ATOMIC_INIT(0);
 
 #if defined(RHEL_RELEASE_CODE)
 #if(RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(4,8))
@@ -4003,15 +4003,15 @@ static int ring_create(
   atomic_set(&pfr->num_ring_users, 0);
   INIT_LIST_HEAD(&pfr->sw_filtering_rules);
   INIT_LIST_HEAD(&pfr->hw_filtering_rules);
-  sk->sk_family = PF_RING;
-  sk->sk_destruct = ring_sock_destruct;
-
-  ring_insert(sk);
-
   pfr->master_ring = NULL;
   pfr->ring_netdev = &none_device_element; /* Unbound socket */
   pfr->sample_rate = 1;	/* No sampling */
-  pfr->ring_id = ring_id_serial++;
+  sk->sk_family = PF_RING;
+  sk->sk_destruct = ring_sock_destruct;
+
+  pfr->ring_id = atomic_inc_return(&ring_id_serial);
+
+  ring_insert(sk);
 
   ring_proc_add(pfr);
 
