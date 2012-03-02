@@ -103,9 +103,6 @@ int pfring_dna_recv(pfring *ring, u_char** buffer, u_int buffer_len,
   u_char *pkt = NULL;
   int8_t status = 0;
 
-  if(ring->is_shutting_down) return(-1);
-
-  ring->break_recv_loop = 0;
   if(ring->reentrant) pthread_rwlock_wrlock(&ring->lock);
 
   redo_pfring_recv:
@@ -117,10 +114,7 @@ int pfring_dna_recv(pfring *ring, u_char** buffer, u_int buffer_len,
     pkt = ring->dna_next_packet(ring, buffer, buffer_len, hdr);
 
     if(pkt && (hdr->len > 0)) {
-      /* Set the (1) below to (0) for enabling packet parsing for DNA devices */
-      if(0)
-	hdr->extended_hdr.parsed_header_len = 0;
-      else if(buffer_len > 0)
+      if(buffer_len > 0)
 	pfring_parse_pkt(*buffer, hdr, 4, 1, 1);
 
       hdr->extended_hdr.rx_direction = 1;

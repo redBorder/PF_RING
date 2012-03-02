@@ -279,15 +279,18 @@ int pfring_loop(pfring *ring, pfringProcesssPacket looper,
   u_char *buffer = NULL;
   struct pfring_pkthdr hdr;
   int rc = 0;
-
-  if((!ring) || ring->is_shutting_down)
-    return -1;
-
+  
   memset(&hdr, 0, sizeof(hdr));
   ring->break_recv_loop = 0;
 
+  if((! ring) 
+     || ring->is_shutting_down
+     || (! ring->recv)
+     || ring->mode == send_only_mode)
+    return -1;
+
   while(!ring->break_recv_loop) {
-    rc = pfring_recv(ring, &buffer, 0, &hdr, wait_for_packet);
+    rc = ring->recv(ring, &buffer, 0, &hdr, wait_for_packet);
     if(rc < 0)
       break;
     else if(rc > 0)
@@ -553,10 +556,11 @@ int pfring_recv(pfring *ring, u_char** buffer, u_int buffer_len,
 		u_int8_t wait_for_incoming_packet) {
   if(likely((ring 
 	     && ring->enabled 
-	     && (!ring->is_shutting_down)
 	     && ring->recv
-	     && (ring->mode != send_only_mode))))
+	     && (ring->mode != send_only_mode)))) {
+    ring->break_recv_loop = 0;
     return ring->recv(ring, buffer, buffer_len, hdr, wait_for_incoming_packet);
+  }
 
   return PF_RING_ERROR_NOT_SUPPORTED;
 }

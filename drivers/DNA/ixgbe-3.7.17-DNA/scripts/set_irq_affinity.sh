@@ -23,21 +23,23 @@
 
 set_affinity()
 {
-	if [ $VEC -ge 32 ]
+	NUM_CORES=`grep -c ^processor /proc/cpuinfo`
+	let "CORE = $VEC % $NUM_CORES"
+	if [ $CORE -ge 32 ]
 	then
 		MASK_FILL=""
 		MASK_ZERO="00000000"
-		let "IDX = $VEC / 32"
+		let "IDX = $CORE / 32"
 		for ((i=1; i<=$IDX;i++))
 		do
 			MASK_FILL="${MASK_FILL},${MASK_ZERO}"
 		done
 
-		let "VEC -= 32 * $IDX"
-		MASK_TMP=$((1<<$VEC))
+		let "CORE -= 32 * $IDX"
+		MASK_TMP=$((1<<$CORE))
 		MASK=`printf "%X%s" $MASK_TMP $MASK_FILL`
 	else
-		MASK_TMP=$((1<<$VEC))
+		MASK_TMP=$((1<<$CORE))
 		MASK=`printf "%X" $MASK_TMP`
 	fi
 
