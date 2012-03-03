@@ -140,8 +140,10 @@ pfring* pfring_open(char *device_name, u_int8_t promisc,
     return NULL;
   }
 
-  if(ring->reentrant)
-    pthread_rwlock_init(&ring->lock, PTHREAD_PROCESS_PRIVATE);
+  if(ring->reentrant) {
+    pthread_rwlock_init(&ring->rx_lock, PTHREAD_PROCESS_PRIVATE);
+    pthread_rwlock_init(&ring->tx_lock, PTHREAD_PROCESS_PRIVATE);
+  }
 
   ring->socket_default_accept_policy = 1; /* Accept (default) */
 
@@ -234,8 +236,10 @@ void pfring_close(pfring *ring) {
   if(ring->close)
     ring->close(ring);
  
-  if(ring->reentrant)
-    pthread_rwlock_destroy(&ring->lock);
+  if(ring->reentrant) {
+    pthread_rwlock_destroy(&ring->rx_lock);
+    pthread_rwlock_destroy(&ring->tx_lock);
+  }
 
   free(ring->device_name);
   free(ring);
@@ -656,12 +660,12 @@ int pfring_send(pfring *ring, char *pkt, u_int pkt_len, u_int8_t flush_packet) {
 	    && (ring->mode != recv_only_mode))) {
 
     if(ring->reentrant) 
-      pthread_rwlock_wrlock(&ring->lock);
+      pthread_rwlock_wrlock(&ring->tx_lock);
 
     rc =  ring->send(ring, pkt, pkt_len, flush_packet);
     
     if(ring->reentrant) 
-      pthread_rwlock_unlock(&ring->lock);
+      pthread_rwlock_unlock(&ring->tx_lock);
   }
 
   return rc;
@@ -679,12 +683,12 @@ int pfring_send_parsed(pfring *ring, char *pkt, struct pfring_pkthdr *hdr, u_int
 	    && (ring->mode != recv_only_mode))) {
 
     if(ring->reentrant) 
-      pthread_rwlock_wrlock(&ring->lock);
+      pthread_rwlock_wrlock(&ring->tx_lock);
 
     rc =  ring->send_parsed(ring, pkt, hdr, flush_packet);
     
     if(ring->reentrant) 
-      pthread_rwlock_unlock(&ring->lock);
+      pthread_rwlock_unlock(&ring->tx_lock);
 
     return rc;
   }
@@ -707,12 +711,12 @@ int pfring_send_get_time(pfring *ring, char *pkt, u_int pkt_len, struct timespec
 	    && (ring->mode != recv_only_mode))) {
 
     if(ring->reentrant) 
-      pthread_rwlock_wrlock(&ring->lock);
+      pthread_rwlock_wrlock(&ring->tx_lock);
 
     rc =  ring->send_get_time(ring, pkt, pkt_len, ts);
     
     if(ring->reentrant) 
-      pthread_rwlock_unlock(&ring->lock);
+      pthread_rwlock_unlock(&ring->tx_lock);
 
     return rc;
   }

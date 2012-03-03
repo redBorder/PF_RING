@@ -210,6 +210,8 @@ void alloc_dna_memory(struct e1000_adapter *adapter) {
 			   &cache_line_size);
       cache_line_size *= 2; /* word (2-byte) to bytes */
 
+      if(cache_line_size == 0) cache_line_size = 64;
+
       if (0)
 	printk("[DNA] Cache line size is %u bytes\n", cache_line_size);
 

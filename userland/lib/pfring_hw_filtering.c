@@ -1,6 +1,6 @@
 /*
  *
- * (C) 2011 - Luca Deri <deri@ntop.org>
+ * (C) 2012 - Luca Deri <deri@ntop.org>
  *            Alfredo Cardigliano <cardigliano@ntop.org>
  *
  *

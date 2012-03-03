@@ -1,6 +1,7 @@
 /*
  *
- * (C) 2005-11 - Luca Deri <deri@ntop.org>
+ * (C) 2005-12 - Luca Deri <deri@ntop.org>
+ *               Alfredo Cardigliano <cardigliano@ntop.org>
  *
  *
  * This program is free software; you can redistribute it and/or modify
@@ -103,36 +104,36 @@ int pfring_dna_recv(pfring *ring, u_char** buffer, u_int buffer_len,
   u_char *pkt = NULL;
   int8_t status = 0;
 
-  if(ring->reentrant) pthread_rwlock_wrlock(&ring->lock);
+  if(unlikely(ring->reentrant)) pthread_rwlock_wrlock(&ring->rx_lock);
 
-  redo_pfring_recv:
-    if(ring->is_shutting_down || ring->break_recv_loop) {
-      if(ring->reentrant) pthread_rwlock_unlock(&ring->lock);
-      return(-1);
-    }
+ redo_pfring_recv:
+  if(ring->is_shutting_down || ring->break_recv_loop) {
+    if(unlikely(ring->reentrant)) pthread_rwlock_unlock(&ring->rx_lock);
+    return(-1);
+  }
 
-    pkt = ring->dna_next_packet(ring, buffer, buffer_len, hdr);
+  pkt = ring->dna_next_packet(ring, buffer, buffer_len, hdr);
 
-    if(pkt && (hdr->len > 0)) {
-      if(buffer_len > 0)
-	pfring_parse_pkt(*buffer, hdr, 4, 1, 1);
+  if(pkt && (hdr->len > 0)) {
+    if(buffer_len > 0)
+      pfring_parse_pkt(*buffer, hdr, 4, 1, 1);
 
-      hdr->extended_hdr.rx_direction = 1;
+    hdr->extended_hdr.rx_direction = 1;
 
-      if(ring->reentrant) pthread_rwlock_unlock(&ring->lock);
-      return(1);
-    }
+    if(unlikely(ring->reentrant)) pthread_rwlock_unlock(&ring->rx_lock);
+    return(1);
+  }
 
-    if(wait_for_incoming_packet) {
-      status = ring->dna_check_packet_to_read(ring, wait_for_incoming_packet);
+  if(wait_for_incoming_packet) {
+    status = ring->dna_check_packet_to_read(ring, wait_for_incoming_packet);
 
-      if(status > 0)
-        goto redo_pfring_recv;
-    }
+    if(status > 0)
+      goto redo_pfring_recv;
+  }
 
-    if(ring->reentrant) pthread_rwlock_unlock(&ring->lock);
-    return(0);
- }
+  if(unlikely(ring->reentrant)) pthread_rwlock_unlock(&ring->rx_lock);
+  return(0);
+}
 
 /* ******************************* */
 
@@ -240,10 +241,10 @@ int pfring_dna_open(pfring *ring) {
   rc = pfring_get_mapped_dna_device(ring, &ring->dna_dev);
 
   if(rc < 0) {
-      printf("pfring_get_mapped_dna_device() failed [rc=%d]\n", rc);
-      pfring_map_dna_device(ring, remove_device_mapping, ring->device_name);
-      close(ring->fd);
-      return -1;
+    printf("pfring_get_mapped_dna_device() failed [rc=%d]\n", rc);
+    pfring_map_dna_device(ring, remove_device_mapping, ring->device_name);
+    close(ring->fd);
+    return -1;
   }
 
 #ifdef DEBUG
@@ -264,9 +265,9 @@ int pfring_dna_open(pfring *ring) {
 
   for(i=0; i<ring->dna_dev.mem_info.rx.packet_memory_num_chunks; i++) {
     ring->dna_dev.rx_packet_memory[i] =
-	(unsigned long)mmap(NULL, ring->dna_dev.mem_info.rx.packet_memory_chunk_len,
-			    PROT_READ|PROT_WRITE, MAP_SHARED, ring->fd, 
-			    (100+i)*getpagesize());
+      (unsigned long)mmap(NULL, ring->dna_dev.mem_info.rx.packet_memory_chunk_len,
+			  PROT_READ|PROT_WRITE, MAP_SHARED, ring->fd, 
+			  (100+i)*getpagesize());
       
     if(ring->dna_dev.rx_packet_memory[i] == (unsigned long)MAP_FAILED) {
       printf("mmap(100/%d) failed", i);
@@ -275,13 +276,13 @@ int pfring_dna_open(pfring *ring) {
     }
   }
 
-/* ***************************************** */
+  /* ***************************************** */
 
   for(i=0; i<ring->dna_dev.mem_info.tx.packet_memory_num_chunks; i++) {
     ring->dna_dev.tx_packet_memory[i] =
-	(unsigned long)mmap(NULL, ring->dna_dev.mem_info.tx.packet_memory_chunk_len,
-			    PROT_READ|PROT_WRITE, MAP_SHARED, ring->fd, 
-			    (100+ring->dna_dev.mem_info.rx.packet_memory_num_chunks+i)*getpagesize());
+      (unsigned long)mmap(NULL, ring->dna_dev.mem_info.tx.packet_memory_chunk_len,
+			  PROT_READ|PROT_WRITE, MAP_SHARED, ring->fd, 
+			  (100+ring->dna_dev.mem_info.rx.packet_memory_num_chunks+i)*getpagesize());
       
     if(ring->dna_dev.tx_packet_memory[i] == (unsigned long)MAP_FAILED) {
       printf("mmap(100/%d) failed", i);
@@ -294,8 +295,8 @@ int pfring_dna_open(pfring *ring) {
 
   if(ring->dna_dev.mem_info.rx.descr_packet_memory_tot_len > 0) {
     ring->dna_dev.rx_descr_packet_memory =
-        (void*)mmap(NULL, ring->dna_dev.mem_info.rx.descr_packet_memory_tot_len,
-		    PROT_READ|PROT_WRITE, MAP_SHARED, ring->fd, 1*getpagesize());
+      (void*)mmap(NULL, ring->dna_dev.mem_info.rx.descr_packet_memory_tot_len,
+		  PROT_READ|PROT_WRITE, MAP_SHARED, ring->fd, 1*getpagesize());
 
     if(ring->dna_dev.rx_descr_packet_memory == MAP_FAILED) {
       printf("mmap(1) failed");
@@ -308,8 +309,8 @@ int pfring_dna_open(pfring *ring) {
 
   if(ring->dna_dev.mem_info.tx.descr_packet_memory_tot_len > 0) {
     ring->dna_dev.tx_descr_packet_memory =
-        (void*)mmap(NULL, ring->dna_dev.mem_info.tx.descr_packet_memory_tot_len,
-                    PROT_READ|PROT_WRITE, MAP_SHARED, ring->fd, 3*getpagesize());
+      (void*)mmap(NULL, ring->dna_dev.mem_info.tx.descr_packet_memory_tot_len,
+		  PROT_READ|PROT_WRITE, MAP_SHARED, ring->fd, 3*getpagesize());
 
     if(ring->dna_dev.tx_descr_packet_memory == MAP_FAILED) {
       printf("mmap(3) failed");
@@ -323,8 +324,8 @@ int pfring_dna_open(pfring *ring) {
   if(ring->dna_dev.mem_info.phys_card_memory_len > 0) {
     /* some DNA drivers do not use this memory */
     ring->dna_dev.phys_card_memory =
-	  (void*)mmap(NULL, ring->dna_dev.mem_info.phys_card_memory_len,
-		      PROT_READ|PROT_WRITE, MAP_SHARED, ring->fd, 2*getpagesize());
+      (void*)mmap(NULL, ring->dna_dev.mem_info.phys_card_memory_len,
+		  PROT_READ|PROT_WRITE, MAP_SHARED, ring->fd, 2*getpagesize());
 
     if(ring->dna_dev.phys_card_memory == MAP_FAILED) {
       printf("mmap(2) failed");

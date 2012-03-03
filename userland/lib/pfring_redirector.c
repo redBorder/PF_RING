@@ -1,7 +1,7 @@
 /*
  *
- * (C) 2011 - Luca Deri <deri@ntop.org>
- *            Alfredo Cardigliano <cardigliano@ntop.org>
+ * (C) 2011-12 - Luca Deri <deri@ntop.org>
+ *               Alfredo Cardigliano <cardigliano@ntop.org>
  *
  *
  * This program is free software; you can redistribute it and/or modify

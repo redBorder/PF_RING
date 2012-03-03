@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2011 - ntop
+ * Copyright 2012 - ntop.org
  *
  * Authors:
  *  Alfredo Cardigliano <cardigliano@ntop.org>

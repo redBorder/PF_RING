@@ -1,6 +1,7 @@
 /*
  *
- * (C) 2005-11 - Luca Deri <deri@ntop.org>
+ * (C) 2005-12 - Luca Deri <deri@ntop.org>
+ *               Alfredo Cardigliano <cardigliano@ntop.org>
  *
  *
  * This program is free software; you can redistribute it and/or modify
@@ -238,7 +239,7 @@ extern "C" {
     u_int16_t poll_duration;
     u_int8_t promisc, clear_promisc, reentrant, break_recv_loop;
     u_long num_poll_calls;
-    pthread_rwlock_t lock;
+    pthread_rwlock_t rx_lock, tx_lock;
 
     struct sockaddr_ll sock_tx;
   };

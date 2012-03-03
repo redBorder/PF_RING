@@ -537,6 +537,7 @@ void dna_igb_alloc_rx_buffers(struct igb_ring *rx_ring, struct pfring_hooks *hoo
   cache_line_size = cpu_to_le16(igb_read_pci_cfg_word(hw, IGB_PCI_DEVICE_CACHE_LINE_SIZE));
   cache_line_size &= 0x00FF;
   cache_line_size *= PCI_DEVICE_CACHE_LINE_SIZE_BYTES;
+  if(cache_line_size == 0) cache_line_size = 64;
 
   if(unlikely(enable_debug))
     printk("%s(): pci cache line size %d\n",__FUNCTION__, cache_line_size);

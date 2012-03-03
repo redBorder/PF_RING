@@ -1,6 +1,6 @@
 /*
  *
- * (C) 2005-11 - Luca Deri <deri@ntop.org>
+ * (C) 2005-12 - Luca Deri <deri@ntop.org>
  *               Alfredo Cardigliano <cardigliano@ntop.org>
  *
  *
@@ -401,8 +401,8 @@ int pfring_mod_recv(pfring *ring, u_char** buffer, u_int buffer_len,
     if(ring->break_recv_loop)
       return(0);
 
-    if(ring->reentrant)
-      pthread_rwlock_wrlock(&ring->lock);
+    if(unlikely(ring->reentrant))
+      pthread_rwlock_wrlock(&ring->rx_lock);
 
     //rmb();
 
@@ -445,12 +445,12 @@ int pfring_mod_recv(pfring *ring, u_char** buffer, u_int buffer_len,
 	ring->slots_info->remove_off = ring->slots_info->insert_off;
       }
 
-      if(ring->reentrant) pthread_rwlock_unlock(&ring->lock);
+      if(unlikely(ring->reentrant)) pthread_rwlock_unlock(&ring->rx_lock);
       return(1);
     }
 
     /* Nothing to do: we need to wait */
-    if(ring->reentrant) pthread_rwlock_unlock(&ring->lock);
+    if(unlikely(ring->reentrant)) pthread_rwlock_unlock(&ring->rx_lock);
 
     if(wait_for_incoming_packet) {
       rc = pfring_poll(ring, ring->poll_duration);

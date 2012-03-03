@@ -177,88 +177,6 @@ dna_device_model dna_model(struct ixgbe_hw *hw){
 
 /* ********************************** */
 
-#if 0 /* Currently ring cleanup happens in userspace */
-
-void dna_cleanup_rx_ring(struct ixgbe_ring *rx_ring) {
-  struct ixgbe_adapter	  *adapter = netdev_priv(rx_ring->netdev);
-  struct ixgbe_hw	  *hw = &adapter->hw;
-  union ixgbe_adv_rx_desc *rx_desc, *shadow_rx_desc;
-  u32 tail;
-  u32 head = IXGBE_READ_REG(hw, IXGBE_RDH(rx_ring->reg_idx));
-  u32 i;
-
-  /*  
-  tail = IXGBE_READ_REG(hw, IXGBE_RDT(rx_ring->reg_idx));
-  u32 count = rx_ring->count;
-
-  // We now point to the next slot where packets will be received
-  if(++tail == rx_ring->count) tail = 0;
-
-  while(count > 0) {
-    if(tail == head) break; // Do not go beyond head
-
-    rx_desc = IXGBE_RX_DESC(rx_ring, tail);
-    shadow_rx_desc = IXGBE_RX_DESC(rx_ring, tail + rx_ring->count);
-
-    if(rx_desc->wb.upper.status_error != 0) {
-      print_adv_rx_descr(rx_desc);
-      break;
-    }
-
-    rx_desc->wb.upper.status_error = 0;
-    rx_desc->read.hdr_addr = shadow_rx_desc->read.hdr_addr, rx_desc->read.pkt_addr = shadow_rx_desc->read.pkt_addr;
-    IXGBE_WRITE_REG(hw, IXGBE_RDT(rx_ring->reg_idx), tail);
-
-    if(++tail == rx_ring->count) tail = 0;
-    count--;
-  }
-  */
-
-  /* resetting all */
-
-  for (i=0; i<rx_ring->count; i++) {
-    rx_desc = IXGBE_RX_DESC(rx_ring, i);
-    shadow_rx_desc = IXGBE_RX_DESC(rx_ring, i + rx_ring->count);
-
-    rx_desc->wb.upper.status_error = 0;
-    rx_desc->read.hdr_addr = shadow_rx_desc->read.hdr_addr;
-    rx_desc->read.pkt_addr = shadow_rx_desc->read.pkt_addr;
-  }
-
-  if (head == 0) tail = rx_ring->count - 1;
-  else tail = head - 1;
-
-  IXGBE_WRITE_REG(hw, IXGBE_RDT(rx_ring->reg_idx), tail);
-}
-
-/* ********************************** */
-
-void dna_cleanup_tx_ring(struct ixgbe_ring *tx_ring) {
-  struct ixgbe_adapter	  *adapter = netdev_priv(tx_ring->netdev);
-  struct ixgbe_hw	  *hw = &adapter->hw;
-  union ixgbe_adv_tx_desc *tx_desc, *shadow_tx_desc;
-  u32 tail;
-  u32 head = IXGBE_READ_REG(hw, IXGBE_TDH(tx_ring->reg_idx));
-  u32 i;
-
-  /* resetting all */
-  for (i=0; i<tx_ring->count; i++) {
-    tx_desc = IXGBE_TX_DESC(tx_ring, i);
-    shadow_tx_desc = IXGBE_TX_DESC(tx_ring, i + tx_ring->count);
-
-    tx_desc->read.olinfo_status = 0;
-    tx_desc->read.buffer_addr = shadow_tx_desc->read.buffer_addr;
-  }
-
-  tail = head; //(head + 1) % tx_ring->count;
-
-  IXGBE_WRITE_REG(hw, IXGBE_TDT(tx_ring->reg_idx), tail);
-}
-
-#endif
-
-/* ********************************** */
-
 void notify_function_ptr(void *data, u_int8_t device_in_use) {
   struct ixgbe_ring	*rx_ring = (struct ixgbe_ring*)data;
   struct ixgbe_adapter	*adapter = netdev_priv(rx_ring->netdev);
@@ -494,6 +412,7 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
   cache_line_size = cpu_to_le16(IXGBE_READ_PCIE_WORD(hw, IXGBE_PCI_DEVICE_CACHE_LINE_SIZE));
   cache_line_size &= 0x00FF;
   cache_line_size *= PCI_DEVICE_CACHE_LINE_SIZE_BYTES;
+  if(cache_line_size == 0) cache_line_size = 64;
 
   if(unlikely(enable_debug))
     printk("%s(): pci cache line size %d\n",__FUNCTION__, cache_line_size);
