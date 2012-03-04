@@ -1234,7 +1234,6 @@ static int ring_alloc_mem(struct sock *sk)
       && (pfr->userspace_ring_type == userspace_ring_producer
           || (pfr->userspace_ring_type == userspace_ring_consumer
 	      && pfr->userspace_ring->ring_memory != NULL))) {
-
     if(pfr->userspace_ring->ring_memory == NULL)
       return (-1); /* Consumr ring memory has not yet been allocated */
 
@@ -1328,7 +1327,8 @@ static int ring_alloc_mem(struct sock *sk)
 
   /* UserSPace RING
    * - consumer creating a new ring */
-  if(pfr->userspace_ring != NULL && pfr->userspace_ring_type == userspace_ring_consumer) {
+  if((pfr->userspace_ring != NULL)
+     && (pfr->userspace_ring_type == userspace_ring_consumer)) {
     pfr->userspace_ring->slot_header_len = pfr->slot_header_len;
     pfr->userspace_ring->bucket_len      = pfr->bucket_len;
     pfr->userspace_ring->tot_mem         = pfr->slots_info->tot_mem;
@@ -2789,7 +2789,7 @@ static int reflect_packet(struct sk_buff *skb,
 
     if(ret == NETDEV_TX_OK)
       pfr->slots_info->tot_fwd_ok++;
-    else 
+    else
       pfr->slots_info->tot_fwd_notok++;
 
     if(unlikely(enable_debug))
@@ -3618,11 +3618,13 @@ static int skb_ring_handler(struct sk_buff *skb,
   } else
     displ = 0;
 
+#if 0
   if(unlikely(enable_debug)) {
     if(skb->dev && (skb->dev->ifindex < MAX_NUM_IFIDX))
       printk("[PF_RING] (1) skb_ring_handler(): [%d rings on %s (idx=%d), %d 'any' rings]\n",
 	     num_rings_per_device[skb->dev->ifindex], skb->dev->name, skb->dev->ifindex, num_any_rings);
   }
+#endif
 
   if((num_any_rings == 0)
      && (skb->dev
@@ -4138,7 +4140,7 @@ static struct pf_userspace_ring* userspace_ring_create(char *u_dev_name, userspa
   if(strncmp(u_dev_name, "usr", 3) != 0) {
     if(unlikely(enable_debug))
       printk("[PF_RING] userspace_ring_create(%s) failed (1)\n", u_dev_name);
-    
+
     return NULL;
   }
 
@@ -4149,8 +4151,13 @@ static struct pf_userspace_ring* userspace_ring_create(char *u_dev_name, userspa
   /* checking if the userspace ring already exists */
   list_for_each_safe(ptr, tmp_ptr, &userspace_ring_list) {
     entry = list_entry(ptr, struct pf_userspace_ring, list);
-    if(entry->id == id) {
 
+    if(unlikely(enable_debug))
+      printk("[PF_RING] userspace_ring_create(%d) vs %lu [users: %u][type: %s]\n", 
+	     entry->id, id, atomic_read(&entry->users[type]),
+	     (type == userspace_ring_producer) ? "producer" : "consumer");
+    
+    if(entry->id == id) {
       if(atomic_read(&entry->users[type]) > 0)
         goto unlock;
 
@@ -4163,14 +4170,13 @@ static struct pf_userspace_ring* userspace_ring_create(char *u_dev_name, userspa
   if(usr == NULL) {
     /* Note: a userspace ring can be created by a consumer only,
      * (however a producer can keep it if the consumer dies) */
-
     if(unlikely(enable_debug))
-      printk("[PF_RING] userspace_ring_create(%s): attempting to creare ring\n", u_dev_name);
+      printk("[PF_RING] userspace_ring_create(%s): attempting to create ring\n", u_dev_name);
 
     if(type == userspace_ring_producer) {
       if(unlikely(enable_debug))
 	printk("[PF_RING] userspace_ring_create(%s) failed (2)\n", u_dev_name);
-      
+
       goto unlock;
     }
 
@@ -4179,7 +4185,7 @@ static struct pf_userspace_ring* userspace_ring_create(char *u_dev_name, userspa
     if(usr == NULL) {
       if(unlikely(enable_debug))
 	printk("[PF_RING] userspace_ring_create(%s) failed (3)\n", u_dev_name);
-      
+
       goto unlock;
     }
 
@@ -4194,6 +4200,11 @@ static struct pf_userspace_ring* userspace_ring_create(char *u_dev_name, userspa
 
   atomic_inc(&usr->users[type]);
 
+  if(unlikely(enable_debug))
+    printk("[PF_RING] userspace_ring_create(%lu) just created [users: %u][type: %s]\n", 
+	   id, atomic_read(&usr->users[type]),
+	   (type == userspace_ring_producer) ? "producer" : "consumer");
+  
   if(type == userspace_ring_consumer)
     usr->consumer_ring_slots_waitqueue = consumer_ring_slots_waitqueue;
 
@@ -4242,10 +4253,11 @@ static int userspace_ring_remove(struct pf_userspace_ring *usr,
   }
 
   write_unlock(&userspace_ring_lock);
-
-  if(unlikely(enable_debug))
-    if(ret == 1)
+  
+  if(ret == 1) {
+    if(unlikely(enable_debug)) 
       printk("[PF_RING] userspace_ring_remove() Ring can be freed.\n");
+  }
 
   return ret;
 }
@@ -4591,12 +4603,20 @@ static int packet_ring_bind(struct sock *sk, char *dev_name)
   /* UserSpace RING.
    * Note: with userspace rings we expect that mmap() follow (only one) bind() */
 
-  if(pfr->userspace_ring != NULL)
+  if(pfr->userspace_ring != NULL) {
+    if(unlikely(enable_debug))
+      printk("[PF_RING] packet_ring_bind(): userspace_ring != NULL, failure\n");
+
     return(-EINVAL); /* TODO bind() already called on a userspace ring */
+  }
 
   if(strncmp(dev_name, "usr", 3) == 0) {
-    if(pfr->ring_memory != NULL)
+    if(pfr->ring_memory != NULL) {
+      if(unlikely(enable_debug))
+	printk("[PF_RING] packet_ring_bind(): ring_memory != NULL, failure\n");
+
       return(-EINVAL); /* TODO mmap() already called */
+    }
 
     pfr->userspace_ring = userspace_ring_create(dev_name, userspace_ring_consumer,
                                                 &pfr->ring_slots_waitqueue);
@@ -4627,7 +4647,7 @@ static int packet_ring_bind(struct sock *sk, char *dev_name)
      && (!(dev->dev->flags & IFF_UP))) {
     if(unlikely(enable_debug))
       printk("[PF_RING] packet_ring_bind(%s): down\n", dev->dev->name);
-    
+
     return(-ENETDOWN);
   }
 
@@ -5775,7 +5795,7 @@ static int ring_setsockopt(struct socket *sock,
 
       if((channel_id & the_bit) == the_bit) {
         if(unlikely(enable_debug)) printk("[PF_RING] Setting channel %d\n", i);
-        
+
 	if (quick_mode) {
 	  device_rings[pfr->ring_netdev->dev->ifindex][i] = pfr;
 	}
@@ -6294,8 +6314,8 @@ static int ring_setsockopt(struct socket *sock,
 
       if(pfr->ring_memory != NULL) {
 	if(unlikely(enable_debug))
-	  printk("[PF_RING] SO_ATTACH_USERSPACE_RING (1)\n");
-	
+	  printk("[PF_RING] SO_ATTACH_USERSPACE_RING (1) [%s]\n", u_dev_name);
+
         return -EINVAL; /* TODO mmap() already called */
       }
 
@@ -6304,7 +6324,7 @@ static int ring_setsockopt(struct socket *sock,
 
       if(pfr->userspace_ring == NULL) {
 	if(unlikely(enable_debug))
-	  printk("[PF_RING] SO_ATTACH_USERSPACE_RING (2)\n");
+	  printk("[PF_RING] SO_ATTACH_USERSPACE_RING (2) [%s]\n", u_dev_name);
 
         return -EINVAL;
       }
@@ -6312,8 +6332,9 @@ static int ring_setsockopt(struct socket *sock,
       pfr->userspace_ring_type = userspace_ring_producer;
 
       if(unlikely(enable_debug))
-        printk("[PF_RING] SO_ATTACH_USERSPACE_RING done.\n");
+        printk("[PF_RING] SO_ATTACH_USERSPACE_RING done [%s]\n", u_dev_name);
     }
+
     found = 1;
     break;
 
