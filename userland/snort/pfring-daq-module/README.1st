@@ -41,6 +41,36 @@ Running snort in IPS mode
 -------------------------
 # snort --daq-dir=/usr/local/lib/daq --daq pfring  -i ethX:ethY -e -Q
 
+
+PF_RING DAQ Specific Options
+----------------------------
+1. Kernel Filters
+   By default, PF_RING kernel filtering rules are added whenever snort's verdict
+   requests to drop specific flows. If you want instead snort (and not PF_RING)
+   drop packets (i.e. don't add automatically PF_RING kernel filtering rules)
+   add "--daq-var no-kernel-filters"
+
+2. Socket clustering
+   PF_RING allows you to distribute packets across multiple processes by using
+   socket clusters. For instance two snort instances bound to the same clusterId
+   receive each a subset of packets so that both can cooperatively share the load.
+   In order to enable this feature do "--daq-var clusterid=X" where X is a number
+   (i.e. the clusterId).
+
+3. Bind an instance to a core
+   Proper core insulation, grants snort instances not to step on each other's feet.
+   In order to bind an instance to a specific core do "--daq-var bindcpu=Y" where
+   Y is the core Id.
+
+
+Example of Clustering + Core Binding
+------------------------------------
+snort -q --pid-path /var/run --create-pidfile -D -i eth2:eth3 -c /opt/rb/etc/snort/snort.conf -l /var/log/snort/bpbr0/instance-1 --daq-dir /opt/rb/lib/daq/ --daq pfring --daq-mode inline -Q --daq-var clusterid=10 --daq-var bindcpu=0 -R _bpbr0_1
+snort -q --pid-path /var/run --create-pidfile -D -i eth2:eth3 -c /opt/rb/etc/snort/snort.conf -l /var/log/snort/bpbr0/instance-2 --daq-dir /opt/rb/lib/daq/ --daq pfring --daq-mode inline -Q --daq-var clusterid=10 --daq-var bindcpu=1 -R _bpbr0_2
+snort -q --pid-path /var/run --create-pidfile -D -i eth2:eth3 -c /opt/rb/etc/snort/snort.conf -l /var/log/snort/bpbr0/instance-3 --daq-dir /opt/rb/lib/daq/ --daq pfring --daq-mode inline -Q --daq-var clusterid=10 --daq-var bindcpu=2 -R _bpbr0_3
+snort -q --pid-path /var/run --create-pidfile -D -i eth2:eth3 -c /opt/rb/etc/snort/snort.conf -l /var/log/snort/bpbr0/instance-4 --daq-dir /opt/rb/lib/daq/ --daq pfring --daq-mode inline -Q --daq-var clusterid=10 --daq-var bindcpu=3 -R _bpbr0_4
+
+
 ----
-Luca Deri <deri@ntop.org> - February 2012
+Luca Deri <deri@ntop.org> - March 2012
 

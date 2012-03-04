@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2010-11 ntop.org
+** Copyright (C) 2010-12 ntop.org
 **
 ** Authors: Luca Deri <deri@ntop.org>
 **          Alfredo Cardigliano <cardigliano@ntop.org>
@@ -63,6 +63,7 @@ typedef struct _pfring_context
   uint32_t netmask;
   DAQ_Stats_t stats;
   u_int clusterid;
+  u_int8_t use_kernel_filters;
   u_int bindcpu;
   uint32_t base_recv[2];
   uint32_t base_drop[2];
@@ -138,7 +139,7 @@ static int update_hw_stats(Pfring_Context_t *context) {
     }
 
     context->stats.hw_packets_received += ps.recv - context->base_recv[1];
-    context->stats.hw_packets_dropped += ps.drop - context->base_drop[1];
+    context->stats.hw_packets_dropped  += ps.drop - context->base_drop[1];
   }
 
   return DAQ_SUCCESS;
@@ -162,6 +163,7 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
   context->promisc_flag =(config->flags & DAQ_CFG_PROMISC);
   context->timeout =(config->timeout > 0) ?(int) config->timeout : -1;
   context->filter_count = 0;
+  context->use_kernel_filters = 1;
 
   context->device = strdup(config->name);
   if(!context->device) {
@@ -200,6 +202,8 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
 		 __FUNCTION__, entry->value);
 	return DAQ_ERROR;
       }
+    } else if(!strcmp(entry->key, "no-kernel-filters")) {
+      context->use_kernel_filters = 0;
     } else if(!strcmp(entry->key, "bindcpu")) {
       char* end = entry->value;
       context->bindcpu =(int)strtol(entry->value, &end, 0);
@@ -377,7 +381,6 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
       }
     } else {
       hash_filtering_rule hash_rule;
-      int rc;
 
       hdr.caplen = phdr.caplen;
       hdr.pktlen = phdr.len;
@@ -395,34 +398,40 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
       case DAQ_VERDICT_WHITELIST: /* Pass the packet and fastpath all future packets in the same flow systemwide. */
       case DAQ_VERDICT_IGNORE:    /* Pass the packet and fastpath all future packets in the same flow for this application. */
 
-	memset(&hash_rule, 0, sizeof(hash_rule));
+	if(context->use_kernel_filters) {
+	  memset(&hash_rule, 0, sizeof(hash_rule));
 
-        pfring_parse_pkt(context->pkt_buffer, &phdr, 4, 0, 0);
-	/* or use pfring_recv_parsed() to force parsing. */
+	  pfring_parse_pkt(context->pkt_buffer, &phdr, 4, 0, 0);
+	  /* or use pfring_recv_parsed() to force parsing. */
 
-	hash_rule.rule_id     = context->filter_count++;
-	hash_rule.vlan_id     = phdr.extended_hdr.parsed_pkt.vlan_id;
-	hash_rule.proto       = phdr.extended_hdr.parsed_pkt.l3_proto;
-	memcpy(&hash_rule.host_peer_a, &phdr.extended_hdr.parsed_pkt.ipv4_src, sizeof(ip_addr));
-	memcpy(&hash_rule.host_peer_b, &phdr.extended_hdr.parsed_pkt.ipv4_dst, sizeof(ip_addr));
-	hash_rule.port_peer_a = phdr.extended_hdr.parsed_pkt.l4_src_port;
-	hash_rule.port_peer_b = phdr.extended_hdr.parsed_pkt.l4_dst_port;
-	hash_rule.rule_action = (verdict == DAQ_VERDICT_BLACKLIST) ?
-	  dont_forward_packet_and_stop_rule_evaluation : forward_packet_and_stop_rule_evaluation;
-	hash_rule.plugin_action.plugin_id = NO_PLUGIN_ID;
+	  hash_rule.rule_id     = context->filter_count++;
+	  hash_rule.vlan_id     = phdr.extended_hdr.parsed_pkt.vlan_id;
+	  hash_rule.proto       = phdr.extended_hdr.parsed_pkt.l3_proto;
+	  memcpy(&hash_rule.host_peer_a, &phdr.extended_hdr.parsed_pkt.ipv4_src, sizeof(ip_addr));
+	  memcpy(&hash_rule.host_peer_b, &phdr.extended_hdr.parsed_pkt.ipv4_dst, sizeof(ip_addr));
+	  hash_rule.port_peer_a = phdr.extended_hdr.parsed_pkt.l4_src_port;
+	  hash_rule.port_peer_b = phdr.extended_hdr.parsed_pkt.l4_dst_port;
+	  hash_rule.rule_action = (verdict == DAQ_VERDICT_BLACKLIST) ?
+	    dont_forward_packet_and_stop_rule_evaluation : forward_packet_and_stop_rule_evaluation;
+	  hash_rule.plugin_action.plugin_id = NO_PLUGIN_ID;
 
-	rc = pfring_handle_hash_filtering_rule(context->ring_handle, &hash_rule, 1 /* add_rule */);
+	  /* Purge rules idle (i.e. with no packet matching) for more than 1h */
+	  pfring_purge_idle_hash_rules(context->ring_handle, 3600 /* 1h */);
 
-	/*	
-	printf("[DEBUG] %d.%d.%d.%d:%d -> %d.%d.%d.%d:%d Verdict=%d [pfring_handle_hash_filtering_rule=%d]\n", 
-	       hash_rule.host_peer_a.v4 >> 24 & 0xFF, hash_rule.host_peer_a.v4 >> 16 & 0xFF,
-	       hash_rule.host_peer_a.v4 >>  8 & 0xFF, hash_rule.host_peer_a.v4 >>  0 & 0xFF, 
-	       hash_rule.port_peer_a & 0xFFFF, 
-	       hash_rule.host_peer_b.v4 >> 24 & 0xFF, hash_rule.host_peer_b.v4 >> 16 & 0xFF,
-	       hash_rule.host_peer_b.v4 >>  8 & 0xFF, hash_rule.host_peer_b.v4 >>  0 & 0xFF,
-	       hash_rule.port_peer_b & 0xFFFF, 
-	       verdict, rc);
-	*/
+	  pfring_handle_hash_filtering_rule(context->ring_handle, &hash_rule, 1 /* add_rule */);
+
+	  /*	
+		printf("[DEBUG] %d.%d.%d.%d:%d -> %d.%d.%d.%d:%d Verdict=%d [pfring_handle_hash_filtering_rule=%d]\n", 
+		hash_rule.host_peer_a.v4 >> 24 & 0xFF, hash_rule.host_peer_a.v4 >> 16 & 0xFF,
+		hash_rule.host_peer_a.v4 >>  8 & 0xFF, hash_rule.host_peer_a.v4 >>  0 & 0xFF, 
+		hash_rule.port_peer_a & 0xFFFF, 
+		hash_rule.host_peer_b.v4 >> 24 & 0xFF, hash_rule.host_peer_b.v4 >> 16 & 0xFF,
+		hash_rule.host_peer_b.v4 >>  8 & 0xFF, hash_rule.host_peer_b.v4 >>  0 & 0xFF,
+		hash_rule.port_peer_b & 0xFFFF, 
+		verdict, rc);
+	  */
+
+	}
 
 	if(verdict == DAQ_VERDICT_BLACKLIST) {
 	  break;
