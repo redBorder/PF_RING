@@ -242,6 +242,9 @@ extern "C" {
     pthread_rwlock_t rx_lock, tx_lock;
 
     struct sockaddr_ll sock_tx;
+
+    /* Reflector socket (copy RX packets onto it) */
+    pfring *reflector_socket;
   };
 
   /* ********************************* */
@@ -312,6 +315,7 @@ extern "C" {
   int pfring_next_pkt_time(pfring *ring, struct timespec *ts);
   int pfring_next_pkt_raw_timestamp(pfring *ring, u_int64_t *timestamp_ns);
   int pfring_version(pfring *ring, u_int32_t *version);
+  int pfring_set_reflector_device(pfring *ring, char *device_name);
   int pfring_get_bound_device_address(pfring *ring, u_char mac_address[6]);
   u_int16_t pfring_get_slot_header_len(pfring *ring);
   int pfring_set_virtual_device(pfring *ring, virtual_filtering_device_info *info);

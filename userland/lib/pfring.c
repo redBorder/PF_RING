@@ -98,7 +98,6 @@ pfring* pfring_open(char *device_name, u_int8_t promisc,
   ring->direction   = rx_and_tx_direction;
   ring->mode        = send_and_recv_mode;
 
-
 #ifdef RING_DEBUG
   printf("pfring_open: device_name=%s\n", device_name);
 #endif
@@ -140,7 +139,7 @@ pfring* pfring_open(char *device_name, u_int8_t promisc,
     return NULL;
   }
 
-  if(ring->reentrant) {
+  if(unlikely(ring->reentrant)) {
     pthread_rwlock_init(&ring->rx_lock, PTHREAD_PROCESS_PRIVATE);
     pthread_rwlock_init(&ring->tx_lock, PTHREAD_PROCESS_PRIVATE);
   }
@@ -236,7 +235,7 @@ void pfring_close(pfring *ring) {
   if(ring->close)
     ring->close(ring);
  
-  if(ring->reentrant) {
+  if(unlikely(ring->reentrant)) {
     pthread_rwlock_destroy(&ring->rx_lock);
     pthread_rwlock_destroy(&ring->tx_lock);
   }
@@ -278,6 +277,22 @@ void pfring_config(u_short cpu_percentage) {
 
 /* **************************************************** */
 
+int pfring_set_reflector_device(pfring *ring, char *device_name) {
+  if((device_name == NULL) || ring->reflector_socket)
+    return(-1);
+
+  ring->reflector_socket = pfring_open(device_name, 0, ring->caplen, ring->reentrant);
+
+  if(ring->reflector_socket != NULL) {
+    pfring_set_socket_mode(ring->reflector_socket, tx_only_direction);
+    pfring_enable_ring(ring->reflector_socket);
+    return(0);
+  } else
+    return(-1);
+}
+
+/* **************************************************** */
+
 int pfring_loop(pfring *ring, pfringProcesssPacket looper, 
 		const u_char *user_bytes, u_int8_t wait_for_packet) {
   u_char *buffer = NULL;
@@ -297,10 +312,10 @@ int pfring_loop(pfring *ring, pfringProcesssPacket looper,
     rc = ring->recv(ring, &buffer, 0, &hdr, wait_for_packet);
     if(rc < 0)
       break;
-    else if(rc > 0)
+    else if(rc > 0) {      
       looper(&hdr, buffer, user_bytes);
-    else {
-      /* if(!wait_for_packet) usleep(1); */
+    } else {
+      /* if(!wait_for_packet) usleep(1); */     
     }
   }
 
@@ -562,8 +577,15 @@ int pfring_recv(pfring *ring, u_char** buffer, u_int buffer_len,
 	     && ring->enabled 
 	     && ring->recv
 	     && (ring->mode != send_only_mode)))) {
+    int rc;
+    
     ring->break_recv_loop = 0;
-    return ring->recv(ring, buffer, buffer_len, hdr, wait_for_incoming_packet);
+    rc = ring->recv(ring, buffer, buffer_len, hdr, wait_for_incoming_packet);
+    
+    if(unlikely(ring->reflector_socket != NULL))
+      pfring_send(ring->reflector_socket, (char*)buffer, hdr->caplen, 0 /* flush */);
+    
+    return rc;
   }
 
   return PF_RING_ERROR_NOT_SUPPORTED;
@@ -659,12 +681,12 @@ int pfring_send(pfring *ring, char *pkt, u_int pkt_len, u_int8_t flush_packet) {
 	    && ring->send
 	    && (ring->mode != recv_only_mode))) {
 
-    if(ring->reentrant) 
+    if(unlikely(ring->reentrant)) 
       pthread_rwlock_wrlock(&ring->tx_lock);
 
     rc =  ring->send(ring, pkt, pkt_len, flush_packet);
     
-    if(ring->reentrant) 
+    if(unlikely(ring->reentrant)) 
       pthread_rwlock_unlock(&ring->tx_lock);
   }
 
@@ -682,12 +704,12 @@ int pfring_send_parsed(pfring *ring, char *pkt, struct pfring_pkthdr *hdr, u_int
 	    && ring->send_parsed
 	    && (ring->mode != recv_only_mode))) {
 
-    if(ring->reentrant) 
+    if(unlikely(ring->reentrant)) 
       pthread_rwlock_wrlock(&ring->tx_lock);
 
     rc =  ring->send_parsed(ring, pkt, hdr, flush_packet);
     
-    if(ring->reentrant) 
+    if(unlikely(ring->reentrant)) 
       pthread_rwlock_unlock(&ring->tx_lock);
 
     return rc;
@@ -710,12 +732,12 @@ int pfring_send_get_time(pfring *ring, char *pkt, u_int pkt_len, struct timespec
 	    && ring->send_get_time
 	    && (ring->mode != recv_only_mode))) {
 
-    if(ring->reentrant) 
+    if(unlikely(ring->reentrant)) 
       pthread_rwlock_wrlock(&ring->tx_lock);
 
     rc =  ring->send_get_time(ring, pkt, pkt_len, ts);
     
-    if(ring->reentrant) 
+    if(unlikely(ring->reentrant)) 
       pthread_rwlock_unlock(&ring->tx_lock);
 
     return rc;

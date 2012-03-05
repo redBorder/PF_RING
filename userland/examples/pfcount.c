@@ -509,6 +509,7 @@ void printHelp(void) {
   printf("-e <direction>  0=RX+TX, 1=RX only, 2=TX only\n");
   printf("-l <len>        Capture length\n");
   printf("-g <core_id>    Bind this app to a code (only with -n 0)\n");
+  printf("-d <device>     Device on which incoming packets are copied (e.g. userspace:usr0 or dna1)\n");
   printf("-w <watermark>  Watermark\n");
   printf("-p <poll wait>  Poll wait (msec)\n");
   printf("-b <cpu %%>      CPU pergentage priority (0-99)\n");
@@ -599,7 +600,7 @@ void* packet_consumer_thread(void* _id) {
 /* *************************************** */
 
 int main(int argc, char* argv[]) {
-  char *device = NULL, c, buf[32];
+  char *device = NULL, c, buf[32], *reflector_device = NULL;
   u_char mac_address[6] = { 0 };
   int promisc, snaplen = DEFAULT_SNAPLEN, rc;
   u_int clusterId = 0;
@@ -646,7 +647,7 @@ int main(int argc, char* argv[]) {
   startTime.tv_sec = 0;
   thiszone = gmt2local(0);
 
-  while((c = getopt(argc,argv,"hi:c:dl:vae:n:w:p:b:rg:u:f:")) != '?') {
+  while((c = getopt(argc,argv,"hi:c:d:l:vae:n:w:p:b:rg:u:f:")) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -668,6 +669,9 @@ int main(int argc, char* argv[]) {
       break;
     case 'c':
       clusterId = atoi(optarg);
+      break;
+    case 'd':
+      reflector_device = strdup(optarg);
       break;
     case 'l':
       snaplen = atoi(optarg);
@@ -779,7 +783,16 @@ int main(int argc, char* argv[]) {
     if((rc = pfring_set_poll_watermark(pd, watermark)) != 0)
       fprintf(stderr, "pfring_set_poll_watermark returned [rc=%d][watermark=%d]\n", rc, watermark);
   }
- 
+
+  if(reflector_device != NULL) {
+    rc = pfring_set_reflector_device(pd, reflector_device);
+
+    if(rc == 0) {
+      /* printf("pfring_set_reflector_device(%s) succeeded\n", reflector_device); */
+    } else
+      fprintf(stderr, "pfring_set_reflector_device(%s) failed [rc: %d]\n", reflector_device, rc);
+  }
+
   if(rehash_rss)
     pfring_enable_rss_rehash(pd);
 
