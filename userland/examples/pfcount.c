@@ -766,6 +766,14 @@ int main(int argc, char* argv[]) {
       printf("pfring_set_bpf_filter(%s) returned %d\n", bpfFilter, rc);
     else
       printf("Successfully set BPF filter '%s'\n", bpfFilter);
+
+#if 0
+    rc = pfring_remove_bpf_filter(pd);
+    if(rc != 0)
+      printf("pfring_remove_bpf_filter() returned %d\n", rc);
+    else
+      printf("Successfully removed BPF filter '%s'\n", bpfFilter);
+#endif
   }
 
   if(clusterId > 0) {

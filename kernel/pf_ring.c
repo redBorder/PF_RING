@@ -5734,7 +5734,10 @@ static int ring_setsockopt(struct socket *sock,
     }
     break;
 
-  case SO_DETACH_FILTER:
+  case SO_DETACH_FILTER:    
+    if(unlikely(enable_debug))       
+      printk("[PF_RING] Removing BPF filter [%p]\n", pfr->bpfFilter);
+
     write_lock_bh(&pfr->ring_rules_lock);
     found = 1;
     if(pfr->bpfFilter != NULL) {
@@ -5742,7 +5745,8 @@ static int ring_setsockopt(struct socket *sock,
       pfr->bpfFilter = NULL;
     } else
       ret = -ENONET;
-    write_unlock_bh(&pfr->ring_rules_lock);
+    write_unlock_bh(&pfr->ring_rules_lock);   
+
     break;
 
   case SO_ADD_TO_CLUSTER:

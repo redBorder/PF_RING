@@ -788,11 +788,8 @@ int pfring_mod_set_bpf_filter(pfring *ring, char *filter_buffer){
 
   rc = setsockopt(ring->fd, 0, SO_ATTACH_FILTER, &fcode, sizeof(fcode));
 
-  if(rc == -1) {
-    int dummy = 0;
-
-    setsockopt(ring->fd, SOL_SOCKET, SO_DETACH_FILTER, &dummy, sizeof(dummy));
-  }
+  if(rc == -1)
+    pfring_mod_remove_bpf_filter(ring);
 #endif
 
   return rc;
@@ -805,7 +802,10 @@ int pfring_mod_remove_bpf_filter(pfring *ring){
 #ifdef ENABLE_BPF 
   int dummy = 0;
 
-  rc = setsockopt(ring->fd, SOL_SOCKET, SO_DETACH_FILTER, &dummy, sizeof(dummy));
+  rc = setsockopt(ring->fd, 0, SO_DETACH_FILTER, &dummy, sizeof(dummy));
+
+  if(rc == -1)
+    rc = setsockopt(ring->fd, SOL_SOCKET, SO_DETACH_FILTER, &dummy, sizeof(dummy));
 #endif
 
   return rc;
