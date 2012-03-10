@@ -35,11 +35,12 @@ cp $HOME/PF_RING/userland/libpcap/libpcap.a $RPM_BUILD_ROOT/usr/local/lib
 cp $HOME/PF_RING/userland/examples/pfcount  $RPM_BUILD_ROOT/usr/local/PF_RING/bin
 cp $HOME/PF_RING/userland/examples/pfsend   $RPM_BUILD_ROOT/usr/local/PF_RING/bin
 cp $HOME/PF_RING/userland/examples/pfdnabounce $RPM_BUILD_ROOT/usr/local/PF_RING/bin
+cp $HOME/PF_RING/README.FIRST                  $RPM_BUILD_ROOT/usr/local/PF_RING/
 # DNA Drivers
 cp $HOME/PF_RING/drivers/DNA/ixgbe-3.7.17-DNA/src/ixgbe.ko $RPM_BUILD_ROOT/usr/local/PF_RING/drivers/DNA
 cp $HOME/PF_RING/drivers/DNA/igb-3.2.10-DNA/src/igb.ko $RPM_BUILD_ROOT/usr/local/PF_RING/drivers/DNA
 cp $HOME/PF_RING/drivers/DNA/e1000e-1.6.3-DNA/src/e1000e.ko $RPM_BUILD_ROOT/usr/local/PF_RING/drivers/DNA
-
+cp $HOME/PF_RING/drivers/DNA/README.DNA $RPM_BUILD_ROOT/usr/local/PF_RING/drivers/DNA
 
 
 # Clean out our build directory
@@ -53,13 +54,14 @@ rm -fr $RPM_BUILD_ROOT
 /usr/local/lib/libpfring.so
 /usr/local/lib/libpcap.a
 /usr/local/include/pfring.h
+/usr/local/PF_RING/drivers/DNA/README.DNA
 /usr/local/PF_RING/drivers/DNA/ixgbe.ko
 /usr/local/PF_RING/drivers/DNA/igb.ko
 /usr/local/PF_RING/drivers/DNA/e1000e.ko
 /usr/local/PF_RING/bin/pfcount
 /usr/local/PF_RING/bin/pfsend
 /usr/local/PF_RING/bin/pfdnabounce
-
+/usr/local/PF_RING/README.FIRST
 
 # Set the default attributes of all of the files specified to have an
 # owner and group of root and to inherit the permissions of the file

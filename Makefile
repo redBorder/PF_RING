@@ -18,7 +18,9 @@ PACKAGE=$(APPL)-$(PACKAGE_VERSION)-0.$(PLATFORM).rpm
 PACKAGE_PATH=$(HOME)/rpmbuild/RPMS/$(PLATFORM)/$(PACKAGE)
 
 
-build-rpm: all #cleanup-rpm
+package: all build-rpm clean-rpm
+
+build-rpm: 
 # Do NOT build package as root (http://wiki.centos.org/HowTos/SetupRpmBuildEnvironment)
 #	mkdir -p $(HOME)/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 #	echo '%_topdir %(echo $HOME)/rpmbuild' > ~/.rpmmacros
