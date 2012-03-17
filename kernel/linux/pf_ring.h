@@ -30,6 +30,12 @@
 #define DEFAULT_BUCKET_LEN            128
 #define MAX_NUM_DEVICES               256
 
+/*
+  Do NOT extend MAX_NUM_RING_SOCKETS over 64 as this is the size
+  of ring_table_bitmap (pf_ring.c)
+*/
+#define MAX_NUM_RING_SOCKETS          64 /* sizeof(u_int64_t) */
+
 /* Watermark */
 #define DEFAULT_MIN_PKT_QUEUED        128
 
@@ -128,7 +134,6 @@ struct pkt_offset {
   int16_t l4_offset;
   int16_t payload_offset;
 };
-
 
 struct pkt_flow_info {
   u_int32_t in_iface, out_iface, samplingPopulation, flow_sequence;
@@ -246,6 +251,24 @@ struct pfring_pkthdr {
 
 /* ************************************************* */
 
+#define MAX_NUM_LIST_ELEMENTS  64 /* sizeof(bits_set) [see below] */
+
+typedef struct {
+  u_int32_t num_elements, top_element_id;
+  rwlock_t list_lock;
+  void *list_elements[MAX_NUM_LIST_ELEMENTS];
+} lockless_list;
+
+void init_lockless_list(lockless_list *l);
+int lockless_list_add(lockless_list *l, void *elem);
+int lockless_list_remove(lockless_list *l, void *elem);
+void* lockless_list_get_next(lockless_list *l, u_int32_t *last_list_idx);
+void* lockless_list_get_first(lockless_list *l, u_int32_t *last_list_idx);
+void lockless_list_empty(lockless_list *l, u_int8_t free_memory);
+void term_lockless_list(lockless_list *l, u_int8_t free_memory);
+
+/* ************************************************* */
+
 typedef struct {
   u_int8_t smac[ETH_ALEN], dmac[ETH_ALEN]; /* Use '0' (zero-ed MAC address) for any MAC address.
 					      This is applied to both source and destination. */
@@ -313,7 +336,7 @@ typedef enum {
 typedef enum {
   send_and_recv_mode = 0,
   send_only_mode,
-  recv_only_mode  
+  recv_only_mode
 } socket_mode;
 
 typedef enum {
@@ -602,7 +625,7 @@ typedef enum {
   intel_ixgbe,
   /* IMPORTANT NOTE
      add new family types ALWAYS at the end
-     (i.e. append) of this datatype 
+     (i.e. append) of this datatype
   */
   intel_ixgbe_82598,
   intel_ixgbe_82599,
@@ -851,6 +874,7 @@ struct pf_ring_socket {
 
   DECLARE_BITMAP(netdev_mask, MAX_NUM_DEVICES_ID /* bits */);
   u_short ring_pid;
+  u_short ring_table_slot_id;
   u_int32_t ring_id;
   char *appl_name; /* String that identifies the application bound to the socket */
   packet_direction direction; /* Specify the capture direction for packets */
@@ -1003,7 +1027,7 @@ typedef int (*plugin_purge_idle)(struct pf_ring_socket *pfr,
 
 /* Build a new rule when forward_packet_add_rule_and_stop_rule_evaluation is specified
    return 0 in case of success, an error code (< 0) otherwise.
-   Rule memory (sw_filtering_rule_element or sw_filtering_hash_bucket) must be allocated 
+   Rule memory (sw_filtering_rule_element or sw_filtering_hash_bucket) must be allocated
    by the plugin, the non-NULL rule will be added. */
 typedef int (*plugin_add_rule)(sw_filtering_rule_element *rule,
 			       struct pfring_pkthdr *hdr,
@@ -1012,7 +1036,7 @@ typedef int (*plugin_add_rule)(sw_filtering_rule_element *rule,
 			       sw_filtering_hash_bucket **new_hash_bucket,
 			       u_int16_t filter_plugin_id,
 			       struct parse_buffer **filter_rule_memory_storage);
-/* Build an hash rule or return the wildcard rule id when forward_packet_del_rule_and_stop_rule_evaluation 
+/* Build an hash rule or return the wildcard rule id when forward_packet_del_rule_and_stop_rule_evaluation
    is specified. Return values: 0 - no action, 1 - remove hash rule, 2 - remove wildcard rule, 3 - remove both,
    an error code (< 0) otherwise. */
 typedef int (*plugin_del_rule)(sw_filtering_rule_element *rule,

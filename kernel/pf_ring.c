@@ -1,4 +1,4 @@
- /* ***************************************************************
+/* ***************************************************************
  *
  * (C) 2004-12 - Luca Deri <deri@ntop.org>
  *
@@ -147,8 +147,14 @@ static u_int8_t pfring_enabled = 0;
 static ring_device_element any_device_element, none_device_element;
 
 /* List of all ring sockets. */
-static struct list_head ring_table;
+static lockless_list ring_table;
 static u_int ring_table_size;
+
+/*
+  List where we store pointers that we need to remove in 
+   a delayed fashion when we're done with all operations
+*/
+static lockless_list delayed_memory_table;
 
 /* Protocol hook */
 static struct packet_type prot_hook;
@@ -172,7 +178,7 @@ static rwlock_t virtual_filtering_lock =
 ;
 
 /* List of all clusters */
-static struct list_head ring_cluster_list;
+static lockless_list ring_cluster_list;
 
 /* List of all devices on which PF_RING has been registered */
 static struct list_head ring_aware_device_list; /* List of ring_device_element */
@@ -413,6 +419,169 @@ static inline void skb_reset_transport_header(struct sk_buff *skb)
 }
 #endif
 #endif
+
+/* ************************************************** */
+
+void init_lockless_list(lockless_list *l) {
+  memset(l, 0, sizeof(lockless_list));
+
+  l->list_lock =
+#if(LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39))
+    RW_LOCK_UNLOCKED
+#else
+    __RW_LOCK_UNLOCKED(l->list_lock)
+#endif
+    ;
+}
+
+/* ************************************************** */
+
+/* Return the index where the element has been add or -1 in case of no room left */
+int lockless_list_add(lockless_list *l, void *elem) {
+  int i;
+
+  if(unlikely(enable_debug))
+    printk("[PF_RING] -> BEGIN %s() [total=%u]\n", __FUNCTION__, l->num_elements);
+
+  if(l->num_elements >= MAX_NUM_LIST_ELEMENTS) return(-1); /* Too many */
+
+  /* I could avoid mutexes but ... */
+  write_lock_bh(&l->list_lock);
+
+  for(i=0; i<MAX_NUM_LIST_ELEMENTS; i++) {
+    void *old_slot_value;
+
+    /* Set l->list_elements[i]=elem if l->list_elements[i]=NULL */
+    old_slot_value = cmpxchg(&l->list_elements[i], NULL, elem);
+
+    if(old_slot_value == NULL)
+      break; /* We succeeded */
+  }
+
+#if 0
+  /* 2 - Set the ring table bit */
+  if(l->list_elements[first_bit_unset] != NULL) {
+    /* Purge old element first, that was stored previously */
+    kfree(l->list_elements[first_bit_unset]);
+  }
+#endif
+
+  if(l->top_element_id < i)
+    l->top_element_id = i;
+
+  l->num_elements++;
+
+  if(unlikely(enable_debug)) {
+    printk("[PF_RING] -> END %s() [total=%u][id=%u][top_element_id=%u]\n",
+	   __FUNCTION__, l->num_elements, i, l->top_element_id);
+    
+    for(i=0; i<MAX_NUM_LIST_ELEMENTS; i++) {
+      if(l->list_elements[i])
+	printk("[PF_RING] -> %s() [slot %u is full]\n", __FUNCTION__, i);
+    }
+  }
+
+  write_unlock_bh(&l->list_lock);
+
+  return(i);
+}
+
+/* ************************************************** */
+
+/* http://community.topcoder.com/tc?module=Static&d1=tutorials&d2=bitManipulation */
+
+/*
+  Return the index where the element has been add or -1 in case the element to
+  be removed was not found
+
+  NOTE: NO MEMORY IS FREED
+*/
+int lockless_list_remove(lockless_list *l, void *elem) {
+  int i, old_full_slot = -1;
+
+  if(unlikely(enable_debug))
+    printk("[PF_RING] -> BEGIN %s() [total=%u]\n", __FUNCTION__, l->num_elements);
+
+  if(l->num_elements == 0) return(-1); /* Not found */
+
+  write_lock_bh(&l->list_lock);
+
+  for(i=0; i<MAX_NUM_LIST_ELEMENTS; i++) {
+    if(l->list_elements[i] == elem) {
+      xchg(&l->list_elements[i], NULL);
+
+      while((l->top_element_id > 0) && (l->list_elements[l->top_element_id] == NULL))
+	l->top_element_id--;
+
+      l->num_elements--, old_full_slot = i;
+      break;
+    }
+  }
+
+  if(unlikely(enable_debug)) {
+    printk("[PF_RING] -> END %s() [total=%u][top_element_id=%u]\n", __FUNCTION__, l->num_elements, l->top_element_id);
+    
+    for(i=0; i<MAX_NUM_LIST_ELEMENTS; i++) {
+      if(l->list_elements[i])
+	printk("[PF_RING] -> %s() [slot %u is full]\n", __FUNCTION__, i);
+    }
+  }
+
+  write_unlock_bh(&l->list_lock);
+  wmb();
+
+  return(old_full_slot);
+}
+
+/* ************************************************** */
+
+void* lockless_list_get_next(lockless_list *l, u_int32_t *last_idx) {
+  while(*last_idx <= l->top_element_id) {
+    void *elem;
+
+    elem = l->list_elements[*last_idx];
+    (*last_idx)++;
+
+    if(elem != NULL)
+      return(elem);
+  }
+
+  return(NULL);
+}
+
+/* ************************************************** */
+
+void* lockless_list_get_first(lockless_list *l, u_int32_t *last_idx) {
+  *last_idx = 0;
+  return(lockless_list_get_next(l, last_idx));
+}
+
+/* ************************************************** */
+
+void lockless_list_empty(lockless_list *l, u_int8_t free_memory) {
+  int i;
+
+  if(free_memory) {
+    write_lock_bh(&l->list_lock);
+    
+    for(i=0; i<MAX_NUM_LIST_ELEMENTS; i++) {
+      if(l->list_elements[i] != NULL) {
+	kfree(l->list_elements[i]);
+	l->list_elements[i] = NULL;
+      }
+    }
+
+    l->num_elements = 0;
+    write_unlock_bh(&l->list_lock);
+    wmb();    
+  }
+}
+
+/* ************************************************** */
+
+void term_lockless_list(lockless_list *l, u_int8_t free_memory) {
+  lockless_list_empty(l, free_memory);
+}
 
 /* ************************************************** */
 
@@ -781,6 +950,7 @@ static int i82599_generic_handler(struct pf_ring_socket *pfr,
      && rule->rule_family_type == intel_82599_perfect_filter_rule
      && rc < 0) {
       intel_82599_perfect_filter_hw_rule *perfect_rule = &rule->rule_family.perfect_rule;
+
       printk("[DNA][DEBUG] %s() ixgbe_set_rxnfc(%d.%d.%d.%d:%d -> %d.%d.%d.%d:%d) returned %d\n",
     	     __FUNCTION__,
              perfect_rule->s_addr >> 24 & 0xFF, perfect_rule->s_addr >> 16 & 0xFF,
@@ -1032,7 +1202,6 @@ static int ring_proc_get_info(char *buf, char **start, off_t offset,
 			      int len, int *unused, void *data)
 {
   int rlen = 0;
-  struct pf_ring_socket *pfr;
   FlowSlotInfo *fsi;
 
   if(data == NULL) {
@@ -1049,8 +1218,8 @@ static int ring_proc_get_info(char *buf, char **start, off_t offset,
     rlen += sprintf(buf + rlen, "Total rings         : %d\n", ring_table_size);
     rlen += sprintf(buf + rlen, "Total plugins       : %d\n", plugin_registration_size);
   } else {
-    /* detailed statistics about a PF_RING */
-    pfr = (struct pf_ring_socket *)data;
+    /* Detailed statistics about a PF_RING */
+    struct pf_ring_socket *pfr = (struct pf_ring_socket *)data;
 
     if(data) {
       fsi = pfr->slots_info;
@@ -1348,23 +1517,12 @@ static int ring_alloc_mem(struct sock *sk)
  */
 static inline void ring_insert(struct sock *sk)
 {
-  struct ring_element *next;
   struct pf_ring_socket *pfr;
 
   if(unlikely(enable_debug))
     printk("[PF_RING] ring_insert()\n");
 
-  next = kmalloc(sizeof(struct ring_element), GFP_ATOMIC);
-  if(next != NULL) {
-    next->sk = sk;
-    ring_write_lock();
-    list_add(&next->list, &ring_table);
-    ring_write_unlock();
-  } else {
-    if(net_ratelimit())
-      printk("[PF_RING] net_ratelimit() failure\n");
-  }
-
+  lockless_list_add(&ring_table, sk);
   pfr = (struct pf_ring_socket *)ring_sk(sk);
   pfr->ring_pid = current->pid;
   bitmap_zero(pfr->netdev_mask, MAX_NUM_DEVICES_ID), pfr->num_bound_devices = 0;
@@ -1382,40 +1540,45 @@ static inline void ring_insert(struct sock *sk)
  * stop when we find the one we're looking for(break),
  * or when we reach the end of the list.
  */
-static inline void ring_remove(struct sock *sk)
+static inline void ring_remove(struct sock *sk_to_delete)
 {
-  struct list_head *ptr, *tmp_ptr;
-  struct ring_element *entry, *to_delete = NULL;
-  struct pf_ring_socket *pfr_to_delete = ring_sk(sk);
+  struct pf_ring_socket *pfr_to_delete = ring_sk(sk_to_delete);
   u_int8_t master_found = 0, socket_found = 0;
+  u_int32_t last_list_idx;
+  struct sock *sk;
 
   if(unlikely(enable_debug))
     printk("[PF_RING] ring_remove()\n");
 
-  list_for_each_safe(ptr, tmp_ptr, &ring_table) {
+  sk = (struct sock*)lockless_list_get_first(&ring_table, &last_list_idx);
+
+  while(sk != NULL) {
     struct pf_ring_socket *pfr;
 
-    entry = list_entry(ptr, struct ring_element, list);
-    pfr = ring_sk(entry->sk);
+    pfr = ring_sk(sk);
 
     if(pfr->master_ring == pfr_to_delete) {
       if(unlikely(enable_debug))
 	printk("[PF_RING] Removing master ring\n");
 
       pfr->master_ring = NULL, master_found = 1;
-    } else if(entry->sk == sk) {
+    } else if(sk == sk_to_delete) {
       if(unlikely(enable_debug))
 	printk("[PF_RING] Found socket to remove\n");
 
-      list_del(ptr);
-      to_delete = entry;
       socket_found = 1;
     }
 
-    if(master_found && socket_found) break;
+    if(master_found && socket_found)
+      break;
+    else
+      sk = (struct sock*)lockless_list_get_next(&ring_table, &last_list_idx);
   }
 
-  if(to_delete) kfree(to_delete);
+  if(socket_found) {
+    lockless_list_remove(&ring_table, sk_to_delete);
+  } else
+    printk("[PF_RING] WARNING: Unable to find socket to remove!!!\n");
 
   if(unlikely(enable_debug))
     printk("[PF_RING] leaving ring_remove()\n");
@@ -3043,7 +3206,6 @@ int check_wildcard_rules(struct sk_buff *skb,
 	  if(unlikely(enable_debug))
 	    printk("pfring_plugin_del_rule() returned %d\n", rc);
 
-
           if(rc > 0) {
 	    /* we have done with rule evaluation,
 	     * now we need a write_lock to del rules */
@@ -3407,16 +3569,19 @@ int unregister_plugin(u_int16_t pfring_plugin_id)
   if(plugin_registration[pfring_plugin_id] == NULL)
     return(-EINVAL);	/* plugin not registered */
   else {
-    struct list_head *ptr, *tmp_ptr, *ring_ptr, *ring_tmp_ptr;
+    struct sock *sk;
+    u_int32_t last_list_idx;
 
     plugin_registration[pfring_plugin_id] = NULL;
     plugin_registration_size--;
 
-    ring_read_lock();
-    list_for_each_safe(ring_ptr, ring_tmp_ptr, &ring_table) {
-      struct ring_element *entry =
-	list_entry(ring_ptr, struct ring_element, list);
-      struct pf_ring_socket *pfr = ring_sk(entry->sk);
+    sk = (struct sock*)lockless_list_get_first(&ring_table, &last_list_idx);
+
+    while(sk != NULL) {
+      struct pf_ring_socket *pfr;
+      struct list_head *ptr, *tmp_ptr;
+
+      pfr = ring_sk(sk);
 
       list_for_each_safe(ptr, tmp_ptr, &pfr->sw_filtering_rules) {
 	sw_filtering_rule_element *rule;
@@ -3424,6 +3589,8 @@ int unregister_plugin(u_int16_t pfring_plugin_id)
 	rule = list_entry(ptr, sw_filtering_rule_element, list);
 
 	if(rule->rule.plugin_action.plugin_id == pfring_plugin_id) {
+	  ring_read_lock();
+
 	  rule->rule.plugin_action.plugin_id = NO_PLUGIN_ID;
 
 	  if(plugin_registration[pfring_plugin_id]
@@ -3436,10 +3603,13 @@ int unregister_plugin(u_int16_t pfring_plugin_id)
 	    kfree(rule->plugin_data_ptr);
 	    rule->plugin_data_ptr = NULL;
 	  }
+
+	  ring_read_unlock();
 	}
       }
+
+      sk = (struct sock*)lockless_list_get_next(&ring_table, &last_list_idx);
     }
-    ring_read_unlock();
 
     for(i = MAX_PLUGIN_ID - 1; i > 0; i--) {
       if(plugin_registration[i] != NULL) {
@@ -3594,12 +3764,15 @@ static int skb_ring_handler(struct sk_buff *skb,
 {
   struct sock *skElement;
   int rc = 0, is_ip_pkt = 0, room_available = 0;
-  struct list_head *ptr, *tmp_ptr;
   struct pfring_pkthdr hdr;
   int displ;
   int defragmented_skb = 0;
   struct sk_buff *skk = NULL;
   struct sk_buff *orig_skb = skb;
+  u_int32_t last_list_idx;
+  struct sock *sk;
+  struct pf_ring_socket *pfr;
+  ring_cluster_element *cluster_ptr;
 
   /* Check if there's at least one PF_RING ring defined that
      could receive the packet: if none just stop here */
@@ -3684,7 +3857,7 @@ static int skb_ring_handler(struct sk_buff *skb,
 			     + 4 /* VLAN header */);
 
   if(quick_mode) {
-    struct pf_ring_socket *pfr = device_rings[skb->dev->ifindex][channel_id];
+    pfr = device_rings[skb->dev->ifindex][channel_id];
 
     hdr.extended_hdr.parsed_header_len = 0;
 
@@ -3726,18 +3899,15 @@ static int skb_ring_handler(struct sk_buff *skb,
 
     hdr.extended_hdr.rx_direction = recv_packet;
 
-    /* Avoid the ring to be manipulated while playing with it */
-    ring_read_lock();
-
     /* [1] Check unclustered sockets */
-    list_for_each_safe(ptr, tmp_ptr, &ring_table) {
-      struct pf_ring_socket *pfr;
-      struct ring_element *entry;
+    sk = (struct sock*)lockless_list_get_first(&ring_table, &last_list_idx);
 
-      entry = list_entry(ptr, struct ring_element, list);
-
-      skElement = entry->sk;
-      pfr = ring_sk(skElement);
+    if(unlikely(enable_debug))
+      printk("[PF_RING] -> lockless_list_get_first=%p [num elements=%u][last_list_idx=%u]\n",
+	     sk, ring_table.num_elements, (unsigned int)last_list_idx);
+    
+    while(sk != NULL) {
+      pfr = ring_sk(sk);
 
       if((pfr != NULL)
 	 && (
@@ -3758,14 +3928,19 @@ static int skb_ring_handler(struct sk_buff *skb,
 	hdr.caplen = old_caplen;
 	rc = 1;	/* Ring found: we've done our job */
       }
+
+      sk = (struct sock*)lockless_list_get_next(&ring_table, &last_list_idx);
+
+      if(unlikely(enable_debug))
+	printk("[PF_RING] -> lockless_list_get_next=%p [num elements=%u][last_list_idx=%u]\n",
+	       sk, ring_table.num_elements, (unsigned int)last_list_idx);      
     }
 
-    /* [2] Check socket clusters */
-    list_for_each(ptr, &ring_cluster_list) {
-      ring_cluster_element *cluster_ptr;
-      struct pf_ring_socket *pfr;
+    cluster_ptr = (ring_cluster_element*)lockless_list_get_first(&ring_cluster_list, &last_list_idx);
 
-      cluster_ptr = list_entry(ptr, ring_cluster_element, list);
+    /* [2] Check socket clusters */
+    while(cluster_ptr != NULL) {
+      struct pf_ring_socket *pfr;
 
       if(cluster_ptr->cluster.num_cluster_elements > 0) {
 	u_int skb_hash = hash_pkt_cluster(cluster_ptr, &hdr);
@@ -3816,9 +3991,9 @@ static int skb_ring_handler(struct sk_buff *skb,
 	    skb_hash = (skb_hash + 1) % cluster_ptr->cluster.num_cluster_elements;
 	}
       }
-    } /* Clustering */
 
-    ring_read_unlock();
+      cluster_ptr = (ring_cluster_element*)lockless_list_get_next(&ring_cluster_list, &last_list_idx);
+    } /* Clustering */
 
 #ifdef PROFILING
     rdt1 = _rdtsc() - rdt1;
@@ -4153,10 +4328,10 @@ static struct pf_userspace_ring* userspace_ring_create(char *u_dev_name, userspa
     entry = list_entry(ptr, struct pf_userspace_ring, list);
 
     if(unlikely(enable_debug))
-      printk("[PF_RING] userspace_ring_create(%d) vs %lu [users: %u][type: %s]\n", 
+      printk("[PF_RING] userspace_ring_create(%d) vs %lu [users: %u][type: %s]\n",
 	     entry->id, id, atomic_read(&entry->users[type]),
 	     (type == userspace_ring_producer) ? "producer" : "consumer");
-    
+
     if(entry->id == id) {
       if(atomic_read(&entry->users[type]) > 0)
         goto unlock;
@@ -4201,10 +4376,10 @@ static struct pf_userspace_ring* userspace_ring_create(char *u_dev_name, userspa
   atomic_inc(&usr->users[type]);
 
   if(unlikely(enable_debug))
-    printk("[PF_RING] userspace_ring_create(%lu) just created [users: %u][type: %s]\n", 
+    printk("[PF_RING] userspace_ring_create(%lu) just created [users: %u][type: %s]\n",
 	   id, atomic_read(&usr->users[type]),
 	   (type == userspace_ring_producer) ? "producer" : "consumer");
-  
+
   if(type == userspace_ring_consumer)
     usr->consumer_ring_slots_waitqueue = consumer_ring_slots_waitqueue;
 
@@ -4253,9 +4428,9 @@ static int userspace_ring_remove(struct pf_userspace_ring *usr,
   }
 
   write_unlock(&userspace_ring_lock);
-  
+
   if(ret == 1) {
-    if(unlikely(enable_debug)) 
+    if(unlikely(enable_debug))
       printk("[PF_RING] userspace_ring_remove() Ring can be freed.\n");
   }
 
@@ -4452,6 +4627,7 @@ static int ring_release(struct socket *sock)
   */
   sock_orphan(sk);
   ring_proc_remove(pfr);
+
   ring_write_lock();
 
   if(pfr->ring_netdev->dev && pfr->ring_netdev == &any_device_element)
@@ -4578,10 +4754,21 @@ static int ring_release(struct socket *sock)
   if(pfr->extra_dma_memory)
     free_extra_dma_memory(pfr);
 
-  kfree(pfr);
+  /* 
+     Wait long enough so that other threads using ring_table
+     have finished referencing the socket pointer that
+     we will be deleting
+  */
+  wmb();
+  msleep(100 /* 100 msec */);
+
+  kfree(pfr); /* Time to free */
 
   if(unlikely(enable_debug))
     printk("[PF_RING] ring_release: done\n");
+
+  /* Some housekeeping tasks */
+  lockless_list_empty(&delayed_memory_table, 1 /* free memory */);
 
   return 0;
 }
@@ -5236,28 +5423,30 @@ int remove_from_cluster_list(struct ring_cluster *el, struct sock *sock)
 
 static int remove_from_cluster(struct sock *sock, struct pf_ring_socket *pfr)
 {
-  struct list_head *ptr, *tmp_ptr;
+  ring_cluster_element *cluster_ptr;
+  u_int32_t last_list_idx;
 
   if(unlikely(enable_debug))
     printk("[PF_RING] --> remove_from_cluster(%d)\n", pfr->cluster_id);
 
   if(pfr->cluster_id == 0 /* 0 = No Cluster */ )
-    return(0);	/* Noting to do */
+    return(0);	/* Nothing to do */
 
-  list_for_each_safe(ptr, tmp_ptr, &ring_cluster_list) {
-    ring_cluster_element *cluster_ptr;
+  cluster_ptr = (ring_cluster_element*)lockless_list_get_first(&ring_cluster_list, &last_list_idx);
 
-    cluster_ptr = list_entry(ptr, ring_cluster_element, list);
-
+  while(cluster_ptr != NULL) {
     if(cluster_ptr->cluster.cluster_id == pfr->cluster_id) {
       int ret = remove_from_cluster_list(&cluster_ptr->cluster, sock);
 
-      if (cluster_ptr->cluster.num_cluster_elements == 0) {
-	list_del(ptr);
-	kfree(cluster_ptr);
+      if(cluster_ptr->cluster.num_cluster_elements == 0) {
+	lockless_list_remove(&ring_cluster_list, cluster_ptr);
+	lockless_list_add(&delayed_memory_table, cluster_ptr); /* Free later */
       }
+
       return ret;
     }
+
+    cluster_ptr = (ring_cluster_element*)lockless_list_get_next(&ring_cluster_list, &last_list_idx);
   }
 
   return(-EINVAL);	/* Not found */
@@ -5270,32 +5459,27 @@ static int set_master_ring(struct sock *sock,
 			   u_int32_t master_socket_id)
 {
   int rc = -1;
-  struct list_head *ptr, *tmp_ptr;
+  u_int32_t last_list_idx;
+  struct sock *sk;
 
   if(unlikely(enable_debug))
     printk("[PF_RING] set_master_ring(%s=%d)\n",
 	   pfr->ring_netdev->dev ? pfr->ring_netdev->dev->name : "none",
 	   master_socket_id);
 
-  /* Avoid the ring to be manipulated while playing with it */
-  ring_read_lock();
+  sk = (struct sock*)lockless_list_get_first(&ring_table, &last_list_idx);
 
-  list_for_each_safe(ptr, tmp_ptr, &ring_table) {
-    struct pf_ring_socket *sk_pfr;
-    struct ring_element *entry;
-    struct sock *skElement;
+  while(sk != NULL) {
+    struct pf_ring_socket *pfr;
 
-    entry = list_entry(ptr, struct ring_element, list);
+    pfr = ring_sk(sk);
 
-    skElement = entry->sk;
-    sk_pfr = ring_sk(skElement);
-
-    if((sk_pfr != NULL) && (sk_pfr->ring_id == master_socket_id)) {
-      pfr->master_ring = sk_pfr;
+    if((pfr != NULL) && (pfr->ring_id == master_socket_id)) {
+      pfr->master_ring = pfr;
 
       if(unlikely(enable_debug))
 	printk("[PF_RING] Found set_master_ring(%s) -> %s\n",
-	       sk_pfr->ring_netdev->dev ? sk_pfr->ring_netdev->dev->name : "none",
+	       pfr->ring_netdev->dev ? pfr->ring_netdev->dev->name : "none",
 	       pfr->master_ring->ring_netdev->dev->name);
 
       rc = 0;
@@ -5303,12 +5487,12 @@ static int set_master_ring(struct sock *sock,
     } else {
       if(unlikely(enable_debug))
 	printk("[PF_RING] Skipping socket(%s)=%d\n",
-	       sk_pfr->ring_netdev->dev ? sk_pfr->ring_netdev->dev->name : "none",
-	       sk_pfr->ring_id);
+	       pfr->ring_netdev->dev ? pfr->ring_netdev->dev->name : "none",
+	       pfr->ring_id);
     }
-  }
 
-  ring_read_unlock();
+    sk = (struct sock*)lockless_list_get_next(&ring_table, &last_list_idx);
+  }
 
   if(unlikely(enable_debug))
     printk("[PF_RING] set_master_ring(%s, socket_id=%d) = %d\n",
@@ -5324,8 +5508,8 @@ static int add_sock_to_cluster(struct sock *sock,
 			       struct pf_ring_socket *pfr,
 			       struct add_to_cluster *cluster)
 {
-  struct list_head *ptr, *tmp_ptr;
   ring_cluster_element *cluster_ptr;
+  u_int32_t last_list_idx;
 
   if(unlikely(enable_debug))
     printk("[PF_RING] --> add_sock_to_cluster(%d)\n", cluster->clusterId);
@@ -5336,12 +5520,14 @@ static int add_sock_to_cluster(struct sock *sock,
   if(pfr->cluster_id != 0)
     remove_from_cluster(sock, pfr);
 
-  list_for_each_safe(ptr, tmp_ptr, &ring_cluster_list) {
-    cluster_ptr = list_entry(ptr, ring_cluster_element, list);
+  cluster_ptr = (ring_cluster_element*)lockless_list_get_first(&ring_cluster_list, &last_list_idx);
 
+  while(cluster_ptr != NULL) {
     if(cluster_ptr->cluster.cluster_id == cluster->clusterId) {
       return(add_sock_to_cluster_list(cluster_ptr, sock));
     }
+
+    cluster_ptr = (ring_cluster_element*)lockless_list_get_next(&ring_cluster_list, &last_list_idx);
   }
 
   /* There's no existing cluster. We need to create one */
@@ -5358,7 +5544,7 @@ static int add_sock_to_cluster(struct sock *sock,
   memset(cluster_ptr->cluster.sk, 0, sizeof(cluster_ptr->cluster.sk));
   cluster_ptr->cluster.sk[0] = sock;
   pfr->cluster_id = cluster->clusterId;
-  list_add(&cluster_ptr->list, &ring_cluster_list); /* Add as first entry */
+  lockless_list_add(&ring_cluster_list, cluster_ptr);
 
   return(0); /* 0 = OK */
 }
@@ -5734,8 +5920,8 @@ static int ring_setsockopt(struct socket *sock,
     }
     break;
 
-  case SO_DETACH_FILTER:    
-    if(unlikely(enable_debug))       
+  case SO_DETACH_FILTER:
+    if(unlikely(enable_debug))
       printk("[PF_RING] Removing BPF filter [%p]\n", pfr->bpfFilter);
 
     write_lock_bh(&pfr->ring_rules_lock);
@@ -5745,7 +5931,7 @@ static int ring_setsockopt(struct socket *sock,
       pfr->bpfFilter = NULL;
     } else
       ret = -ENONET;
-    write_unlock_bh(&pfr->ring_rules_lock);   
+    write_unlock_bh(&pfr->ring_rules_lock);
 
     break;
 
@@ -6977,13 +7163,13 @@ static struct pfring_hooks ring_hooks = {
 
 void remove_device_from_ring_list(struct net_device *dev) {
   struct list_head *ptr, *tmp_ptr;
+  u_int32_t last_list_idx;
+  struct sock *sk;
 
   list_for_each_safe(ptr, tmp_ptr, &ring_aware_device_list) {
     ring_device_element *dev_ptr = list_entry(ptr, ring_device_element, device_list);
 
     if(dev_ptr->dev == dev) {
-      struct list_head *ring_ptr, *ring_tmp_ptr;
-
       if(dev_ptr->proc_entry) {
 #ifdef ENABLE_PROC_WRITE_RULE
 	if(dev_ptr->device_type != standard_nic_family)
@@ -6995,12 +7181,17 @@ void remove_device_from_ring_list(struct net_device *dev) {
       }
 
       /* We now have to "un-bind" existing sockets */
-      list_for_each_safe(ring_ptr, ring_tmp_ptr, &ring_table) {
-	struct ring_element   *entry = list_entry(ring_ptr, struct ring_element, list);
-	struct pf_ring_socket *pfr = ring_sk(entry->sk);
+      sk = (struct sock*)lockless_list_get_first(&ring_table, &last_list_idx);
+
+      while(sk != NULL) {
+	struct pf_ring_socket *pfr;
+
+	pfr = ring_sk(sk);
 
 	if(pfr->ring_netdev == dev_ptr)
 	  pfr->ring_netdev = &none_device_element; /* Unbinding socket */
+
+	sk = (struct sock*)lockless_list_get_next(&ring_table, &last_list_idx);
       }
 
       list_del(ptr);
@@ -7227,18 +7418,11 @@ static struct notifier_block ring_netdev_notifier = {
 static void __exit ring_exit(void)
 {
   struct list_head *ptr, *tmp_ptr;
-  struct ring_element *entry;
-  struct pfring_hooks *hook;
+    struct pfring_hooks *hook;
 
   pfring_enabled = 0;
 
   unregister_device_handler();
-
-  list_for_each_safe(ptr, tmp_ptr, &ring_table) {
-    entry = list_entry(ptr, struct ring_element, list);
-    list_del(ptr);
-    kfree(entry);
-  }
 
   list_del(&any_device_element.device_list);
   list_for_each_safe(ptr, tmp_ptr, &ring_aware_device_list) {
@@ -7265,14 +7449,9 @@ static void __exit ring_exit(void)
     kfree(dev_ptr);
   }
 
-  list_for_each_safe(ptr, tmp_ptr, &ring_cluster_list) {
-    ring_cluster_element *cluster_ptr;
-
-    cluster_ptr = list_entry(ptr, ring_cluster_element, list);
-
-    list_del(ptr);
-    kfree(cluster_ptr);
-  }
+  term_lockless_list(&ring_table, 1 /* free memory */);
+  term_lockless_list(&ring_cluster_list, 1 /* free memory */);
+  term_lockless_list(&delayed_memory_table, 1 /* free memory */);
 
   list_for_each_safe(ptr, tmp_ptr, &ring_dna_devices_list) {
     dna_device_list *elem;
@@ -7307,7 +7486,7 @@ static int __init ring_init(void)
 #endif
 
   printk("[PF_RING] Welcome to PF_RING %s ($Revision: %s$)\n"
-	 "(C) 2004-11 L.Deri <deri@ntop.org>\n",
+	 "(C) 2004-12 L.Deri <deri@ntop.org>\n",
 	 RING_VERSION, SVN_REV);
 
 #if(LINUX_VERSION_CODE > KERNEL_VERSION(2,6,11))
@@ -7315,9 +7494,11 @@ static int __init ring_init(void)
     return(rc);
 #endif
 
-  INIT_LIST_HEAD(&ring_table);
+  init_lockless_list(&ring_table);
+  init_lockless_list(&ring_cluster_list);
+  init_lockless_list(&delayed_memory_table);
+
   INIT_LIST_HEAD(&virtual_filtering_devices_list);
-  INIT_LIST_HEAD(&ring_cluster_list);
   INIT_LIST_HEAD(&ring_aware_device_list);
   INIT_LIST_HEAD(&ring_dna_devices_list);
   INIT_LIST_HEAD(&userspace_ring_list);
