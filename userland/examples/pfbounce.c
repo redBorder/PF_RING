@@ -147,7 +147,7 @@ int main(int argc, char* argv[]) {
   /* hardcode: promisc=1, to_ms=500 */
   promisc = 1;
 
-  pd = pfring_open(in_dev, promisc, 1500 /* snaplen */, 0);
+  pd = pfring_open(in_dev, promisc, 1500 /* snaplen */, 0, 0 /* short header */);
   if(pd == NULL) {
     printf("pfring_open %s error [%s]\n", in_dev, strerror(errno));
     return(-1);

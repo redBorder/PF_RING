@@ -525,7 +525,7 @@ int main(int argc, char* argv[]) {
   /* hardcode: promisc=1, to_ms=500 */
   promisc = 1;
 
-  num_channels = pfring_open_multichannel(device,  promisc, snaplen, 0, ring);
+  num_channels = pfring_open_multichannel(device, promisc, snaplen, 0, 0 /* short header */, ring);
   
   if(num_channels <= 0) {
     fprintf(stderr, "pfring_open_multichannel() returned %d [%s]\n", num_channels, strerror(errno));

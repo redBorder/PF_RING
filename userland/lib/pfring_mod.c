@@ -130,6 +130,15 @@ int pfring_mod_open(pfring *ring) {
     return -1;
   }
 
+  if(!ring->long_header) {
+    rc = setsockopt(ring->fd, 0, SO_USE_SHORT_PKT_HEADER, &ring->long_header, sizeof(ring->long_header));
+    
+    if(rc < 0) {
+      close(ring->fd);
+      return -1;
+    }
+  }
+
   /* printf("channel_id=%d\n", channel_id); */
 
   if(!strcmp(ring->device_name, "none")) {

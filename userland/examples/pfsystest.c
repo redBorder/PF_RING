@@ -77,7 +77,7 @@ int main(int argc, char* argv[]) {
   double deltaUsec, call_per_sec, thpt, call_duration_usec;
 
   device = "eth0";
-  pd = pfring_open(device, 1,  128, 0);
+  pd = pfring_open(device, 1,  128, 0, 0 /* short header */);
 
   if(pd == NULL) {
     printf("pfring_open error(%s) [%s]\n", device, strerror(errno));

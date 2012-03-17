@@ -355,7 +355,7 @@ int main(int argc, char* argv[]) {
 
   /* hardcode: promisc=1, to_ms=500 */
   promisc = 1;
-  if((pd = pfring_open(device, promisc, 1500, 0)) == NULL) {
+  if((pd = pfring_open(device, promisc, 1500, 0, 0 /* short header */)) == NULL) {
     printf("pfring_open error [%s]\n", strerror(errno));
     return(-1);
   } else {

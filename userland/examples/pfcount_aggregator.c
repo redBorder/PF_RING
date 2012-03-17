@@ -592,7 +592,7 @@ int main(int argc, char* argv[]) {
   dev = strtok_r(devices, "+", &tmp);
   while(i<MAX_NUM_DEVS && dev != NULL) {
 
-    pd[i] = pfring_open(dev, 1 /* promisc */,  snaplen, 0);
+    pd[i] = pfring_open(dev, 1 /* promisc */,  snaplen, 0, 0 /* short header */);
 
     if(pd[i] == NULL) {
       fprintf(stderr, "pfring_open error [%s] (pf_ring not loaded or perhaps you use quick mode and have already a socket bound to %s ?)\n",

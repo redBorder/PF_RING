@@ -75,7 +75,8 @@ static pfring_module_info pfring_module_list[] = {
 /* **************************************************** */
 
 pfring* pfring_open(char *device_name, u_int8_t promisc,
-		    u_int32_t caplen, u_int8_t _reentrant) {
+		    u_int32_t caplen, u_int8_t reentrant,
+		    u_int8_t long_pkt_header) {
   int i = -1;
   int mod_found = 0;
   int ret;
@@ -94,9 +95,10 @@ pfring* pfring_open(char *device_name, u_int8_t promisc,
 
   ring->promisc     = promisc;
   ring->caplen      = caplen;
-  ring->reentrant   = _reentrant;
+  ring->reentrant   = reentrant;
   ring->direction   = rx_and_tx_direction;
   ring->mode        = send_and_recv_mode;
+  ring->long_header = long_pkt_header ? 1 : 0;
 
 #ifdef RING_DEBUG
   printf("pfring_open: device_name=%s\n", device_name);
@@ -162,10 +164,11 @@ pfring* pfring_open(char *device_name, u_int8_t promisc,
 /* **************************************************** */
 
 pfring* pfring_open_consumer(char *device_name, u_int8_t promisc,
-			     u_int32_t caplen, u_int8_t _reentrant,
+			     u_int32_t caplen, u_int8_t reentrant,
+			     u_int8_t long_pkt_header,
 			     u_int8_t consumer_plugin_id,
 			     char* consumer_data, u_int consumer_data_len) {
-  pfring *ring = pfring_open(device_name, promisc, caplen, _reentrant);
+  pfring *ring = pfring_open(device_name, promisc, caplen, reentrant, long_pkt_header);
   
   if(ring) {
     if(consumer_plugin_id > 0) {
@@ -187,7 +190,8 @@ pfring* pfring_open_consumer(char *device_name, u_int8_t promisc,
 /* **************************************************** */
 
 u_int8_t pfring_open_multichannel(char *device_name, u_int8_t promisc,
-				  u_int32_t caplen, u_int8_t _reentrant,
+				  u_int32_t caplen, u_int8_t reentrant,
+				  u_int8_t long_pkt_header,
 				  pfring* ring[MAX_NUM_RX_CHANNELS]) {
   u_int8_t num_channels, i, num = 0;
   char *at;
@@ -199,7 +203,7 @@ u_int8_t pfring_open_multichannel(char *device_name, u_int8_t promisc,
     at[0] = '\0';
 
   /* Count how many RX channel the specified device supports */
-  ring[0] = pfring_open(base_device_name, promisc, caplen, _reentrant);
+  ring[0] = pfring_open(base_device_name, promisc, caplen, reentrant, long_pkt_header);
 
   if(ring[0] == NULL)
     return(0);
@@ -213,7 +217,7 @@ u_int8_t pfring_open_multichannel(char *device_name, u_int8_t promisc,
     char dev[32];
 
     snprintf(dev, sizeof(dev), "%s@%d", base_device_name, i);
-    ring[i] = pfring_open(dev, promisc, caplen, _reentrant);
+    ring[i] = pfring_open(dev, promisc, caplen, reentrant, long_pkt_header);
 
     if(ring[i] == NULL)
       return(num);
@@ -281,7 +285,8 @@ int pfring_set_reflector_device(pfring *ring, char *device_name) {
   if((device_name == NULL) || ring->reflector_socket)
     return(-1);
 
-  ring->reflector_socket = pfring_open(device_name, 0, ring->caplen, ring->reentrant);
+  ring->reflector_socket = pfring_open(device_name, 0, ring->caplen, 
+				       ring->reentrant, 0 /* short header */);
 
   if(ring->reflector_socket != NULL) {
     pfring_set_socket_mode(ring->reflector_socket, tx_only_direction);

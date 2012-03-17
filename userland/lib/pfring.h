@@ -136,7 +136,7 @@ extern "C" {
   /* ********************************* */
 
   struct __pfring {
-    u_int8_t initialized, enabled;
+    u_int8_t initialized, enabled, long_header;
     packet_direction direction; /* Specify the capture direction for packets */
     socket_mode mode;
 
@@ -250,13 +250,16 @@ extern "C" {
   /* ********************************* */
 
   pfring* pfring_open(char *device_name, u_int8_t promisc, 
-		      u_int32_t caplen, u_int8_t reentrant);
+		      u_int32_t caplen, u_int8_t reentrant,
+		      u_int8_t long_pkt_header);
   pfring* pfring_open_consumer(char *device_name, u_int8_t promisc,
-			       u_int32_t caplen, u_int8_t _reentrant,
+			       u_int32_t caplen, u_int8_t reentrant,
+			       u_int8_t long_pkt_header,
 			       u_int8_t consumer_plugin_id,
 			       char* consumer_data, u_int consumer_data_len);
   u_int8_t pfring_open_multichannel(char *device_name, u_int8_t promisc,
 				    u_int32_t caplen, u_int8_t _reentrant,
+				    u_int8_t long_pkt_header,
 				    pfring* ring[MAX_NUM_RX_CHANNELS]);
 
   void pfring_shutdown(pfring *ring);

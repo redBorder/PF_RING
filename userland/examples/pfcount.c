@@ -514,6 +514,7 @@ void printHelp(void) {
   printf("-p <poll wait>  Poll wait (msec)\n");
   printf("-b <cpu %%>      CPU pergentage priority (0-99)\n");
   printf("-a              Active packet wait\n");
+  printf("-m              Long packet header (with PF_RING extensions)\n");
   printf("-r              Rehash RSS packets\n");
   printf("-u <1|2>        For each incoming packet add a drop rule (1=hash, 2=wildcard rule)\n");
   printf("-v              Verbose\n");
@@ -606,7 +607,8 @@ int main(int argc, char* argv[]) {
   u_int clusterId = 0;
   int bind_core = -1;
   packet_direction direction = rx_and_tx_direction;
-  u_int16_t watermark = 0, poll_duration = 0, cpu_percentage = 0, rehash_rss = 0;
+  u_int16_t watermark = 0, poll_duration = 0, 
+    cpu_percentage = 0, rehash_rss = 0, long_pkt_header = 0;
   char *bpfFilter = NULL;
 
 #if 0
@@ -647,7 +649,7 @@ int main(int argc, char* argv[]) {
   startTime.tv_sec = 0;
   thiszone = gmt2local(0);
 
-  while((c = getopt(argc,argv,"hi:c:d:l:vae:n:w:p:b:rg:u:f:")) != '?') {
+  while((c = getopt(argc,argv,"hi:c:d:l:vae:n:w:p:b:rg:u:f:m")) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -694,6 +696,9 @@ int main(int argc, char* argv[]) {
     case 'b':
       cpu_percentage = atoi(optarg);
       break;
+    case 'm':
+      long_pkt_header = 1;
+      break;
     case 'p':
       poll_duration = atoi(optarg);
       break;
@@ -734,7 +739,7 @@ int main(int argc, char* argv[]) {
     pfring_config(cpu_percentage);
   }
 
-  pd = pfring_open(device, promisc,  snaplen, (num_threads > 1) ? 1 : 0);
+  pd = pfring_open(device, promisc,  snaplen, (num_threads > 1) ? 1 : 0, long_pkt_header);
 
   if(pd == NULL) {
     fprintf(stderr, "pfring_open error [%s] (pf_ring not loaded or perhaps you use quick mode and have already a socket bound to %s ?)\n",
