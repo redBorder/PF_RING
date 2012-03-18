@@ -75,6 +75,7 @@
 #define SO_SHUTDOWN_RING                 124
 #define SO_PURGE_IDLE_RULES              125 /* inactivity (sec) */
 #define SO_SET_SOCKET_MODE               126
+#define SO_USE_SHORT_PKT_HEADER          127
 
 /* Get */
 #define SO_GET_RING_VERSION              170
@@ -188,6 +189,11 @@ typedef struct {
   u_int32_t tunnel_id;          /* GTP tunnelId or NO_GTP_TUNNEL_ID for no filtering */
 } gtp_parsing;
 
+typedef enum {
+  long_pkt_header = 0, /* it includes PF_RING-extensions over the original pcap header */
+  short_pkt_header     /* Short pcap-like header */
+} pkt_header_len;
+
 struct pkt_parsing_info {
   /* Core fields (also used by NetFlow) */
   u_int8_t dmac[ETH_ALEN], smac[ETH_ALEN];  /* MAC src/dst addresses */
@@ -253,6 +259,8 @@ struct pfring_pkthdr {
 
 #define MAX_NUM_LIST_ELEMENTS  64 /* sizeof(bits_set) [see below] */
 
+#ifdef __KERNEL__
+
 typedef struct {
   u_int32_t num_elements, top_element_id;
   rwlock_t list_lock;
@@ -266,6 +274,7 @@ void* lockless_list_get_next(lockless_list *l, u_int32_t *last_list_idx);
 void* lockless_list_get_first(lockless_list *l, u_int32_t *last_list_idx);
 void lockless_list_empty(lockless_list *l, u_int8_t free_memory);
 void term_lockless_list(lockless_list *l, u_int8_t free_memory);
+#endif
 
 /* ************************************************* */
 
@@ -879,6 +888,7 @@ struct pf_ring_socket {
   char *appl_name; /* String that identifies the application bound to the socket */
   packet_direction direction; /* Specify the capture direction for packets */
   socket_mode mode; /* Specify the link direction to enable (RX, TX, both) */
+  pkt_header_len header_len;
 
   /* /proc */
   char sock_proc_name[64];

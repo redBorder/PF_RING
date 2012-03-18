@@ -600,7 +600,7 @@ static inline int get_next_slot_offset(struct pf_ring_socket *pfr, u_int32_t off
 
   real_slot_size = pfr->slot_header_len + hdr->caplen;
 
-  if(!quick_mode)
+  if(pfr->header_len == long_pkt_header)
     real_slot_size += hdr->extended_hdr.parsed_header_len;
 
   if((off + real_slot_size + pfr->slots_info->slot_len) > (pfr->slots_info->tot_mem - sizeof(FlowSlotInfo))) {
@@ -1442,7 +1442,7 @@ static int ring_alloc_mem(struct sock *sk)
    *
    * ********************************************** */
 
-  if(quick_mode)
+  if(pfr->header_len == short_pkt_header)
     pfr->slot_header_len = sizeof(struct timeval) + sizeof(u_int32_t) + sizeof(u_int32_t) + sizeof(u_int64_t) /* ts+caplen+len+timestamp_ns */;
   else
     pfr->slot_header_len = sizeof(struct pfring_pkthdr);
@@ -2343,7 +2343,7 @@ inline int copy_data_to_ring(struct sk_buff *skb,
     if(hdr->ts.tv_sec == 0)
       set_skb_time(skb, hdr);
 
-    if(!quick_mode) {
+    if(pfr->header_len == long_pkt_header) {
       if((plugin_mem != NULL) && (offset > 0))
 	memcpy(&ring_bucket[pfr->slot_header_len], plugin_mem, offset);
     }
@@ -2371,7 +2371,7 @@ inline int copy_data_to_ring(struct sk_buff *skb,
     raw_data_len = min_val(raw_data_len, pfr->bucket_len); /* Avoid overruns */
     memcpy(&ring_bucket[pfr->slot_header_len], raw_data, raw_data_len); /* Copy raw data if present */
     hdr->len = hdr->caplen = raw_data_len;
-    if(!quick_mode)
+    if(pfr->header_len == long_pkt_header)
       hdr->extended_hdr.if_index = FAKE_PACKET;
     /* printk("[PF_RING] Copied raw data at slot with offset %d [len=%d]\n", off, raw_data_len); */
   }
@@ -4174,6 +4174,7 @@ static int ring_create(
   pfr->poll_num_pkts_watermark = DEFAULT_MIN_PKT_QUEUED;
   pfr->add_packet_to_ring = add_packet_to_ring;
   pfr->add_raw_packet_to_ring = add_raw_packet_to_ring;
+  pfr->header_len = quick_mode ? short_pkt_header : long_pkt_header;
   init_waitqueue_head(&pfr->ring_slots_waitqueue);
   rwlock_init(&pfr->ring_index_lock);
   rwlock_init(&pfr->ring_rules_lock);
@@ -4185,7 +4186,6 @@ static int ring_create(
   pfr->sample_rate = 1;	/* No sampling */
   sk->sk_family = PF_RING;
   sk->sk_destruct = ring_sock_destruct;
-
   pfr->ring_id = atomic_inc_return(&ring_id_serial);
 
   ring_insert(sk);
@@ -6531,6 +6531,10 @@ static int ring_setsockopt(struct socket *sock,
   case SO_SHUTDOWN_RING:
     found = 1, pfr->ring_active = 0, pfr->ring_shutdown = 1;
     wake_up_interruptible(&pfr->ring_slots_waitqueue);
+    break;
+
+  case SO_USE_SHORT_PKT_HEADER:
+    found = 1, pfr->header_len = short_pkt_header;
     break;
 
   default:
