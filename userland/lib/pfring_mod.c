@@ -866,7 +866,7 @@ int pfring_mod_remove_bpf_filter(pfring *ring){
 
 /* **************************************************** */
 
-void pfring_mode_shutdown(pfring *ring) {
+void pfring_mod_shutdown(pfring *ring) {
   int dummy = 0;
 
   setsockopt(ring->fd, 0, SO_SHUTDOWN_RING, &dummy, sizeof(dummy));

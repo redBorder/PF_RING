@@ -605,7 +605,8 @@ int vpfring_ctrl_message_rcv(void *message, uint32_t size, void *ret_message, ui
 		case VPFRING_CTRL_MSG_SHUTDOWN:
 			VPFRING_DEBUG_PRINTF("message VPFRING_CTRL_MSG_SHUTDOWN received\n");
 			
-			return pfring_shutdown(vpfri->ring);
+			pfring_shutdown(vpfri->ring);
+			break;
 
 		default:
 			VPFRING_DEBUG_PRINTF("vpfring_ctrl_message_rcv: unrecognized msessage type!\n");
