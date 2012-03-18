@@ -20,8 +20,6 @@
 
 #include "pfring.h"
 
-#include "pfring_hw_filtering.h"
-
 // #define RING_DEBUG
 
 /* ********************************* */
@@ -149,8 +147,6 @@ pfring* pfring_open(char *device_name, u_int8_t promisc,
   ring->socket_default_accept_policy = 1; /* Accept (default) */
 
   ring->rdi.device_id = ring->rdi.port_id = -1; /* Default */
-
-  pfring_hw_ft_init(ring);
 
   ring->initialized = 1;
 
@@ -630,19 +626,19 @@ int pfring_set_poll_duration(pfring *ring, u_int duration) {
 /* **************************************************** */
 
 int pfring_add_hw_rule(pfring *ring, hw_filtering_rule *rule) {
-  if(!ring)
-    return -1;
+  if(ring && ring->add_hw_rule)
+    return ring->add_hw_rule(ring, rule);
 
-  return pfring_hw_ft_add_hw_rule(ring, rule);
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
 
 int pfring_remove_hw_rule(pfring *ring, u_int16_t rule_id) {
-  if(!ring)
-    return -1;
+  if(ring && ring->remove_hw_rule)
+    return ring->remove_hw_rule(ring, rule_id);
     
-  return pfring_hw_ft_remove_hw_rule(ring, rule_id);
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
@@ -906,24 +902,10 @@ int pfring_get_hash_filtering_rule_stats(pfring *ring, hash_filtering_rule* rule
 
 int pfring_handle_hash_filtering_rule(pfring *ring, hash_filtering_rule* rule_to_add, 
 				      u_char add_rule) {
-  int rc = -1;
-
-  if(!ring)
-    return rc;
+  if(ring && ring->handle_hash_filtering_rule)
+    return ring->handle_hash_filtering_rule(ring, rule_to_add, add_rule);
   
-  if(ring->ft_mode != hardware_only) {
-    if (ring->handle_hash_filtering_rule) {
-      rc = ring->handle_hash_filtering_rule(ring, rule_to_add, add_rule);
-    
-      if(rc < 0)
-        return rc;
-    } else return rc;
-  }
-  
-  if(ring->ft_mode != software_only)
-    rc = pfring_hw_ft_handle_hash_filtering_rule(ring, rule_to_add, add_rule);
-
-  return rc;
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
@@ -947,47 +929,19 @@ int pfring_purge_idle_rules(pfring *ring, u_int16_t inactivity_sec) {
 /* **************************************************** */
 
 int pfring_add_filtering_rule(pfring *ring, filtering_rule* rule_to_add) {
-  int rc = -1;
-
-  if(!ring)
-    return rc;
-
-  if(ring->ft_mode != hardware_only) {
-    if(ring->add_filtering_rule) {
-      rc = ring->add_filtering_rule(ring, rule_to_add);
-
-      if(rc < 0)
-        return rc;
-    } else return rc;
-  }
-
-  if(ring->ft_mode != software_only)
-    rc = pfring_hw_ft_add_filtering_rule(ring, rule_to_add);
-
-  return rc;
+  if(ring && ring->add_filtering_rule)
+    return ring->add_filtering_rule(ring, rule_to_add);
+  
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
 
 int pfring_remove_filtering_rule(pfring *ring, u_int16_t rule_id) {
-  int rc = -1;
-
-  if(!ring)
-    return rc;
-
-  if(ring->ft_mode != hardware_only) {
-    if(ring->remove_filtering_rule) {
-      rc = ring->remove_filtering_rule(ring, rule_id);
-
-      if(rc < 0)
-        return rc;
-    } else return rc;
-  }
-
-  if(ring->ft_mode != software_only)
-    rc = pfring_hw_ft_remove_filtering_rule(ring, rule_id);
-
-  return rc;
+  if(ring && ring->remove_filtering_rule)
+    return ring->remove_filtering_rule(ring, rule_id);
+  
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
@@ -1003,22 +957,10 @@ int pfring_get_filtering_rule_stats(pfring *ring, u_int16_t rule_id,
 /* **************************************************** */
 
 int pfring_toggle_filtering_policy(pfring *ring, u_int8_t rules_default_accept_policy) {
-  int rc = -1;
+  if (ring && ring->toggle_filtering_policy)
+    return ring->toggle_filtering_policy(ring, rules_default_accept_policy);
 
-  if(!ring)
-    return rc;
-
-  if(ring->toggle_filtering_policy) {
-    rc = ring->toggle_filtering_policy(ring, rules_default_accept_policy);
-    
-    if(rc < 0)
-      return(rc);
-  }
-
-  if(ring->ft_mode != software_only)
-    rc = pfring_hw_ft_set_traffic_policy(ring, rules_default_accept_policy);
-
-  return(rc);
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */

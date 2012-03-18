@@ -22,6 +22,7 @@
 #include "pfring.h"
 #include "pfring_mod.h"
 #include "pfring_utils.h"
+#include "pfring_hw_filtering.h"
 #include "pfring_mod_dna.h"
 
 //#define RING_DEBUG
@@ -187,8 +188,14 @@ int pfring_dna_open(pfring *ring) {
   ring->get_bound_device_address = pfring_mod_get_bound_device_address;
   ring->get_slot_header_len = pfring_mod_get_slot_header_len;
   ring->set_virtual_device = pfring_mod_set_virtual_device;
+  ring->add_hw_rule = pfring_hw_ft_add_hw_rule;
+  ring->remove_hw_rule = pfring_hw_ft_remove_hw_rule;
   ring->loopback_test = pfring_mod_loopback_test;
   ring->disable_ring = pfring_mod_disable_ring;
+  ring->handle_hash_filtering_rule = pfring_mod_handle_hash_filtering_rule;
+  ring->add_filtering_rule = pfring_mod_add_filtering_rule;
+  ring->remove_filtering_rule = pfring_mod_remove_filtering_rule;
+  ring->toggle_filtering_policy = pfring_mod_toggle_filtering_policy;
   /* These functions are set by the dna library: (when supported by the device)
    * ring->send
    * ring->send_get_time
@@ -360,6 +367,8 @@ int pfring_dna_open(pfring *ring) {
 #ifdef DEBUG
   pfring_dump_dna_stats(ring);
 #endif
+
+  pfring_hw_ft_init(ring);
 
   return 0;
 }

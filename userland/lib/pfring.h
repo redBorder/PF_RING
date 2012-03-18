@@ -196,6 +196,8 @@ extern "C" {
     int       (*get_bound_device_address)     (pfring *, u_char [6]);
     u_int16_t (*get_slot_header_len)          (pfring *);
     int       (*set_virtual_device)           (pfring *, virtual_filtering_device_info *);
+    int       (*add_hw_rule)                  (pfring *, hw_filtering_rule *);
+    int       (*remove_hw_rule)               (pfring *, u_int16_t);
     int       (*loopback_test)                (pfring *, char *, u_int, u_int);
     int       (*enable_ring)                  (pfring *);
     int       (*disable_ring)                 (pfring *);
