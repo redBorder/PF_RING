@@ -1620,7 +1620,7 @@ static int parse_raw_pkt(char *data, u_int data_len,
 			 struct pfring_pkthdr *hdr, u_int8_t reset_all)
 {
   struct ethhdr *eh = (struct ethhdr *)data;
-  u_int16_t displ, ip_len;
+  u_int16_t displ, ip_len, fragment_offset = 0;
 
   if(reset_all)
     memset(&hdr->extended_hdr.parsed_pkt, 0, sizeof(hdr->extended_hdr.parsed_pkt));
@@ -1672,6 +1672,7 @@ static int parse_raw_pkt(char *data, u_int data_len,
     hdr->extended_hdr.parsed_pkt.l3_proto = ip->protocol;
     hdr->extended_hdr.parsed_pkt.ipv4_tos = ip->tos;
     hdr->extended_hdr.parsed_pkt.ip_version = 4;
+    fragment_offset = ip->frag_off & htons(IP_OFFSET); /* fragment, but not the first */
     ip_len  = ip->ihl*4;
   } else if(hdr->extended_hdr.parsed_pkt.eth_type == ETH_P_IPV6 /* IPv6 */) {
     struct ipv6hdr *ipv6;
@@ -1734,7 +1735,7 @@ static int parse_raw_pkt(char *data, u_int data_len,
   if(unlikely(enable_debug))
     printk("[PF_RING] [l3_proto=%d]\n", hdr->extended_hdr.parsed_pkt.l3_proto);
 
-  if((hdr->extended_hdr.parsed_pkt.l3_proto == IPPROTO_TCP) || (hdr->extended_hdr.parsed_pkt.l3_proto == IPPROTO_UDP)) {
+  if((hdr->extended_hdr.parsed_pkt.l3_proto == IPPROTO_TCP || hdr->extended_hdr.parsed_pkt.l3_proto == IPPROTO_UDP) && !fragment_offset) {
     hdr->extended_hdr.parsed_pkt.offset.l4_offset = hdr->extended_hdr.parsed_pkt.offset.l3_offset+ip_len;
 
     if(hdr->extended_hdr.parsed_pkt.l3_proto == IPPROTO_TCP) {

@@ -23,6 +23,10 @@ struct iphdr {
   u_int8_t	tos;
   u_int16_t	tot_len;
   u_int16_t	id;
+#define IP_CE		0x8000
+#define IP_DF		0x4000
+#define IP_MF		0x2000
+#define IP_OFFSET	0x1FFF
   u_int16_t	frag_off;
   u_int8_t	ttl;
   u_int8_t	protocol;

@@ -87,7 +87,7 @@ int pfring_parse_pkt(u_char *pkt, struct pfring_pkthdr *hdr, u_int8_t level /* 2
 		     u_int8_t add_timestamp /* 0,1 */, u_int8_t add_hash /* 0,1 */) {
   struct eth_hdr *eh = (struct eth_hdr*) pkt;
   u_int32_t displ, ip_len;
-  u_int analized = 0;
+  u_int16_t analized = 0, fragment_offset = 0;
 
   /* Note: in order to optimize the computation, this function expects a zero-ed 
    * or partially parsed pkthdr */
@@ -136,6 +136,7 @@ L3:
     hdr->extended_hdr.parsed_pkt.ipv4_dst = ntohl(ip->daddr);
     hdr->extended_hdr.parsed_pkt.l3_proto = ip->protocol;
     hdr->extended_hdr.parsed_pkt.ipv4_tos = ip->tos;
+    fragment_offset = ip->frag_off & htons(IP_OFFSET); /* fragment, but not the first */
     ip_len  = ip->ihl*4;
 
   } else if(hdr->extended_hdr.parsed_pkt.eth_type == 0x86DD /* IPv6 */) {
@@ -186,7 +187,7 @@ L4:
 
   analized = 3;
 
-  if (level < 4)
+  if (level < 4 || fragment_offset)
     goto TIMESTAMP;
 
   if(hdr->extended_hdr.parsed_pkt.l3_proto == IPPROTO_TCP) {
