@@ -85,7 +85,8 @@ static int vpfring_ring_add(struct vPFRingAddMsg *amsg, void *ret_message, uint3
 		amsg->device_name,
 		amsg->promisc,
 		amsg->caplen,
-		amsg->reentrant);
+		amsg->reentrant,
+		amsg->long_header);
 
 	if (vpfri->ring == NULL)
 		goto free_client;
@@ -196,6 +197,17 @@ int vpfring_ctrl_message_rcv(void *message, uint32_t size, void *ret_message, ui
 			return pfring_set_direction(vpfri->ring, 
 				((struct vPFRingSetDirectionMsg *) msg->payload)->direction);
 
+		case VPFRING_CTRL_MSG_SET_SOCKET_MODE:
+			VPFRING_DEBUG_PRINTF("message VPFRING_CTRL_MSG_SET_SOCKET_MODE received\n");
+
+			if (msg->payload_len != sizeof(struct vPFRingSetSocketModeMsg)){
+				VPFRING_DEBUG_PRINTF("skipping! vPFRingSetSocketModeMsg with wrong size\n");
+				return -1;
+			}
+			
+			return pfring_set_socket_mode(vpfri->ring, 
+				((struct vPFRingSetSocketModeMsg *) msg->payload)->mode);
+
 		case VPFRING_CTRL_MSG_SET_CLUSTER:
 			{
 			struct vPFRingSetClusterMsg *cmsg;
@@ -277,10 +289,10 @@ int vpfring_ctrl_message_rcv(void *message, uint32_t size, void *ret_message, ui
 
 			return pfring_remove_from_cluster(vpfri->ring);
 
-		case VPFRING_CTRL_MSG_PURGE_IDLE_SET_RULES:
+		case VPFRING_CTRL_MSG_PURGE_IDLE_HASH_RULES:
 			{
 			struct vPFRingPurgeIdleHashRulesMsg *pisrmsg;
-			VPFRING_DEBUG_PRINTF("message VPFRING_CTRL_MSG_PURGE_IDLE_SET_RULES received\n");
+			VPFRING_DEBUG_PRINTF("message VPFRING_CTRL_MSG_PURGE_IDLE_HASH_RULES received\n");
 
 			if (msg->payload_len != sizeof(struct vPFRingPurgeIdleHashRulesMsg)){
 				VPFRING_DEBUG_PRINTF("skipping! vPFRingPurgeIdleHashRulesMsg with wrong size\n");
@@ -288,6 +300,21 @@ int vpfring_ctrl_message_rcv(void *message, uint32_t size, void *ret_message, ui
 			}
 			
 			pisrmsg = (struct vPFRingPurgeIdleHashRulesMsg *) msg->payload;
+
+			return pfring_purge_idle_hash_rules(vpfri->ring, pisrmsg->inactivity_sec);
+			}
+
+		case VPFRING_CTRL_MSG_PURGE_IDLE_RULES:
+			{
+			struct vPFRingPurgeIdleRulesMsg *pisrmsg;
+			VPFRING_DEBUG_PRINTF("message VPFRING_CTRL_MSG_PURGE_IDLE_RULES received\n");
+
+			if (msg->payload_len != sizeof(struct vPFRingPurgeIdleRulesMsg)){
+				VPFRING_DEBUG_PRINTF("skipping! vPFRingPurgeIdleRulesMsg with wrong size\n");
+				return -1;
+			}
+			
+			pisrmsg = (struct vPFRingPurgeIdleRulesMsg *) msg->payload;
 
 			return pfring_purge_idle_hash_rules(vpfri->ring, pisrmsg->inactivity_sec);
 			}
@@ -554,6 +581,31 @@ int vpfring_ctrl_message_rcv(void *message, uint32_t size, void *ret_message, ui
 			VPFRING_DEBUG_PRINTF("message VPFRING_CTRL_MSG_ENABLE_RSS_REHASH received\n");
 			
 			return pfring_enable_rss_rehash(vpfri->ring);
+
+		case VPFRING_CTRL_MSG_SET_BPF_FILTER:
+			{
+			struct vPFRingSetBPFFilter *sbfmsg;
+			VPFRING_DEBUG_PRINTF("message VPFRING_CTRL_MSG_SET_BPF_FILTER received\n");
+
+			if (msg->payload_len < sizeof(struct vPFRingSetBPFFilter)){
+				VPFRING_DEBUG_PRINTF("skipping! vPFRingSetBPFFilter with wrong size\n");
+				return -1;
+			}
+			
+			sbfmsg = (struct vPFRingSetBPFFilter *) msg->payload;
+
+			return pfring_set_bpf_filter(vpfri->ring, sbfmsg->filter_buffer);
+			}
+		
+		case VPFRING_CTRL_MSG_REMOVE_BPF_FILTER:
+			VPFRING_DEBUG_PRINTF("message VPFRING_CTRL_MSG_REMOVE_BPF_FILTER received\n");
+			
+			return pfring_remove_bpf_filter(vpfri->ring);
+
+		case VPFRING_CTRL_MSG_SHUTDOWN:
+			VPFRING_DEBUG_PRINTF("message VPFRING_CTRL_MSG_SHUTDOWN received\n");
+			
+			return pfring_shutdown(vpfri->ring);
 
 		default:
 			VPFRING_DEBUG_PRINTF("vpfring_ctrl_message_rcv: unrecognized msessage type!\n");

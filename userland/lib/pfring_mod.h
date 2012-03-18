@@ -68,5 +68,6 @@ int pfring_mod_enable_ring(pfring *ring);
 int pfring_mod_disable_ring(pfring *ring);
 int pfring_mod_set_bpf_filter(pfring *ring, char *filter_buffer);
 int pfring_mod_remove_bpf_filter(pfring *ring);
+void pfring_mod_shutdown(pfring *ring);
 
 #endif /* _PFRING_MOD_H_ */

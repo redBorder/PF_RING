@@ -114,6 +114,7 @@ int pfring_mod_open(pfring *ring) {
   ring->is_pkt_available = pfring_mod_is_pkt_available;
   ring->set_bpf_filter = pfring_mod_set_bpf_filter;
   ring->remove_bpf_filter = pfring_mod_remove_bpf_filter;
+  ring->shutdown = pfring_mod_shutdown;
 
   ring->poll_duration = DEFAULT_POLL_DURATION;
   ring->fd = socket(PF_RING, SOCK_RAW, htons(ETH_P_ALL));
@@ -861,5 +862,13 @@ int pfring_mod_remove_bpf_filter(pfring *ring){
 #endif
 
   return rc;
+}
+
+/* **************************************************** */
+
+void pfring_mode_shutdown(pfring *ring) {
+  int dummy = 0;
+
+  setsockopt(ring->fd, 0, SO_SHUTDOWN_RING, &dummy, sizeof(dummy));
 }
 

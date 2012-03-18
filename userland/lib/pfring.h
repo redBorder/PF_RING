@@ -201,6 +201,7 @@ extern "C" {
     int       (*loopback_test)                (pfring *, char *, u_int, u_int);
     int       (*enable_ring)                  (pfring *);
     int       (*disable_ring)                 (pfring *);
+    void      (*shutdown)                     (pfring *);
     int       (*set_bpf_filter)               (pfring *, char *);
     int       (*remove_bpf_filter)            (pfring *);
     int       (*get_device_clock)             (pfring *, struct timespec *);

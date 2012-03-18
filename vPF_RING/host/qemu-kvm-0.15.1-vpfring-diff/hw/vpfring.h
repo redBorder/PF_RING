@@ -57,7 +57,7 @@ struct vPFRingInfo{
 #define VPFRING_CTRL_MSG_ADD_HW_RULE			 4 /* payload: vPFRingAddHwRuleMsg */
 #define VPFRING_CTRL_MSG_REMOVE_HW_RULE			 5 /* payload: vPFRingRemoveHwRuleMsg */
 #define VPFRING_CTRL_MSG_REMOVE_FROM_CLUSTER		 6
-#define VPFRING_CTRL_MSG_PURGE_IDLE_SET_RULES		 7 /* payload: vPFRingPurgeIdleSetRulesMsg */
+#define VPFRING_CTRL_MSG_PURGE_IDLE_HASH_RULES		 7 /* payload: vPFRingPurgeIdleHashRulesMsg */
 #define VPFRING_CTRL_MSG_SET_APPLICATION_NAME		 8 /* payload: vPFRingSetApplicationNameMsg */
 #define VPFRING_CTRL_MSG_DEVICE_ADD			 9 /* payload: vPFRingAddMsg */
 #define VPFRING_CTRL_MSG_BIND				10 /* payload: vPFRingBindMsg */
@@ -82,6 +82,12 @@ struct vPFRingInfo{
 #define VPFRING_CTRL_MSG_GET_SLOT_HEADER_LEN		29
 #define VPFRING_CTRL_MSG_GET_NUM_QUEUED_PKTS		30
 #define VPFRING_CTRL_MSG_ENABLE_RSS_REHASH		31
+#define VPFRING_CTRL_MSG_SET_SOCKET_MODE		32 /* payload: vPFRingSetSocketModeMsg */
+#define VPFRING_CTRL_MSG_PURGE_IDLE_RULES		33 /* payload: vPFRingPurgeIdleRulesMsg */
+#define VPFRING_CTRL_MSG_SET_BPF_FILTER			34 /* payload: vPFRingSetBPFFilter */ 
+#define VPFRING_CTRL_MSG_REMOVE_BPF_FILTER		35
+#define VPFRING_CTRL_MSG_SHUTDOWN			36
+
 
 #define VPFRING_CTRL_MAX_DEV_NAME  64
 
@@ -130,15 +136,16 @@ struct vPFRingSetApplicationNameMsg {
 };
 
 struct vPFRingAddMsg /* PLUG + open_consumer */ {
-		char			device_name[VPFRING_CTRL_MAX_DEV_NAME];
-	uint32_t		caplen;
-	uint8_t		 promisc;
-	uint8_t		 reentrant;
-	uint16_t		 __padding;
+	char		device_name[VPFRING_CTRL_MAX_DEV_NAME];
+	uint32_t	caplen;
+	uint8_t		promisc;
+	uint8_t		reentrant;
+	uint8_t		long_header;
+	uint16_t	__padding;
 };
 
 struct vPFRingBindMsg {
-		char			device_name[VPFRING_CTRL_MAX_DEV_NAME];
+	char			device_name[VPFRING_CTRL_MAX_DEV_NAME];
 };
 
 struct vPFRingSetPollWatermarkMsg{
@@ -184,6 +191,19 @@ struct vPFRingSetSamplingRateMsg{
 	uint32_t	rate;
 };
 
+struct vPFRingSetSocketModeMsg{
+	uint32_t	mode;
+};
+
+struct vPFRingPurgeIdleRulesMsg{
+	uint16_t	inactivity_sec;
+	uint16_t	__padding;
+};
+
+struct vPFRingSetBPFFilter{
+	uint32_t	filter_buffer_len;
+	char		filter_buffer[0];
+};
 
 /* END vPFRing control messages */
 

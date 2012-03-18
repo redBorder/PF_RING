@@ -7,7 +7,7 @@
 +
 +# vNPlug & vPFRing
 +obj-y += vnplug-ctrl.o vnplug-dev.o vpfring.o
-+LIBS+=-lpfring
++LIBS+=-lpfring -lpcap
 +
  obj-$(CONFIG_REALLY_VIRTFS) += 9pfs/virtio-9p-device.o
  obj-y += rwhandler.o

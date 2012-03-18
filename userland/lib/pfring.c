@@ -247,13 +247,13 @@ void pfring_close(pfring *ring) {
 /* **************************************************** */
 
 void pfring_shutdown(pfring *ring) {
-  int dummy = 0;
-
-  if(!ring)
+  if (!ring)
     return;
 
-  setsockopt(ring->fd, 0, SO_SHUTDOWN_RING, &dummy, sizeof(dummy));
   ring->is_shutting_down = ring->break_recv_loop = 1;
+
+  if(ring->shutdown)
+    ring->shutdown(ring);
 }
 
 /* **************************************************** */
