@@ -234,7 +234,7 @@ int main(int argc, char* argv[]) {
   /* hardcode: promisc=1, to_ms=500 */
   promisc = 1;
 
-  pd1 = pfring_open(in_dev, promisc, 1500 /* snaplen */, 0, 0 /* short header */);
+  pd1 = pfring_open(in_dev, 1500 /* snaplen */, PF_RING_PROMISC);
   if(pd1 == NULL) {
     printf("pfring_open %s error [%s]\n", in_dev, strerror(errno));
     return(-1);
@@ -246,7 +246,7 @@ int main(int argc, char* argv[]) {
 
   pfring_set_application_name(pd1, "pfdnabounce");
 
-  pd2 = pfring_open(out_dev, promisc, 1500 /* snaplen */, 0, 0 /* short header */);
+  pd2 = pfring_open(out_dev, 1500 /* snaplen */, PF_RING_PROMISC);
   if(pd2 == NULL) {
     printf("pfring_open %s error [%s]\n", in_dev, strerror(errno));
     return(-1);

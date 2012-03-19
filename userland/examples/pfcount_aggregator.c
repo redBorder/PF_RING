@@ -591,8 +591,7 @@ int main(int argc, char* argv[]) {
 
   dev = strtok_r(devices, "+", &tmp);
   while(i<MAX_NUM_DEVS && dev != NULL) {
-
-    pd[i] = pfring_open(dev, 1 /* promisc */,  snaplen, 0, 0 /* short header */);
+    pd[i] = pfring_open(dev, snaplen, PF_RING_PROMISC);
 
     if(pd[i] == NULL) {
       fprintf(stderr, "pfring_open error [%s] (pf_ring not loaded or perhaps you use quick mode and have already a socket bound to %s ?)\n",
@@ -612,7 +611,7 @@ int main(int argc, char* argv[]) {
     pfring_set_application_name(pd[i], "pfaggregator");
 
     if(pfring_get_bound_device_address(pd[i], mac_address) != 0)
-        fprintf(stderr, "Impossible to know the device address\n");
+      fprintf(stderr, "Impossible to know the device address\n");
     else
       printf("Capturing from %s [%s]\n", dev, etheraddr_string(mac_address, buf));
 

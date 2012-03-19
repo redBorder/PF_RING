@@ -77,7 +77,7 @@ int main(int argc, char* argv[]) {
   double deltaUsec, call_per_sec, thpt, call_duration_usec;
 
   device = "eth0";
-  pd = pfring_open(device, 1,  128, 0, 0 /* short header */);
+  pd = pfring_open(device, 128, PF_RING_PROMISC);
 
   if(pd == NULL) {
     printf("pfring_open error(%s) [%s]\n", device, strerror(errno));
@@ -95,59 +95,59 @@ int main(int argc, char* argv[]) {
   }
 
   if(0) {
-  test_id = 64;
-  buffer_len = test_id*1024;
-  buffer = malloc(buffer_len);
-  num_runs = 10000;
+    test_id = 64;
+    buffer_len = test_id*1024;
+    buffer = malloc(buffer_len);
+    num_runs = 10000;
 
-  for(j=0; j<=test_id; j++) {
-    test_len = j*1024;
+    for(j=0; j<=test_id; j++) {
+      test_len = j*1024;
 
-    gettimeofday(&startTime, NULL);
+      gettimeofday(&startTime, NULL);
 
-    for(i=0; i<num_runs; i++)
-      pfring_loopback_test(pd, buffer, buffer_len, test_len);
+      for(i=0; i<num_runs; i++)
+	pfring_loopback_test(pd, buffer, buffer_len, test_len);
 
-    gettimeofday(&endTime, NULL);
-    deltaUsec = delta_time(&endTime, &startTime);
-    call_duration_usec = deltaUsec/((double)num_runs);
-    call_per_sec = ((double)num_runs*1000000)/deltaUsec;
-    thpt = (double)(call_per_sec * test_len * 8) / (double)1000000000;
+      gettimeofday(&endTime, NULL);
+      deltaUsec = delta_time(&endTime, &startTime);
+      call_duration_usec = deltaUsec/((double)num_runs);
+      call_per_sec = ((double)num_runs*1000000)/deltaUsec;
+      thpt = (double)(call_per_sec * test_len * 8) / (double)1000000000;
 
-    printf("%02d [Test len=%d KB][%.2f calls/sec][%.1f usec/call][Thpt: %.2f Gbps][%s]\n",
-	   j, test_len/1024, call_per_sec, call_duration_usec, thpt,
-	   (thpt > (double)10) ? "10 Gbit Wire rate" : "No Wire rate");
-  } 
+      printf("%02d [Test len=%d KB][%.2f calls/sec][%.1f usec/call][Thpt: %.2f Gbps][%s]\n",
+	     j, test_len/1024, call_per_sec, call_duration_usec, thpt,
+	     (thpt > (double)10) ? "10 Gbit Wire rate" : "No Wire rate");
+    } 
 
-  free(buffer);
+    free(buffer);
 
-  /* ************************************** */
+    /* ************************************** */
 
-  test_id = 4;
-  buffer_len = test_id*1024*1024;
-  buffer = malloc(buffer_len);
-  num_runs = 1000;
+    test_id = 4;
+    buffer_len = test_id*1024*1024;
+    buffer = malloc(buffer_len);
+    num_runs = 1000;
 
-  for(j=1; j<=test_id; j++) {
-    test_len = j*1024*1024;
+    for(j=1; j<=test_id; j++) {
+      test_len = j*1024*1024;
 
-    gettimeofday(&startTime, NULL);
+      gettimeofday(&startTime, NULL);
 
-    for(i=0; i<num_runs; i++)
-      pfring_loopback_test(pd, buffer, buffer_len, test_len);
+      for(i=0; i<num_runs; i++)
+	pfring_loopback_test(pd, buffer, buffer_len, test_len);
 
-    gettimeofday(&endTime, NULL);
-    deltaUsec = delta_time(&endTime, &startTime);
-    call_duration_usec = deltaUsec/((double)num_runs);
-    call_per_sec = ((double)num_runs*1000000)/deltaUsec;
-    thpt = (double)(call_per_sec * test_len * 8) / (double)1000000000;
+      gettimeofday(&endTime, NULL);
+      deltaUsec = delta_time(&endTime, &startTime);
+      call_duration_usec = deltaUsec/((double)num_runs);
+      call_per_sec = ((double)num_runs*1000000)/deltaUsec;
+      thpt = (double)(call_per_sec * test_len * 8) / (double)1000000000;
 
-    printf("%02d [Test len=%d KB][%.2f calls/sec][%.1f usec/call][Thpt: %.2f Gbps][%s]\n",
-	   j, test_len/1024, call_per_sec, call_duration_usec, thpt,
-	   (thpt > (double)10) ? "10 Gbit Wire rate" : "No Wire rate");
-  }
+      printf("%02d [Test len=%d KB][%.2f calls/sec][%.1f usec/call][Thpt: %.2f Gbps][%s]\n",
+	     j, test_len/1024, call_per_sec, call_duration_usec, thpt,
+	     (thpt > (double)10) ? "10 Gbit Wire rate" : "No Wire rate");
+    }
 
-  free(buffer);
+    free(buffer);
   }
 
   /* ******************************************** */

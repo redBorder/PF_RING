@@ -52,7 +52,7 @@ int main(int argc, char* argv[]) {
   virtual_filtering_device_info info;
   int rc;
 
-  pd = pfring_open("none", 0 /* promisc */, 128 /* snaplen */, 0 /* reentrant */, 0 /* short header */);
+  pd = pfring_open("none", 128 /* snaplen */, 0);
 
   if(pd == NULL) {
     printf("pfring_open error [%s]\n", strerror(errno));

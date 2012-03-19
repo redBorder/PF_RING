@@ -84,11 +84,13 @@ static pfring* pfring_daq_open(Pfring_Context_t *context, char *device, int td) 
   }
 
   if(device) {
+    int flags = PF_RING_PROMISC /* PF_RING_REENTRANT */;
+
     context->pkt_buffer = NULL;
 
-    ring_handle = pfring_open(device, context->promisc_flag ? 1 : 0,
-			      context->snaplen, 1 /* reentrant */,
-			      1 /* long header */);
+    if(context->promisc_flag) flags |= PF_RING_PROMISC;
+
+    ring_handle = pfring_open(device, context->snaplen, flags);
 
     if(!ring_handle) {
       DPE(context->errbuf, "pfring_open(): unable to open device '%s'. Please use -i <device>", device);

@@ -514,7 +514,7 @@ void* packet_consumer_thread(void* _id) {
 
 int main(int argc, char* argv[]) {
   char *device = NULL, c;
-  int promisc, snaplen = DEFAULT_SNAPLEN, rc;
+  int flags = PF_RING_PROMISC, snaplen = DEFAULT_SNAPLEN, rc;
   u_int clusterId = 0;
   packet_direction direction = rx_and_tx_direction;
   u_int16_t watermark = 0;
@@ -608,13 +608,12 @@ int main(int argc, char* argv[]) {
 
   printf("Capturing from %s\n", device);
 
-  /* hardcode: promisc=1, to_ms=500 */
-  promisc = 1;
-
   if(num_threads > 0)
     pthread_rwlock_init(&statsLock, NULL);
 
-  pd = pfring_open(device, promisc,  snaplen, (num_threads > 1) ? 1 : 0, 0 /* short header */);
+  if(num_threads > 1) flags |= PF_RING_REENTRANT;
+
+  pd = pfring_open(device, snaplen, flags);
 
   if(pd == NULL) {
     printf("pfring_open error [%s]\n", strerror(errno));

@@ -319,7 +319,7 @@ void printHelp(void) {
 
 int main(int argc, char* argv[]) {
   char *device = NULL, c;
-  int promisc, add_rule = 1;
+  int add_rule = 1;
   u_int8_t protocol = 6 /* tcp */;
   filtering_rule rule;
   struct dummy_filter *filter;
@@ -353,9 +353,7 @@ int main(int argc, char* argv[]) {
 
   printf("Capturing from %s\n", device);
 
-  /* hardcode: promisc=1, to_ms=500 */
-  promisc = 1;
-  if((pd = pfring_open(device, promisc, 1500, 0, 0 /* short header */)) == NULL) {
+  if((pd = pfring_open(device, 1500, PF_RING_PROMISC)) == NULL) {
     printf("pfring_open error [%s]\n", strerror(errno));
     return(-1);
   } else {

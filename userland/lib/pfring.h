@@ -252,18 +252,18 @@ extern "C" {
 
   /* ********************************* */
 
-  pfring* pfring_open(char *device_name, u_int8_t promisc, 
-		      u_int32_t caplen, u_int8_t reentrant,
-		      u_int8_t long_pkt_header);
-  pfring* pfring_open_consumer(char *device_name, u_int8_t promisc,
-			       u_int32_t caplen, u_int8_t reentrant,
-			       u_int8_t long_pkt_header,
+  #define PF_RING_REENTRANT        1 << 1
+  #define PF_RING_LONG_HEADER     1 << 2
+  #define PF_RING_PROMISC          1 << 3
+
+  /* ********************************* */
+
+  pfring* pfring_open(char *device_name, u_int32_t caplen, u_int32_t flags);
+  pfring* pfring_open_consumer(char *device_name, u_int32_t caplen, u_int32_t flags,
 			       u_int8_t consumer_plugin_id,
 			       char* consumer_data, u_int consumer_data_len);
-  u_int8_t pfring_open_multichannel(char *device_name, u_int8_t promisc,
-				    u_int32_t caplen, u_int8_t _reentrant,
-				    u_int8_t long_pkt_header,
-				    pfring* ring[MAX_NUM_RX_CHANNELS]);
+  u_int8_t pfring_open_multichannel(char *device_name, u_int32_t caplen, 
+				    u_int32_t flags, pfring* ring[MAX_NUM_RX_CHANNELS]);
 
   void pfring_shutdown(pfring *ring);
   void pfring_config(u_short cpu_percentage);

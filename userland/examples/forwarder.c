@@ -46,7 +46,6 @@ void printHelp(void)
   printf("-v              [Verbose]\n");
   printf("-i <device>     [Input device name]\n");
   printf("-o <device>     [Output device name]\n");
-  printf("-n <device>     [Not promiscuous]\n");
 }
 
 /* ****************************************************** */
@@ -222,14 +221,13 @@ int main(int argc, char* argv[])
 {
   pfring *pd;
   char *in_dev = NULL, *out_dev = NULL, c;
-  int promisc = 1;
   filtering_rule rule;
   hash_filtering_rule hash_rule;
   int	filter_only_one_type = 0;
 
   thiszone = gmt2local(0);
 
-  while((c = getopt(argc,argv, "hi:o:c:fnv")) != -1) 
+  while((c = getopt(argc,argv, "hi:o:c:fv")) != -1) 
   {
     switch(c) 
     {
@@ -242,9 +240,6 @@ int main(int argc, char* argv[])
 	break;
       case 'o':
 	out_dev = strdup(optarg);
-	break;
-      case 'n':
-	promisc = 0;
 	break;
       case 'f':
 	filter_only_one_type = 1;
@@ -266,7 +261,7 @@ int main(int argc, char* argv[])
   }
 
   /* open devices */
-  if((pd = pfring_open(in_dev, promisc, 1500, 0, 0 /* short header */)) == NULL) {
+  if((pd = pfring_open(in_dev, 1500, PF_RING_PROMISC)) == NULL) {
     printf("pfring_open error for %s [%s]\n", in_dev, strerror(errno));
     return -1;
   }  else {

@@ -466,7 +466,7 @@ void* packet_consumer_thread(void* _id) {
 
 int main(int argc, char* argv[]) {
   char *device = NULL, c;
-  int promisc, snaplen = DEFAULT_SNAPLEN, rc, watermark = 0, rehash_rss = 0;
+  int snaplen = DEFAULT_SNAPLEN, rc, watermark = 0, rehash_rss = 0;
   packet_direction direction = rx_and_tx_direction;
   long i;
   u_int16_t cpu_percentage = 0, poll_duration = 0;
@@ -523,9 +523,7 @@ int main(int argc, char* argv[]) {
   printf("Capturing from %s\n", device);
 
   /* hardcode: promisc=1, to_ms=500 */
-  promisc = 1;
-
-  num_channels = pfring_open_multichannel(device, promisc, snaplen, 0, 0 /* short header */, ring);
+  num_channels = pfring_open_multichannel(device, snaplen, PF_RING_PROMISC, ring);
   
   if(num_channels <= 0) {
     fprintf(stderr, "pfring_open_multichannel() returned %d [%s]\n", num_channels, strerror(errno));

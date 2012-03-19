@@ -604,7 +604,7 @@ int main(int argc, char* argv[]) {
   char *device = NULL, c, buf[32], *reflector_device = NULL;
   u_char mac_address[6] = { 0 };
   int promisc, snaplen = DEFAULT_SNAPLEN, rc;
-  u_int clusterId = 0;
+  u_int clusterId = 0, flags = 0;
   int bind_core = -1;
   packet_direction direction = rx_and_tx_direction;
   u_int16_t watermark = 0, poll_duration = 0, 
@@ -739,7 +739,11 @@ int main(int argc, char* argv[]) {
     pfring_config(cpu_percentage);
   }
 
-  pd = pfring_open(device, promisc,  snaplen, (num_threads > 1) ? 1 : 0, long_pkt_header);
+  if(num_threads > 1) flags |= PF_RING_REENTRANT;
+  if(long_pkt_header) flags |= PF_RING_LONG_HEADER;
+  if(promisc)         flags |= PF_RING_PROMISC;
+
+  pd = pfring_open(device, snaplen, flags);
 
   if(pd == NULL) {
     fprintf(stderr, "pfring_open error [%s] (pf_ring not loaded or perhaps you use quick mode and have already a socket bound to %s ?)\n",

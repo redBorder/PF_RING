@@ -35,7 +35,7 @@ class PFring {
   char *device_name;
 
  public:
-  PFring(char* device, u_int snaplen, bool promisc = true, u_int8_t reentrant = 0);
+  PFring(char* device, u_int snaplen, u_int flags = 0);
   ~PFring();
 
   /* Cluster */

@@ -26,13 +26,13 @@
 
 /* *********************************************** */
 
-PFring::PFring(char* _device_name, u_int _snaplen, bool promisc, u_int8_t reentrant) {
+PFring::PFring(char* _device_name, u_int _snaplen, u_int flags) {
   snaplen = _snaplen, device_name = NULL;
 
   if(_device_name == NULL)
     ring = NULL;
   else {
-    if((ring = pfring_open(_device_name, promisc, _snaplen, reentrant)) != NULL)
+    if((ring = pfring_open(_device_name, _snaplen, flags)) != NULL)
       device_name = strdup(_device_name);
   }
 }

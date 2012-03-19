@@ -487,7 +487,7 @@ int main(int argc, char* argv[]) {
   while(dev != NULL) {
     printf("Adding %s to bundle\n", dev);
 
-    ring[num_ring] = pfring_open(dev, promisc, snaplen, 0, 0 /* short header */);
+    ring[num_ring] = pfring_open(dev, snaplen, PF_RING_PROMISC);
 
     if(ring[num_ring] == NULL) {
       printf("pfring_open error [%s] (perhaps you use quick mode and have already a socket bound to %s ?)\n", 

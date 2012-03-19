@@ -59,7 +59,6 @@ void printHelp(void) {
 
 int main(int argc, char* argv[]) {
   char *device = NULL, c;
-  int promisc;
 
 #if 0  
   struct sched_param schedparam;
@@ -123,8 +122,7 @@ int main(int argc, char* argv[]) {
     return(-1);
   }
 
-  promisc = 1;
-  if((pd = pfring_open(device, promisc, 1500, 0, 0 /* short header */)) == NULL) {
+  if((pd = pfring_open(device, 1500, PF_RING_PROMISC)) == NULL) {
     printf("pfring_open error [%s]\n", strerror(errno));
     return(-1);
   } else

@@ -1162,9 +1162,11 @@ pcap_activate_linux(pcap_t *handle)
 	if(!getenv("PCAP_NO_PF_RING")) {
 	  /* Code courtesy of Chris Wakelin <c.d.wakelin@reading.ac.uk> */
 	  char *clusterId;
-
-	  handle->ring = pfring_open((char*)device, handle->opt.promisc, handle->snapshot, 
-				     0 /* not reentrant */, 0 /* short header */);
+	  int flags = 0;
+	  	  
+	  if(handle->opt.promisc) flags |= PF_RING_PROMISC;
+	  
+	  handle->ring = pfring_open((char*)device, handle->snapshot, flags);
 
 	  if(handle->ring) {
 	    if(clusterId = getenv("PCAP_PF_RING_CLUSTER_ID"))

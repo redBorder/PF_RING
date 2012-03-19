@@ -196,7 +196,7 @@ static __inline__ ticks getticks(void)
 
 int main(int argc, char* argv[]) {
   char c, *pcap_in = NULL, mac_address[6];
-  int promisc, i, verbose = 0, active_poll = 0;
+  int i, verbose = 0, active_poll = 0;
   int reforge_mac = 0, to_go, to_go_threshold = 256, use_zero_copy_tx = 0;
   u_int mac_a, mac_b, mac_c, mac_d, mac_e, mac_f;
   char buffer[9000];
@@ -265,10 +265,7 @@ int main(int argc, char* argv[]) {
 
   printf("Sending packets on %s\n", in_dev);
 
-  /* hardcode: promisc=1, to_ms=500 */
-  promisc = 1;
-
-  pd = pfring_open(in_dev, promisc, 1500, 0, 0 /* short header */);
+  pd = pfring_open(in_dev, 1500, PF_RING_PROMISC);
   if(pd == NULL) {
     printf("pfring_open %s error [%s]\n", in_dev, strerror(errno));
     return(-1);
