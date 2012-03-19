@@ -83,10 +83,8 @@ static int vpfring_ring_add(struct vPFRingAddMsg *amsg, void *ret_message, uint3
 
 	vpfri->ring = pfring_open(
 		amsg->device_name,
-		amsg->promisc,
 		amsg->caplen,
-		amsg->reentrant,
-		amsg->long_header);
+		amsg->flags);
 
 	if (vpfri->ring == NULL)
 		goto free_client;

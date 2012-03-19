@@ -138,10 +138,7 @@ struct vPFRingSetApplicationNameMsg {
 struct vPFRingAddMsg /* PLUG + open_consumer */ {
 	char		device_name[VPFRING_CTRL_MAX_DEV_NAME];
 	uint32_t	caplen;
-	uint8_t		promisc;
-	uint8_t		reentrant;
-	uint8_t		long_header;
-	uint16_t	__padding;
+	uint32_t	flags;
 };
 
 struct vPFRingBindMsg {
