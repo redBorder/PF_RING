@@ -94,7 +94,7 @@ pfring* pfring_open(char *device_name, u_int32_t caplen, u_int32_t flags) {
   ring->reentrant   = (flags & PF_RING_REENTRANT) ? 1 : 0;
   ring->direction   = rx_and_tx_direction;
   ring->mode        = send_and_recv_mode;
-  ring->long_header = (flags & PF_RING_LONG_HEADER) ? 0 : 1;
+  ring->long_header = (flags & PF_RING_LONG_HEADER) ? 1 : 0;
 
 #ifdef RING_DEBUG
   printf("pfring_open: device_name=%s\n", device_name);
