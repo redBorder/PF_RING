@@ -62,7 +62,7 @@ struct timeval lastTime, startTime;
 
 #define DEFAULT_DEVICE     "eth0"
 
-typedef unsigned long long ticks;
+typedef u_int64_t ticks;
 
 /* *************************************** */
 /*
@@ -186,10 +186,9 @@ int bind2core(u_int core_id) {
 
 static __inline__ ticks getticks(void)
 {
-  unsigned a, d;
-  asm("cpuid");
+  u_int32_t a, d;
+  // asm("cpuid"); // serialization
   asm volatile("rdtsc" : "=a" (a), "=d" (d));
-
   return (((ticks)a) | (((ticks)d) << 32));
 }
 
@@ -242,7 +241,6 @@ int main(int argc, char* argv[]) {
       break;
     case 'r':
       sscanf(optarg, "%lf", &gbit_s);
-      if (gbit_s == 10) gbit_s = 0; /* useless to check ticks */
       break;
 #if 0
     case 'b':
@@ -298,7 +296,7 @@ int main(int argc, char* argv[]) {
     tick_start = getticks();
     usleep(1001);
     hz = (getticks() - tick_start - tick_delta) * 1000 /*kHz -> Hz*/;
-    printf("Estimated CPU freq: %llu Hz\n", hz);
+    printf("Estimated CPU freq: %lu Hz\n", hz);
 
     /* computing max rate */
     pps = ((gbit_s * 1000000000) / 8 /*byte*/) / (8 /*Preamble*/ + send_len + 4 /*CRC*/ + 12 /*IFG*/);
@@ -358,7 +356,7 @@ int main(int argc, char* argv[]) {
 	}
 
 	if(verbose) 
-	  printf("Read %d bytes packet from pcap file %s [%lu.%lu Secs =  %lu ticks@%lluhz from beginning]\n", 
+	  printf("Read %d bytes packet from pcap file %s [%lu.%lu Secs =  %lu ticks@%luhz from beginning]\n", 
 		 p->len, pcap_in, h->ts.tv_sec - beginning.tv_sec, h->ts.tv_usec - beginning.tv_usec, p->ticks_from_beginning, hz);
 	num_pcap_pkts++;
       } /* while */
