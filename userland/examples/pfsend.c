@@ -46,6 +46,7 @@
 
 struct packet {
   u_int16_t len;
+  u_int64_t ticks_from_beginning;
   char *pkt;
   struct packet *next;
 };
@@ -157,7 +158,7 @@ void printHelp(void) {
   printf("-l <length>     Packet length to send. Ignored with -f\n");
   printf("-n <num>        Num pkts to send (use 0 for infinite). With -f it\n"
 	 "                specifies the number of times the file will be sent\n");
-  printf("-r <rate>       Rate to send (example -r 2.5 sends 2.5 Gbit/sec)\n");
+  printf("-r <rate>       Rate to send (example -r 2.5 sends 2.5 Gbit/sec, -r -1 pcap capture rate)\n");
   printf("-m <dst MAC>    Reforge destination MAC (format AA:BB:CC:DD:EE:FF)\n");
   printf("-v              Verbose\n");
   exit(0);
@@ -241,6 +242,7 @@ int main(int argc, char* argv[]) {
       break;
     case 'r':
       sscanf(optarg, "%lf", &gbit_s);
+      if (gbit_s == 10) gbit_s = 0; /* useless to check ticks */
       break;
 #if 0
     case 'b':
@@ -286,7 +288,7 @@ int main(int argc, char* argv[]) {
   if(send_len < 60)
     send_len = 60;
 
-  if(gbit_s > 0) {
+  if(gbit_s > 0 || gbit_s < 0) {
     /* cumputing usleep delay */
     tick_start = getticks();
     usleep(1);
@@ -313,6 +315,7 @@ int main(int argc, char* argv[]) {
     struct pcap_pkthdr *h;
     pcap_t *pt = pcap_open_offline(pcap_in, ebuf);
     u_int num_pcap_pkts = 0;
+    struct timeval beginning;
 
     if(pt) {
       struct packet *last = NULL;
@@ -323,9 +326,15 @@ int main(int argc, char* argv[]) {
 
 	if(rc <= 0) break;
 
+	if (num_pcap_pkts == 0) {
+	  beginning.tv_sec = h->ts.tv_sec;
+	  beginning.tv_usec = h->ts.tv_usec;
+	}
+
 	p = (struct packet*)malloc(sizeof(struct packet));
 	if(p) {
 	  p->len = h->caplen;
+	  p->ticks_from_beginning = (((h->ts.tv_sec - beginning.tv_sec) * 1000000) + (h->ts.tv_usec - beginning.tv_usec)) * hz / 1000000;
 	  p->next = NULL;
 	  p->pkt = (char*)malloc(p->len);
 
@@ -348,8 +357,8 @@ int main(int argc, char* argv[]) {
 	}
 
 	if(verbose) 
-	  printf("Read %d bytes packet from pcap file %s\n", 
-		 p->len, pcap_in);
+	  printf("Read %d bytes packet from pcap file %s [%lu.%lu Secs =  %lu ticks@%lluhz from beginning]\n", 
+		 p->len, pcap_in, h->ts.tv_sec - beginning.tv_sec, h->ts.tv_usec - beginning.tv_usec, p->ticks_from_beginning, hz);
 	num_pcap_pkts++;
       } /* while */
 
@@ -376,6 +385,7 @@ int main(int argc, char* argv[]) {
     p = (struct packet*)malloc(sizeof(struct packet));
     if(p) {
       p->len = send_len;
+      p->ticks_from_beginning = 0;
       p->next = p; /* Loop */
       p->pkt = (char*)malloc(p->len);
       memcpy(p->pkt, buffer, send_len);
@@ -398,9 +408,6 @@ int main(int argc, char* argv[]) {
 
   gettimeofday(&startTime, NULL);
   memcpy(&lastTime, &startTime, sizeof(startTime)); 
-
-  if(gbit_s > 0)
-    tick_start = getticks();
 
   pfring_set_socket_mode(pd, send_only_mode);
 
@@ -442,15 +449,18 @@ int main(int argc, char* argv[]) {
   tosend = pkt_head;
   i = 0;
 
+  if(gbit_s > 0)
+    tick_start = getticks();
+
   while(!num || i < num) {
     int rc;
 
   redo:
 
-    if(use_zero_copy_tx) {
+    if(use_zero_copy_tx)
       /* We pre-filled the TX slots */
       rc = pfring_send(pd, NULL, 0, 0 /* Don't flush (it does PF_RING automatically) */);
-    } else
+    else
       rc = pfring_send(pd, tosend->pkt, tosend->len, 0 /* Don't flush (it does PF_RING automatically) */);
 
     if(verbose)
@@ -458,25 +468,23 @@ int main(int argc, char* argv[]) {
 
     if(rc < 0) {
       /* Not enough space in buffer */
-
-      if(gbit_s == 0) {
-	if(!active_poll) {
-	  if(bind_core >= 0)
-	    usleep(1);
-	  else {
-	    // printf("pfring_poll()\n");
-	    pfring_poll(pd, 0); //sched_yield();
-	  }
-	}
-      } else {
-	/* Just waste some time */
-	while((getticks() - tick_start) < (num_pkt_good_sent * tick_delta)) ;
-	// printf("waste time\n");
+      if(!active_poll) {
+        if(bind_core >= 0)
+	  usleep(1);
+	else
+	  pfring_poll(pd, 0); //sched_yield();
       }
-
       goto redo;
     } else
       num_pkt_good_sent++, num_bytes_good_sent += tosend->len+24 /* 8 Preamble + 4 CRC + 12 IFG */, tosend = tosend->next;
+
+    if(gbit_s > 0) {
+      /* rate set */
+      while((getticks() - tick_start) < (num_pkt_good_sent * tick_delta)) ;
+    } else if (gbit_s < 0) {
+      /* real pcap rate */
+      while((getticks() - tick_start) < tosend->ticks_from_beginning) ;
+    }
 
     if(num > 0) i++;
 
