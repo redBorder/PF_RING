@@ -288,7 +288,7 @@ int main(int argc, char* argv[]) {
   if(send_len < 60)
     send_len = 60;
 
-  if(gbit_s > 0 || gbit_s < 0) {
+  if(gbit_s != 0) {
     /* cumputing usleep delay */
     tick_start = getticks();
     usleep(1);
@@ -305,8 +305,9 @@ int main(int argc, char* argv[]) {
 
     td = (double)(hz / pps);
     tick_delta = (ticks)td;
-
-    printf("Number of %d-byte Packet Per Second at %.2f Gbit/s: %.2f\n", (send_len + 4 /*CRC*/), gbit_s, pps);
+    
+    if (gbit_s > 0)
+      printf("Number of %d-byte Packet Per Second at %.2f Gbit/s: %.2f\n", (send_len + 4 /*CRC*/), gbit_s, pps);
   }
 
   if(pcap_in) {
@@ -449,7 +450,7 @@ int main(int argc, char* argv[]) {
   tosend = pkt_head;
   i = 0;
 
-  if(gbit_s > 0)
+  if(gbit_s != 0)
     tick_start = getticks();
 
   while(!num || i < num) {
@@ -483,6 +484,8 @@ int main(int argc, char* argv[]) {
       while((getticks() - tick_start) < (num_pkt_good_sent * tick_delta)) ;
     } else if (gbit_s < 0) {
       /* real pcap rate */
+      if (tosend->ticks_from_beginning == 0)
+        tick_start = getticks(); /* first packet, resetting time */
       while((getticks() - tick_start) < tosend->ticks_from_beginning) ;
     }
 
