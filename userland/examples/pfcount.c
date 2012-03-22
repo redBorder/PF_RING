@@ -58,6 +58,7 @@ pthread_rwlock_t statsLock;
 static struct timeval startTime;
 unsigned long long numPkts[MAX_NUM_THREADS] = { 0 }, numBytes[MAX_NUM_THREADS] = { 0 };
 u_int8_t wait_for_packet = 1, do_shutdown = 0, add_drop_rule = 0;
+u_int8_t use_extended_pkt_header = 0;
 
 /* *************************************** */
 /*
@@ -386,7 +387,7 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u
     }
 #endif
 
-    if(h->extended_hdr.parsed_header_len > 0) {
+    if(use_extended_pkt_header && (h->extended_hdr.parsed_header_len > 0)) {
       printf("[eth_type=0x%04X]", 
 	     h->extended_hdr.parsed_pkt.eth_type);
       printf("[l3_proto=%u]", (unsigned int)h->extended_hdr.parsed_pkt.l3_proto);
@@ -400,7 +401,7 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u
 
       printf("[%s -> %s] ",
 	     etheraddr_string(h->extended_hdr.parsed_pkt.smac, buf1),
-	     etheraddr_string(h->extended_hdr.parsed_pkt.dmac, buf2));
+	     etheraddr_string(h->extended_hdr.parsed_pkt.dmac, buf2));    
     }
 
     memcpy(&ehdr, p+h->extended_hdr.parsed_header_len, sizeof(struct ether_header));
@@ -427,6 +428,7 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u
       printf("-> %s:%d] ", intoa(ntohl(ip.ip_dst.s_addr)), h->extended_hdr.parsed_pkt.l4_dst_port);
 
       if((ip.ip_p == IPPROTO_UDP) 
+	 && use_extended_pkt_header
 	 && (h->extended_hdr.parsed_pkt.gtp.tunnel_id != NO_GTP_TUNNEL_ID))
 	printf("[GTP Version=%s/TEID=0x%08X/MsgType=0x%02X]",
 	       gtp_version2str(h->extended_hdr.parsed_pkt.gtp.version),
@@ -608,7 +610,7 @@ int main(int argc, char* argv[]) {
   int bind_core = -1;
   packet_direction direction = rx_and_tx_direction;
   u_int16_t watermark = 0, poll_duration = 0, 
-    cpu_percentage = 0, rehash_rss = 0, long_pkt_header = 0;
+    cpu_percentage = 0, rehash_rss = 0;
   char *bpfFilter = NULL;
 
 #if 0
@@ -697,7 +699,7 @@ int main(int argc, char* argv[]) {
       cpu_percentage = atoi(optarg);
       break;
     case 'm':
-      long_pkt_header = 1;
+      use_extended_pkt_header = 1;
       break;
     case 'p':
       poll_duration = atoi(optarg);
@@ -739,9 +741,9 @@ int main(int argc, char* argv[]) {
     pfring_config(cpu_percentage);
   }
 
-  if(num_threads > 1) flags |= PF_RING_REENTRANT;
-  if(long_pkt_header) flags |= PF_RING_LONG_HEADER;
-  if(promisc)         flags |= PF_RING_PROMISC;
+  if(num_threads > 1)         flags |= PF_RING_REENTRANT;
+  if(use_extended_pkt_header) flags |= PF_RING_LONG_HEADER;
+  if(promisc)                 flags |= PF_RING_PROMISC;
 
   pd = pfring_open(device, snaplen, flags);
 

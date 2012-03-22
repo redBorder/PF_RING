@@ -296,7 +296,7 @@ int main(int argc, char* argv[]) {
     tick_start = getticks();
     usleep(1001);
     hz = (getticks() - tick_start - tick_delta) * 1000 /*kHz -> Hz*/;
-    printf("Estimated CPU freq: %lu Hz\n", hz);
+    printf("Estimated CPU freq: %lu Hz\n", (long unsigned int)hz);
 
     /* computing max rate */
     pps = ((gbit_s * 1000000000) / 8 /*byte*/) / (8 /*Preamble*/ + send_len + 4 /*CRC*/ + 12 /*IFG*/);
@@ -357,7 +357,9 @@ int main(int argc, char* argv[]) {
 
 	if(verbose) 
 	  printf("Read %d bytes packet from pcap file %s [%lu.%lu Secs =  %lu ticks@%luhz from beginning]\n", 
-		 p->len, pcap_in, h->ts.tv_sec - beginning.tv_sec, h->ts.tv_usec - beginning.tv_usec, p->ticks_from_beginning, hz);
+		 p->len, pcap_in, h->ts.tv_sec - beginning.tv_sec, h->ts.tv_usec - beginning.tv_usec,
+		 (long unsigned int)p->ticks_from_beginning, 
+		 (long unsigned int)hz);
 	num_pcap_pkts++;
       } /* while */
 
