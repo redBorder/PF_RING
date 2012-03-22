@@ -190,6 +190,8 @@ L4:
   if (level < 4 || fragment_offset)
     goto TIMESTAMP;
 
+  hdr->extended_hdr.parsed_pkt.gtp.tunnel_id = NO_GTP_TUNNEL_ID;
+
   if(hdr->extended_hdr.parsed_pkt.l3_proto == IPPROTO_TCP) {
     struct tcphdr *tcp;
 
@@ -215,6 +217,19 @@ L4:
 
     hdr->extended_hdr.parsed_pkt.l4_src_port = ntohs(udp->source), hdr->extended_hdr.parsed_pkt.l4_dst_port = ntohs(udp->dest);
     hdr->extended_hdr.parsed_pkt.offset.payload_offset = hdr->extended_hdr.parsed_pkt.offset.l4_offset + sizeof(struct udphdr);
+
+    if(hdr->caplen > (hdr->extended_hdr.parsed_pkt.offset.payload_offset + 4)) {
+      /* GTPv1 */
+      if((hdr->extended_hdr.parsed_pkt.l4_src_port == GTP_SIGNALING_PORT) || 
+         (hdr->extended_hdr.parsed_pkt.l4_dst_port == GTP_SIGNALING_PORT) || 
+	 (hdr->extended_hdr.parsed_pkt.l4_src_port == GTP_U_DATA_PORT)    || 
+	 (hdr->extended_hdr.parsed_pkt.l4_dst_port == GTP_U_DATA_PORT)) {
+        hdr->extended_hdr.parsed_pkt.gtp.version = gtp_version_1;
+        hdr->extended_hdr.parsed_pkt.gtp.message_type = pkt[hdr->extended_hdr.parsed_pkt.offset.payload_offset + 1];
+        memcpy(&hdr->extended_hdr.parsed_pkt.gtp.tunnel_id, &pkt[hdr->extended_hdr.parsed_pkt.offset.payload_offset + 4], 4);
+        hdr->extended_hdr.parsed_pkt.gtp.tunnel_id = ntohl(hdr->extended_hdr.parsed_pkt.gtp.tunnel_id);
+      }
+    }
 
   } else {
     hdr->extended_hdr.parsed_pkt.offset.payload_offset = hdr->extended_hdr.parsed_pkt.offset.l4_offset;
