@@ -1280,8 +1280,10 @@ static int ring_proc_get_info(char *buf, char **start, off_t offset,
 	  rlen += sprintf(buf + rlen, "Tot Read           : %lu\n", (unsigned long)fsi->tot_read);
 	  rlen += sprintf(buf + rlen, "Insert Offset      : %lu\n", (unsigned long)fsi->insert_off);
 	  rlen += sprintf(buf + rlen, "Remove Offset      : %lu\n", (unsigned long)fsi->remove_off);
-	  rlen += sprintf(buf + rlen, "Tot Fwd Ok         : %lu\n", (unsigned long)fsi->tot_fwd_ok);
-	  rlen += sprintf(buf + rlen, "Tot Fwd Errors     : %lu\n", (unsigned long)fsi->tot_fwd_notok);
+	  rlen += sprintf(buf + rlen, "TX: Send Ok        : %lu\n", (unsigned long)fsi->good_pkt_sent);
+	  rlen += sprintf(buf + rlen, "TX: Send Errors    : %lu\n", (unsigned long)fsi->pkt_send_error);
+	  rlen += sprintf(buf + rlen, "Reflect: Fwd Ok    : %lu\n", (unsigned long)fsi->tot_fwd_ok);
+	  rlen += sprintf(buf + rlen, "Reflect: Fwd Errors: %lu\n", (unsigned long)fsi->tot_fwd_notok);
 	  rlen += sprintf(buf + rlen, "Num Free Slots     : %u\n",  get_num_ring_free_slots(pfr));
 	}
 
@@ -5191,7 +5193,7 @@ static int ring_sendmsg(struct kiocb *iocb, struct socket *sock,
   /*
    *	Get and verify the address.
    */
-  saddr=(struct sockaddr_pkt *)msg->msg_name;
+  saddr = (struct sockaddr_pkt *)msg->msg_name;
   if(saddr) {
       if(saddr == NULL) proto = htons(ETH_P_ALL);
 
@@ -5282,15 +5284,23 @@ static int ring_sendmsg(struct kiocb *iocb, struct socket *sock,
    *	Now send it
    */
 
-  if (dev_queue_xmit(skb) != NETDEV_TX_OK)
+  if (dev_queue_xmit(skb) != NETDEV_TX_OK) {
+    err = -ENETDOWN; /* Probably we need a better error here */
     goto out;
+  }
 
+  pfr->slots_info->good_pkt_sent++;
   return(len);
 
  out_free:
   kfree_skb(skb);
 
  out:
+  if(err == 0)
+    pfr->slots_info->good_pkt_sent++;
+  else
+    pfr->slots_info->pkt_send_error++;
+
   return err;
 }
 

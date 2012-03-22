@@ -566,6 +566,7 @@ typedef struct flowSlotInfo {
   u_int32_t insert_off /* managed by kernel */;
   u_int64_t tot_pkts, tot_lost, tot_insert;
   u_int64_t tot_fwd_ok, tot_fwd_notok;
+  u_int64_t good_pkt_sent, pkt_send_error;
   /* <-- 64 bytes here, should be enough to avoid some L1 VIVT coherence issues (32 ~ 64bytes lines) */
   char padding[128-64];
   /* <-- 128 bytes here, should be enough to avoid false sharing in most L2 (64 ~ 128bytes lines) */
