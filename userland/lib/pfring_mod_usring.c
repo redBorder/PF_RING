@@ -29,7 +29,7 @@ u_int32_t n_call_tot = 0;
 static __inline__ ticks getticks(void)
 {
   unsigned a, d;
-  asm("cpuid");
+  /* asm("cpuid"); */
   asm volatile("rdtsc" : "=a" (a), "=d" (d));
   return (((ticks)a) | (((ticks)d) << 32));
 }

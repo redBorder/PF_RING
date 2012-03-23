@@ -460,9 +460,9 @@ int main(int argc, char* argv[]) {
 
     if(use_zero_copy_tx)
       /* We pre-filled the TX slots */
-      rc = pfring_send(pd, NULL, 0, 0 /* Don't flush (it does PF_RING automatically) */);
+      rc = pfring_send(pd, NULL, 0, gbit_s < 0 ? 1 : 0 /* Don't flush (it does PF_RING automatically) */);
     else
-      rc = pfring_send(pd, tosend->pkt, tosend->len, 0 /* Don't flush (it does PF_RING automatically) */);
+      rc = pfring_send(pd, tosend->pkt, tosend->len, gbit_s < 0 ? 1 : 0 /* Don't flush (it does PF_RING automatically) */);
 
     if(verbose)
       printf("[%d] pfring_send(%d) returned %d\n", i, tosend->len, rc);
