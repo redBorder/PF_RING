@@ -76,6 +76,9 @@
 #define SO_PURGE_IDLE_RULES              125 /* inactivity (sec) */
 #define SO_SET_SOCKET_MODE               126
 #define SO_USE_SHORT_PKT_HEADER          127
+#define SO_CREATE_DNA_CLUSTER            128
+#define SO_ATTACH_DNA_CLUSTER            129
+#define SO_WAKE_UP_DNA_CLUSTER_SLAVE     130
 
 /* Get */
 #define SO_GET_RING_VERSION              170
@@ -586,7 +589,6 @@ typedef struct flowSlotInfo {
 
 #define DNA_MAX_CHUNK_ORDER		5
 #define DNA_MAX_NUM_CHUNKS		4096
-#define MAX_EXTRA_DMA_SLOTS		524288
 
 /* *********************************** */
 
@@ -742,6 +744,23 @@ typedef struct {
   struct proc_dir_entry *proc_entry;
 } virtual_filtering_device_info;
 
+/* ************************************************* */
+
+#define DNA_CLUSTER_MAX_NUM_SLAVES 32
+
+struct create_dna_cluster_info {
+  u_int32_t cluster_id;
+  u_int32_t num_slots; /* total number of rx/tx nic/slaves slots */
+  u_int32_t num_slaves;
+  u_int32_t slave_mem_len; /* per slave shared memory size */
+  u_int64_t dma_addr[0];
+};
+
+struct attach_dna_cluster_info {
+  u_int32_t cluster_id;
+  u_int32_t slave_id;
+};
+
 #ifdef __KERNEL__
 
 #define CLUSTER_LEN       32
@@ -858,6 +877,40 @@ struct pf_userspace_ring {
 
 /* ************************************************* */
 
+struct dma_memory_info {
+  u_int32_t num_chunks, chunk_len;
+  u_int32_t num_slots,  slot_len;
+  unsigned long *virtual_addr;  /* chunks pointers */
+  u_int64_t     *dma_addr;      /* per-slot DMA adresses */
+  struct device *hwdev;         /* dev for DMA mapping */
+};
+
+/* ************************************************* */
+
+typedef enum {
+  dna_cluster_master = 0,
+  dna_cluster_slave
+} dna_cluster_client_type;
+
+struct dna_cluster {
+  u_int32_t id;
+  u_int32_t num_slaves;
+
+  atomic_t master;
+  atomic_t slaves;
+
+  struct dma_memory_info *extra_dma_memory;
+
+  u_int32_t slave_shared_memory_len; /* per slave len */
+  char *shared_memory;
+
+  wait_queue_head_t *slave_waitqueue[DNA_CLUSTER_MAX_NUM_SLAVES];
+
+  struct list_head list;
+};
+
+/* ************************************************* */
+
 typedef int (*do_handle_sw_filtering_hash_bucket)(struct pf_ring_socket *pfr,
 					       sw_filtering_hash_bucket* rule,
 					       u_char add_rule);
@@ -906,11 +959,7 @@ struct pf_ring_socket {
   dna_device_list *dna_device_entry;
 
   /* Extra DMA memory */
-  u_int32_t extra_dma_memory_num_chunks, extra_dma_memory_chunk_len;
-  u_int32_t extra_dma_memory_num_slots,  extra_dma_memory_slot_len;
-  unsigned long *extra_dma_memory;  /* chunks pointers */
-  u_int64_t *extra_dma_memory_addr; /* per-slot DMA adresses */
-  struct device *extra_dma_memory_hwdev; /* dev for DMA mapping */
+  struct dma_memory_info *extra_dma_memory;
 
   /* Cluster */
   u_short cluster_id; /* 0 = no cluster */
@@ -966,8 +1015,13 @@ struct pf_ring_socket {
 #endif /* VPFRING_SUPPORT */
 
   /* UserSpace RING */
-  userspace_ring_client_type  userspace_ring_type;
-  struct pf_userspace_ring   *userspace_ring;
+  userspace_ring_client_type userspace_ring_type;
+  struct pf_userspace_ring *userspace_ring;
+
+  /* DNA cluster */
+  struct dna_cluster *dna_cluster;
+  dna_cluster_client_type dna_cluster_type;
+  u_int32_t dna_cluster_slave_id; /* slave only */
 };
 
 /* **************************************** */

@@ -207,6 +207,16 @@ static rwlock_t userspace_ring_lock =
 #endif
 ;
 
+/* List of DNA clusters */
+static struct list_head dna_cluster_list;
+static rwlock_t dna_cluster_lock =
+#if(LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39))
+  RW_LOCK_UNLOCKED
+#else
+  __RW_LOCK_UNLOCKED(dna_cluster_lock)
+#endif
+;
+
 /* Dumy buffer used for loopback_test */
 u_int32_t loobpack_test_buffer_len = 4*1024*1024;
 u_char *loobpack_test_buffer = NULL;
@@ -1388,6 +1398,27 @@ static void ring_proc_term(void)
 
 /* ********************************** */
 
+static u_int32_t align_shared_memory_size(u_int32_t min_mem)
+{
+  u_int32_t tot_mem;
+
+  tot_mem = PAGE_ALIGN(min_mem);
+
+  /* Alignment necessary on ARM platforms */
+  tot_mem += SHMLBA - (tot_mem % SHMLBA);
+
+  /* rounding size to the next power of 2 (needed by vPFRing) */
+  tot_mem--;
+  tot_mem |= tot_mem >> 1;
+  tot_mem |= tot_mem >> 2;
+  tot_mem |= tot_mem >> 4;
+  tot_mem |= tot_mem >> 8;
+  tot_mem |= tot_mem >> 16;
+  tot_mem++;
+
+  return tot_mem;
+}
+
 /*
  * Allocate ring memory used later on for
  * mapping it to userland
@@ -1398,7 +1429,7 @@ static int ring_alloc_mem(struct sock *sk)
   u_int32_t tot_mem;
   struct pf_ring_socket *pfr = ring_sk(sk);
 
-  /* UserSPace RING
+  /* Userspace RING
    * - producer attaching to a ring
    * - or consumer re-opening an old ring already attachred */
   if(pfr->userspace_ring != NULL
@@ -1451,19 +1482,7 @@ static int ring_alloc_mem(struct sock *sk)
 
   the_slot_len = pfr->slot_header_len + pfr->bucket_len;
 
-  tot_mem = PAGE_ALIGN(sizeof(FlowSlotInfo) + min_num_slots * the_slot_len);
-
-  /* Alignment necessary on ARM platforms */
-  tot_mem += SHMLBA - (tot_mem % SHMLBA);
-
-  /* rounding size to the next power of 2 (needed by vPFRing) */
-  tot_mem--;
-  tot_mem |= tot_mem >> 1;
-  tot_mem |= tot_mem >> 2;
-  tot_mem |= tot_mem >> 4;
-  tot_mem |= tot_mem >> 8;
-  tot_mem |= tot_mem >> 16;
-  tot_mem++;
+  tot_mem = align_shared_memory_size(sizeof(FlowSlotInfo) + min_num_slots * the_slot_len);
 
   /* Memory is already zeroed */
   pfr->ring_memory = vmalloc_user(tot_mem);
@@ -1487,7 +1506,7 @@ static int ring_alloc_mem(struct sock *sk)
   pfr->slots_info->tot_mem = tot_mem;
   pfr->slots_info->sample_rate = 1;
 
-  if(unlikely(enable_debug))
+  //if(unlikely(enable_debug))
     printk("[PF_RING] allocated %d slots [slot_len=%d][tot_mem=%u]\n",
 	   pfr->slots_info->min_num_slots, pfr->slots_info->slot_len,
 	   pfr->slots_info->tot_mem);
@@ -4317,7 +4336,7 @@ static struct pf_userspace_ring* userspace_ring_create(char *u_dev_name, userspa
 
   if(strncmp(u_dev_name, "usr", 3) != 0) {
     if(unlikely(enable_debug))
-      printk("[PF_RING] userspace_ring_create(%s) failed (1)\n", u_dev_name);
+      printk("[PF_RING] %s(%s) failed (1)\n", __FUNCTION__, u_dev_name);
 
     return NULL;
   }
@@ -4331,7 +4350,8 @@ static struct pf_userspace_ring* userspace_ring_create(char *u_dev_name, userspa
     entry = list_entry(ptr, struct pf_userspace_ring, list);
 
     if(unlikely(enable_debug))
-      printk("[PF_RING] userspace_ring_create(%d) vs %lu [users: %u][type: %s]\n",
+      printk("[PF_RING] %s(%d) vs %lu [users: %u][type: %s]\n",
+             __FUNCTION__,
 	     entry->id, id, atomic_read(&entry->users[type]),
 	     (type == userspace_ring_producer) ? "producer" : "consumer");
 
@@ -4347,27 +4367,25 @@ static struct pf_userspace_ring* userspace_ring_create(char *u_dev_name, userspa
   /* creating a new userspace ring */
   if(usr == NULL) {
     /* Note: a userspace ring can be created by a consumer only,
-     * (however a producer can keep it if the consumer dies) */
+     * however a producer can keep it if the consumer dies */
     if(unlikely(enable_debug))
-      printk("[PF_RING] userspace_ring_create(%s): attempting to create ring\n", u_dev_name);
+      printk("[PF_RING] %s(%s): attempting to create ring\n", __FUNCTION__, u_dev_name);
 
     if(type == userspace_ring_producer) {
       if(unlikely(enable_debug))
-	printk("[PF_RING] userspace_ring_create(%s) failed (2)\n", u_dev_name);
+	printk("[PF_RING] %s(%s) failed (2)\n", __FUNCTION__, u_dev_name);
 
       goto unlock;
     }
 
-    usr = kmalloc(sizeof(struct pf_userspace_ring), GFP_ATOMIC);
+    usr = kcalloc(1, sizeof(struct pf_userspace_ring), GFP_KERNEL);
 
     if(usr == NULL) {
       if(unlikely(enable_debug))
-	printk("[PF_RING] userspace_ring_create(%s) failed (3)\n", u_dev_name);
+	printk("[PF_RING] %s(%s) failed (3)\n", __FUNCTION__, u_dev_name);
 
       goto unlock;
     }
-
-    memset(usr, 0, sizeof(struct pf_userspace_ring));
 
     usr->id = id;
     atomic_set(&usr->users[userspace_ring_consumer], 0);
@@ -4379,8 +4397,8 @@ static struct pf_userspace_ring* userspace_ring_create(char *u_dev_name, userspa
   atomic_inc(&usr->users[type]);
 
   if(unlikely(enable_debug))
-    printk("[PF_RING] userspace_ring_create(%lu) just created [users: %u][type: %s]\n",
-	   id, atomic_read(&usr->users[type]),
+    printk("[PF_RING] %s(%lu) just created [users: %u][type: %s]\n",
+	   __FUNCTION__, id, atomic_read(&usr->users[type]),
 	   (type == userspace_ring_producer) ? "producer" : "consumer");
 
   if(type == userspace_ring_consumer)
@@ -4391,9 +4409,9 @@ unlock:
 
   if(unlikely(enable_debug)) {
     if(usr != NULL)
-      printk("[PF_RING] userspace_ring_create() Userspace ring found or created.\n");
+      printk("[PF_RING] %s() Userspace ring found or created.\n", __FUNCTION__);
     else
-      printk("[PF_RING] userspace_ring_create(): NULL ring returned.\n");
+      printk("[PF_RING] %s(): NULL ring returned.\n", __FUNCTION__);
   }
 
   return usr;
@@ -4402,7 +4420,7 @@ unlock:
 /* ********************************** */
 
 static int userspace_ring_remove(struct pf_userspace_ring *usr,
-                                        userspace_ring_client_type type) {
+                                 userspace_ring_client_type type) {
   struct list_head *ptr, *tmp_ptr;
   struct pf_userspace_ring *entry;
   int ret = 0;
@@ -4479,118 +4497,338 @@ static unsigned long alloc_contiguous_memory(u_int mem_len) {
   return(mem);
 }
 
-static int allocate_extra_dma_memory(struct pf_ring_socket *pfr, struct device *hwdev,
-                                     u_int32_t num_slots, u_int32_t slot_len, u_int32_t chunk_len)
+/* ************************************* */
+
+static struct dma_memory_info *allocate_extra_dma_memory(struct device *hwdev, 
+                                                         u_int32_t num_slots, u_int32_t slot_len, u_int32_t chunk_len)
 {
-  u_int i, num_slots_per_chunk;
+  u_int i, num_slots_per_chunk, num_chunks;
+  struct dma_memory_info *dma_memory;
 
-  pfr->extra_dma_memory_chunk_len = chunk_len;
-  pfr->extra_dma_memory_num_slots = num_slots;
-  pfr->extra_dma_memory_slot_len = slot_len;
-  pfr->extra_dma_memory_hwdev = hwdev;
-  num_slots_per_chunk = pfr->extra_dma_memory_chunk_len / pfr->extra_dma_memory_slot_len;
-  pfr->extra_dma_memory_num_chunks = pfr->extra_dma_memory_num_slots / num_slots_per_chunk;
+  /* Note: this function allocates up to num_slots slots. You can check the exact number by ... */
 
-  if(pfr->extra_dma_memory || pfr->extra_dma_memory_addr) /* already called */
-    return -EINVAL;
+  num_slots_per_chunk = chunk_len / slot_len;
+  num_chunks = num_slots / num_slots_per_chunk;
 
-  if(pfr->extra_dma_memory_num_chunks == 0)
-    return -EINVAL;
+  if(num_chunks == 0) 
+    return NULL;
 
-  if((pfr->extra_dma_memory = kcalloc(1, sizeof(unsigned long) * pfr->extra_dma_memory_num_chunks, GFP_KERNEL)) == NULL)
-    return -ENOMEM;
+  if((dma_memory = kcalloc(1, sizeof(struct dma_memory_info), GFP_KERNEL)) == NULL)
+    return NULL;
 
-  if ((pfr->extra_dma_memory_addr = kcalloc(1, sizeof(u_int64_t) * pfr->extra_dma_memory_num_slots, GFP_KERNEL)) == NULL) {
-    kfree(pfr->extra_dma_memory);
-    pfr->extra_dma_memory = NULL;
-    return -ENOMEM;
+  dma_memory->chunk_len = chunk_len;
+  dma_memory->num_slots = num_slots;
+  dma_memory->slot_len = slot_len;
+  dma_memory->hwdev = hwdev;
+  dma_memory->num_chunks = num_chunks;
+
+  if((dma_memory->virtual_addr = kcalloc(1, sizeof(unsigned long) * dma_memory->num_chunks, GFP_KERNEL)) == NULL) {
+    kfree(dma_memory);
+    return NULL;
+  }
+
+  if ((dma_memory->dma_addr = kcalloc(1, sizeof(u_int64_t) * dma_memory->num_slots, GFP_KERNEL)) == NULL) {
+    kfree(dma_memory->virtual_addr);
+    kfree(dma_memory);
+    return NULL;
   }
 
   if(unlikely(enable_debug))
     printk("[PF_RING] %s() Allocating %d chunks of %d bytes [slots per chunk=%d]\n",
-           __FUNCTION__, pfr->extra_dma_memory_num_chunks, pfr->extra_dma_memory_chunk_len, num_slots_per_chunk);
+           __FUNCTION__, dma_memory->num_chunks, dma_memory->chunk_len, num_slots_per_chunk);
 
   /* Allocating memory chunks */
-  for(i=0; i < pfr->extra_dma_memory_num_chunks; i++) {
-    pfr->extra_dma_memory[i] = alloc_contiguous_memory(pfr->extra_dma_memory_chunk_len);
+  for(i=0; i < dma_memory->num_chunks; i++) {
+    dma_memory->virtual_addr[i] = alloc_contiguous_memory(dma_memory->chunk_len);
 
-    if(!pfr->extra_dma_memory[i]) {
+    if(!dma_memory->virtual_addr[i]) {
       printk("[PF_RING] %s() Warning: no more free memory available! Allocated %d of %d chunks.\n",
-	     __FUNCTION__, i + 1, pfr->extra_dma_memory_num_chunks);
+	     __FUNCTION__, i + 1, dma_memory->num_chunks);
 
-      pfr->extra_dma_memory_num_chunks = i;
+      dma_memory->num_chunks = i;
+      dma_memory->num_slots = dma_memory->num_chunks * num_slots_per_chunk;
       break;
     }
   }
 
   /* Mapping DMA slots */
-  for(i=0; i < pfr->extra_dma_memory_num_slots; i++) {
+  for(i=0; i < dma_memory->num_slots; i++) {
     u_int chunk_id = i / num_slots_per_chunk;
-    u_int offset = (i % num_slots_per_chunk) * pfr->extra_dma_memory_slot_len;
+    u_int offset = (i % num_slots_per_chunk) * dma_memory->slot_len;
     char *slot;
 
-    if(!pfr->extra_dma_memory[chunk_id])
+    if(!dma_memory->virtual_addr[chunk_id])
       break;
 
-    slot = (char *) (pfr->extra_dma_memory[chunk_id] + offset);
+    slot = (char *) (dma_memory->virtual_addr[chunk_id] + offset);
 
     if(unlikely(enable_debug))
       printk("[PF_RING] %s() Mapping DMA slot %d of %d [slot addr=%p][offset=%u]\n",
-             __FUNCTION__, i + 1, pfr->extra_dma_memory_num_slots, slot, offset);
+             __FUNCTION__, i + 1, dma_memory->num_slots, slot, offset);
 
-      pfr->extra_dma_memory_addr[i] = cpu_to_le64(
-        pci_map_single(to_pci_dev(pfr->extra_dma_memory_hwdev), slot,
-                       pfr->extra_dma_memory_slot_len,
+      dma_memory->dma_addr[i] = cpu_to_le64(
+        pci_map_single(to_pci_dev(dma_memory->hwdev), slot,
+                       dma_memory->slot_len,
                        PCI_DMA_BIDIRECTIONAL));
 
       if(dma_mapping_error(
 #if(LINUX_VERSION_CODE > KERNEL_VERSION(2,6,26))
-                           pfr->extra_dma_memory_hwdev,
+                           dma_memory->hwdev,
 #endif
-			   pfr->extra_dma_memory_addr[i])) {
-        printk("[PF_RING] %s() Error mapping DMA slot %d of %d \n", __FUNCTION__, i + 1, pfr->extra_dma_memory_num_slots);
-	pfr->extra_dma_memory_addr[i] = 0;
+			   dma_memory->dma_addr[i])) {
+        printk("[PF_RING] %s() Error mapping DMA slot %d of %d \n", __FUNCTION__, i + 1, dma_memory->num_slots);
+	dma_memory->dma_addr[i] = 0;
+	dma_memory->num_slots = i;
         break;
       }
   }
 
-  return 0;
+  return dma_memory;
 }
 
-static void free_extra_dma_memory(struct pf_ring_socket *pfr) {
+static void free_extra_dma_memory(struct dma_memory_info *dma_memory) {
   u_int i;
 
-  if(!pfr->extra_dma_memory)
-    return;
-
   /* Unmapping DMA addresses */
-  if(pfr->extra_dma_memory_addr) {
-    for(i=0; i < pfr->extra_dma_memory_num_slots; i++) {
-      if(pfr->extra_dma_memory_addr[i]) {
-        dma_unmap_single(pfr->extra_dma_memory_hwdev, pfr->extra_dma_memory_addr[i],
-	                 pfr->extra_dma_memory_slot_len,
+  if(dma_memory->dma_addr) {
+    for(i=0; i < dma_memory->num_slots; i++) {
+      if(dma_memory->dma_addr[i]) {
+        dma_unmap_single(dma_memory->hwdev, dma_memory->dma_addr[i],
+	                 dma_memory->slot_len,
 	                 PCI_DMA_BIDIRECTIONAL);
-	pfr->extra_dma_memory_addr[i] = 0;
       }
     }
-    kfree(pfr->extra_dma_memory_addr);
-    pfr->extra_dma_memory_addr = NULL;
+    kfree(dma_memory->dma_addr);
   }
 
   /* Freeing memory */
-  for(i=0; i < pfr->extra_dma_memory_num_chunks; i++) {
-    if(pfr->extra_dma_memory[i]) {
-      if(unlikely(enable_debug))
-        printk("[PF_RING] %s() Freeing chunk %d of %d\n", __FUNCTION__, i, pfr->extra_dma_memory_num_chunks);
+  if (dma_memory->virtual_addr) {
+    for(i=0; i < dma_memory->num_chunks; i++) {
+      if(dma_memory->virtual_addr[i]) {
+        if(unlikely(enable_debug))
+          printk("[PF_RING] %s() Freeing chunk %d of %d\n", __FUNCTION__, i, dma_memory->num_chunks);
 
-      free_contiguous_memory(pfr->extra_dma_memory[i], pfr->extra_dma_memory_chunk_len);
-      pfr->extra_dma_memory[i] = 0;
+        free_contiguous_memory(dma_memory->virtual_addr[i], dma_memory->chunk_len);
+      }
+    }
+    kfree(dma_memory->virtual_addr);
+  }
+
+  kfree(dma_memory);
+}
+
+/* ********************************** */
+
+static char *dna_cluster_allocate_shared_memory(u_int32_t num_slaves, u_int32_t slave_mem_len)
+{
+  char *shared_mem;
+  u_int32_t shared_mem_size;
+
+  if(unlikely(enable_debug))
+    printk("[PF_RING] %s()\n", __FUNCTION__);
+
+  shared_mem_size = align_shared_memory_size(PAGE_ALIGN(slave_mem_len) * num_slaves);
+
+  /* Memory is already zeroed */
+  shared_mem = vmalloc_user(shared_mem_size);
+
+  if(shared_mem != NULL) {
+    if(unlikely(enable_debug))
+      printk("[PF_RING] %s() successfully allocated %u bytes at 0x%08lx\n",
+             __FUNCTION__, shared_mem_size, (unsigned long) shared_mem);
+  } else {
+    printk("[PF_RING] ERROR: not enough memory for DNA cluster\n");
+  }
+
+  return shared_mem;
+}
+
+static struct dna_cluster* dna_cluster_create(u_int32_t dna_cluster_id, u_int32_t num_slots, 
+                                              u_int32_t num_slaves, u_int32_t slave_mem_len,
+                                              struct device *hwdev, u_int32_t slot_len, u_int32_t chunk_len)
+{
+  struct list_head *ptr, *tmp_ptr;
+  struct dna_cluster *entry;
+  struct dna_cluster *dnac = NULL;
+
+  write_lock(&dna_cluster_lock);
+
+  /* checking if the dna cluster already exists */
+  list_for_each_safe(ptr, tmp_ptr, &dna_cluster_list) {
+    entry = list_entry(ptr, struct dna_cluster, list);
+
+    if(entry->id == dna_cluster_id) {
+
+      if(unlikely(enable_debug))
+        printk("[PF_RING] %s(%u) cluster already exists [master: %u][slaves: %u]\n",
+               __FUNCTION__, dna_cluster_id, atomic_read(&entry->master), atomic_read(&entry->slaves));
+
+      /* Note: a dna cluster can be created by a master only,
+       * however one/more slaves can keep it if the master dies */
+      if(atomic_read(&entry->master) > 0)
+        goto unlock;
+
+      dnac = entry;
+      break;
     }
   }
 
-  pfr->extra_dma_memory_num_chunks = 0;
-  kfree(pfr->extra_dma_memory);
-  pfr->extra_dma_memory = NULL;
+  /* Creating a new dna cluster */
+  if(dnac == NULL) {
+    if(unlikely(enable_debug))
+      printk("[PF_RING] %s(%u): attempting to create a dna cluster\n", __FUNCTION__, dna_cluster_id);
+
+    dnac = kcalloc(1, sizeof(struct dna_cluster), GFP_KERNEL);
+
+    if(dnac == NULL) {
+      if(unlikely(enable_debug))
+	printk("[PF_RING] %s(%u) failed\n", __FUNCTION__, dna_cluster_id);
+      goto unlock;
+    }
+    
+    dnac->id = dna_cluster_id;
+    dnac->num_slaves = num_slaves;
+
+    atomic_set(&dnac->master, 0);
+    atomic_set(&dnac->slaves, 0);
+ 
+    if((dnac->extra_dma_memory = allocate_extra_dma_memory(hwdev, num_slots, slot_len, chunk_len)) == NULL) {
+      kfree(dnac);
+      dnac = NULL;
+      goto unlock;
+    }
+
+    if(dnac->extra_dma_memory->num_slots < num_slots) {
+      /* DNA cluster requires exactly num_slots, they are not used as a auxiliary "tank" */
+      free_extra_dma_memory(dnac->extra_dma_memory);
+      kfree(dnac);
+      dnac = NULL;
+      goto unlock;
+    } 
+
+    if((dnac->shared_memory = dna_cluster_allocate_shared_memory(num_slaves, slave_mem_len)) == NULL) {
+      free_extra_dma_memory(dnac->extra_dma_memory);
+      kfree(dnac);
+      dnac = NULL;
+      goto unlock;
+    }
+    dnac->slave_shared_memory_len = PAGE_ALIGN(slave_mem_len);
+
+    list_add(&dnac->list, &dna_cluster_list);
+
+    if(unlikely(enable_debug))
+      printk("[PF_RING] %s(%u) New DNA cluster created\n",  __FUNCTION__, dna_cluster_id);
+  }
+
+  atomic_inc(&dnac->master);
+
+unlock:
+  write_unlock(&dna_cluster_lock);
+
+  if(unlikely(enable_debug)) {
+    if(dnac != NULL)
+      printk("[PF_RING] %s(%u) DNA cluster found or created [master: %u][slaves: %u]\n",
+           __FUNCTION__, dna_cluster_id, atomic_read(&dnac->master), atomic_read(&dnac->slaves));
+    else
+      printk("[PF_RING] %s() error\n", __FUNCTION__);
+  }
+
+  return dnac;
+}
+
+static void dna_cluster_remove(struct dna_cluster *dnac, dna_cluster_client_type type, u_int32_t slave_id) {
+  struct list_head *ptr, *tmp_ptr;
+  struct dna_cluster *entry;
+
+  write_lock(&dna_cluster_lock);
+
+  list_for_each_safe(ptr, tmp_ptr, &dna_cluster_list) {
+    entry = list_entry(ptr, struct dna_cluster, list);
+
+    if(entry == dnac) {
+      
+      if (type == dna_cluster_master)
+        atomic_dec(&dnac->master);
+      else if (type == dna_cluster_slave) {
+        dnac->slave_waitqueue[slave_id] = NULL;
+        atomic_dec(&dnac->slaves);
+      }
+
+      if(atomic_read(&dnac->master) == 0 && atomic_read(&dnac->slaves) == 0) {
+        list_del(ptr);
+        free_extra_dma_memory(entry->extra_dma_memory);
+        vfree(entry->shared_memory);
+        kfree(entry);
+        
+	if(unlikely(enable_debug))
+	  printk("[PF_RING] %s() success\n", __FUNCTION__);
+      }
+
+      break;
+    }
+  }
+
+  write_unlock(&dna_cluster_lock);
+}
+
+static struct dna_cluster* dna_cluster_attach(u_int32_t dna_cluster_id, wait_queue_head_t *slave_waitqueue, u_int32_t *slave_id) {
+  struct list_head *ptr, *tmp_ptr;
+  struct dna_cluster *entry;
+  struct dna_cluster *dnac = NULL;
+  u_int32_t i;
+  int slot_found = 0;
+
+  write_lock(&dna_cluster_lock);
+
+  list_for_each_safe(ptr, tmp_ptr, &dna_cluster_list) {
+    entry = list_entry(ptr, struct dna_cluster, list);
+
+    if(entry->id == dna_cluster_id) {
+
+      if(unlikely(enable_debug))
+        printk("[PF_RING] %s(%u) cluster found [master: %u][slaves: %u]\n",
+               __FUNCTION__, dna_cluster_id, atomic_read(&entry->master), atomic_read(&entry->slaves));
+
+      dnac = entry;
+      
+      if (atomic_add_return(1, &dnac->slaves) > dnac->num_slaves) {
+        printk("[PF_RING] %s(%u) too many slaves\n", __FUNCTION__, dna_cluster_id);
+        atomic_dec(&dnac->slaves);
+	dnac = NULL;
+        goto unlock;
+      }
+
+      for(i = 0; i < dnac->num_slaves; i++) {
+        if (dnac->slave_waitqueue[i] == NULL) {
+          dnac->slave_waitqueue[i] = slave_waitqueue;
+	  *slave_id = i;
+	  slot_found = 1;
+	}
+      }
+
+      if(!slot_found) {
+        printk("[PF_RING] %s(%u) can't get a slave id\n", __FUNCTION__, dna_cluster_id);
+        atomic_dec(&dnac->slaves);
+	dnac = NULL;
+        goto unlock;
+      }
+
+      break;
+    }
+  }
+
+unlock:
+  write_unlock(&dna_cluster_lock);
+
+  if(unlikely(enable_debug)) {
+    if(dnac != NULL)
+      printk("[PF_RING] %s(%u) attached to DNA cluster [master: %u][slaves: %u]\n",
+           __FUNCTION__, dna_cluster_id, atomic_read(&dnac->master), atomic_read(&dnac->slaves));
+    else
+      printk("[PF_RING] %s() error\n", __FUNCTION__);
+  }
+
+  return dnac;
 }
 
 /* *********************************************** */
@@ -4745,6 +4983,9 @@ static int ring_release(struct socket *sock)
   if(ring_memory_ptr != NULL && free_ring_memory)
     vfree(ring_memory_ptr);
 
+  if (pfr->dna_cluster != NULL)
+    dna_cluster_remove(pfr->dna_cluster, pfr->dna_cluster_type, pfr->dna_cluster_slave_id); 
+
   if(pfr->dna_device_entry != NULL) {
     dna_device_mapping mapping;
 
@@ -4754,8 +4995,10 @@ static int ring_release(struct socket *sock)
     ring_map_dna_device(pfr, &mapping);
   }
 
-  if(pfr->extra_dma_memory)
-    free_extra_dma_memory(pfr);
+  if(pfr->extra_dma_memory != NULL) {
+    free_extra_dma_memory(pfr->extra_dma_memory);
+    pfr->extra_dma_memory = NULL;
+  }
 
   /* 
      Wait long enough so that other threads using ring_table
@@ -4967,7 +5210,7 @@ static int do_memory_mmap(struct vm_area_struct *vma,
   start = vma->vm_start;
 
   if(unlikely(enable_debug))
-    printk("[PF_RING] do_memory_mmap(mode=%d, size=%lu, ptr=%p)\n", mode, size, ptr);
+    printk("[PF_RING] %s(mode=%d, size=%lu, ptr=%p)\n", __FUNCTION__, mode, size, ptr);
 
   while(size > 0) {
     int rc;
@@ -5012,128 +5255,201 @@ static int ring_mmap(struct file *file,
   struct sock *sk = sock->sk;
   struct pf_ring_socket *pfr = ring_sk(sk);
   int rc;
-  unsigned long mem_id = 0;
+  unsigned long mem_id = vma->vm_pgoff; /* using vm_pgoff as memory id */
   unsigned long size = (unsigned long)(vma->vm_end - vma->vm_start);
 
   if(unlikely(enable_debug))
-    printk("[PF_RING] ring_mmap() called\n");
-
-  if(ring_alloc_mem(sk) != 0) {
-    printk("[PF_RING] ring_mmap(): unable to allocate memory\n");
-    return(-EINVAL);
-  }
-
+    printk("[PF_RING] %s() called\n", __FUNCTION__);
+ 
   if(size % PAGE_SIZE) {
     if(unlikely(enable_debug))
-      printk("[PF_RING] ring_mmap() failed: len is not multiple of PAGE_SIZE\n");
+      printk("[PF_RING] %s() failed: len is not multiple of PAGE_SIZE\n", __FUNCTION__);
 
     return(-EINVAL);
   }
 
   if(unlikely(enable_debug))
-    printk("[PF_RING] ring_mmap() called, size: %ld bytes [bucket_len=%d]\n",
-	   size, pfr->bucket_len);
+    printk("[PF_RING] %s() called, size: %ld bytes [bucket_len=%d]\n",
+	   __FUNCTION__, size, pfr->bucket_len);
 
-  /* using vm_pgoff as memory id */
-  mem_id = vma->vm_pgoff;
-
-  if( (mem_id == 0 && pfr->ring_memory == NULL) ||
-      (mem_id  > 0 && pfr->dna_device  == NULL)) {
-
-    if(unlikely(enable_debug))
-      printk("[PF_RING] ring_mmap() failed: "
-	     "mapping area to an unbound socket\n");
-
-    return -EINVAL;
-  }
-
-  /* Tricks for DNA */
+  /* Trick for mapping DNA chunks */
   if(mem_id >= 100){
     mem_id -= 100;
 
-    if(mem_id < pfr->dna_device->mem_info.rx.packet_memory_num_chunks) {
-      /* DNA; RX packet memory */
+    if(pfr->dna_device) {
+      if(mem_id < pfr->dna_device->mem_info.rx.packet_memory_num_chunks) {
+        /* DNA: RX packet memory */
 
-      if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->rx_packet_memory[mem_id], VM_LOCKED, 1)) < 0)
-        return(rc);
-    } else if(mem_id < pfr->dna_device->mem_info.rx.packet_memory_num_chunks + pfr->dna_device->mem_info.tx.packet_memory_num_chunks) {
-      /* DNA: TX packet memory */
+        if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->rx_packet_memory[mem_id], VM_LOCKED, 1)) < 0)
+          return(rc);
 
-      mem_id -= pfr->dna_device->mem_info.rx.packet_memory_num_chunks;
+	return(0);
+      } else if(mem_id < pfr->dna_device->mem_info.rx.packet_memory_num_chunks + 
+                         pfr->dna_device->mem_info.tx.packet_memory_num_chunks) {
+        /* DNA: TX packet memory */
 
-      if(mem_id >= pfr->dna_device->mem_info.tx.packet_memory_num_chunks)
-        return -EINVAL;
+        mem_id -= pfr->dna_device->mem_info.rx.packet_memory_num_chunks;
 
-      if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->tx_packet_memory[mem_id], VM_LOCKED, 1)) < 0)
-        return(rc);
-    } else {
-      /* Extra DMA memory */
+        if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->tx_packet_memory[mem_id], VM_LOCKED, 1)) < 0)
+          return(rc);
+	
+	return(0);
+      } else if(pfr->extra_dma_memory && mem_id < pfr->dna_device->mem_info.rx.packet_memory_num_chunks + 
+                                                  pfr->dna_device->mem_info.tx.packet_memory_num_chunks + 
+                                                  pfr->extra_dma_memory->num_chunks) {
+        /* Extra DMA memory */
 
-      mem_id -= pfr->dna_device->mem_info.rx.packet_memory_num_chunks;
-      mem_id -= pfr->dna_device->mem_info.tx.packet_memory_num_chunks;
+        mem_id -= pfr->dna_device->mem_info.rx.packet_memory_num_chunks;
+        mem_id -= pfr->dna_device->mem_info.tx.packet_memory_num_chunks;
 
-      if(mem_id >= pfr->extra_dma_memory_num_chunks)
-        return -EINVAL;
+        if(pfr->extra_dma_memory->virtual_addr == NULL)
+          return -EINVAL;
 
-      if(pfr->extra_dma_memory == NULL)
-        return -EINVAL;
+        if((rc = do_memory_mmap(vma, size, (void *)pfr->extra_dma_memory->virtual_addr[mem_id], VM_LOCKED, 1)) < 0)
+          return(rc);
 
-      if((rc = do_memory_mmap(vma, size, (void *)pfr->extra_dma_memory[mem_id], VM_LOCKED, 1)) < 0)
-        return(rc);
+	return(0);
+      }
     }
+    
+    if(pfr->dna_cluster) {
+      /* DNA cluster extra DMA memory */
 
-    return(0);
+      if(pfr->dna_device) {
+        mem_id -= pfr->dna_device->mem_info.rx.packet_memory_num_chunks;
+        mem_id -= pfr->dna_device->mem_info.tx.packet_memory_num_chunks;
+        if(pfr->extra_dma_memory)
+          mem_id -= pfr->extra_dma_memory->num_chunks;
+      }
+      
+      if(pfr->dna_cluster->extra_dma_memory == NULL || pfr->dna_cluster->extra_dma_memory->virtual_addr == NULL)
+        return -EINVAL;
+
+      if(mem_id >= pfr->dna_cluster->extra_dma_memory->num_chunks)
+        return -EINVAL;
+
+      if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_cluster->extra_dma_memory->virtual_addr[mem_id], VM_LOCKED, 1)) < 0)
+        return(rc);
+
+      return(0);
+    }
+    
+    printk("[PF_RING] %s() failed: not DNA nor DNA cluster\n", __FUNCTION__);
+    return(-EINVAL);
   }
 
   switch(mem_id) {
     /* RING */
     case 0:
+      if(pfr->dna_device != NULL || pfr->dna_cluster != NULL) {
+        printk("[PF_RING] %s(): trying to map ring memory on DNA socket\n", __FUNCTION__);
+	return(-EINVAL);
+      }
+
+      if(pfr->ring_memory == NULL) {
+        if(ring_alloc_mem(sk) != 0) {
+          printk("[PF_RING] %s(): unable to allocate memory\n", __FUNCTION__);
+          return(-EINVAL);
+        }
+      }
+
       /* If userspace tries to mmap beyond end of our buffer, then fail */
       if(size > pfr->slots_info->tot_mem) {
         if(unlikely(enable_debug))
-	  printk("[PF_RING] ring_mmap() failed: "
-	         "area too large [%ld > %d]\n",
-	         size, pfr->slots_info->tot_mem);
+	  printk("[PF_RING] %s() failed: area too large [%ld > %d]\n", __FUNCTION__, size, pfr->slots_info->tot_mem);
         return(-EINVAL);
       }
 
       if(unlikely(enable_debug))
-        printk("[PF_RING] mmap [slot_len=%d]"
-	       "[tot_slots=%d] for ring on device %s\n",
-	       pfr->slots_info->slot_len, pfr->slots_info->min_num_slots,
-	       pfr->ring_netdev->dev->name);
+        printk("[PF_RING] mmap [slot_len=%d][tot_slots=%d] for ring on device %s\n",
+	       pfr->slots_info->slot_len, pfr->slots_info->min_num_slots, pfr->ring_netdev->dev->name);
 
       if((rc = do_memory_mmap(vma, size, pfr->ring_memory, VM_LOCKED, 0)) < 0)
         return(rc);
-      break;
 
+      break;
     case 1:
       /* DNA: RX packet descriptors */
+      if(pfr->dna_device == NULL) {
+        if(unlikely(enable_debug))
+	  printk("[PF_RING] %s() failed: operation for DNA only", __FUNCTION__);
+        return(-EINVAL);
+      }
 
       if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->rx_descr_packet_memory, VM_LOCKED, 1)) < 0)
 	return(rc);
-      break;
 
+      break;
     case 2:
       /* DNA: Physical card memory */
+      if(pfr->dna_device == NULL) {
+        if(unlikely(enable_debug))
+	  printk("[PF_RING] %s() failed: operation for DNA only", __FUNCTION__);
+        return(-EINVAL);
+      }
 
       if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->phys_card_memory, (VM_RESERVED | VM_IO), 2)) < 0)
 	return(rc);
-      break;
 
+      break;
     case 3:
       /* DNA: TX packet descriptors */
+      if(pfr->dna_device == NULL) {
+        if(unlikely(enable_debug))
+	  printk("[PF_RING] %s() failed: operation for DNA only", __FUNCTION__);
+        return(-EINVAL);
+      }
 
       if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->tx_descr_packet_memory, VM_LOCKED, 1)) < 0)
 	return(rc);
-      break;
 
+      break;
+    case 4:
+      /* DNA cluster shared memory (master) */
+      if(pfr->dna_cluster == NULL || pfr->dna_cluster_type != dna_cluster_master) {
+        if(unlikely(enable_debug))
+	  printk("[PF_RING] %s() failed: operation for DNA cluster master only", __FUNCTION__);
+        return(-EINVAL);
+      }
+
+      if(size > (pfr->dna_cluster->slave_shared_memory_len * pfr->dna_cluster->num_slaves)) {
+        if(unlikely(enable_debug))
+          printk("[PF_RING] %s() failed: area too large [%ld > %d]\n", 
+	         __FUNCTION__, size, pfr->dna_cluster->slave_shared_memory_len * pfr->dna_cluster->num_slaves);
+        return(-EINVAL);
+      }
+
+      if((rc = do_memory_mmap(vma, size, pfr->dna_cluster->shared_memory, VM_LOCKED, 0)) < 0)
+        return(rc);
+
+      break;
+    case 5:
+      /* DNA cluster shared memory (slave) */
+      if(pfr->dna_cluster == NULL || pfr->dna_cluster_type != dna_cluster_slave) {
+        if(unlikely(enable_debug))
+	  printk("[PF_RING] %s() failed: operation for DNA cluster slave only", __FUNCTION__);
+        return(-EINVAL);
+      }
+
+      if(size > pfr->dna_cluster->slave_shared_memory_len) {
+        if(unlikely(enable_debug))
+          printk("[PF_RING] %s() failed: area too large [%ld > %d]\n", 
+	         __FUNCTION__, size, pfr->dna_cluster->slave_shared_memory_len * pfr->dna_cluster->num_slaves);
+        return(-EINVAL);
+      }
+
+      if((rc = do_memory_mmap(vma, size, 
+                 &pfr->dna_cluster->shared_memory[pfr->dna_cluster->slave_shared_memory_len * pfr->dna_cluster_slave_id], 
+		 VM_LOCKED, 0)) < 0)
+        return(rc);
+
+      break;
     default:
       return(-EAGAIN);
   }
 
   if(unlikely(enable_debug))
-    printk("[PF_RING] ring_mmap succeeded\n");
+    printk("[PF_RING] %s succeeded\n", __FUNCTION__);
 
   return 0;
 }
@@ -6539,6 +6855,103 @@ static int ring_setsockopt(struct socket *sock,
     found = 1;
     break;
 
+  case SO_CREATE_DNA_CLUSTER:
+    {
+      struct create_dna_cluster_info cdnaci;
+
+      if(optlen < sizeof(cdnaci))
+        return -EINVAL;
+
+      if(copy_from_user(&cdnaci, optval, sizeof(cdnaci)))
+	return -EFAULT;
+
+      if(cdnaci.num_slots == 0 || cdnaci.num_slaves == 0 || cdnaci.slave_mem_len == 0 || 
+         cdnaci.num_slaves > DNA_CLUSTER_MAX_NUM_SLAVES)
+        return -EINVAL;
+
+      if(pfr->dna_device == NULL || pfr->dna_device->hwdev == NULL)
+        return -EINVAL;
+
+      if(optlen < (sizeof(cdnaci) + sizeof(u_int64_t) * cdnaci.num_slots))
+        return -EINVAL;
+
+      if(pfr->dna_cluster) /* already called */
+        return -EINVAL;
+
+      pfr->dna_cluster = dna_cluster_create(cdnaci.cluster_id, cdnaci.num_slots, cdnaci.num_slaves,
+                                            cdnaci.slave_mem_len, pfr->dna_device->hwdev, 
+                                            pfr->dna_device->mem_info.rx.packet_memory_slot_len,
+                                            pfr->dna_device->mem_info.rx.packet_memory_chunk_len);
+
+      if(pfr->dna_cluster == NULL) {
+	if(unlikely(enable_debug))
+	  printk("[PF_RING] SO_CREATE_DNA_CLUSTER [%u]\n", cdnaci.cluster_id);
+
+        return -EINVAL;
+      }
+
+      pfr->dna_cluster_type = dna_cluster_master;
+
+      if(copy_to_user(optval + sizeof(cdnaci), pfr->dna_cluster->extra_dma_memory->dma_addr, 
+                      sizeof(u_int64_t) * cdnaci.num_slots)) {
+        dna_cluster_remove(pfr->dna_cluster, pfr->dna_cluster_type, 0);
+	pfr->dna_cluster = NULL;
+        return -EFAULT;
+      }
+
+      if(unlikely(enable_debug))
+        printk("[PF_RING] SO_CREATE_DNA_CLUSTER done [%u]\n", cdnaci.cluster_id);
+    }
+
+    found = 1;
+    break;
+
+  case SO_ATTACH_DNA_CLUSTER:
+    {
+      struct attach_dna_cluster_info adnaci;
+
+      if(copy_from_user(&adnaci, optval, sizeof(adnaci)))
+	return -EFAULT;
+
+      pfr->dna_cluster = dna_cluster_attach(adnaci.cluster_id, &pfr->ring_slots_waitqueue, &adnaci.slave_id);
+
+      if(pfr->dna_cluster == NULL) {
+	if(unlikely(enable_debug))
+	  printk("[PF_RING] SO_ATTACH_DNA_CLUSTER [%u]\n", adnaci.cluster_id);
+
+        return -EINVAL;
+      }
+
+      pfr->dna_cluster_slave_id = adnaci.slave_id;
+      pfr->dna_cluster_type = dna_cluster_slave;
+
+      if(copy_to_user(optval, &adnaci, sizeof(adnaci))) {
+        dna_cluster_remove(pfr->dna_cluster, pfr->dna_cluster_type, pfr->dna_cluster_slave_id);
+	pfr->dna_cluster = NULL;
+        return -EFAULT;
+      }
+
+      if(unlikely(enable_debug))
+        printk("[PF_RING] SO_ATTACH_USERSPACE_RING done [%u]\n", adnaci.cluster_id);
+    }
+
+    found = 1;
+    break;
+
+  case SO_WAKE_UP_DNA_CLUSTER_SLAVE:
+    {
+      u_int32_t slave_id;
+
+      if(copy_from_user(&slave_id, optval, sizeof(slave_id)))
+	return -EFAULT;
+      
+      if (pfr->dna_cluster && slave_id < pfr->dna_cluster->num_slaves && pfr->dna_cluster->slave_waitqueue[slave_id]) {
+        /* TODO && !(slave_flags & DNA_CLUSTER_SLAVE_NO_INTERRUPT)) {
+        slave_flags |= DNA_CLUSTER_SLAVE_NO_INTERRUPT; */
+        wake_up_interruptible(pfr->dna_cluster->slave_waitqueue[slave_id]);
+      }
+    }
+ 
   case SO_SHUTDOWN_RING:
     found = 1, pfr->ring_active = 0, pfr->ring_shutdown = 1;
     wake_up_interruptible(&pfr->ring_slots_waitqueue);
@@ -6772,19 +7185,23 @@ static int ring_getsockopt(struct socket *sock,
       if(copy_from_user(&num_slots, optval, sizeof(num_slots)))
         return -EFAULT;
 
-      if(num_slots > MAX_EXTRA_DMA_SLOTS)
-        num_slots = MAX_EXTRA_DMA_SLOTS;
+      //if(num_slots > MAX_EXTRA_DMA_SLOTS)
+      //  num_slots = MAX_EXTRA_DMA_SLOTS;
 
       if(len < (sizeof(u_int64_t) * num_slots))
         return -EINVAL;
 
-      if(allocate_extra_dma_memory(pfr, pfr->dna_device->hwdev, num_slots,
-                                   pfr->dna_device->mem_info.rx.packet_memory_slot_len,
-                                   pfr->dna_device->mem_info.rx.packet_memory_chunk_len) < 0)
+      if(pfr->extra_dma_memory) /* already called */
+        return -EINVAL;
+
+      if((pfr->extra_dma_memory = allocate_extra_dma_memory(pfr->dna_device->hwdev, 
+                                    num_slots, pfr->dna_device->mem_info.rx.packet_memory_slot_len,
+                                    pfr->dna_device->mem_info.rx.packet_memory_chunk_len)) == NULL)
         return -EFAULT;
 
-      if(copy_to_user(optval, pfr->extra_dma_memory_addr, (sizeof(u_int64_t) * num_slots))) {
-        free_extra_dma_memory(pfr);
+      if(copy_to_user(optval, pfr->extra_dma_memory->dma_addr, (sizeof(u_int64_t) * num_slots))) {
+        free_extra_dma_memory(pfr->extra_dma_memory);
+	pfr->extra_dma_memory = NULL;
         return -EFAULT;
       }
 
@@ -7517,6 +7934,7 @@ static int __init ring_init(void)
   INIT_LIST_HEAD(&ring_aware_device_list);
   INIT_LIST_HEAD(&ring_dna_devices_list);
   INIT_LIST_HEAD(&userspace_ring_list);
+  INIT_LIST_HEAD(&dna_cluster_list);
 
   for(i = 0; i < MAX_NUM_DEVICES; i++)
     INIT_LIST_HEAD(&device_ring_list[i]);
