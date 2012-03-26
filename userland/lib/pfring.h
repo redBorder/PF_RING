@@ -376,8 +376,8 @@ extern "C" {
 }
 #endif
 
-#ifdef HAVE_NITRO
-#include "pfring_nitro_toolkit.h"
+#ifdef HAVE_ZERO
+#include "pfring_zero.h"
 #endif
 
 #endif /* _PFRING_H_ */
