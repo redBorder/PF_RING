@@ -6180,6 +6180,9 @@ static int ring_setsockopt(struct socket *sock,
     return -EFAULT;
 
   found = 1;
+  
+  if(unlikely(enable_debug)) 
+    printk("[PF_RING] --> ring_setsockopt(optname=%u)\n", optname);
 
   switch(optname) {
   case SO_ATTACH_FILTER:
@@ -6574,7 +6577,12 @@ static int ring_setsockopt(struct socket *sock,
     if(optlen != sizeof(u_int16_t))
       return -EINVAL;
     else {
-      u_int16_t threshold =  pfr->slots_info->min_num_slots/2;
+      u_int16_t threshold;
+
+      if(pfr->slots_info != NULL)
+	threshold = pfr->slots_info->min_num_slots/2;
+      else
+	threshold = min_num_slots;
 
       if(copy_from_user(&pfr->poll_num_pkts_watermark, optval, optlen))
 	return -EFAULT;
@@ -6587,6 +6595,8 @@ static int ring_setsockopt(struct socket *sock,
 
       if(unlikely(enable_debug))
 	printk("[PF_RING] --> SO_SET_POLL_WATERMARK=%d\n", pfr->poll_num_pkts_watermark);
+
+      found = 1;
     }
     break;
 
@@ -6599,6 +6609,8 @@ static int ring_setsockopt(struct socket *sock,
 
       if(unlikely(enable_debug))
 	printk("[PF_RING] --> SO_RING_BUCKET_LEN=%d\n", pfr->bucket_len);
+
+      found = 1;
     }
     break;
 
