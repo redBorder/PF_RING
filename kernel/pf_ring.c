@@ -4510,7 +4510,7 @@ static struct dma_memory_info *allocate_extra_dma_memory(struct device *hwdev,
   /* Note: this function allocates up to num_slots slots. You can check the exact number by ... */
 
   num_slots_per_chunk = chunk_len / slot_len;
-  num_chunks = num_slots / num_slots_per_chunk;
+  num_chunks = (num_slots + num_slots_per_chunk-1) / num_slots_per_chunk;
 
   if(num_chunks == 0) 
     return NULL;
