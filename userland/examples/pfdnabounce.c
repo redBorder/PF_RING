@@ -204,7 +204,6 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u
 
 int main(int argc, char* argv[]) {
   char c;
-  int promisc;
   u_int32_t version;
 
   startTime.tv_sec = 0;
@@ -230,9 +229,6 @@ int main(int argc, char* argv[]) {
   if(out_dev == NULL) out_dev = strdup(in_dev);
 
   printf("Bouncing packets from %s to %s\n", in_dev, out_dev);
-
-  /* hardcode: promisc=1, to_ms=500 */
-  promisc = 1;
 
   pd1 = pfring_open(in_dev, 1500 /* snaplen */, PF_RING_PROMISC);
   if(pd1 == NULL) {
