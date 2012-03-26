@@ -518,7 +518,7 @@ int lockless_list_remove(lockless_list *l, void *elem) {
 
   for(i=0; i<MAX_NUM_LIST_ELEMENTS; i++) {
     if(l->list_elements[i] == elem) {
-      xchg(&l->list_elements[i], NULL);
+      (void)xchg(&l->list_elements[i], NULL);
 
       while((l->top_element_id > 0) && (l->list_elements[l->top_element_id] == NULL))
 	l->top_element_id--;
@@ -796,6 +796,8 @@ static int ring_proc_dev_get_info(char *buf, char **start, off_t offset,
 
     if(dev_ptr->is_dna_device) {
       switch(dev_ptr->dna_device_model) {
+      case intel_e1000:
+	dev_family = "Intel e1000"; break;
       case intel_e1000e:
 	dev_family = "Intel e1000e"; break;
       case intel_igb:
