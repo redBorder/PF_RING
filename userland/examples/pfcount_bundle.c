@@ -432,7 +432,7 @@ void* packet_consumer(void) {
 
 int main(int argc, char* argv[]) {
   char *device = NULL, c, *dev, *pos = NULL, *separator = ";,";
-  int promisc, snaplen = DEFAULT_SNAPLEN;
+  int snaplen = DEFAULT_SNAPLEN;
   u_int16_t watermark = 0;
   bundle_read_policy bundle_policy = pick_round_robin;
   u_int32_t version;
@@ -474,9 +474,6 @@ int main(int argc, char* argv[]) {
   }
 
   if(device == NULL) device = strdup(DEFAULT_DEVICE);
-
-  /* hardcode: promisc=1, to_ms=500 */
-  promisc = 1;
 
   printf("Capturing from bundle %s\n", device);
   

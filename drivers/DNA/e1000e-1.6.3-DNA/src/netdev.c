@@ -1231,52 +1231,16 @@ static bool e1000_clean_rx_irq(struct e1000_adapter *adapter)
 	int cleaned_count = 0;
 	bool cleaned = 0;
 	unsigned int total_rx_bytes = 0, total_rx_packets = 0;
+
 #ifdef ENABLE_DNA
-	struct pfring_hooks *hook = (struct pfring_hooks*)netdev->pfring_ptr;
-	int debug = 0;
+        if(adapter->dna.dna_enabled)
+	  return(dna_e1000e_clean_rx_irq(adapter));
 #endif
 
 	i = rx_ring->next_to_clean;
 	rx_desc = E1000_RX_DESC_EXT(*rx_ring, i);
 	staterr = le32_to_cpu(rx_desc->wb.upper.status_error);
 	buffer_info = &rx_ring->buffer_info[i];
-
-#ifdef ENABLE_DNA
-	if(debug) printk(KERN_INFO "DNA: e1000_clean_rx_irq(%s)\n", adapter->netdev->name);
-
-	if(hook && (hook->magic == PF_RING) && adapter->dna.dna_enabled) {
-	  int ret;
-
-	  if(debug)
-	    printk(KERN_INFO
-		   "DNA: e1000_clean_rx_irq(%s)[id=%d][status=%d]\n",
-		   adapter->netdev->name, i, staterr);
-
-	  if(staterr & E1000_RXD_STAT_DD) {
-	    if(!adapter->dna.interrupt_received) {
-	      if(waitqueue_active(&adapter->dna.packet_waitqueue)) {
-		wake_up_interruptible(&adapter->dna.packet_waitqueue);
-		adapter->dna.interrupt_received = 1;
-
-		if(debug)
-		  printk(KERN_WARNING "DNA: e1000_clean_rx_irq(%s): "
-			 "woken up [slot=%d] XXXX\n", adapter->netdev->name, i);
-
-	      }
-	    }
-
-	    if(debug)
-	      printk(KERN_WARNING "DNA: e1000_clean_rx_irq(%s): "
-		     "woken up [slot=%d][interrupt_received=%d]\n",
-		     adapter->netdev->name, i, adapter->dna.interrupt_received);
-
-	    ret = TRUE;
-	  } else
-	    ret = FALSE;
-
-	  return(ret);
-	}
-#endif
 
 	while (staterr & E1000_RXD_STAT_DD) {
 		struct sk_buff *skb;

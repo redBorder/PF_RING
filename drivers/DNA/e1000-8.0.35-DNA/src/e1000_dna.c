@@ -1,7 +1,7 @@
 /*
  *
- * (C) 2008-11 - Luca Deri <deri@ntop.org>
- * (C) 2011    - Alfredo Cardigliano <cardigliano@ntop.org>
+ * (C) 2008-12 - Luca Deri <deri@ntop.org>
+ * (C) 2011-12 - Alfredo Cardigliano <cardigliano@ntop.org>
  *
  *
  * This program is free software; you can redistribute it and/or modify
@@ -21,6 +21,8 @@
 
 #define MAX_NUM_ADAPTERS       8
 
+#define DEBUG
+
 static char *adapters_to_enable[MAX_NUM_ADAPTERS] = { 0 };
 module_param_array(adapters_to_enable, charp, NULL, 0444);
 MODULE_PARM_DESC(adapters_to_enable,
@@ -38,26 +40,30 @@ static void e1000_irq_disable(struct e1000_adapter *adapter);
 /* ****************************** */
 
 void dna_check_enable_adapter(struct e1000_adapter *adapter) {
-  adapter->dna.dna_enabled = 0; /* Default */
-  
-  if(adapters_to_enable[0] == NULL) {
-    /* We enable all the adapters */
-    adapter->dna.dna_enabled = 1;
-  } else {
-    int i = 0;
+  //  struct pfring_hooks *hook = (struct pfring_hooks*)adapter->netdev->pfring_ptr;
 
-    while((i < MAX_NUM_ADAPTERS) && (adapters_to_enable[i] != NULL)) {
-      u8 addr[ETH_ALEN]; 
-      
-      if(sscanf(adapters_to_enable[i], "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
-	         &addr[0], &addr[1], &addr[2], &addr[3], &addr[4], &addr[5]) == 6
-         && !memcmp(addr, adapter->hw.mac.addr, sizeof(addr))) {
-        adapter->dna.dna_enabled = 1;
-        break;
-      }
-      
-      i++;
-    } /* while */
+  adapter->dna.dna_enabled = 0; /* Default */
+
+  /*  if(hook && (hook->magic == PF_RING)) */ {
+    if(adapters_to_enable[0] == NULL) {
+      /* We enable all the adapters */
+      adapter->dna.dna_enabled = 1;
+    } else {
+      int i = 0;
+
+      while((i < MAX_NUM_ADAPTERS) && (adapters_to_enable[i] != NULL)) {
+	u8 addr[ETH_ALEN];
+
+	if(sscanf(adapters_to_enable[i], "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+		  &addr[0], &addr[1], &addr[2], &addr[3], &addr[4], &addr[5]) == 6
+	   && !memcmp(addr, adapter->hw.mac.addr, sizeof(addr))) {
+	  adapter->dna.dna_enabled = 1;
+	  break;
+	}
+
+	i++;
+      } /* while */
+    }
   }
 }
 
@@ -126,6 +132,8 @@ static void free_contiguous_memory(unsigned long mem,
 /* ********************************** */
 
 void init_dna(struct e1000_adapter *adapter) {
+  if(!adapter->dna.dna_enabled) return;
+
   init_waitqueue_head(&adapter->dna.packet_waitqueue);
 }
 
@@ -145,19 +153,27 @@ void notify_function_ptr(void *data, u_int8_t device_in_use) {
 int wait_packet_function_ptr(void *data, int mode) {
   struct e1000_adapter *adapter = (struct e1000_adapter*)data;
 
-  if(unlikely(enable_debug)) printk("[wait_packet_function_ptr] called [mode=%d]\n", mode);
+  // if(unlikely(enable_debug)) printk("[wait_packet_function_ptr] called [mode=%d]\n", mode);
 
   if(mode == 1) {
-    struct e1000_ring *rx_ring = adapter->rx_ring;
-    union e1000_rx_desc_extended *rx_desc;
+    struct e1000_rx_ring *rx_ring = adapter->rx_ring;
+    struct e1000_rx_desc *rx_desc;
+    int ret;
 
     rx_ring->next_to_clean = E1000_READ_REG(&adapter->hw, E1000_RDT(0));
-    rx_desc = E1000_RX_DESC_EXT(*rx_ring, rx_ring->next_to_clean);
-    if(unlikely(enable_debug)) printk("[wait_packet_function_ptr] Check if a packet is arrived\n");
 
-    prefetch(rx_desc);
+    /* Here i is the last I've read (zero-copy implementation) */
+    if(++rx_ring->next_to_clean == rx_ring->count)
+      rx_ring->next_to_clean = 0;
 
-    if(!(le32_to_cpu(rx_desc->wb.upper.status_error) & E1000_RXD_STAT_DD)) {
+    rx_desc = E1000_RX_DESC(*rx_ring, rx_ring->next_to_clean);
+    ret = rx_desc->status & E1000_RXD_STAT_DD;
+
+    if(unlikely(enable_debug))
+      printk("[wait_packet_function_ptr] Check if a packet is arrived [slotId=%u][status=%u][ret=%u]\n",
+	     rx_ring->next_to_clean, rx_desc->status, ret);
+
+    if(rx_desc->status & E1000_RXD_STAT_DD) {
       adapter->dna.interrupt_received = 0;
 
 #if 0
@@ -166,89 +182,94 @@ int wait_packet_function_ptr(void *data, int mode) {
 	if(unlikely(enable_debug)) printk("[wait_packet_function_ptr] Packet not arrived yet: enabling interrupts\n");
       }
 #endif
-    } else
-      adapter->dna.interrupt_received = 1;
+    } else {
+      /* Uncommenting the line below cause the cpu to raise up */
+      // adapter->dna.interrupt_received = 1;
+    }
 
-    return(le32_to_cpu(rx_desc->wb.upper.status_error) & E1000_RXD_STAT_DD);
+    return(ret);
   } else {
     if(adapter->dna.interrupt_enabled) {
       e1000_irq_disable(adapter);
       adapter->dna.interrupt_enabled = 0;
       if(unlikely(enable_debug)) printk("[wait_packet_function_ptr] Disabled interrupts\n");
     }
+
     return(0);
   }
 }
 
-/* ********************************** */
+/* ***************************************************************** */
 
-static bool dna_e1000e_clean_rx_irq(struct e1000_adapter *adapter) {
+static bool dna_e1000_clean_rx_irq(struct e1000_adapter *adapter,
+				   struct e1000_rx_ring *rx_ring,
+				   int *work_done) {
   bool ret;
   int i, debug = 0;
-  struct e1000_ring *rx_ring = adapter->rx_ring;
-  union e1000_rx_desc_extended *rx_desc;
-  struct e1000_buffer *buffer_info;
+  struct e1000_rx_desc *rx_desc;
+  struct e1000_rx_buffer *buffer_info;
   struct e1000_hw *hw = &adapter->hw;
-  u32 staterr;
 
   /* The register contains the last packet that we have read */
   i = E1000_READ_REG(hw, E1000_RDT(0));
   if(++i == rx_ring->count)
     i = 0;
 
-  rx_ring->next_to_clean = i; 
-  rx_desc = E1000_RX_DESC_EXT(*rx_ring, i);
-  staterr = le32_to_cpu(rx_desc->wb.upper.status_error);
-  buffer_info = &rx_ring->buffer_info[i];
-  
-  if(unlikely(debug))
-    printk(KERN_INFO
-	   "DNA: dna_e1000_clean_rx_irq(%s)[id=%d][status=%d][rx_reg=%u]\n",
-	   adapter->netdev->name, i, staterr,
-	   E1000_READ_REG(&adapter->hw, E1000_RDT(0)));
+  rx_ring->next_to_clean = i;
 
-  if(staterr & E1000_RXD_STAT_DD) {
+  rx_desc = E1000_RX_DESC(*rx_ring, i);
+  buffer_info = &rx_ring->buffer_info[i];
+
+  if(debug)
+    printk(KERN_INFO
+	   "DNA: dna_e1000_clean_rx_irq(%s)[id=%d][status=%d][rx_reg=%u][buffer_addr=%lu]\n",
+	   adapter->netdev->name, i, rx_desc->status,
+	   E1000_READ_REG(&adapter->hw, E1000_RDT(0)),
+	   (long unsigned int)rx_desc->buffer_addr);
+
+  if(rx_desc->status & E1000_RXD_STAT_DD) {
     if(!adapter->dna.interrupt_received) {
       if(waitqueue_active(&adapter->dna.packet_waitqueue)) {
 	wake_up_interruptible(&adapter->dna.packet_waitqueue);
 	adapter->dna.interrupt_received = 1;
 
-	if(unlikely(debug))
+	if(debug)
 	  printk(KERN_WARNING "DNA: dna_e1000_clean_rx_irq(%s): "
 		 "woken up [slot=%d] XXXX\n", adapter->netdev->name, i);
 
       }
     }
 
-    if(unlikely(debug))
+    if(debug)
       printk(KERN_WARNING "DNA: dna_e1000_clean_rx_irq(%s): "
 	     "woken up [slot=%d][interrupt_received=%d]\n",
 	     adapter->netdev->name, i, adapter->dna.interrupt_received);
 
-    ret = TRUE;
-  } else
     ret = FALSE;
+  } else
+    ret = TRUE;
 
-  return(ret);		
+  return(ret);
 }
- 
-/* ********************************** */
+
+/* ***************************************************************** */
 
 void alloc_dna_memory(struct e1000_adapter *adapter) {
   struct net_device *netdev = adapter->netdev;
   struct pci_dev *pdev = adapter->pdev;
-  struct e1000_ring *rx_ring = adapter->rx_ring;
-  struct e1000_ring *tx_ring = adapter->tx_ring;
+  struct e1000_rx_ring *rx_ring = adapter->rx_ring;
+  struct e1000_tx_ring *tx_ring = adapter->tx_ring;
   struct e1000_tx_desc *tx_desc;
   struct pfring_hooks *hook = (struct pfring_hooks*)netdev->pfring_ptr;
   union e1000_rx_desc_extended *rx_desc, *shadow_rx_desc;
-  struct e1000_buffer *buffer_info;
+  struct e1000_rx_buffer *buffer_rx_info;
+  struct e1000_buffer    *buffer_tx_info;
   u16 cache_line_size;
   struct sk_buff *skb;
   unsigned int i;
   int cleaned_count = rx_ring->count; /* Allocate all slots in one shot */
   unsigned int bufsz = adapter->rx_buffer_len;
-  mem_ring_info         rx_info = {0}; 
+  mem_ring_info         rx_info = {0};
   mem_ring_info         tx_info = {0};
   int                   num_slots_per_page;
 
@@ -308,24 +329,38 @@ void alloc_dna_memory(struct e1000_adapter *adapter) {
 	offset = (i % num_slots_per_page) * adapter->dna.packet_slot_len;
 	skb = (struct sk_buff *)(adapter->dna.rx_packet_memory[page_index] + offset);
 
+#ifdef DEBUG
 	if(0)
 	  printk("[DNA] Allocating slot %d of %d [addr=%p][page_index=%u][offset=%u]\n",
 		 i, adapter->dna.packet_num_slots, skb, page_index, offset);
+#endif
 
-	buffer_info = &rx_ring->buffer_info[i];
-	buffer_info->skb = skb;
-	buffer_info->length = adapter->rx_buffer_len;
-	buffer_info->dma = pci_map_single(pdev, skb,
-					  buffer_info->length,
-					  PCI_DMA_FROMDEVICE);
+	buffer_rx_info = &rx_ring->buffer_info[i];
+	buffer_rx_info->skb = skb;
+	buffer_rx_info->page = NULL;
+	buffer_rx_info->dma = dma_map_single(pci_dev_to_dev(adapter->pdev),
+					     skb,
+					     adapter->rx_buffer_len,
+					     DMA_FROM_DEVICE);
 
-#if 0
-	printk("[DNA] Mapping buffer %d [ptr=%p][len=%d]\n",
-	       i, (void*)buffer_info->dma, adapter->dna.packet_slot_len);
+#ifdef DEBUG
+	if(0)
+	  printk("[DNA] Mapping buffer %d [ptr=%llu][len=%d]\n",
+		 i, buffer_rx_info->dma, adapter->dna.packet_slot_len);
 #endif
 
 	rx_desc = E1000_RX_DESC_EXT(*rx_ring, i);
-	rx_desc->read.buffer_addr = cpu_to_le64(buffer_info->dma);
+	rx_desc->read.buffer_addr = cpu_to_le64(buffer_rx_info->dma);
+	rx_desc->read.reserved = 0; /*
+				      This field is used to store indexes so we better
+				      set it to zero
+				    */
+
+#ifdef DEBUG
+	if(0)
+	  printk("[DNA] RX descriptor %d [len=%d][status=%u]\n",
+		 i, rx_desc->wb.upper.length, rx_desc->wb.upper.status_error);
+#endif
 
 	shadow_rx_desc = E1000_RX_DESC_EXT(*rx_ring, i + rx_ring->count);
 	memcpy(shadow_rx_desc, rx_desc, sizeof(union e1000_rx_desc_extended));
@@ -334,7 +369,18 @@ void alloc_dna_memory(struct e1000_adapter *adapter) {
       wmb();
 
       /* Tell the card that we have allocated all buckets */
-      writel(rx_ring->count-1, adapter->hw.hw_addr + rx_ring->tail);
+      writel(rx_ring->count-1, adapter->hw.hw_addr + rx_ring->rdt);
+
+#if 0
+      //rx_ring->next_to_clean = E1000_READ_REG(&adapter->hw, E1000_RDT(0));
+      rx_ring->next_to_clean = 0;
+      printk("[DNA] [rx_ring->next_to_clean=%u][RDT=%u]\n",
+	     rx_ring->next_to_clean, E1000_READ_REG(&adapter->hw, E1000_RDT(0)));
+
+      rx_desc = E1000_RX_DESC_EXT(*rx_ring, rx_ring->count);
+      rx_desc->read.reserved = rx_ring->next_to_clean;
+      printk("[DNA] [idx=%u][rx_desc->read.reserved=%llu]\n", rx_ring->count, rx_desc->read.reserved);
+#endif
 
       /* The statement below syncs the value of next_to_clean with
 	 the corresponding register, hence sync the kernel with
@@ -346,9 +392,7 @@ void alloc_dna_memory(struct e1000_adapter *adapter) {
       //e1000_irq_enable(adapter);
 
       /* TX */
-
       if(adapter->dna.tx_packet_memory[0] == 0) {
-
 	for(i=0; i<adapter->dna.num_memory_pages; i++) {
 	  adapter->dna.tx_packet_memory[i] =
 	    alloc_contiguous_memory(&adapter->dna.tot_packet_memory, &adapter->dna.mem_order);
@@ -377,20 +421,20 @@ void alloc_dna_memory(struct e1000_adapter *adapter) {
 	    printk("[DNA] [TX] Allocating slot %d of %d [addr=%p][page_index=%u][offset=%u]\n",
 		   i, adapter->dna.packet_num_slots, skb, page_index, offset);
 
-	  buffer_info = &tx_ring->buffer_info[i];
-	  buffer_info->skb = skb;
-	  buffer_info->length = adapter->rx_buffer_len;
-	  buffer_info->dma = pci_map_single(pdev, skb,
-					    buffer_info->length,
-					    PCI_DMA_TODEVICE);
+	  buffer_tx_info = &tx_ring->buffer_info[i];
+	  buffer_tx_info->skb = skb;
+	  buffer_tx_info->length = adapter->rx_buffer_len;
+	  buffer_tx_info->dma = dma_map_single(pci_dev_to_dev(adapter->pdev), skb,
+					       buffer_tx_info->length,
+					       DMA_TO_DEVICE);
 
 #if 0
 	  printk("[DNA] Mapping buffer %d [ptr=%p][len=%d]\n",
-		 i, (void*)buffer_info->dma, adapter->dna.packet_slot_len);
+		 i, (void*)buffer_tx_info->dma, adapter->dna.packet_slot_len);
 #endif
 
 	  tx_desc = E1000_TX_DESC(*tx_ring, i);
-	  tx_desc->buffer_addr = cpu_to_le64(buffer_info->dma);
+	  tx_desc->buffer_addr = cpu_to_le64(buffer_tx_info->dma);
 	}
       }
 
@@ -399,7 +443,7 @@ void alloc_dna_memory(struct e1000_adapter *adapter) {
       rx_info.packet_memory_num_slots     = adapter->dna.packet_num_slots;
       rx_info.packet_memory_slot_len      = adapter->dna.packet_slot_len;
       rx_info.descr_packet_memory_tot_len = 2 * rx_ring->size;
-  
+
       tx_info.packet_memory_num_chunks    = adapter->dna.num_memory_pages;
       tx_info.packet_memory_chunk_len     = adapter->dna.tot_packet_memory;
       tx_info.packet_memory_num_slots     = adapter->dna.packet_num_slots;
@@ -415,12 +459,12 @@ void alloc_dna_memory(struct e1000_adapter *adapter) {
 				    rx_ring->desc,
 				    adapter->dna.tx_packet_memory,
 				    tx_ring->desc, /* Packet descriptors */
-				    (void*)netdev->mem_start,
-				    netdev->mem_end-netdev->mem_start,
+				    (void*)pci_resource_start(adapter->pdev, BAR_0),
+				    pci_resource_len(adapter->pdev, BAR_0),
 				    0, /* Channel Id */
 				    netdev,
 				    &pdev->dev,
-				    intel_e1000e,
+				    intel_e1000,
 				    adapter->netdev->dev_addr,
 				    &adapter->dna.packet_waitqueue,
 				    &adapter->dna.interrupt_received,
@@ -428,13 +472,16 @@ void alloc_dna_memory(struct e1000_adapter *adapter) {
 				    wait_packet_function_ptr,
 				    notify_function_ptr);
 
-      if(1) printk("[DNA] Enabled DNA on %s (len=%u)\n", adapter->netdev->name, rx_ring->size);
+      if(0) {
+	printk("[DNA] Enabled DNA on %s (len=%u)\n",
+	       adapter->netdev->name, rx_ring->size);
+      }
     } else {
       printk("WARNING e1000_alloc_rx_buffers(cleaned_count=%d)"
-	     "[%s][%lu] already allocated\n",
-	     cleaned_count, adapter->netdev->name,
-	     adapter->dna.rx_packet_memory[0]);
+	     "[%s] already allocated\n",
+	     cleaned_count, adapter->netdev->name);
 
     }
   }
 }
+
