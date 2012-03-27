@@ -377,10 +377,7 @@ extern "C" {
 #endif
 
 #ifdef HAVE_ZERO
-int dna_bounce_init(pfring_bounce *bounce);
-int dna_bounce_loop(pfring_bounce *bounce, pfringBounceProcesssPacket looper, 
-		    const u_char *user_bytes, u_int8_t wait_for_packet);
-void dna_bounce_destroy(pfring_bounce *bounce);
+#include "pfring_zero.h"
 #endif
 
 #endif /* _PFRING_H_ */
