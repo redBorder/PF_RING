@@ -197,7 +197,7 @@ static __inline__ ticks getticks(void)
 int main(int argc, char* argv[]) {
   char c, *pcap_in = NULL, mac_address[6];
   int i, verbose = 0, active_poll = 0;
-  int reforge_mac = 0, to_go, to_go_threshold = 256, use_zero_copy_tx = 0;
+  int reforge_mac = 0, use_zero_copy_tx = 0;
   u_int mac_a, mac_b, mac_c, mac_d, mac_e, mac_f;
   char buffer[9000];
   int send_len = 60;
@@ -208,6 +208,7 @@ int main(int argc, char* argv[]) {
   ticks tick_start = 0, tick_delta = 0;
   ticks hz = 0;
   struct packet *tosend;
+  u_int num_tx_slots;
 
   while((c = getopt(argc,argv,"hi:n:g:l:af:r:vm:"
 #if 0
@@ -423,7 +424,7 @@ int main(int argc, char* argv[]) {
   if(pd->dna_copy_tx_packet_into_slot != NULL) {
     tosend = pkt_head;
 
-    u_int num_tx_slots = pd->dna_get_num_tx_slots(pd);
+    num_tx_slots = pd->dna_get_num_tx_slots(pd);
 
     if(num_tx_slots > 0) {
       int ret;
@@ -445,8 +446,6 @@ int main(int argc, char* argv[]) {
   if(use_zero_copy_tx)
     printf("Using zero-copy TX\n");
 
-  to_go = to_go_threshold;
-
   tosend = pkt_head;
   i = 0;
 
@@ -460,7 +459,7 @@ int main(int argc, char* argv[]) {
 
     if(use_zero_copy_tx)
       /* We pre-filled the TX slots */
-      rc = pfring_send(pd, NULL, 0, gbit_s < 0 ? 1 : 0 /* Don't flush (it does PF_RING automatically) */);
+      rc = pfring_send(pd, NULL, tosend->len, gbit_s < 0 ? 1 : 0 /* Don't flush (it does PF_RING automatically) */);
     else
       rc = pfring_send(pd, tosend->pkt, tosend->len, gbit_s < 0 ? 1 : 0 /* Don't flush (it does PF_RING automatically) */);
 
@@ -476,8 +475,15 @@ int main(int argc, char* argv[]) {
 	  pfring_poll(pd, 0); //sched_yield();
       }
       goto redo;
-    } else
-      num_pkt_good_sent++, num_bytes_good_sent += tosend->len+24 /* 8 Preamble + 4 CRC + 12 IFG */, tosend = tosend->next;
+    }
+    
+    num_pkt_good_sent++;
+    num_bytes_good_sent += tosend->len + 24 /* 8 Preamble + 4 CRC + 12 IFG */;
+
+    tosend = tosend->next;
+    
+    if (use_zero_copy_tx && num_pkt_good_sent == num_tx_slots)
+      tosend = pkt_head;
 
     if(gbit_s > 0) {
       /* rate set */
@@ -490,12 +496,6 @@ int main(int argc, char* argv[]) {
     }
 
     if(num > 0) i++;
-
-    if(to_go > 0)
-      to_go--;
-    else {
-      to_go = to_go_threshold;
-    }
   } /* for */
 
   print_stats(0);
