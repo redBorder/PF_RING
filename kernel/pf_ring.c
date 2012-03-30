@@ -1508,7 +1508,7 @@ static int ring_alloc_mem(struct sock *sk)
   pfr->slots_info->tot_mem = tot_mem;
   pfr->slots_info->sample_rate = 1;
 
-  //if(unlikely(enable_debug))
+  if(unlikely(enable_debug))
     printk("[PF_RING] allocated %d slots [slot_len=%d][tot_mem=%u]\n",
 	   pfr->slots_info->min_num_slots, pfr->slots_info->slot_len,
 	   pfr->slots_info->tot_mem);
@@ -4636,8 +4636,8 @@ static char *dna_cluster_allocate_shared_memory(u_int32_t num_slaves, u_int32_t 
 
   if(shared_mem != NULL) {
     if(unlikely(enable_debug))
-      printk("[PF_RING] %s() successfully allocated %u bytes at 0x%08lx\n",
-             __FUNCTION__, shared_mem_size, (unsigned long) shared_mem);
+      printk("[PF_RING] %s() successfully allocated %u bytes at %p\n",
+             __FUNCTION__, shared_mem_size, shared_mem);
   } else {
     printk("[PF_RING] ERROR: not enough memory for DNA cluster\n");
   }
@@ -4805,6 +4805,7 @@ static struct dna_cluster* dna_cluster_attach(u_int32_t dna_cluster_id, wait_que
           dnac->slave_waitqueue[i] = slave_waitqueue;
 	  *slave_id = i;
 	  slot_found = 1;
+	  break;
 	}
       }
 
