@@ -5202,8 +5202,8 @@ unsigned long kvirt_to_pa(unsigned long adr)
 
 /* ************************************* */
 
-static int do_memory_mmap(struct vm_area_struct *vma,
-			  unsigned long size, char *ptr, u_int flags, int mode)
+static int do_memory_mmap(struct vm_area_struct *vma, unsigned long size, 
+                          char *ptr, u_int ptr_pg_off, u_int flags, int mode)
 {
   unsigned long start;
 
@@ -5220,7 +5220,7 @@ static int do_memory_mmap(struct vm_area_struct *vma,
 
     if(mode == 0) {
 #if(LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,11))
-      rc = remap_vmalloc_range(vma, ptr, 0);
+      rc = remap_vmalloc_range(vma, ptr, ptr_pg_off);
       break; /* Do not iterate */
 #else
       rc = remap_pfn_range(vma, start, kvirt_to_pa((unsigned long)ptr), PAGE_SIZE, PAGE_SHARED);
@@ -5283,7 +5283,7 @@ static int ring_mmap(struct file *file,
       if(mem_id < pfr->dna_device->mem_info.rx.packet_memory_num_chunks) {
         /* DNA: RX packet memory */
 
-        if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->rx_packet_memory[mem_id], VM_LOCKED, 1)) < 0)
+        if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->rx_packet_memory[mem_id], 0, VM_LOCKED, 1)) < 0)
           return(rc);
 
 	return(0);
@@ -5293,7 +5293,7 @@ static int ring_mmap(struct file *file,
 
         mem_id -= pfr->dna_device->mem_info.rx.packet_memory_num_chunks;
 
-        if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->tx_packet_memory[mem_id], VM_LOCKED, 1)) < 0)
+        if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->tx_packet_memory[mem_id], 0, VM_LOCKED, 1)) < 0)
           return(rc);
 	
 	return(0);
@@ -5308,7 +5308,7 @@ static int ring_mmap(struct file *file,
         if(pfr->extra_dma_memory->virtual_addr == NULL)
           return -EINVAL;
 
-        if((rc = do_memory_mmap(vma, size, (void *)pfr->extra_dma_memory->virtual_addr[mem_id], VM_LOCKED, 1)) < 0)
+        if((rc = do_memory_mmap(vma, size, (void *)pfr->extra_dma_memory->virtual_addr[mem_id], 0, VM_LOCKED, 1)) < 0)
           return(rc);
 
 	return(0);
@@ -5331,7 +5331,7 @@ static int ring_mmap(struct file *file,
       if(mem_id >= pfr->dna_cluster->extra_dma_memory->num_chunks)
         return -EINVAL;
 
-      if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_cluster->extra_dma_memory->virtual_addr[mem_id], VM_LOCKED, 1)) < 0)
+      if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_cluster->extra_dma_memory->virtual_addr[mem_id], 0, VM_LOCKED, 1)) < 0)
         return(rc);
 
       return(0);
@@ -5367,7 +5367,7 @@ static int ring_mmap(struct file *file,
         printk("[PF_RING] mmap [slot_len=%d][tot_slots=%d] for ring on device %s\n",
 	       pfr->slots_info->slot_len, pfr->slots_info->min_num_slots, pfr->ring_netdev->dev->name);
 
-      if((rc = do_memory_mmap(vma, size, pfr->ring_memory, VM_LOCKED, 0)) < 0)
+      if((rc = do_memory_mmap(vma, size, pfr->ring_memory, 0, VM_LOCKED, 0)) < 0)
         return(rc);
 
       break;
@@ -5379,7 +5379,7 @@ static int ring_mmap(struct file *file,
         return(-EINVAL);
       }
 
-      if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->rx_descr_packet_memory, VM_LOCKED, 1)) < 0)
+      if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->rx_descr_packet_memory, 0, VM_LOCKED, 1)) < 0)
 	return(rc);
 
       break;
@@ -5391,7 +5391,7 @@ static int ring_mmap(struct file *file,
         return(-EINVAL);
       }
 
-      if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->phys_card_memory, (VM_RESERVED | VM_IO), 2)) < 0)
+      if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->phys_card_memory, 0, (VM_RESERVED | VM_IO), 2)) < 0)
 	return(rc);
 
       break;
@@ -5403,7 +5403,7 @@ static int ring_mmap(struct file *file,
         return(-EINVAL);
       }
 
-      if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->tx_descr_packet_memory, VM_LOCKED, 1)) < 0)
+      if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->tx_descr_packet_memory, 0, VM_LOCKED, 1)) < 0)
 	return(rc);
 
       break;
@@ -5422,7 +5422,7 @@ static int ring_mmap(struct file *file,
         return(-EINVAL);
       }
 
-      if((rc = do_memory_mmap(vma, size, pfr->dna_cluster->shared_memory, VM_LOCKED, 0)) < 0)
+      if((rc = do_memory_mmap(vma, size, pfr->dna_cluster->shared_memory, 0, VM_LOCKED, 0)) < 0)
         return(rc);
 
       break;
@@ -5441,8 +5441,8 @@ static int ring_mmap(struct file *file,
         return(-EINVAL);
       }
 
-      if((rc = do_memory_mmap(vma, size, 
-                 &pfr->dna_cluster->shared_memory[pfr->dna_cluster->slave_shared_memory_len * pfr->dna_cluster_slave_id], 
+      if((rc = do_memory_mmap(vma, size, pfr->dna_cluster->shared_memory,
+		 (pfr->dna_cluster->slave_shared_memory_len / PAGE_SIZE) * pfr->dna_cluster_slave_id,
 		 VM_LOCKED, 0)) < 0)
         return(rc);
 
