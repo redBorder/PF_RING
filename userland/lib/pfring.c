@@ -574,6 +574,10 @@ int pfring_recv(pfring *ring, u_char** buffer, u_int buffer_len,
 	     && (ring->mode != send_only_mode)))) {
     int rc;
     
+    /* Reentrancy is not compatible with zero copy */
+    if(unlikely((buffer_len == 0) && ring->reentrant))
+      return(PF_RING_ERROR_INVALID_ARGUMENT);
+
     ring->break_recv_loop = 0;
     rc = ring->recv(ring, buffer, buffer_len, hdr, wait_for_incoming_packet);
     
@@ -802,6 +806,14 @@ int pfring_set_socket_mode(pfring *ring, socket_mode mode) {
 
     if(rc == 0)
       ring->mode = mode;
+
+    /* We move back from RX/TX to TX-only mode */
+    if(mode == send_only_mode) {
+      if(ring->promisc && ring->clear_promisc) {
+	if(pfring_set_if_promisc(ring->device_name, 0) == 0)
+	  ring->clear_promisc = 0;
+      }
+    }
 
     return(rc);
   }
