@@ -266,7 +266,7 @@ int main(int argc, char* argv[]) {
 
   printf("Sending packets on %s\n", in_dev);
 
-  pd = pfring_open(in_dev, 1500, PF_RING_PROMISC);
+  pd = pfring_open(in_dev, 1500, 0 /* PF_RING_PROMISC */);
   if(pd == NULL) {
     printf("pfring_open %s error [%s]\n", in_dev, strerror(errno));
     return(-1);
