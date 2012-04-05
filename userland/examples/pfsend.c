@@ -51,6 +51,35 @@ struct packet {
   struct packet *next;
 };
 
+struct ip_header {
+#if BYTE_ORDER == LITTLE_ENDIAN
+  u_int32_t	ihl:4,		/* header length */
+    version:4;			/* version */
+#else
+  u_int32_t	version:4,			/* version */
+    ihl:4;		/* header length */
+#endif
+  u_int8_t	tos;			/* type of service */
+  u_int16_t	tot_len;			/* total length */
+  u_int16_t	id;			/* identification */
+  u_int16_t	frag_off;			/* fragment offset field */
+  u_int8_t	ttl;			/* time to live */
+  u_int8_t	protocol;			/* protocol */
+  u_int16_t	check;			/* checksum */
+  u_int32_t saddr, daddr;	/* source and dest address */
+};
+
+/*
+ * Udp protocol header.
+ * Per RFC 768, September, 1981.
+ */
+struct udp_header {
+  u_int16_t	source;		/* source port */
+  u_int16_t	dest;		/* destination port */
+  u_int16_t	len;		/* udp length */
+  u_int16_t	check;		/* udp checksum */
+};
+
 struct packet *pkt_head = NULL;
 pfring  *pd;
 pfring_stat pfringStats;
@@ -190,6 +219,48 @@ static __inline__ ticks getticks(void)
   // asm("cpuid"); // serialization
   asm volatile("rdtsc" : "=a" (a), "=d" (d));
   return (((ticks)a) | (((ticks)d) << 32));
+}
+
+/* ******************************************* */
+
+/*
+ * Checksum routine for Internet Protocol family headers (C Version)
+ *
+ * Borrowed from DHCPd
+ */
+
+static u_int32_t in_cksum(unsigned char *buf,
+			  unsigned nbytes, u_int32_t sum) {
+  uint i;
+
+  /* Checksum all the pairs of bytes first... */
+  for (i = 0; i < (nbytes & ~1U); i += 2) {
+    sum += (u_int16_t) ntohs(*((u_int16_t *)(buf + i)));
+    /* Add carry. */
+    if(sum > 0xFFFF)
+      sum -= 0xFFFF;
+  }
+
+  /* If there's a single byte left over, checksum it, too.   Network
+     byte order is big-endian, so the remaining byte is the high byte. */
+  if(i < nbytes) {
+#ifdef DEBUG_CHECKSUM_VERBOSE
+    debug ("sum = %x", sum);
+#endif
+    sum += buf [i] << 8;
+    /* Add carry. */
+    if(sum > 0xFFFF)
+      sum -= 0xFFFF;
+  }
+
+  return sum;
+}
+
+/* ******************************************* */
+
+static u_int32_t wrapsum (u_int32_t sum) {
+  sum = ~sum & 0xFFFF;
+  return htons(sum);
 }
 
 /* *************************************** */
@@ -376,14 +447,49 @@ int main(int argc, char* argv[]) {
     }
   } else {
     struct packet *p;
-    u_int16_t *eth_len = (u_int16_t *) &buffer[12];
+    struct ip_header *ip_header;
+    struct udp_header *udp_header;
+    u_int32_t src_ip = 0x0A020304 /* 10.2.3.4 */, dst_ip=0xc0a80001 /* 192.168.0.1 */;
+    u_int16_t src_port = 2012, dst_port = 3000;
 
-    for(i=0; i<send_len; i++) buffer[i] = i%0xff;
+    /* Reset packet */
+    memset(buffer, 0, sizeof(buffer));
 
-    *eth_len = send_len - 14;
-
+    for(i=0; i<12; i++) buffer[i] = i;
+    buffer[12] = 0x08, buffer[13] = 0x00; /* IP */
     if(reforge_mac) memcpy(buffer, mac_address, 6);
 
+    ip_header = (struct ip_header*) &buffer[sizeof(struct ether_header)];
+    ip_header->ihl = 5;
+    ip_header->version = 4;
+    ip_header->tos = 0;
+    ip_header->tot_len = htons(send_len-sizeof(struct ether_header));
+    ip_header->id = htons(2012);
+    ip_header->ttl = 64;
+    ip_header->frag_off = htons(0);
+    ip_header->protocol = IPPROTO_UDP;
+    ip_header->check = wrapsum(in_cksum((unsigned char *)ip_header,
+					sizeof(struct ip_header), 0));
+    ip_header->daddr = htonl(dst_ip);
+    ip_header->saddr = htonl(src_ip);
+
+    udp_header = (struct udp_header*)(buffer + sizeof(struct ether_header) + sizeof(struct ip_header));
+    udp_header->source = htons(src_port);
+    udp_header->dest = htons(dst_port);
+    udp_header->len = htons(send_len-sizeof(struct ether_header)-sizeof(struct ip_header));
+    udp_header->check = 0; /* It must be 0 to compute the checksum */
+
+    /*
+      http://www.cs.nyu.edu/courses/fall01/G22.2262-001/class11.htm
+      http://www.ietf.org/rfc/rfc0761.txt
+      http://www.ietf.org/rfc/rfc0768.txt
+    */
+    i = sizeof(struct ether_header) + sizeof(struct ip_header) + sizeof(struct udp_header);
+    udp_header->check = wrapsum(in_cksum((unsigned char *)udp_header, sizeof(struct udp_header),
+					 in_cksum((unsigned char *)&buffer[i], send_len-i,
+						  in_cksum((unsigned char *)&ip_header->saddr,
+							   2*sizeof(ip_header->saddr),
+							   IPPROTO_UDP + ntohs(udp_header->len)))));
     p = (struct packet*)malloc(sizeof(struct packet));
     if(p) {
       p->len = send_len;

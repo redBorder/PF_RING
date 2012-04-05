@@ -350,6 +350,14 @@ static int32_t thiszone;
 void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u_char *user_bytes) {
   long threadId = (long)user_bytes;
 
+  /*
+  {
+    int i;
+
+    i = p[26] + p[40];
+  }
+  */
+
   if(verbose) {
     struct ether_header ehdr;
     u_short eth_type, vlan_id;
@@ -463,7 +471,7 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u
 
   numPkts[threadId]++, numBytes[threadId] += h->len+24 /* 8 Preamble + 4 CRC + 12 IFG */;
 
-  if(add_drop_rule) {
+  if(unlikely(add_drop_rule)) {
     if(h->ts.tv_sec == 0)
       pfring_parse_pkt((u_char*)p, (struct pfring_pkthdr*)h, 4, 0, 1);
 
