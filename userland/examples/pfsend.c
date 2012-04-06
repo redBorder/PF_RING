@@ -386,7 +386,7 @@ int main(int argc, char* argv[]) {
     struct pcap_pkthdr *h;
     pcap_t *pt = pcap_open_offline(pcap_in, ebuf);
     u_int num_pcap_pkts = 0;
-    struct timeval beginning;
+    struct timeval beginning = { 0, 0 };
 
     if(pt) {
       struct packet *last = NULL;
