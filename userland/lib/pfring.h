@@ -150,16 +150,19 @@ extern "C" {
 
     /* TODO these fields should be moved in ->priv_data */
     /* DNA (Direct NIC Access) */
-    u_char dna_mapped_device;    
-    u_int16_t num_rx_pkts_before_dns_sync, num_tx_pkts_before_dns_sync, dna_sync_watermark;
-    u_int64_t tot_dna_read_pkts, tot_dna_lost_pkts;
-    u_int32_t rx_reg, tx_reg, last_rx_slot_read;
-    u_int32_t num_rx_slots_per_chunk, num_tx_slots_per_chunk;
-    dna_device dna_dev;    
-    dna_indexes *indexes_ptr;
-    u_int32_t *rx_reg_ptr, *tx_reg_ptr, *mpc_reg_ptr, *qprdc_reg_ptr, 
-      *rnbc_reg_ptr, *rqdpc_reg_ptr, *gorc_reg_ptr;
-    dna_device_operation last_dna_operation;
+    struct {
+      u_char dna_mapped_device;    
+      u_int16_t num_rx_pkts_before_dna_sync, num_tx_pkts_before_dna_sync, dna_sync_watermark;
+      u_int64_t tot_dna_read_pkts, tot_dna_lost_pkts;
+      u_int32_t rx_reg, tx_reg, last_rx_slot_read;
+      u_int32_t num_rx_slots_per_chunk, num_tx_slots_per_chunk;
+      
+      dna_device dna_dev;    
+      dna_indexes *indexes_ptr;
+      u_int32_t *rx_reg_ptr, *tx_reg_ptr, *mpc_reg_ptr, *qprdc_reg_ptr, 
+	*rnbc_reg_ptr, *rqdpc_reg_ptr, *gorc_reg_ptr;
+      dna_device_operation last_dna_operation;
+    } dna;
 
     void       *priv_data; /* module private data */
 

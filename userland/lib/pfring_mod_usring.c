@@ -49,7 +49,7 @@ int pfring_mod_usring_open(pfring *ring) {
   ring->enable_ring = pfring_mod_enable_ring;
 
 #ifdef USE_WATERMARK
-  ring->dna_sync_watermark = DEFAULT_MIN_PKT_QUEUED;
+  ring->dna.dna_sync_watermark = DEFAULT_MIN_PKT_QUEUED;
 #endif
 
   if(strncmp(ring->device_name, "usr", 3))
@@ -245,10 +245,10 @@ static inline void pfring_mod_usring_signal(pfring *ring, u_int8_t flush_packet)
   if (!(ring->slots_info->userspace_ring_flags & USERSPACE_RING_NO_INTERRUPT)) {
 
 #ifdef USE_WATERMARK
-    if(!flush_packet && ring->num_tx_pkts_before_dns_sync < ring->dna_sync_watermark)
-      ring->num_tx_pkts_before_dns_sync++;
+    if(!flush_packet && ring->dna.num_tx_pkts_before_dna_sync < ring->dna.dna_sync_watermark)
+      ring->dna.num_tx_pkts_before_dna_sync++;
     else {
-      ring->num_tx_pkts_before_dns_sync = 0;
+      ring->dna.num_tx_pkts_before_dna_sync = 0;
 #endif
 
 #ifdef PROFILING

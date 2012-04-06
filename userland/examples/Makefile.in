@@ -22,7 +22,7 @@ DNA_DEFINE = #-DENABLE_DNA_SUPPORT
 #
 # PF_RING aware libpcap
 #
-O_FLAG     = #-O2
+O_FLAG     = -O2
 EXTRA_LIBS = 
 PCAPDIR    = ../libpcap-1.1.1-ring
 LIBPCAP    = ${PCAPDIR}/libpcap.a  ${EXTRA_LIBS}
@@ -40,7 +40,7 @@ INCLUDE    = -I${PFRING_KERNEL} -I${PFRING_KERNEL}/plugins -I${PFRINGDIR} -I${PC
 # CROSS_COMPILE=arm-mv5sft-linux-gnueabi-
 #
 CC         = ${CROSS_COMPILE}gcc #--platform=native
-CFLAGS     = -g ${O_FLAG} -Wall ${INCLUDE} ${DNA_DEFINE} @HAVE_ZERO@ #-O
+CFLAGS     = ${O_FLAG} -Wall ${INCLUDE} ${DNA_DEFINE} @HAVE_ZERO@ -O2 # -g
 # LDFLAGS  =
 
 #
@@ -71,82 +71,82 @@ RPOBJS    = pcaps.o interval.o
 all: ${TARGETS}
 
 ringc: ${RCOBJS} ${LIBPFRING}
-	${CC} ${RCOBJS} ${LIBS} -o $@
+	${CC} ${CFLAGS} ${RCOBJS} ${LIBS} -o $@
 
 rings: ${RSOBJS} ${LIBPFRING}
-	${CC} ${RSOBJS} ${LIBS} -o $@
+	${CC} ${CFLAGS} ${RSOBJS} ${LIBS} -o $@
 
 ringm: ${RMOBJS} ${LIBPFRING}
-	${CC} ${RMOBJS} ${LIBS} -o $@
+	${CC} ${CFLAGS} ${RMOBJS} ${LIBS} -o $@
 
 pcaps: ${RPOBJS}
-	${CC} ${RPOBJS} ${LIBPCAP} ${LIBS} -o $@
+	${CC} ${CFLAGS} ${RPOBJS} ${LIBPCAP} ${LIBS} -o $@
 
 pfcount: pfcount.o ${LIBPFRING}
-	${CC} pfcount.o ${LIBS} -o $@
+	${CC} ${CFLAGS} pfcount.o ${LIBS} -o $@
 
 dummy_plugin_pfcount: dummy_plugin_pfcount.o ${LIBPFRING}
-	${CC} dummy_plugin_pfcount.o ${LIBS} -o $@
+	${CC} ${CFLAGS} dummy_plugin_pfcount.o ${LIBS} -o $@
 
 pffilter_test: pffilter_test.o ${LIBPFRING}
-	${CC} pffilter_test.o ${LIBS} -o $@
+	${CC} ${CFLAGS} pffilter_test.o ${LIBS} -o $@
 
 pcap2nspcap: pcap2nspcap.o ${LIBPFRING}
-	${CC} pcap2nspcap.o ${LIBPCAP} ${LIBS} -o $@
+	${CC} ${CFLAGS} pcap2nspcap.o ${LIBPCAP} ${LIBS} -o $@
 
 pfcount_multichannel: pfcount_multichannel.o ${LIBPFRING}
-	${CC} pfcount_multichannel.o ${LIBS} -o $@
+	${CC} ${CFLAGS} pfcount_multichannel.o ${LIBS} -o $@
 
 pfcount_82599: pfcount_82599.o ${LIBPFRING}
-	${CC} pfcount_82599.o ${LIBS} -o $@
+	${CC} ${CFLAGS} pfcount_82599.o ${LIBS} -o $@
 
 pfcount_bundle: pfcount_bundle.o ${LIBPFRING}
-	${CC} pfcount_bundle.o ${LIBS} -o $@
+	${CC} ${CFLAGS} pfcount_bundle.o ${LIBS} -o $@
 
 pfcount_dummy_plugin: pfcount_dummy_plugin.o ${LIBPFRING}
-	${CC} pfcount_dummy_plugin.o ${LIBS} -o $@
+	${CC} ${CFLAGS} pfcount_dummy_plugin.o ${LIBS} -o $@
 
 pfcount_aggregator: pfcount_aggregator.o ${LIBPFRING}
-	${CC} pfcount_aggregator.o ${LIBS} -o $@
+	${CC} ${CFLAGS} pfcount_aggregator.o ${LIBS} -o $@
 
 preflect: preflect.o ${LIBPFRING}
-	${CC} preflect.o ${LIBPCAP} ${LIBS} -o $@
+	${CC} ${CFLAGS} preflect.o ${LIBPCAP} ${LIBS} -o $@
 
 pfbounce: pfbounce.o ${LIBPFRING}
-	${CC} pfbounce.o ${LIBPCAP} ${LIBS} -o $@
+	${CC} ${CFLAGS} pfbounce.o ${LIBPCAP} ${LIBS} -o $@
 
 pfdnabounce: pfdnabounce.o ${LIBPFRING}
-	${CC} pfdnabounce.o ${LIBPCAP} ${LIBS} -o $@
+	${CC} ${CFLAGS} pfdnabounce.o ${LIBPCAP} ${LIBS} -o $@
 
 pfsend: pfsend.o ${LIBPFRING}
-	${CC} pfsend.o ${LIBPCAP} ${LIBS} -o $@
+	${CC} ${CFLAGS} pfsend.o ${LIBPCAP} ${LIBS} -o $@
 
 pftwin: pftwin.o ${LIBPFRING}
-	${CC} pftwin.o ${LIBS} -o $@
+	${CC} ${CFLAGS} pftwin.o ${LIBS} -o $@
 
 ptwin: ptwin.o ${LIBPFRING}
-	${CC} ptwin.o ${LIBPCAP} ${LIBS} -o $@
+	${CC} ${CFLAGS} ptwin.o ${LIBPCAP} ${LIBS} -o $@
 
 pfmap: pfmap.o ${LIBPFRING}
-	${CC} pfmap.o ${LIBS} -o $@
+	${CC} ${CFLAGS} pfmap.o ${LIBS} -o $@
 
 forwarder: forwarder.o ${LIBPFRING}
-	${CC} forwarder.o ${LIBS} -o $@
+	${CC} ${CFLAGS} forwarder.o ${LIBS} -o $@
 
 pcount: pcount.o ${LIBPCAP} ${LIBPFRING}
-	${CC} pcount.o ${LIBPCAP} ${LIBS} -o $@
+	${CC} ${CFLAGS} pcount.o ${LIBPCAP} ${LIBS} -o $@
 
 alldevs: alldevs.o ${LIBPCAP} ${LIBPFRING}
-	${CC} alldevs.o ${LIBPCAP} ${LIBS} -o $@
+	${CC} ${CFLAGS} alldevs.o ${LIBPCAP} ${LIBS} -o $@
 
 pwrite: pwrite.o ${LIBPCAP} ${LIBPFRING}
-	${CC} pwrite.o ${LIBPCAP} ${LIBS} -o $@
+	${CC} ${CFLAGS} pwrite.o ${LIBPCAP} ${LIBS} -o $@
 
 vdevice_simulator: vdevice_simulator.o ${LIBPCAP} ${LIBPFRING}
-	${CC} vdevice_simulator.o ${LIBPCAP} ${LIBS} -o $@
+	${CC} ${CFLAGS} vdevice_simulator.o ${LIBPCAP} ${LIBS} -o $@
 
 pfsystest: pfsystest.o ${LIBPFRING}
-	${CC} pfsystest.o ${LIBS} -o $@
+	${CC} ${CFLAGS} pfsystest.o ${LIBS} -o $@
 
 clean:
 	@rm -f ${TARGETS} *.o *~
