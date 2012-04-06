@@ -468,10 +468,10 @@ int main(int argc, char* argv[]) {
     ip_header->ttl = 64;
     ip_header->frag_off = htons(0);
     ip_header->protocol = IPPROTO_UDP;
-    ip_header->check = wrapsum(in_cksum((unsigned char *)ip_header,
-					sizeof(struct ip_header), 0));
     ip_header->daddr = htonl(dst_ip);
     ip_header->saddr = htonl(src_ip);
+    ip_header->check = wrapsum(in_cksum((unsigned char *)ip_header,
+					sizeof(struct ip_header), 0));
 
     udp_header = (struct udp_header*)(buffer + sizeof(struct ether_header) + sizeof(struct ip_header));
     udp_header->source = htons(src_port);
