@@ -58,7 +58,7 @@ pthread_rwlock_t statsLock;
 static struct timeval startTime;
 unsigned long long numPkts[MAX_NUM_THREADS] = { 0 }, numBytes[MAX_NUM_THREADS] = { 0 };
 u_int8_t wait_for_packet = 1, do_shutdown = 0, add_drop_rule = 0;
-u_int8_t use_extended_pkt_header = 0;
+u_int8_t use_extended_pkt_header = 0, touch_payload = 0;
 
 /* *************************************** */
 /*
@@ -350,13 +350,11 @@ static int32_t thiszone;
 void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u_char *user_bytes) {
   long threadId = (long)user_bytes;
 
-  /*
-  {
-    int i;
-
-    i = p[26] + p[40];
+  if(touch_payload) {
+    volatile int __attribute__ ((unused)) i;
+    
+    i = p[12] + p[13];
   }
-  */
 
   if(verbose) {
     struct ether_header ehdr;
@@ -526,6 +524,7 @@ void printHelp(void) {
   printf("-a              Active packet wait\n");
   printf("-m              Long packet header (with PF_RING extensions)\n");
   printf("-r              Rehash RSS packets\n");
+  printf("-t              Touch payload (for force packet load on cache)\n");
   printf("-u <1|2>        For each incoming packet add a drop rule (1=hash, 2=wildcard rule)\n");
   printf("-v              Verbose\n");
 }
@@ -659,7 +658,7 @@ int main(int argc, char* argv[]) {
   startTime.tv_sec = 0;
   thiszone = gmt2local(0);
 
-  while((c = getopt(argc,argv,"hi:c:d:l:vae:n:w:p:b:rg:u:f:m")) != '?') {
+  while((c = getopt(argc,argv,"hi:c:d:l:vae:n:w:p:b:rg:u:f:mt")) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -714,6 +713,9 @@ int main(int argc, char* argv[]) {
       break;
     case 'r':
       rehash_rss = 1;
+      break;
+    case 't':
+      touch_payload = 1;
       break;
     case 'g':
       bind_core = atoi(optarg);

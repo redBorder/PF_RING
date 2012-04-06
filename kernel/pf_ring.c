@@ -3806,6 +3806,8 @@ static int skb_ring_handler(struct sk_buff *skb,
     return(rc);
   }
 
+  // prefetch(skb->data);
+
   if(recv_packet) {
     /* Hack for identifying a packet received by the e1000 */
     if(real_skb)

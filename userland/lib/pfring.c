@@ -58,6 +58,12 @@ static pfring_module_info pfring_module_list[] = {
   },
 #endif
 #ifdef HAVE_DNA
+#ifdef HAVE_ZERO
+  {
+    .name = "dnacluster",
+    .open = pfring_dna_cluster_open,
+  },
+#endif
   {
     .name = "dna",
     .open = pfring_dna_open,
