@@ -88,6 +88,9 @@ u_int8_t wait_for_packet = 1, do_shutdown = 0;
 u_int64_t num_pkt_good_sent = 0, last_num_pkt_good_sent = 0;
 u_int64_t num_bytes_good_sent = 0, last_num_bytes_good_sent = 0;
 struct timeval lastTime, startTime;
+int reforge_mac = 0;
+char mac_address[6];
+int send_len = 60;
 
 #define DEFAULT_DEVICE     "eth0"
 
@@ -189,6 +192,7 @@ void printHelp(void) {
 	 "                specifies the number of times the file will be sent\n");
   printf("-r <rate>       Rate to send (example -r 2.5 sends 2.5 Gbit/sec, -r -1 pcap capture rate)\n");
   printf("-m <dst MAC>    Reforge destination MAC (format AA:BB:CC:DD:EE:FF)\n");
+  printf("-b <num>        Number of different IPs (balanced traffic)\n");
   printf("-v              Verbose\n");
   exit(0);
 }
@@ -263,15 +267,65 @@ static u_int32_t wrapsum (u_int32_t sum) {
   return htons(sum);
 }
 
+/* ******************************************* */
+
+static void forge_udp_packet(char *buffer, u_int idx) {
+  int i;
+  struct ip_header *ip_header;
+  struct udp_header *udp_header;
+  u_int32_t src_ip = (0x0A000000 + idx) % 0xFFFFFFFF /* from 10.0.0.0 */;
+  u_int32_t dst_ip =  0xC0A80001 /* 192.168.0.1 */;
+  u_int16_t src_port = 2012, dst_port = 3000;
+
+  /* Reset packet */
+  memset(buffer, 0, sizeof(buffer));
+
+  for(i=0; i<12; i++) buffer[i] = i;
+  buffer[12] = 0x08, buffer[13] = 0x00; /* IP */
+  if(reforge_mac) memcpy(buffer, mac_address, 6);
+
+  ip_header = (struct ip_header*) &buffer[sizeof(struct ether_header)];
+  ip_header->ihl = 5;
+  ip_header->version = 4;
+  ip_header->tos = 0;
+  ip_header->tot_len = htons(send_len-sizeof(struct ether_header));
+  ip_header->id = htons(2012);
+  ip_header->ttl = 64;
+  ip_header->frag_off = htons(0);
+  ip_header->protocol = IPPROTO_UDP;
+  ip_header->daddr = htonl(dst_ip);
+  ip_header->saddr = htonl(src_ip);
+  ip_header->check = wrapsum(in_cksum((unsigned char *)ip_header,
+			sizeof(struct ip_header), 0));
+
+  udp_header = (struct udp_header*)(buffer + sizeof(struct ether_header) + sizeof(struct ip_header));
+  udp_header->source = htons(src_port);
+  udp_header->dest = htons(dst_port);
+  udp_header->len = htons(send_len-sizeof(struct ether_header)-sizeof(struct ip_header));
+  udp_header->check = 0; /* It must be 0 to compute the checksum */
+
+  /*
+    http://www.cs.nyu.edu/courses/fall01/G22.2262-001/class11.htm
+    http://www.ietf.org/rfc/rfc0761.txt
+    http://www.ietf.org/rfc/rfc0768.txt
+  */
+
+  i = sizeof(struct ether_header) + sizeof(struct ip_header) + sizeof(struct udp_header);
+  udp_header->check = wrapsum(in_cksum((unsigned char *)udp_header, sizeof(struct udp_header),
+                                       in_cksum((unsigned char *)&buffer[i], send_len-i,
+                                       in_cksum((unsigned char *)&ip_header->saddr,
+                                                2*sizeof(ip_header->saddr),
+                                                IPPROTO_UDP + ntohs(udp_header->len)))));
+}
+
 /* *************************************** */
 
 int main(int argc, char* argv[]) {
-  char c, *pcap_in = NULL, mac_address[6];
+  char c, *pcap_in = NULL;
   int i, verbose = 0, active_poll = 0;
-  int reforge_mac = 0, use_zero_copy_tx = 0;
+  int use_zero_copy_tx = 0;
   u_int mac_a, mac_b, mac_c, mac_d, mac_e, mac_f;
   char buffer[9000];
-  int send_len = 60;
   u_int32_t num = 0;
   int bind_core = -1;
   u_int16_t cpu_percentage = 0;
@@ -280,13 +334,17 @@ int main(int argc, char* argv[]) {
   ticks hz = 0;
   struct packet *tosend;
   u_int num_tx_slots = 0;
+  int num_balanced_pkts = 1;
 
-  while((c = getopt(argc,argv,"hi:n:g:l:af:r:vm:"
+  while((c = getopt(argc,argv,"b:hi:n:g:l:af:r:vm:"
 #if 0
 		    "b:"
 #endif
 		    )) != -1) {
     switch(c) {
+    case 'b':
+      num_balanced_pkts = atoi(optarg);
+      break;
     case 'h':
       printHelp();
       break;
@@ -446,58 +504,31 @@ int main(int argc, char* argv[]) {
       return(-1);
     }
   } else {
-    struct packet *p;
-    struct ip_header *ip_header;
-    struct udp_header *udp_header;
-    u_int32_t src_ip = 0x0A020304 /* 10.2.3.4 */, dst_ip=0xc0a80001 /* 192.168.0.1 */;
-    u_int16_t src_port = 2012, dst_port = 3000;
+    struct packet *p = NULL, *last = NULL;
 
-    /* Reset packet */
-    memset(buffer, 0, sizeof(buffer));
+    for (i = 0; i < num_balanced_pkts; i++) {
 
-    for(i=0; i<12; i++) buffer[i] = i;
-    buffer[12] = 0x08, buffer[13] = 0x00; /* IP */
-    if(reforge_mac) memcpy(buffer, mac_address, 6);
+      forge_udp_packet(buffer, i);
 
-    ip_header = (struct ip_header*) &buffer[sizeof(struct ether_header)];
-    ip_header->ihl = 5;
-    ip_header->version = 4;
-    ip_header->tos = 0;
-    ip_header->tot_len = htons(send_len-sizeof(struct ether_header));
-    ip_header->id = htons(2012);
-    ip_header->ttl = 64;
-    ip_header->frag_off = htons(0);
-    ip_header->protocol = IPPROTO_UDP;
-    ip_header->daddr = htonl(dst_ip);
-    ip_header->saddr = htonl(src_ip);
-    ip_header->check = wrapsum(in_cksum((unsigned char *)ip_header,
-					sizeof(struct ip_header), 0));
+      p = (struct packet *) malloc(sizeof(struct packet));
+      if(p) {
+	if (i == 0) pkt_head = p;
 
-    udp_header = (struct udp_header*)(buffer + sizeof(struct ether_header) + sizeof(struct ip_header));
-    udp_header->source = htons(src_port);
-    udp_header->dest = htons(dst_port);
-    udp_header->len = htons(send_len-sizeof(struct ether_header)-sizeof(struct ip_header));
-    udp_header->check = 0; /* It must be 0 to compute the checksum */
+        p->len = send_len;
+        p->ticks_from_beginning = 0;
+        p->next = pkt_head;
+        p->pkt = (char*)malloc(p->len);
 
-    /*
-      http://www.cs.nyu.edu/courses/fall01/G22.2262-001/class11.htm
-      http://www.ietf.org/rfc/rfc0761.txt
-      http://www.ietf.org/rfc/rfc0768.txt
-    */
-    i = sizeof(struct ether_header) + sizeof(struct ip_header) + sizeof(struct udp_header);
-    udp_header->check = wrapsum(in_cksum((unsigned char *)udp_header, sizeof(struct udp_header),
-					 in_cksum((unsigned char *)&buffer[i], send_len-i,
-						  in_cksum((unsigned char *)&ip_header->saddr,
-							   2*sizeof(ip_header->saddr),
-							   IPPROTO_UDP + ntohs(udp_header->len)))));
-    p = (struct packet*)malloc(sizeof(struct packet));
-    if(p) {
-      p->len = send_len;
-      p->ticks_from_beginning = 0;
-      p->next = p; /* Loop */
-      p->pkt = (char*)malloc(p->len);
-      memcpy(p->pkt, buffer, send_len);
-      pkt_head = p;
+	if (p->pkt == NULL) {
+	  printf("Not enough memory\n");
+	  break;
+	}
+
+        memcpy(p->pkt, buffer, send_len);
+
+	if (last != NULL) last->next = p;
+	last = p;
+      }
     }
   }
 
