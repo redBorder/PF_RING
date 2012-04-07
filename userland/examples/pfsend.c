@@ -279,7 +279,7 @@ int main(int argc, char* argv[]) {
   ticks tick_start = 0, tick_delta = 0;
   ticks hz = 0;
   struct packet *tosend;
-  u_int num_tx_slots;
+  u_int num_tx_slots = 0;
 
   while((c = getopt(argc,argv,"hi:n:g:l:af:r:vm:"
 #if 0
