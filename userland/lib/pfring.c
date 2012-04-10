@@ -631,6 +631,15 @@ int pfring_set_poll_duration(pfring *ring, u_int duration) {
 
 /* **************************************************** */
 
+int pfring_set_tx_watermark(pfring *ring, u_int16_t watermark) {
+  if(ring && ring->set_tx_watermark)
+    return ring->set_tx_watermark(ring, watermark);
+
+  return(PF_RING_ERROR_NOT_SUPPORTED);
+}
+
+/* **************************************************** */
+
 int pfring_add_hw_rule(pfring *ring, hw_filtering_rule *rule) {
   if(ring && ring->add_hw_rule)
     return ring->add_hw_rule(ring, rule);

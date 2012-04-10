@@ -152,7 +152,8 @@ extern "C" {
     /* DNA (Direct NIC Access) */
     struct {
       u_char dna_mapped_device;    
-      u_int16_t num_rx_pkts_before_dna_sync, num_tx_pkts_before_dna_sync, dna_sync_watermark;
+      u_int16_t num_rx_pkts_before_dna_sync, num_tx_pkts_before_dna_sync, 
+	dna_rx_sync_watermark, dna_tx_sync_watermark;
       u_int64_t tot_dna_read_pkts, tot_dna_lost_pkts;
       u_int32_t rx_reg, tx_reg, last_rx_slot_read;
       u_int32_t num_rx_slots_per_chunk, num_tx_slots_per_chunk;
@@ -171,6 +172,7 @@ extern "C" {
     int       (*recv)                         (pfring *, u_char**, u_int, struct pfring_pkthdr *, u_int8_t);
     int       (*set_poll_watermark)           (pfring *, u_int16_t);
     int       (*set_poll_duration)            (pfring *, u_int);
+    int       (*set_tx_watermark)             (pfring *, u_int16_t);
     int       (*set_channel_id)               (pfring *, u_int32_t);
     int       (*set_application_name)         (pfring *, char *);
     int       (*bind)                         (pfring *, char *);
@@ -291,6 +293,7 @@ extern "C" {
 		  u_int8_t level /* 1..4 */, u_int8_t add_timestamp, u_int8_t add_hash);
   int pfring_set_poll_watermark(pfring *ring, u_int16_t watermark);
   int pfring_set_poll_duration(pfring *ring, u_int duration);
+  int pfring_set_tx_watermark(pfring *ring, u_int16_t watermark);
   int pfring_add_hw_rule(pfring *ring, hw_filtering_rule *rule);
   int pfring_remove_hw_rule(pfring *ring, u_int16_t rule_id);
   int pfring_set_channel_id(pfring *ring, u_int32_t channel_id);

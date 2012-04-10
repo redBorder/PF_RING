@@ -63,7 +63,7 @@ void init_redirector(pfring *ring) {
       char *cmd = "/bin/rdictl set_cfg 2 > /dev/null";
 
       /* Temporary patch */
-      system(cmd);
+      (void)system(cmd);
 
       if((rc = rdi_init(ring->rdi.device_id)) < 0) {
 	printf("WARNING: unable to initialize redirector [device=%d@port=%d][rc=%d]\n",
