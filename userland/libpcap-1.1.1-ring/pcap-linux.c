@@ -1177,7 +1177,7 @@ pcap_activate_linux(pcap_t *handle)
 		  pfring_set_cluster(handle->ring, atoi(clusterId), cluster_round_robin);
 	    
 	    pfring_set_poll_watermark(handle->ring, 1 /* watermark */);
-	    handle->ring->dna.dna_sync_watermark = 0; /* trick (otherwise tshark wouldn't work with DNA) */
+	    handle->ring->dna.dna_rx_sync_watermark = 0; /* trick (otherwise tshark wouldn't work with DNA) */
 	  } else
 	    handle->ring = NULL;
 	} else
