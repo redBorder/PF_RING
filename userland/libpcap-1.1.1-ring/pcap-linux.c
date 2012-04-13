@@ -2390,6 +2390,14 @@ pcap_setfilter_linux_common(pcap_t *handle, struct bpf_program *filter,
 		}
 	}
 
+#ifdef HAVE_PF_RING
+	if(can_filter_in_kernel
+	   && (!strncmp(handle->md.device, "dna", 3)))
+	  can_filter_in_kernel = 0; /* With DNA we need to filter in userland
+				       as the kernel is bypassed
+				    */
+#endif
+
 	if (can_filter_in_kernel) {
 		if ((err = set_kernel_filter(handle, &fcode)) == 0)
 		{
