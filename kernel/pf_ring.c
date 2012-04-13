@@ -6962,11 +6962,8 @@ static int ring_setsockopt(struct socket *sock,
       if(copy_from_user(&slave_id, optval, sizeof(slave_id)))
 	return -EFAULT;
       
-      if (pfr->dna_cluster && slave_id < pfr->dna_cluster->num_slaves && pfr->dna_cluster->slave_waitqueue[slave_id]) {
-        /* TODO && !(slave_flags & DNA_CLUSTER_SLAVE_NO_INTERRUPT)) {
-        slave_flags |= DNA_CLUSTER_SLAVE_NO_INTERRUPT; */
+      if (pfr->dna_cluster && slave_id < pfr->dna_cluster->num_slaves && pfr->dna_cluster->slave_waitqueue[slave_id])
         wake_up_interruptible(pfr->dna_cluster->slave_waitqueue[slave_id]);
-      }
     }
  
   case SO_SHUTDOWN_RING:
