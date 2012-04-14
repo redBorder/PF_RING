@@ -107,7 +107,7 @@ static pfring* pfring_daq_open(Pfring_Context_t *context, char *device, int td) 
   }
 
   if(context->clusterid > 0) {
-    pfring_rc = pfring_set_cluster(ring_handle, context->clusterid, cluster_per_flow);
+    pfring_rc = pfring_set_cluster(ring_handle, context->clusterid, cluster_per_flow_2_tuple);
 
     if(pfring_rc != 0) {
       DPE(context->errbuf, "pfring_set_cluster returned %d", pfring_rc);
