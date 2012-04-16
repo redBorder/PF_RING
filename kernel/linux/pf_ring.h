@@ -227,12 +227,17 @@ struct pkt_parsing_info {
 				      */
 
 struct pfring_extended_pkthdr {
-  u_int64_t timestamp_ns; /* Packet timestamp at ns precision. Note that if your NIC supports
-			     hardware timestamp, this is the place to read timestamp from */
-  u_int8_t rx_direction;  /* 1=RX: packet received by the NIC, 0=TX: packet transmitted by the NIC */
-  int32_t  if_index;      /* index of the interface on which the packet has been received.
-                             It can be also used to report other information */
-  u_int32_t pkt_hash;     /* Hash based on the packet header */
+  u_int64_t timestamp_ns;  /* Packet timestamp at ns precision. Note that if your NIC supports
+			      hardware timestamp, this is the place to read timestamp from */
+  u_int8_t rx_direction;   /* 1=RX: packet received by the NIC, 0=TX: packet transmitted by the NIC */
+  int32_t  if_index;       /* index of the interface on which the packet has been received.
+			      It can be also used to report other information */
+  u_int32_t pkt_hash;      /* Hash based on the packet header */
+  struct {
+    int bounce_interface; /* Interface Id where this packet will bounce after processing
+				if its values is other than UNKNOWN_INTERFACE */
+    struct sk_buff *reserved; /* Kernel only pointer */
+  } tx;
   u_int16_t parsed_header_len; /* Extra parsing data before packet */
 
   /* NOTE: leave it as last field of the memset on parse_pkt() will fail */
@@ -566,7 +571,7 @@ typedef struct flowSlotInfo {
   /* first page, managed by kernel */
   u_int16_t version, sample_rate;
   u_int32_t min_num_slots, slot_len, data_len, tot_mem;
-  u_int32_t insert_off /* managed by kernel */;
+  u_int32_t insert_off, kernel_remove_off /* managed by kernel */;
   u_int64_t tot_pkts, tot_lost, tot_insert;
   u_int64_t tot_fwd_ok, tot_fwd_notok;
   u_int64_t good_pkt_sent, pkt_send_error;
@@ -954,6 +959,13 @@ struct pf_ring_socket {
 
   /* Master Ring */
   struct pf_ring_socket *master_ring;
+
+  /* Used to transmit packets after they have been received
+     from user space */
+  struct {
+    int last_tx_dev_idx;
+    struct net_device *last_tx_dev;
+  } tx;
 
   /* Direct NIC Access */
   dna_device *dna_device;

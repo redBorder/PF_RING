@@ -239,7 +239,8 @@ static void ring_proc_term(void);
 static int reflect_packet(struct sk_buff *skb,
 			  struct pf_ring_socket *pfr,
 			  struct net_device *reflector_dev,
-			  int displ, rule_action_behaviour behaviour);
+			  int displ, rule_action_behaviour behaviour,
+			  u_int8_t do_clone_skb);
 
 /* ********************************** */
 
@@ -657,6 +658,78 @@ inline u_int get_num_ring_free_slots(struct pf_ring_socket * pfr)
 
 /* ********************************** */
 
+/*
+  Consume packets that have been read by userland but not
+  yet by kernel
+*/
+static void consume_pending_pkts(struct pf_ring_socket *pfr)
+{
+  if(pfr->header_len != long_pkt_header) return;
+
+  while(pfr->slots_info->remove_off != pfr->slots_info->kernel_remove_off) {
+    struct pfring_pkthdr *hdr = (struct pfring_pkthdr*) &pfr->ring_slots[pfr->slots_info->kernel_remove_off];
+
+    if(unlikely(enable_debug))
+      printk("[PF_RING] Original offset [kernel_remove_off=%u][remove_off=%u]\n",
+	     pfr->slots_info->kernel_remove_off,
+	     pfr->slots_info->remove_off);
+
+    if(hdr->extended_hdr.tx.reserved != NULL) {
+      /* Can't forward the packet on the same interface it has been received */
+      if(hdr->extended_hdr.tx.bounce_interface == pfr->ring_netdev->dev->ifindex)
+	hdr->extended_hdr.tx.bounce_interface = UNKNOWN_INTERFACE;
+
+      if(hdr->extended_hdr.tx.bounce_interface != UNKNOWN_INTERFACE) {
+	/* Let's check if the last used device is still the prefered one */
+	if(pfr->tx.last_tx_dev_idx != hdr->extended_hdr.tx.bounce_interface) {
+	  if(pfr->tx.last_tx_dev != NULL)
+	    dev_put(pfr->tx.last_tx_dev); /* Release device */
+	  
+	  /* Reset all */
+	  pfr->tx.last_tx_dev = NULL, pfr->tx.last_tx_dev_idx = UNKNOWN_INTERFACE;
+
+	  pfr->tx.last_tx_dev = __dev_get_by_index(
+#if(LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,24))
+						   &init_net,
+#endif
+						   hdr->extended_hdr.tx.bounce_interface);
+
+	  if(pfr->tx.last_tx_dev != NULL) {
+	    /* We have found the device */
+	    pfr->tx.last_tx_dev_idx = hdr->extended_hdr.tx.bounce_interface;
+	  }
+	}
+
+	if(pfr->tx.last_tx_dev) {
+	  if(unlikely(enable_debug))
+	    printk("[PF_RING] Bouncing packet to interface %d/%s\n", 
+		   hdr->extended_hdr.tx.bounce_interface,
+		   pfr->tx.last_tx_dev->name);
+	  
+	  reflect_packet(hdr->extended_hdr.tx.reserved, pfr,
+			 pfr->tx.last_tx_dev, 0 /* displ */, 
+			 forward_packet_and_stop_rule_evaluation,
+			 0 /* don't clone skb */);
+	}
+      } else {
+	if(unlikely(enable_debug))
+	  printk("[PF_RING] Freeing cloned (unforwarded) packet\n");
+
+	kfree_skb(hdr->extended_hdr.tx.reserved); /* Free memory */
+      }
+    }
+    
+    pfr->slots_info->kernel_remove_off = get_next_slot_offset(pfr, pfr->slots_info->kernel_remove_off);
+    
+    if(unlikely(enable_debug))
+      printk("[PF_RING] New offset [kernel_remove_off=%u][remove_off=%u]\n",
+	     pfr->slots_info->kernel_remove_off,
+	     pfr->slots_info->remove_off);
+  }
+}
+
+/* ********************************** */
+
 static inline int check_and_init_free_slot(struct pf_ring_socket *pfr, int off)
 {
   // smp_rmb();
@@ -670,10 +743,10 @@ static inline int check_and_init_free_slot(struct pf_ring_socket *pfr, int off)
     if(num_queued_pkts(pfr) >= min_num_slots)
       return(0); /* Memory is full */
   } else {
-    /* There are packets in the ring. We have to check whether we have enough to accommodate a new packet */
+    /* There are packets in the ring. We have to check whether we have 
+       enough space to accommodate a new packet */
 
     if(pfr->slots_info->insert_off < pfr->slots_info->remove_off) {
-
       /* Zero-copy recv: this prevents from overwriting packets while apps are processing them */
       if((pfr->slots_info->remove_off - pfr->slots_info->insert_off) < (2 * pfr->slots_info->slot_len))
 	return(0);
@@ -1820,9 +1893,7 @@ static int parse_pkt(struct sk_buff *skb,
 		     struct pfring_pkthdr *hdr,
 		     u_int8_t reset_all)
 {
-  int rc;
-
-  rc = parse_raw_pkt(&skb->data[real_skb ? -skb_displ : 0], (skb->len + skb_displ), hdr, reset_all);
+  int rc = parse_raw_pkt(&skb->data[real_skb ? -skb_displ : 0], (skb->len + skb_displ), hdr, reset_all);
   hdr->extended_hdr.parsed_pkt.offset.eth_offset = -skb_displ;
 
   return(rc);
@@ -2059,7 +2130,7 @@ static int match_filtering_rule(struct pf_ring_socket *pfr,
      && (memcmp(hdr->extended_hdr.parsed_pkt.smac, rule->rule.core_fields.smac, ETH_ALEN) != 0))
     goto swap_direction;
 
-  if(hdr->extended_hdr.parsed_pkt.ip_version == 6){
+  if(hdr->extended_hdr.parsed_pkt.ip_version == 6) {
     /* IPv6 */
     if(!match_ipv6(&hdr->extended_hdr.parsed_pkt.ip_src, &rule->rule.core_fields.shost_mask, &rule->rule.core_fields.shost)
        || !match_ipv6(&hdr->extended_hdr.parsed_pkt.ip_dst, &rule->rule.core_fields.dhost_mask, &rule->rule.core_fields.dhost))
@@ -2334,7 +2405,7 @@ inline int copy_data_to_ring(struct sk_buff *skb,
   // do_lock = 0;
 
   if(pfr->ring_slots == NULL) return(0);
-
+  
   if(unlikely(enable_debug))
     printk("[PF_RING] do_lock=%d [num_channels_per_ring=%d][num_bound_devices=%d]\n",
 	   do_lock, pfr->num_channels_per_ring, pfr->num_bound_devices);
@@ -2343,6 +2414,8 @@ inline int copy_data_to_ring(struct sk_buff *skb,
 
   if(do_lock) write_lock(&pfr->ring_index_lock);
   // smp_rmb();
+
+  consume_pending_pkts(pfr);
 
   off = pfr->slots_info->insert_off;
   pfr->slots_info->tot_pkts++;
@@ -2389,6 +2462,12 @@ inline int copy_data_to_ring(struct sk_buff *skb,
 	  print_once = 1;
 	}
       }
+    }
+
+    if(pfr->header_len == long_pkt_header) {
+      /* The TX transmission is supported only with long_pkt_header
+	 where we can read the id of the output interface */
+      hdr->extended_hdr.tx.reserved = skb_clone(skb, GFP_ATOMIC);
     }
   } else {
     /* Raw data copy mode */
@@ -2552,7 +2631,7 @@ static void free_filtering_rule(sw_filtering_rule_element * entry, u_int8_t free
     plugin_registration[entry->rule.plugin_action.plugin_id]->pfring_plugin_free_rule_mem(entry);
   }
 
-  if(freeing_ring){ /* tell the plugin to free global data structures */
+  if(freeing_ring) { /* tell the plugin to free global data structures */
     if(entry->rule.plugin_action.plugin_id > 0
        && plugin_registration[entry->rule.plugin_action.plugin_id]
        && plugin_registration[entry->rule.plugin_action.plugin_id]->pfring_plugin_free_ring_mem) {
@@ -2573,7 +2652,7 @@ static void free_filtering_rule(sw_filtering_rule_element * entry, u_int8_t free
   }
 
   if(entry->rule.internals.reflector_dev != NULL)
-    dev_put(entry->rule.internals.reflector_dev);	/* Release device */
+    dev_put(entry->rule.internals.reflector_dev); /* Release device */
 
   if(entry->rule.extended_fields.filter_plugin_id > 0) {
     if(plugin_registration[entry->rule.extended_fields.filter_plugin_id]->pfring_plugin_register)
@@ -2686,7 +2765,7 @@ static int handle_sw_filtering_hash_bucket(struct pf_ring_socket *pfr,
       rule->rule.internals.reflector_dev = NULL;
 
     /* initialiting hash table */
-    if(pfr->sw_filtering_hash == NULL){
+    if(pfr->sw_filtering_hash == NULL) {
       pfr->sw_filtering_hash = (sw_filtering_hash_bucket **)
 	kcalloc(DEFAULT_RING_HASH_SIZE, sizeof(sw_filtering_hash_bucket *), GFP_ATOMIC);
 
@@ -2762,7 +2841,7 @@ static int handle_sw_filtering_hash_bucket(struct pf_ring_socket *pfr,
     }
   }
 
-  if(add_rule && rc == 0){
+  if(add_rule && rc == 0) {
     pfr->num_sw_filtering_rules++;
 
     /* Avoid immediate rule purging */
@@ -2938,7 +3017,8 @@ static int reflect_packet(struct sk_buff *skb,
 			  struct pf_ring_socket *pfr,
 			  struct net_device *reflector_dev,
 			  int displ,
-			  rule_action_behaviour behaviour)
+			  rule_action_behaviour behaviour,
+			  u_int8_t do_clone_skb)
 {
   if(unlikely(enable_debug))
     printk("[PF_RING] reflect_packet called\n");
@@ -2948,8 +3028,11 @@ static int reflect_packet(struct sk_buff *skb,
     int ret;
     struct sk_buff *cloned;
 
-    if ((cloned = skb_clone(skb, GFP_ATOMIC)) == NULL)
-      return -ENOMEM;
+    if(do_clone_skb) {
+      if((cloned = skb_clone(skb, GFP_ATOMIC)) == NULL)
+	return -ENOMEM;
+    } else
+      cloned = skb;
 
     cloned->pkt_type = PACKET_OUTGOING;
     cloned->dev = reflector_dev;
@@ -3059,12 +3142,12 @@ int check_perfect_rules(struct sk_buff *skb,
     case reflect_packet_and_stop_rule_evaluation:
     case bounce_packet_and_stop_rule_evaluation:
       *fwd_pkt = 0;
-      reflect_packet(skb, pfr, hash_bucket->rule.internals.reflector_dev, displ, behaviour);
+      reflect_packet(skb, pfr, hash_bucket->rule.internals.reflector_dev, displ, behaviour, 1);
       break;
     case reflect_packet_and_continue_rule_evaluation:
     case bounce_packet_and_continue_rule_evaluation:
       *fwd_pkt = 0;
-      reflect_packet(skb, pfr, hash_bucket->rule.internals.reflector_dev, displ, behaviour);
+      reflect_packet(skb, pfr, hash_bucket->rule.internals.reflector_dev, displ, behaviour, 1);
       hash_found = 0;	/* This way we also evaluate the list of rules */
       break;
     }
@@ -3155,7 +3238,7 @@ int check_wildcard_rules(struct sk_buff *skb,
 	      if(hash_bucket != NULL) {
 	        rc = handle_sw_filtering_hash_bucket(pfr, hash_bucket, 1 /* add_rule_from_plugin */);
 
-	        if(rc != 0){
+	        if(rc != 0) {
 	          kfree(hash_bucket);
 	          hash_bucket = NULL;
 	        }
@@ -3164,7 +3247,7 @@ int check_wildcard_rules(struct sk_buff *skb,
 	      if(rule_element != NULL) {
 	        rc = add_sw_filtering_rule_element(pfr, rule_element);
 
-	        if(rc != 0){
+	        if(rc != 0) {
 	          kfree(rule_element);
 	          rule_element = NULL;
 	        }
@@ -3193,7 +3276,7 @@ int check_wildcard_rules(struct sk_buff *skb,
 	    rc = handle_sw_filtering_hash_bucket(pfr, hash_bucket, 1 /* add_rule_from_plugin */);
 	    write_unlock(&pfr->ring_rules_lock);
 
-	    if(rc != 0){
+	    if(rc != 0) {
 	      kfree(hash_bucket);
 	      hash_bucket = NULL;
 	    } else {
@@ -3273,12 +3356,12 @@ int check_wildcard_rules(struct sk_buff *skb,
       } else if((entry->rule.rule_action == reflect_packet_and_stop_rule_evaluation)
 		|| (entry->rule.rule_action == bounce_packet_and_stop_rule_evaluation)) {
 	*fwd_pkt = 0;
-	reflect_packet(skb, pfr, entry->rule.internals.reflector_dev, displ, entry->rule.rule_action);
+	reflect_packet(skb, pfr, entry->rule.internals.reflector_dev, displ, entry->rule.rule_action, 1);
 	break;
       } else if((entry->rule.rule_action == reflect_packet_and_continue_rule_evaluation)
 		|| (entry->rule.rule_action == bounce_packet_and_continue_rule_evaluation)) {
 	*fwd_pkt = 1;
-	reflect_packet(skb, pfr, entry->rule.internals.reflector_dev, displ, entry->rule.rule_action);
+	reflect_packet(skb, pfr, entry->rule.internals.reflector_dev, displ, entry->rule.rule_action, 1);
       }
     } else {
       if(unlikely(enable_debug))
@@ -3690,7 +3773,7 @@ static struct sk_buff* defrag_skb(struct sk_buff *skb,
       if((cloned = skb_clone(skb, GFP_ATOMIC)) != NULL) {
         int vlan_offset = 0;
 
-        if(displ && (hdr->extended_hdr.parsed_pkt.offset.l3_offset - displ) /*VLAN*/){
+        if(displ && (hdr->extended_hdr.parsed_pkt.offset.l3_offset - displ) /*VLAN*/) {
 	  vlan_offset = 4;
           skb_pull(cloned, vlan_offset);
           displ += vlan_offset;
@@ -3738,7 +3821,7 @@ static struct sk_buff* defrag_skb(struct sk_buff *skb,
 		   c[10], c[11], c[12], c[13], c[14], c[15], c[16], c[17]);
           }
 
-	  if(vlan_offset > 0){
+	  if(vlan_offset > 0) {
 	    skb_push(skk, vlan_offset);
 	    displ -= vlan_offset;
 	  }
@@ -3923,6 +4006,7 @@ static int skb_ring_handler(struct sk_buff *skb,
     else
       hdr.extended_hdr.if_index = UNKNOWN_INTERFACE;
 
+    hdr.extended_hdr.tx.bounce_interface = UNKNOWN_INTERFACE, hdr.extended_hdr.tx.reserved = NULL;
     hdr.extended_hdr.rx_direction = recv_packet;
 
     /* [1] Check unclustered sockets */
@@ -4213,7 +4297,8 @@ static int ring_create(
   sk->sk_family = PF_RING;
   sk->sk_destruct = ring_sock_destruct;
   pfr->ring_id = atomic_inc_return(&ring_id_serial);
-
+  
+  pfr->tx.last_tx_dev_idx = UNKNOWN_INTERFACE, pfr->tx.last_tx_dev = NULL;
   ring_insert(sk);
 
   ring_proc_add(pfr);
@@ -4874,6 +4959,9 @@ static int ring_release(struct socket *sock)
   sock_orphan(sk);
   ring_proc_remove(pfr);
 
+  if(pfr->tx.last_tx_dev != NULL)
+    dev_put(pfr->tx.last_tx_dev); /* Release device */
+
   ring_write_lock();
 
   if(pfr->ring_netdev->dev && pfr->ring_netdev == &any_device_element)
@@ -5278,7 +5366,7 @@ static int ring_mmap(struct file *file,
 	   __FUNCTION__, size, pfr->bucket_len);
 
   /* Trick for mapping DNA chunks */
-  if(mem_id >= 100){
+  if(mem_id >= 100) {
     mem_id -= 100;
 
     if(pfr->dna_device) {
@@ -5502,7 +5590,7 @@ static int ring_sendmsg(struct kiocb *iocb, struct socket *sock,
   int err = 0;
 
   /* Userspace RING: Waking up the ring consumer */
-  if(pfr->userspace_ring != NULL){
+  if(pfr->userspace_ring != NULL) {
     if(pfr->userspace_ring->consumer_ring_slots_waitqueue != NULL
         && !(pfr->slots_info->userspace_ring_flags & USERSPACE_RING_NO_INTERRUPT)) {
         pfr->slots_info->userspace_ring_flags |= USERSPACE_RING_NO_INTERRUPT;
@@ -5649,6 +5737,8 @@ unsigned int ring_poll(struct file *file,
 
     pfr->ring_active = 1;
     // smp_rmb();
+
+    consume_pending_pkts(pfr);
 
     /* printk("Before [num_queued_pkts(pfr)=%u]\n", num_queued_pkts(pfr)); */
 
@@ -6224,7 +6314,7 @@ static int ring_setsockopt(struct socket *sock,
 	break;
       }
 
-      if(copy_from_user(filter->insns, fprog.filter, fsize)){
+      if(copy_from_user(filter->insns, fprog.filter, fsize)) {
 	kfree(filter);
         break;
       }
