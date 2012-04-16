@@ -1201,8 +1201,8 @@ static char* direction2string(packet_direction d) {
 static char* sockmode2string(socket_mode m) {
   switch(m) {
   case send_and_recv_mode: return("RX+TX");
-  case send_only_mode:     return("RX only");
-  case recv_only_mode:     return("TX only");
+  case recv_only_mode:     return("RX only");
+  case send_only_mode:     return("TX only");
   }
 
   return("???");
