@@ -5169,7 +5169,8 @@ static int packet_ring_bind(struct sock *sk, char *dev_name)
   if(dev->dev->ifindex >= MAX_NUM_IFIDX)
     return(-EINVAL);
 
-  if(strcmp(dev->dev->name, "none")
+  if(strcmp(dev->dev->name, "none") != 0
+     && strcmp(dev->dev->name, "any") != 0
      && (!(dev->dev->flags & IFF_UP))) {
     if(unlikely(enable_debug))
       printk("[PF_RING] packet_ring_bind(%s): down\n", dev->dev->name);
