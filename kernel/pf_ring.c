@@ -664,18 +664,13 @@ inline u_int get_num_ring_free_slots(struct pf_ring_socket * pfr)
 */
 static void consume_pending_pkts(struct pf_ring_socket *pfr)
 {
-  if(unlikely(enable_debug))
-    printk("[PF_RING] [tx.enable_tx_with_bounce=%d][header_len=%d]\n",
-	   pfr->tx.enable_tx_with_bounce,
-	   pfr->header_len);
-
   if((!pfr->tx.enable_tx_with_bounce)
      || (pfr->header_len != long_pkt_header)
      || (pfr->slots_info->remove_off == pfr->slots_info->kernel_remove_off)
      )
     return;
 
-  // write_lock_bh(&pfr->tx.consume_tx_packets_lock);
+  write_lock_bh(&pfr->tx.consume_tx_packets_lock);
 
   while(pfr->slots_info->remove_off != pfr->slots_info->kernel_remove_off) {
     struct pfring_pkthdr *hdr = (struct pfring_pkthdr*) &pfr->ring_slots[pfr->slots_info->kernel_remove_off];
@@ -739,7 +734,7 @@ static void consume_pending_pkts(struct pf_ring_socket *pfr)
 	     pfr->slots_info->remove_off);
   }
 
-  // write_unlock_bh(&pfr->tx.consume_tx_packets_lock);
+  write_unlock_bh(&pfr->tx.consume_tx_packets_lock);
 }
 
 /* ********************************** */
@@ -5759,7 +5754,7 @@ unsigned int ring_poll(struct file *file,
     pfr->ring_active = 1;
     // smp_rmb();
 
-    // consume_pending_pkts(pfr);
+    consume_pending_pkts(pfr);
 
     /* printk("Before [num_queued_pkts(pfr)=%u]\n", num_queued_pkts(pfr)); */
 
