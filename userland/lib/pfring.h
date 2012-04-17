@@ -148,6 +148,14 @@ extern "C" {
     packet_direction direction; /* Specify the capture direction for packets */
     socket_mode mode;
 
+    struct {
+      u_int8_t enabled_rx_packet_send;
+      struct pfring_pkthdr *last_received_hdr; /*
+						 Header of the past packet
+						 that has been received on this socket
+					       */
+    } tx;
+
     /* TODO these fields should be moved in ->priv_data */
     /* DNA (Direct NIC Access) */
     struct {
@@ -221,6 +229,7 @@ extern "C" {
     int       (*set_device_clock)             (pfring *, struct timespec *);
     int       (*adjust_device_clock)          (pfring *, struct timespec *, int8_t);
     void      (*sync_indexes_with_kernel)     (pfring *);
+    int       (*send_last_rx_packet)          (pfring *, int);
     int       (*bounce_init)                  (pfring_bounce *);
     int       (*bounce_loop)                  (pfring_bounce *, pfringBounceProcesssPacket, const u_char *, u_int8_t);
     void      (*bounce_destroy)               (pfring_bounce *);
@@ -338,6 +347,7 @@ extern "C" {
   int pfring_set_reflector_device(pfring *ring, char *device_name);
   int pfring_get_bound_device_address(pfring *ring, u_char mac_address[6]);
   u_int16_t pfring_get_slot_header_len(pfring *ring);
+  int pfring_get_bound_device_id(pfring *ring, int *device_id);
   int pfring_set_virtual_device(pfring *ring, virtual_filtering_device_info *info);
   int pfring_loopback_test(pfring *ring, char *buffer, u_int buffer_len, u_int test_len);
   int pfring_enable_ring(pfring *ring);
@@ -349,6 +359,7 @@ extern "C" {
   int pfring_set_device_clock(pfring *ring, struct timespec *ts);
   int pfring_adjust_device_clock(pfring *ring, struct timespec *offset, int8_t sign);
   void pfring_sync_indexes_with_kernel(pfring *ring);
+  int pfring_send_last_rx_packet(pfring *ring, int tx_interface_id);
 
   u_int pfring_get_num_tx_slots(pfring* ring);
   u_int pfring_dna_get_num_rx_slots(pfring* ring);

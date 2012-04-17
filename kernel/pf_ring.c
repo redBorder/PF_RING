@@ -151,7 +151,7 @@ static lockless_list ring_table;
 static u_int ring_table_size;
 
 /*
-  List where we store pointers that we need to remove in 
+  List where we store pointers that we need to remove in
    a delayed fashion when we're done with all operations
 */
 static lockless_list delayed_memory_table;
@@ -485,7 +485,7 @@ int lockless_list_add(lockless_list *l, void *elem) {
   if(unlikely(enable_debug)) {
     printk("[PF_RING] -> END %s() [total=%u][id=%u][top_element_id=%u]\n",
 	   __FUNCTION__, l->num_elements, i, l->top_element_id);
-    
+
     for(i=0; i<MAX_NUM_LIST_ELEMENTS; i++) {
       if(l->list_elements[i])
 	printk("[PF_RING] -> %s() [slot %u is full]\n", __FUNCTION__, i);
@@ -531,7 +531,7 @@ int lockless_list_remove(lockless_list *l, void *elem) {
 
   if(unlikely(enable_debug)) {
     printk("[PF_RING] -> END %s() [total=%u][top_element_id=%u]\n", __FUNCTION__, l->num_elements, l->top_element_id);
-    
+
     for(i=0; i<MAX_NUM_LIST_ELEMENTS; i++) {
       if(l->list_elements[i])
 	printk("[PF_RING] -> %s() [slot %u is full]\n", __FUNCTION__, i);
@@ -574,7 +574,7 @@ void lockless_list_empty(lockless_list *l, u_int8_t free_memory) {
 
   if(free_memory) {
     write_lock_bh(&l->list_lock);
-    
+
     for(i=0; i<MAX_NUM_LIST_ELEMENTS; i++) {
       if(l->list_elements[i] != NULL) {
 	kfree(l->list_elements[i]);
@@ -584,7 +584,7 @@ void lockless_list_empty(lockless_list *l, u_int8_t free_memory) {
 
     l->num_elements = 0;
     write_unlock_bh(&l->list_lock);
-    wmb();    
+    wmb();
   }
 }
 
@@ -664,15 +664,27 @@ inline u_int get_num_ring_free_slots(struct pf_ring_socket * pfr)
 */
 static void consume_pending_pkts(struct pf_ring_socket *pfr)
 {
-  if(pfr->header_len != long_pkt_header) return;
+  if(unlikely(enable_debug))
+    printk("[PF_RING] [tx.enable_tx_with_bounce=%d][header_len=%d]\n",
+	   pfr->tx.enable_tx_with_bounce,
+	   pfr->header_len);
+
+  if((!pfr->tx.enable_tx_with_bounce)
+     || (pfr->header_len != long_pkt_header)
+     || (pfr->slots_info->remove_off == pfr->slots_info->kernel_remove_off)
+     )
+    return;
+
+  // write_lock_bh(&pfr->tx.consume_tx_packets_lock);
 
   while(pfr->slots_info->remove_off != pfr->slots_info->kernel_remove_off) {
     struct pfring_pkthdr *hdr = (struct pfring_pkthdr*) &pfr->ring_slots[pfr->slots_info->kernel_remove_off];
 
     if(unlikely(enable_debug))
-      printk("[PF_RING] Original offset [kernel_remove_off=%u][remove_off=%u]\n",
+      printk("[PF_RING] Original offset [kernel_remove_off=%u][remove_off=%u][skb=%p]\n",
 	     pfr->slots_info->kernel_remove_off,
-	     pfr->slots_info->remove_off);
+	     pfr->slots_info->remove_off,
+	     hdr->extended_hdr.tx.reserved);
 
     if(hdr->extended_hdr.tx.reserved != NULL) {
       /* Can't forward the packet on the same interface it has been received */
@@ -684,7 +696,7 @@ static void consume_pending_pkts(struct pf_ring_socket *pfr)
 	if(pfr->tx.last_tx_dev_idx != hdr->extended_hdr.tx.bounce_interface) {
 	  if(pfr->tx.last_tx_dev != NULL)
 	    dev_put(pfr->tx.last_tx_dev); /* Release device */
-	  
+
 	  /* Reset all */
 	  pfr->tx.last_tx_dev = NULL, pfr->tx.last_tx_dev_idx = UNKNOWN_INTERFACE;
 
@@ -702,12 +714,12 @@ static void consume_pending_pkts(struct pf_ring_socket *pfr)
 
 	if(pfr->tx.last_tx_dev) {
 	  if(unlikely(enable_debug))
-	    printk("[PF_RING] Bouncing packet to interface %d/%s\n", 
+	    printk("[PF_RING] Bouncing packet to interface %d/%s\n",
 		   hdr->extended_hdr.tx.bounce_interface,
 		   pfr->tx.last_tx_dev->name);
-	  
+
 	  reflect_packet(hdr->extended_hdr.tx.reserved, pfr,
-			 pfr->tx.last_tx_dev, 0 /* displ */, 
+			 pfr->tx.last_tx_dev, 0 /* displ */,
 			 forward_packet_and_stop_rule_evaluation,
 			 0 /* don't clone skb */);
 	}
@@ -718,14 +730,16 @@ static void consume_pending_pkts(struct pf_ring_socket *pfr)
 	kfree_skb(hdr->extended_hdr.tx.reserved); /* Free memory */
       }
     }
-    
+
     pfr->slots_info->kernel_remove_off = get_next_slot_offset(pfr, pfr->slots_info->kernel_remove_off);
-    
+
     if(unlikely(enable_debug))
       printk("[PF_RING] New offset [kernel_remove_off=%u][remove_off=%u]\n",
 	     pfr->slots_info->kernel_remove_off,
 	     pfr->slots_info->remove_off);
   }
+
+  // write_unlock_bh(&pfr->tx.consume_tx_packets_lock);
 }
 
 /* ********************************** */
@@ -743,7 +757,7 @@ static inline int check_and_init_free_slot(struct pf_ring_socket *pfr, int off)
     if(num_queued_pkts(pfr) >= min_num_slots)
       return(0); /* Memory is full */
   } else {
-    /* There are packets in the ring. We have to check whether we have 
+    /* There are packets in the ring. We have to check whether we have
        enough space to accommodate a new packet */
 
     if(pfr->slots_info->insert_off < pfr->slots_info->remove_off) {
@@ -2405,7 +2419,7 @@ inline int copy_data_to_ring(struct sk_buff *skb,
   // do_lock = 0;
 
   if(pfr->ring_slots == NULL) return(0);
-  
+
   if(unlikely(enable_debug))
     printk("[PF_RING] do_lock=%d [num_channels_per_ring=%d][num_bound_devices=%d]\n",
 	   do_lock, pfr->num_channels_per_ring, pfr->num_bound_devices);
@@ -2464,9 +2478,13 @@ inline int copy_data_to_ring(struct sk_buff *skb,
       }
     }
 
-    if(pfr->header_len == long_pkt_header) {
-      /* The TX transmission is supported only with long_pkt_header
-	 where we can read the id of the output interface */
+    if(pfr->tx.enable_tx_with_bounce
+       && (pfr->header_len == long_pkt_header)) {
+      /*
+	 The TX transmission is supported only with long_pkt_header
+	 where we can read the id of the output interface
+      */
+
       hdr->extended_hdr.tx.reserved = skb_clone(skb, GFP_ATOMIC);
     }
   } else {
@@ -4015,7 +4033,7 @@ static int skb_ring_handler(struct sk_buff *skb,
     if(unlikely(enable_debug))
       printk("[PF_RING] -> lockless_list_get_first=%p [num elements=%u][last_list_idx=%u]\n",
 	     sk, ring_table.num_elements, (unsigned int)last_list_idx);
-    
+
     while(sk != NULL) {
       pfr = ring_sk(sk);
 
@@ -4043,7 +4061,7 @@ static int skb_ring_handler(struct sk_buff *skb,
 
       if(unlikely(enable_debug))
 	printk("[PF_RING] -> lockless_list_get_next=%p [num elements=%u][last_list_idx=%u]\n",
-	       sk, ring_table.num_elements, (unsigned int)last_list_idx);      
+	       sk, ring_table.num_elements, (unsigned int)last_list_idx);
     }
 
     cluster_ptr = (ring_cluster_element*)lockless_list_get_first(&ring_cluster_list, &last_list_idx);
@@ -4297,7 +4315,9 @@ static int ring_create(
   sk->sk_family = PF_RING;
   sk->sk_destruct = ring_sock_destruct;
   pfr->ring_id = atomic_inc_return(&ring_id_serial);
-  
+
+  rwlock_init(&pfr->tx.consume_tx_packets_lock);
+  pfr->tx.enable_tx_with_bounce = 0;
   pfr->tx.last_tx_dev_idx = UNKNOWN_INTERFACE, pfr->tx.last_tx_dev = NULL;
   ring_insert(sk);
 
@@ -4588,7 +4608,7 @@ static unsigned long alloc_contiguous_memory(u_int mem_len) {
 
 /* ************************************* */
 
-static struct dma_memory_info *allocate_extra_dma_memory(struct device *hwdev, 
+static struct dma_memory_info *allocate_extra_dma_memory(struct device *hwdev,
                                                          u_int32_t num_slots, u_int32_t slot_len, u_int32_t chunk_len)
 {
   u_int i, num_slots_per_chunk, num_chunks;
@@ -4599,7 +4619,7 @@ static struct dma_memory_info *allocate_extra_dma_memory(struct device *hwdev,
   num_slots_per_chunk = chunk_len / slot_len;
   num_chunks = (num_slots + num_slots_per_chunk-1) / num_slots_per_chunk;
 
-  if(num_chunks == 0) 
+  if(num_chunks == 0)
     return NULL;
 
   if((dma_memory = kcalloc(1, sizeof(struct dma_memory_info), GFP_KERNEL)) == NULL)
@@ -4732,7 +4752,7 @@ static char *dna_cluster_allocate_shared_memory(u_int32_t num_slaves, u_int32_t 
   return shared_mem;
 }
 
-static struct dna_cluster* dna_cluster_create(u_int32_t dna_cluster_id, u_int32_t num_slots, 
+static struct dna_cluster* dna_cluster_create(u_int32_t dna_cluster_id, u_int32_t num_slots,
                                               u_int32_t num_slaves, u_int32_t slave_mem_len,
                                               struct device *hwdev, u_int32_t slot_len, u_int32_t chunk_len)
 {
@@ -4774,13 +4794,13 @@ static struct dna_cluster* dna_cluster_create(u_int32_t dna_cluster_id, u_int32_
 	printk("[PF_RING] %s(%u) failed\n", __FUNCTION__, dna_cluster_id);
       goto unlock;
     }
-    
+
     dnac->id = dna_cluster_id;
     dnac->num_slaves = num_slaves;
 
     atomic_set(&dnac->master, 0);
     atomic_set(&dnac->slaves, 0);
- 
+
     if((dnac->extra_dma_memory = allocate_extra_dma_memory(hwdev, num_slots, slot_len, chunk_len)) == NULL) {
       kfree(dnac);
       dnac = NULL;
@@ -4793,7 +4813,7 @@ static struct dna_cluster* dna_cluster_create(u_int32_t dna_cluster_id, u_int32_
       kfree(dnac);
       dnac = NULL;
       goto unlock;
-    } 
+    }
 
     if((dnac->shared_memory = dna_cluster_allocate_shared_memory(num_slaves, slave_mem_len)) == NULL) {
       free_extra_dma_memory(dnac->extra_dma_memory);
@@ -4835,7 +4855,7 @@ static void dna_cluster_remove(struct dna_cluster *dnac, dna_cluster_client_type
     entry = list_entry(ptr, struct dna_cluster, list);
 
     if(entry == dnac) {
-      
+
       if (type == dna_cluster_master)
         atomic_dec(&dnac->master);
       else if (type == dna_cluster_slave) {
@@ -4848,7 +4868,7 @@ static void dna_cluster_remove(struct dna_cluster *dnac, dna_cluster_client_type
         free_extra_dma_memory(entry->extra_dma_memory);
         vfree(entry->shared_memory);
         kfree(entry);
-        
+
 	if(unlikely(enable_debug))
 	  printk("[PF_RING] %s() success\n", __FUNCTION__);
       }
@@ -4879,7 +4899,7 @@ static struct dna_cluster* dna_cluster_attach(u_int32_t dna_cluster_id, wait_que
                __FUNCTION__, dna_cluster_id, atomic_read(&entry->master), atomic_read(&entry->slaves));
 
       dnac = entry;
-      
+
       if (atomic_add_return(1, &dnac->slaves) > dnac->num_slaves) {
         printk("[PF_RING] %s(%u) too many slaves\n", __FUNCTION__, dna_cluster_id);
         atomic_dec(&dnac->slaves);
@@ -5077,7 +5097,7 @@ static int ring_release(struct socket *sock)
     vfree(ring_memory_ptr);
 
   if (pfr->dna_cluster != NULL)
-    dna_cluster_remove(pfr->dna_cluster, pfr->dna_cluster_type, pfr->dna_cluster_slave_id); 
+    dna_cluster_remove(pfr->dna_cluster, pfr->dna_cluster_type, pfr->dna_cluster_slave_id);
 
   if(pfr->dna_device_entry != NULL) {
     dna_device_mapping mapping;
@@ -5093,7 +5113,7 @@ static int ring_release(struct socket *sock)
     pfr->extra_dma_memory = NULL;
   }
 
-  /* 
+  /*
      Wait long enough so that other threads using ring_table
      have finished referencing the socket pointer that
      we will be deleting
@@ -5293,7 +5313,7 @@ unsigned long kvirt_to_pa(unsigned long adr)
 
 /* ************************************* */
 
-static int do_memory_mmap(struct vm_area_struct *vma, unsigned long size, 
+static int do_memory_mmap(struct vm_area_struct *vma, unsigned long size,
                           char *ptr, u_int ptr_pg_off, u_int flags, int mode)
 {
   unsigned long start;
@@ -5354,7 +5374,7 @@ static int ring_mmap(struct file *file,
 
   if(unlikely(enable_debug))
     printk("[PF_RING] %s() called\n", __FUNCTION__);
- 
+
   if(size % PAGE_SIZE) {
     if(unlikely(enable_debug))
       printk("[PF_RING] %s() failed: len is not multiple of PAGE_SIZE\n", __FUNCTION__);
@@ -5378,7 +5398,7 @@ static int ring_mmap(struct file *file,
           return(rc);
 
 	return(0);
-      } else if(mem_id < pfr->dna_device->mem_info.rx.packet_memory_num_chunks + 
+      } else if(mem_id < pfr->dna_device->mem_info.rx.packet_memory_num_chunks +
                          pfr->dna_device->mem_info.tx.packet_memory_num_chunks) {
         /* DNA: TX packet memory */
 
@@ -5386,10 +5406,10 @@ static int ring_mmap(struct file *file,
 
         if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->tx_packet_memory[mem_id], 0, VM_LOCKED, 1)) < 0)
           return(rc);
-	
+
 	return(0);
-      } else if(pfr->extra_dma_memory && mem_id < pfr->dna_device->mem_info.rx.packet_memory_num_chunks + 
-                                                  pfr->dna_device->mem_info.tx.packet_memory_num_chunks + 
+      } else if(pfr->extra_dma_memory && mem_id < pfr->dna_device->mem_info.rx.packet_memory_num_chunks +
+                                                  pfr->dna_device->mem_info.tx.packet_memory_num_chunks +
                                                   pfr->extra_dma_memory->num_chunks) {
         /* Extra DMA memory */
 
@@ -5405,7 +5425,7 @@ static int ring_mmap(struct file *file,
 	return(0);
       }
     }
-    
+
     if(pfr->dna_cluster) {
       /* DNA cluster extra DMA memory */
 
@@ -5415,7 +5435,7 @@ static int ring_mmap(struct file *file,
         if(pfr->extra_dma_memory)
           mem_id -= pfr->extra_dma_memory->num_chunks;
       }
-      
+
       if(pfr->dna_cluster->extra_dma_memory == NULL || pfr->dna_cluster->extra_dma_memory->virtual_addr == NULL)
         return -EINVAL;
 
@@ -5427,7 +5447,7 @@ static int ring_mmap(struct file *file,
 
       return(0);
     }
-    
+
     printk("[PF_RING] %s() failed: not DNA nor DNA cluster\n", __FUNCTION__);
     return(-EINVAL);
   }
@@ -5508,7 +5528,7 @@ static int ring_mmap(struct file *file,
 
       if(size > (pfr->dna_cluster->slave_shared_memory_len * pfr->dna_cluster->num_slaves)) {
         if(unlikely(enable_debug))
-          printk("[PF_RING] %s() failed: area too large [%ld > %d]\n", 
+          printk("[PF_RING] %s() failed: area too large [%ld > %d]\n",
 	         __FUNCTION__, size, pfr->dna_cluster->slave_shared_memory_len * pfr->dna_cluster->num_slaves);
         return(-EINVAL);
       }
@@ -5527,7 +5547,7 @@ static int ring_mmap(struct file *file,
 
       if(size > pfr->dna_cluster->slave_shared_memory_len) {
         if(unlikely(enable_debug))
-          printk("[PF_RING] %s() failed: area too large [%ld > %d]\n", 
+          printk("[PF_RING] %s() failed: area too large [%ld > %d]\n",
 	         __FUNCTION__, size, pfr->dna_cluster->slave_shared_memory_len * pfr->dna_cluster->num_slaves);
         return(-EINVAL);
       }
@@ -5739,7 +5759,7 @@ unsigned int ring_poll(struct file *file,
     pfr->ring_active = 1;
     // smp_rmb();
 
-    consume_pending_pkts(pfr);
+    // consume_pending_pkts(pfr);
 
     /* printk("Before [num_queued_pkts(pfr)=%u]\n", num_queued_pkts(pfr)); */
 
@@ -6274,8 +6294,8 @@ static int ring_setsockopt(struct socket *sock,
     return -EFAULT;
 
   found = 1;
-  
-  if(unlikely(enable_debug)) 
+
+  if(unlikely(enable_debug))
     printk("[PF_RING] --> ring_setsockopt(optname=%u)\n", optname);
 
   switch(optname) {
@@ -6973,7 +6993,7 @@ static int ring_setsockopt(struct socket *sock,
       if(copy_from_user(&cdnaci, optval, sizeof(cdnaci)))
 	return -EFAULT;
 
-      if(cdnaci.num_slots == 0 || cdnaci.num_slaves == 0 || cdnaci.slave_mem_len == 0 || 
+      if(cdnaci.num_slots == 0 || cdnaci.num_slaves == 0 || cdnaci.slave_mem_len == 0 ||
          cdnaci.num_slaves > DNA_CLUSTER_MAX_NUM_SLAVES)
         return -EINVAL;
 
@@ -6987,7 +7007,7 @@ static int ring_setsockopt(struct socket *sock,
         return -EINVAL;
 
       pfr->dna_cluster = dna_cluster_create(cdnaci.cluster_id, cdnaci.num_slots, cdnaci.num_slaves,
-                                            cdnaci.slave_mem_len, pfr->dna_device->hwdev, 
+                                            cdnaci.slave_mem_len, pfr->dna_device->hwdev,
                                             pfr->dna_device->mem_info.rx.packet_memory_slot_len,
                                             pfr->dna_device->mem_info.rx.packet_memory_chunk_len);
 
@@ -7000,7 +7020,7 @@ static int ring_setsockopt(struct socket *sock,
 
       pfr->dna_cluster_type = dna_cluster_master;
 
-      if(copy_to_user(optval + sizeof(cdnaci), pfr->dna_cluster->extra_dma_memory->dma_addr, 
+      if(copy_to_user(optval + sizeof(cdnaci), pfr->dna_cluster->extra_dma_memory->dma_addr,
                       sizeof(u_int64_t) * cdnaci.num_slots)) {
         dna_cluster_remove(pfr->dna_cluster, pfr->dna_cluster_type, 0);
 	pfr->dna_cluster = NULL;
@@ -7052,11 +7072,12 @@ static int ring_setsockopt(struct socket *sock,
 
       if(copy_from_user(&slave_id, optval, sizeof(slave_id)))
 	return -EFAULT;
-      
+
       if (pfr->dna_cluster && slave_id < pfr->dna_cluster->num_slaves && pfr->dna_cluster->slave_waitqueue[slave_id])
         wake_up_interruptible(pfr->dna_cluster->slave_waitqueue[slave_id]);
     }
- 
+    break;
+
   case SO_SHUTDOWN_RING:
     found = 1, pfr->ring_active = 0, pfr->ring_shutdown = 1;
     wake_up_interruptible(&pfr->ring_slots_waitqueue);
@@ -7064,6 +7085,10 @@ static int ring_setsockopt(struct socket *sock,
 
   case SO_USE_SHORT_PKT_HEADER:
     found = 1, pfr->header_len = short_pkt_header;
+    break;
+
+  case SO_ENABLE_RX_PACKET_BOUNCE:
+    found = 1, pfr->tx.enable_tx_with_bounce = 1;
     break;
 
   default:
@@ -7299,7 +7324,7 @@ static int ring_getsockopt(struct socket *sock,
       if(pfr->extra_dma_memory) /* already called */
         return -EINVAL;
 
-      if((pfr->extra_dma_memory = allocate_extra_dma_memory(pfr->dna_device->hwdev, 
+      if((pfr->extra_dma_memory = allocate_extra_dma_memory(pfr->dna_device->hwdev,
                                     num_slots, pfr->dna_device->mem_info.rx.packet_memory_slot_len,
                                     pfr->dna_device->mem_info.rx.packet_memory_chunk_len)) == NULL)
         return -EFAULT;
@@ -7402,6 +7427,15 @@ static int ring_getsockopt(struct socket *sock,
 	  return -EFAULT;
       }
     } else
+      return -EFAULT;
+    break;
+
+  case SO_GET_BOUND_DEVICE_ID:
+    if((len < sizeof(int))
+       || (pfr->ring_netdev == NULL))
+      return -EINVAL;
+
+    if(copy_to_user(optval, &pfr->ring_netdev->dev->ifindex, sizeof(int)))
       return -EFAULT;
     break;
 

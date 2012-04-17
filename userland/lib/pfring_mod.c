@@ -115,6 +115,7 @@ int pfring_mod_open(pfring *ring) {
   ring->set_bpf_filter = pfring_mod_set_bpf_filter;
   ring->remove_bpf_filter = pfring_mod_remove_bpf_filter;
   ring->shutdown = pfring_mod_shutdown;
+  ring->send_last_rx_packet = pfring_mod_send_last_rx_packet;
 
   ring->poll_duration = DEFAULT_POLL_DURATION;
   ring->fd = socket(PF_RING, SOCK_RAW, htons(ETH_P_ALL));
@@ -425,6 +426,9 @@ int pfring_mod_recv(pfring *ring, u_char** buffer, u_int buffer_len,
       char *bucket = &ring->slots[ring->slots_info->remove_off];
       u_int32_t next_off, real_slot_len, bktLen;
 
+      /* Keep it for packet sending */
+      ring->tx.last_received_hdr = (struct pfring_pkthdr*)bucket;
+
       memcpy(hdr, bucket, ring->slot_header_len);
 
       if(ring->slot_header_len != sizeof(struct pfring_pkthdr))
@@ -444,15 +448,18 @@ int pfring_mod_recv(pfring *ring, u_char** buffer, u_int buffer_len,
       if((next_off + ring->slots_info->slot_len) > (ring->slots_info->tot_mem - sizeof(FlowSlotInfo))) {
         next_off = 0;
       }
-
+      
 #ifdef USE_MB
       /* This prevents the compiler from reordering instructions.
        * http://en.wikipedia.org/wiki/Memory_ordering#Compiler_memory_barrier */
       gcc_mb();
 #endif
 
-      ring->slots_info->tot_read++;
-      ring->slots_info->remove_off = next_off;
+      /*
+	We need to stay one packet back otherwise the kernel will assume that
+	the slot has been processed
+      */
+      ring->slots_info->tot_read++, ring->slots_info->remove_off = next_off;
 
       /* Ugly safety check */
       if((ring->slots_info->tot_insert == ring->slots_info->tot_read)
@@ -862,6 +869,27 @@ int pfring_mod_remove_bpf_filter(pfring *ring){
 #endif
 
   return rc;
+}
+
+/* **************************************************** */
+
+int pfring_mod_send_last_rx_packet(pfring *ring, int tx_interface_id) {
+  if(!ring->tx.enabled_rx_packet_send) {
+    int dummy = 0, rc;
+
+    rc = setsockopt(ring->fd, 0, SO_ENABLE_RX_PACKET_BOUNCE, &dummy, sizeof(dummy));
+    
+    if(rc < 0)
+      return(rc);
+      
+    ring->tx.enabled_rx_packet_send = 1;
+  }
+
+  if(ring->tx.last_received_hdr == NULL)
+    return(PF_RING_ERROR_NO_PKT_AVAILABLE); /* We have not yet read a single packet */
+  
+  ring->tx.last_received_hdr->extended_hdr.tx.bounce_interface = tx_interface_id;
+  return(0);
 }
 
 /* **************************************************** */

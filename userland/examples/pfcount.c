@@ -775,8 +775,15 @@ int main(int argc, char* argv[]) {
   
   if(pfring_get_bound_device_address(pd, mac_address) != 0)
     fprintf(stderr, "Impossible to know the device address\n");
-  else
-    printf("Capturing from %s [%s]\n", device, etheraddr_string(mac_address, buf));
+  else {
+    int device_id = -1;
+
+    pfring_get_bound_device_id(pd, &device_id);
+
+    printf("Capturing from %s [%s][ifIndex: %d]\n", 
+	   device, etheraddr_string(mac_address, buf),
+	   device_id);
+  }
 
   printf("# Device RX channels: %d\n", pfring_get_num_rx_channels(pd));
   printf("# Polling threads:    %d\n", num_threads);

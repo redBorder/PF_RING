@@ -94,7 +94,7 @@ pfring* pfring_open(char *device_name, u_int32_t caplen, u_int32_t flags) {
   ring = (pfring*)malloc(sizeof(pfring));
   if(ring == NULL)
     return NULL;
-  
+
   memset(ring, 0, sizeof(pfring));
 
   ring->promisc     = (flags & PF_RING_PROMISC) ? 1 : 0;
@@ -118,18 +118,18 @@ pfring* pfring_open(char *device_name, u_int32_t caplen, u_int32_t flags) {
 
       if(!(str = strstr(device_name, pfring_module_list[i].name))) continue;
       if(!pfring_module_list[i].open)                              continue;
-      
+
       str1 = strchr(str, ':');
 
 #ifdef RING_DEBUG
       printf("pfring_open: found module %s\n", pfring_module_list[i].name);
 #endif
-      
+
       mod_found = 1;
       ring->device_name = str1 ? strdup(++str1) : strdup(device_name);
       ret = pfring_module_list[i].open(ring);
       break;
-    }    
+    }
   }
 
   /* default */
@@ -169,7 +169,7 @@ pfring* pfring_open_consumer(char *device_name, u_int32_t caplen, u_int32_t flag
 			     u_int8_t consumer_plugin_id,
 			     char* consumer_data, u_int consumer_data_len) {
   pfring *ring = pfring_open(device_name, caplen, flags);
-  
+
   if(ring) {
     if(consumer_plugin_id > 0) {
       int rc;
@@ -237,7 +237,7 @@ void pfring_close(pfring *ring) {
 
   if(ring->close)
     ring->close(ring);
- 
+
   if(unlikely(ring->reentrant)) {
     pthread_rwlock_destroy(&ring->rx_lock);
     pthread_rwlock_destroy(&ring->tx_lock);
@@ -296,16 +296,16 @@ int pfring_set_reflector_device(pfring *ring, char *device_name) {
 
 /* **************************************************** */
 
-int pfring_loop(pfring *ring, pfringProcesssPacket looper, 
+int pfring_loop(pfring *ring, pfringProcesssPacket looper,
 		const u_char *user_bytes, u_int8_t wait_for_packet) {
   u_char *buffer = NULL;
   struct pfring_pkthdr hdr;
   int rc = 0;
-  
+
   memset(&hdr, 0, sizeof(hdr));
   ring->break_recv_loop = 0;
 
-  if((! ring) 
+  if((! ring)
      || ring->is_shutting_down
      || (! ring->recv)
      || ring->mode == send_only_mode)
@@ -315,10 +315,10 @@ int pfring_loop(pfring *ring, pfringProcesssPacket looper,
     rc = ring->recv(ring, &buffer, 0, &hdr, wait_for_packet);
     if(rc < 0)
       break;
-    else if(rc > 0) {      
+    else if(rc > 0) {
       looper(&hdr, buffer, user_bytes);
     } else {
-      /* if(!wait_for_packet) usleep(1); */     
+      /* if(!wait_for_packet) usleep(1); */
     }
   }
 
@@ -418,7 +418,7 @@ redo_pfring_bundle_read:
         empty_rings = 1;
       } else {
         /* error */
-      } 
+      }
     }
 
     if(found) {
@@ -449,7 +449,7 @@ void pfring_bundle_destroy(pfring_bundle *bundle) {
     pfring_disable_ring(bundle->sockets[i]);
   }
 
-  memset(bundle, 0, sizeof(pfring_bundle)); 
+  memset(bundle, 0, sizeof(pfring_bundle));
 }
 
 /* **************************************************** */
@@ -467,8 +467,8 @@ void pfring_bundle_close(pfring_bundle *bundle) {
 /* **************************************************** */
 
 int pfring_bounce_init(pfring_bounce *bounce, pfring *ingress_ring, pfring *egress_ring) {
- 
-  if (bounce == NULL || ingress_ring == NULL || egress_ring == NULL || 
+
+  if (bounce == NULL || ingress_ring == NULL || egress_ring == NULL ||
       ingress_ring->bounce_init == NULL)
     return -1;
 
@@ -481,7 +481,7 @@ int pfring_bounce_init(pfring_bounce *bounce, pfring *ingress_ring, pfring *egre
 
   if(ingress_ring->bounce_init(bounce) != 0) {
     bounce->rx_socket = NULL;
-    bounce->tx_socket = NULL; 
+    bounce->tx_socket = NULL;
     return -1;
   }
 
@@ -497,18 +497,18 @@ int pfring_bounce_init(pfring_bounce *bounce, pfring *ingress_ring, pfring *egre
     return -1;
   }
 
-  pthread_rwlock_init(&bounce->lock, PTHREAD_PROCESS_PRIVATE); 
-  
+  pthread_rwlock_init(&bounce->lock, PTHREAD_PROCESS_PRIVATE);
+
   return 0;
 }
 
 /* **************************************************** */
 
-int pfring_bounce_loop(pfring_bounce *bounce, pfringBounceProcesssPacket looper, 
+int pfring_bounce_loop(pfring_bounce *bounce, pfringBounceProcesssPacket looper,
                        const u_char *user_bytes, u_int8_t wait_for_packet) {
   int rc;
 
-  if (bounce == NULL || bounce->rx_socket == NULL || bounce->tx_socket == NULL || 
+  if (bounce == NULL || bounce->rx_socket == NULL || bounce->tx_socket == NULL ||
       bounce->rx_socket->bounce_loop == NULL)
     return -1;
 
@@ -549,7 +549,7 @@ void pfring_bounce_destroy(pfring_bounce *bounce) {
   pfring_disable_ring(bounce->tx_socket);
 
   /* restoring func ptrs */
-  bounce->rx_socket->recv          = bounce->recv; 
+  bounce->rx_socket->recv          = bounce->recv;
   bounce->tx_socket->send          = bounce->send;
   bounce->tx_socket->send_parsed   = bounce->send_parsed;
   bounce->tx_socket->send_get_time = bounce->send_get_time;
@@ -568,7 +568,7 @@ int pfring_stats(pfring *ring, pfring_stat *stats) {
   if(ring && ring->stats)
     return ring->stats(ring, stats);
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
@@ -576,26 +576,26 @@ int pfring_stats(pfring *ring, pfring_stat *stats) {
 int pfring_recv(pfring *ring, u_char** buffer, u_int buffer_len,
 		struct pfring_pkthdr *hdr,
 		u_int8_t wait_for_incoming_packet) {
-  if(likely((ring 
-	     && ring->enabled 
+  if(likely((ring
+	     && ring->enabled
 	     && ring->recv
 	     && (ring->mode != send_only_mode)))) {
     int rc;
-    
+
     /* Reentrancy is not compatible with zero copy */
     if(unlikely((buffer_len == 0) && ring->reentrant))
       return(PF_RING_ERROR_INVALID_ARGUMENT);
 
     ring->break_recv_loop = 0;
     rc = ring->recv(ring, buffer, buffer_len, hdr, wait_for_incoming_packet);
-    
+
     if(unlikely(ring->reflector_socket != NULL))
       pfring_send(ring->reflector_socket, (char*)buffer, hdr->caplen, 0 /* flush */);
-    
+
     return rc;
   }
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
@@ -605,10 +605,10 @@ int pfring_recv_parsed(pfring *ring, u_char** buffer, u_int buffer_len,
 		       u_int8_t level /* 1..4 */, u_int8_t add_timestamp, u_int8_t add_hash) {
   int rc = pfring_recv(ring, buffer, buffer_len, hdr, wait_for_incoming_packet);
 
-  if(rc > 0) 
+  if(rc > 0)
     rc = pfring_parse_pkt(*buffer, hdr, level, add_timestamp, add_hash);
 
-  return rc;	       
+  return rc;
 }
 
 /* **************************************************** */
@@ -626,7 +626,7 @@ int pfring_set_poll_duration(pfring *ring, u_int duration) {
   if(ring && ring->set_poll_duration)
     return ring->set_poll_duration(ring, duration);
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
@@ -644,7 +644,7 @@ int pfring_add_hw_rule(pfring *ring, hw_filtering_rule *rule) {
   if(ring && ring->add_hw_rule)
     return ring->add_hw_rule(ring, rule);
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
@@ -652,8 +652,8 @@ int pfring_add_hw_rule(pfring *ring, hw_filtering_rule *rule) {
 int pfring_remove_hw_rule(pfring *ring, u_int16_t rule_id) {
   if(ring && ring->remove_hw_rule)
     return ring->remove_hw_rule(ring, rule_id);
-    
-  return PF_RING_ERROR_NOT_SUPPORTED;
+
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
@@ -662,7 +662,7 @@ int pfring_set_channel_id(pfring *ring, u_int32_t channel_id) {
   if(ring && ring->set_channel_id)
     return ring->set_channel_id(ring, channel_id);
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
@@ -671,16 +671,16 @@ int pfring_set_application_name(pfring *ring, char *name) {
   if(ring && ring->set_application_name)
     return ring->set_application_name(ring, name);
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
 
-int pfring_bind(pfring *ring, char *device_name) { 
+int pfring_bind(pfring *ring, char *device_name) {
   if(ring && ring->bind)
     return ring->bind(ring, device_name);
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
@@ -688,7 +688,7 @@ int pfring_bind(pfring *ring, char *device_name) {
 int pfring_send(pfring *ring, char *pkt, u_int pkt_len, u_int8_t flush_packet) {
   int rc = -1;
 
-  if(unlikely(pkt_len > 9000 /* Jumbo MTU */)) 
+  if(unlikely(pkt_len > 9000 /* Jumbo MTU */))
     return rc;
 
   if(likely(ring
@@ -697,12 +697,12 @@ int pfring_send(pfring *ring, char *pkt, u_int pkt_len, u_int8_t flush_packet) {
 	    && ring->send
 	    && (ring->mode != recv_only_mode))) {
 
-    if(unlikely(ring->reentrant)) 
+    if(unlikely(ring->reentrant))
       pthread_rwlock_wrlock(&ring->tx_lock);
 
     rc =  ring->send(ring, pkt, pkt_len, flush_packet);
-    
-    if(unlikely(ring->reentrant)) 
+
+    if(unlikely(ring->reentrant))
       pthread_rwlock_unlock(&ring->tx_lock);
   }
 
@@ -720,12 +720,12 @@ int pfring_send_parsed(pfring *ring, char *pkt, struct pfring_pkthdr *hdr, u_int
 	    && ring->send_parsed
 	    && (ring->mode != recv_only_mode))) {
 
-    if(unlikely(ring->reentrant)) 
+    if(unlikely(ring->reentrant))
       pthread_rwlock_wrlock(&ring->tx_lock);
 
     rc =  ring->send_parsed(ring, pkt, hdr, flush_packet);
-    
-    if(unlikely(ring->reentrant)) 
+
+    if(unlikely(ring->reentrant))
       pthread_rwlock_unlock(&ring->tx_lock);
 
     return rc;
@@ -748,12 +748,12 @@ int pfring_send_get_time(pfring *ring, char *pkt, u_int pkt_len, struct timespec
 	    && ring->send_get_time
 	    && (ring->mode != recv_only_mode))) {
 
-    if(unlikely(ring->reentrant)) 
+    if(unlikely(ring->reentrant))
       pthread_rwlock_wrlock(&ring->tx_lock);
 
     rc =  ring->send_get_time(ring, pkt, pkt_len, ts);
-    
-    if(unlikely(ring->reentrant)) 
+
+    if(unlikely(ring->reentrant))
       pthread_rwlock_unlock(&ring->tx_lock);
 
     return rc;
@@ -789,18 +789,19 @@ int pfring_get_selectable_fd(pfring *ring) {
   if(ring && ring->get_selectable_fd)
     return ring->get_selectable_fd(ring);
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
 
 int pfring_set_direction(pfring *ring, packet_direction direction) {
   if(ring && ring->set_direction) {
-    
+    int rc;
+
     if(ring->enabled)
       return -1; /* direction must be set before pfring_enable() */
 
-    int rc = ring->set_direction(ring, direction);
+    rc = ring->set_direction(ring, direction);
 
     if(rc == 0)
       ring->direction = direction;
@@ -808,18 +809,19 @@ int pfring_set_direction(pfring *ring, packet_direction direction) {
     return(rc);
   }
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
 
 int pfring_set_socket_mode(pfring *ring, socket_mode mode) {
   if(ring && ring->set_socket_mode) {
-    
+    int rc;
+
     if(ring->enabled)
       return -1; /* direction must be set before pfring_enable() */
 
-    int rc = ring->set_socket_mode(ring, mode);
+    rc = ring->set_socket_mode(ring, mode);
 
     if(rc == 0)
       ring->mode = mode;
@@ -835,7 +837,7 @@ int pfring_set_socket_mode(pfring *ring, socket_mode mode) {
     return(rc);
   }
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
@@ -844,7 +846,7 @@ int pfring_set_cluster(pfring *ring, u_int clusterId, cluster_type the_type) {
   if(ring && ring->set_cluster)
     return ring->set_cluster(ring, clusterId, the_type);
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
@@ -853,7 +855,7 @@ int pfring_remove_from_cluster(pfring *ring) {
   if(ring && ring->remove_from_cluster)
     return ring->remove_from_cluster(ring);
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
@@ -862,7 +864,7 @@ int pfring_set_master_id(pfring *ring, u_int32_t master_id) {
   if(ring && ring->set_master_id)
     return ring->set_master_id(ring, master_id);
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
@@ -871,7 +873,7 @@ int pfring_set_master(pfring *ring, pfring *master) {
   if(ring && ring->set_master)
     return ring->set_master(ring, master);
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
@@ -880,7 +882,7 @@ u_int16_t pfring_get_ring_id(pfring *ring) {
   if(ring && ring->get_ring_id)
     return ring->get_ring_id(ring);
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
@@ -898,37 +900,37 @@ u_int8_t pfring_get_packet_consumer_mode(pfring *ring) {
   if(ring && ring->get_packet_consumer_mode)
     return ring->get_packet_consumer_mode(ring);
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
 
-int pfring_set_packet_consumer_mode(pfring *ring, u_int8_t plugin_id, 
+int pfring_set_packet_consumer_mode(pfring *ring, u_int8_t plugin_id,
 				    char *plugin_data, u_int plugin_data_len) {
   if(ring && ring->set_packet_consumer_mode)
     return ring->set_packet_consumer_mode(ring, plugin_id, plugin_data, plugin_data_len);
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
 
-int pfring_get_hash_filtering_rule_stats(pfring *ring, hash_filtering_rule* rule, 
+int pfring_get_hash_filtering_rule_stats(pfring *ring, hash_filtering_rule* rule,
 					 char* stats, u_int *stats_len) {
   if(ring && ring->get_hash_filtering_rule_stats)
     return ring->get_hash_filtering_rule_stats(ring, rule, stats, stats_len);
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
 
-int pfring_handle_hash_filtering_rule(pfring *ring, hash_filtering_rule* rule_to_add, 
+int pfring_handle_hash_filtering_rule(pfring *ring, hash_filtering_rule* rule_to_add,
 				      u_char add_rule) {
   if(ring && ring->handle_hash_filtering_rule)
     return ring->handle_hash_filtering_rule(ring, rule_to_add, add_rule);
-  
-  return PF_RING_ERROR_NOT_SUPPORTED;
+
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
@@ -937,7 +939,7 @@ int pfring_purge_idle_hash_rules(pfring *ring, u_int16_t inactivity_sec) {
   if(ring && ring->purge_idle_hash_rules)
     return ring->purge_idle_hash_rules(ring, inactivity_sec);
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
@@ -946,7 +948,7 @@ int pfring_purge_idle_rules(pfring *ring, u_int16_t inactivity_sec) {
   if(ring && ring->purge_idle_rules)
     return ring->purge_idle_rules(ring, inactivity_sec);
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
@@ -954,8 +956,8 @@ int pfring_purge_idle_rules(pfring *ring, u_int16_t inactivity_sec) {
 int pfring_add_filtering_rule(pfring *ring, filtering_rule* rule_to_add) {
   if(ring && ring->add_filtering_rule)
     return ring->add_filtering_rule(ring, rule_to_add);
-  
-  return PF_RING_ERROR_NOT_SUPPORTED;
+
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
@@ -963,18 +965,18 @@ int pfring_add_filtering_rule(pfring *ring, filtering_rule* rule_to_add) {
 int pfring_remove_filtering_rule(pfring *ring, u_int16_t rule_id) {
   if(ring && ring->remove_filtering_rule)
     return ring->remove_filtering_rule(ring, rule_id);
-  
-  return PF_RING_ERROR_NOT_SUPPORTED;
+
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
 
-int pfring_get_filtering_rule_stats(pfring *ring, u_int16_t rule_id, 
+int pfring_get_filtering_rule_stats(pfring *ring, u_int16_t rule_id,
 				    char* stats, u_int *stats_len) {
   if(ring && ring->get_filtering_rule_stats)
     return ring->get_filtering_rule_stats(ring, rule_id, stats, stats_len);
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
@@ -983,7 +985,7 @@ int pfring_toggle_filtering_policy(pfring *ring, u_int8_t rules_default_accept_p
   if (ring && ring->toggle_filtering_policy)
     return ring->toggle_filtering_policy(ring, rules_default_accept_policy);
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
@@ -992,7 +994,7 @@ int pfring_enable_rss_rehash(pfring *ring) {
   if(ring && ring->enable_rss_rehash)
     return ring->enable_rss_rehash(ring);
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
@@ -1001,7 +1003,7 @@ int pfring_poll(pfring *ring, u_int wait_duration) {
   if(likely((ring && ring->poll)))
     return ring->poll(ring, wait_duration);
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
@@ -1020,7 +1022,15 @@ int pfring_get_bound_device_address(pfring *ring, u_char mac_address[6]) {
   if(ring && ring->get_bound_device_address)
     return ring->get_bound_device_address(ring, mac_address);
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
+}
+
+/* **************************************************** */
+
+int pfring_get_bound_device_id(pfring *ring, int *device_id) {
+  socklen_t len = sizeof(int);
+
+  return(getsockopt(ring->fd, 0, SO_GET_BOUND_DEVICE_ID, device_id, &len));
 }
 
 /* **************************************************** */
@@ -1029,7 +1039,7 @@ u_int16_t pfring_get_slot_header_len(pfring *ring) {
   if(ring && ring->get_slot_header_len)
     return ring->get_slot_header_len(ring);
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
@@ -1038,7 +1048,7 @@ int pfring_set_virtual_device(pfring *ring, virtual_filtering_device_info *info)
   if(ring && ring->set_virtual_device)
     return ring->set_virtual_device(ring, info);
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
@@ -1047,7 +1057,7 @@ int pfring_loopback_test(pfring *ring, char *buffer, u_int buffer_len, u_int tes
   if(ring && ring->loopback_test)
     return ring->loopback_test(ring, buffer, buffer_len, test_len);
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
@@ -1055,7 +1065,7 @@ int pfring_loopback_test(pfring *ring, char *buffer, u_int buffer_len, u_int tes
 int pfring_enable_ring(pfring *ring) {
   if(ring && ring->enable_ring) {
     int rc;
-    
+
     if(ring->enabled) return(0);
 
     rc = ring->enable_ring(ring);
@@ -1064,7 +1074,7 @@ int pfring_enable_ring(pfring *ring) {
     return rc;
   }
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
@@ -1081,7 +1091,7 @@ int pfring_disable_ring(pfring *ring) {
     return rc;
   }
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
@@ -1091,7 +1101,7 @@ int pfring_is_pkt_available(pfring *ring){
     return ring->is_pkt_available(ring);
   }
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
@@ -1101,7 +1111,7 @@ int pfring_next_pkt_time(pfring *ring, struct timespec *ts){
     return ring->next_pkt_time(ring, ts);
   }
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
@@ -1111,7 +1121,7 @@ int pfring_next_pkt_raw_timestamp(pfring *ring, u_int64_t *timestamp_ns){
     return ring->next_pkt_raw_timestamp(ring, timestamp_ns);
   }
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
@@ -1121,7 +1131,7 @@ int pfring_set_bpf_filter(pfring *ring, char *filter_buffer){
     return ring->set_bpf_filter(ring, filter_buffer);
   }
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
@@ -1131,7 +1141,7 @@ int pfring_remove_bpf_filter(pfring *ring){
     return ring->remove_bpf_filter(ring);
   }
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
@@ -1139,6 +1149,22 @@ int pfring_remove_bpf_filter(pfring *ring){
 void pfring_sync_indexes_with_kernel(pfring *ring) {
   if(ring && ring->sync_indexes_with_kernel)
     ring->sync_indexes_with_kernel(ring);
+}
+
+/* **************************************************** */
+
+int pfring_send_last_rx_packet(pfring *ring, int tx_interface_id) {
+  /*
+    We can't send the last packet with multithread as the concept of "last"
+    does not apply here having threads that compete for packets
+  */
+  if(unlikely(ring->reentrant || (!ring->long_header)))
+    return(PF_RING_ERROR_NOT_SUPPORTED);
+
+  if(ring && ring->send_last_rx_packet)
+    return(ring->send_last_rx_packet(ring, tx_interface_id));
+
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
@@ -1158,7 +1184,7 @@ int pfring_get_device_clock(pfring *ring, struct timespec *ts) {
     return ring->get_device_clock(ring, ts);
   }
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
@@ -1178,7 +1204,7 @@ int pfring_adjust_device_clock(pfring *ring, struct timespec *offset, int8_t sig
     return ring->adjust_device_clock(ring, offset, sign);
   }
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
@@ -1188,7 +1214,7 @@ u_int pfring_get_num_tx_slots(pfring* ring) {
     return ring->dna_get_num_tx_slots(ring);
   }
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
@@ -1198,17 +1224,17 @@ u_int pfring_get_num_rx_slots(pfring* ring) {
     return ring->dna_get_num_rx_slots(ring);
   }
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
 
-int pfring_copy_tx_packet_into_slot(pfring* ring, u_int16_t tx_slot_id, char* buffer, u_int len) {
-  if(ring && ring->dna_copy_tx_packet_into_slot) {
+int pfring_copy_tx_packet_into_slot(pfring* ring,
+				    u_int16_t tx_slot_id, char* buffer, u_int len) {
+  if(ring && ring->dna_copy_tx_packet_into_slot)
     return ring->dna_copy_tx_packet_into_slot(ring, tx_slot_id, buffer, len);
-  }
 
-  return PF_RING_ERROR_NOT_SUPPORTED;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */

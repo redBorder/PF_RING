@@ -57,7 +57,7 @@ LIBS       = ${LIBPFRING} @DAG_LIB@ -lpthread @SYSLIBS@ @BPF_LIB@  @SILICOM_LIBS
 # Main targets
 #
 PFPROGS   = pfcount pfcount_multichannel preflect pfbounce pfdnabounce pfmap \
-	    forwarder alldevs dummy_plugin_pfcount pcap2nspcap pfcount_dummy_plugin pffilter_test \
+	    pfbridge alldevs dummy_plugin_pfcount pcap2nspcap pfcount_dummy_plugin pffilter_test \
 	    pfcount_aggregator pfcount_bundle pfcount_82599 vdevice_simulator pfsystest pfsend
 
 PCAPPROGS = pcount pwrite
@@ -130,8 +130,8 @@ ptwin: ptwin.o ${LIBPFRING}
 pfmap: pfmap.o ${LIBPFRING}
 	${CC} ${CFLAGS} pfmap.o ${LIBS} -o $@
 
-forwarder: forwarder.o ${LIBPFRING}
-	${CC} ${CFLAGS} forwarder.o ${LIBS} -o $@
+pfbridge: pfbridge.o ${LIBPFRING}
+	${CC} ${CFLAGS} pfbridge.o ${LIBS} -o $@
 
 pcount: pcount.o ${LIBPCAP} ${LIBPFRING}
 	${CC} ${CFLAGS} pcount.o ${LIBPCAP} ${LIBS} -o $@

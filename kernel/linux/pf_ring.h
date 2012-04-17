@@ -79,6 +79,7 @@
 #define SO_CREATE_DNA_CLUSTER            128
 #define SO_ATTACH_DNA_CLUSTER            129
 #define SO_WAKE_UP_DNA_CLUSTER_SLAVE     130
+#define SO_ENABLE_RX_PACKET_BOUNCE       131
 
 /* Get */
 #define SO_GET_RING_VERSION              170
@@ -95,6 +96,7 @@
 #define SO_GET_BUCKET_LEN                181
 #define SO_GET_DEVICE_TYPE               182
 #define SO_GET_EXTRA_DMA_MEMORY          183
+#define SO_GET_BOUND_DEVICE_ID           184
 
 /* Map */
 #define SO_MAP_DNA_DEVICE                190
@@ -235,7 +237,7 @@ struct pfring_extended_pkthdr {
   u_int32_t pkt_hash;      /* Hash based on the packet header */
   struct {
     int bounce_interface; /* Interface Id where this packet will bounce after processing
-				if its values is other than UNKNOWN_INTERFACE */
+			     if its values is other than UNKNOWN_INTERFACE */
     struct sk_buff *reserved; /* Kernel only pointer */
   } tx;
   u_int16_t parsed_header_len; /* Extra parsing data before packet */
@@ -963,6 +965,8 @@ struct pf_ring_socket {
   /* Used to transmit packets after they have been received
      from user space */
   struct {
+    u_int8_t enable_tx_with_bounce;
+    rwlock_t consume_tx_packets_lock;
     int last_tx_dev_idx;
     struct net_device *last_tx_dev;
   } tx;
