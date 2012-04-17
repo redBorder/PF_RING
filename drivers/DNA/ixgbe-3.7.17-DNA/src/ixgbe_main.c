@@ -7782,12 +7782,18 @@ void ixgbe_update_stats(struct ixgbe_adapter *adapter)
 	hwstats->crcerrs += IXGBE_READ_REG(hw, IXGBE_CRCERRS);
 	for (i = 0; i < 8; i++) {
 		/* for packet buffers not used, the register should read 0 */
+#ifdef ENABLE_DNA
+		if(!adapter->dna.dna_enabled) {
+#endif
 		mpc = IXGBE_READ_REG(hw, IXGBE_MPC(i));
 		missed_rx += mpc;
 		hwstats->mpc[i] += mpc;
 		total_mpc += hwstats->mpc[i];
 		if (hw->mac.type == ixgbe_mac_82598EB)
 			hwstats->rnbc[i] += IXGBE_READ_REG(hw, IXGBE_RNBC(i));
+#ifdef ENABLE_DNA
+		}
+#endif
 		switch (hw->mac.type) {
 		case ixgbe_mac_82598EB:
 			hwstats->pxonrxc[i] += IXGBE_READ_REG(hw,
@@ -7826,6 +7832,9 @@ void ixgbe_update_stats(struct ixgbe_adapter *adapter)
 		hwstats->b2ospc += IXGBE_READ_REG(hw, IXGBE_B2OSPC);
 		hwstats->b2ogprc += IXGBE_READ_REG(hw, IXGBE_B2OGPRC);
 	case ixgbe_mac_82599EB:
+#ifdef ENABLE_DNA
+		if(!adapter->dna.dna_enabled)
+#endif
 		for (i = 0; i < 16; i++)
 			adapter->hw_rx_no_dma_resources +=
 					     IXGBE_READ_REG(hw, IXGBE_QPRDC(i));
