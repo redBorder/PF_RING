@@ -1163,6 +1163,16 @@ int pfring_get_device_clock(pfring *ring, struct timespec *ts) {
 
 /* **************************************************** */
 
+int pfring_set_device_clock(pfring *ring, struct timespec *ts) {
+  if(ring && ring->set_device_clock) {
+    return ring->set_device_clock(ring, ts);
+  }
+
+  return PF_RING_ERROR_NOT_SUPPORTED;
+}
+
+/* **************************************************** */
+
 int pfring_adjust_device_clock(pfring *ring, struct timespec *offset, int8_t sign) {
   if(ring && ring->adjust_device_clock) {
     return ring->adjust_device_clock(ring, offset, sign);
