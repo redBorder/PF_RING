@@ -530,8 +530,11 @@ int main(int argc, char* argv[]) {
     return(-1);
   }
 
-  num_channels = 8;
-  printf("Found %d channels\n",num_channels);
+  if (num_channels > MAX_NUM_THREADS) {
+    printf("Too many channels (%d), using %d channels\n", num_channels, MAX_NUM_THREADS);
+    num_channels = MAX_NUM_THREADS;
+  } else 
+    printf("Found %d channels\n", num_channels);
 
   pfring_version(ring[0], &version);  
   printf("Using PF_RING v.%d.%d.%d\n",
@@ -546,7 +549,7 @@ int main(int argc, char* argv[]) {
     pfring_set_application_name(ring[i], buf);
 
     if((rc = pfring_set_direction(ring[i], direction)) != 0)
-	fprintf(stderr, "pfring_set_direction returned [rc=%d][direction=%d]\n", rc, direction);
+	fprintf(stderr, "pfring_set_direction returned %d [direction=%d] (you can't capture TX with DNA)\n", rc, direction);
     
     if((rc = pfring_set_socket_mode(ring[i], recv_only_mode)) != 0)
 	fprintf(stderr, "pfring_set_socket_mode returned [rc=%d]\n", rc);
