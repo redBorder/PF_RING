@@ -173,6 +173,7 @@ int pfring_dna_open(pfring *ring) {
   ring->recv  = pfring_dna_recv;
   ring->enable_ring = pfring_dna_enable_ring;
   ring->set_direction = pfring_dna_set_direction;
+  ring->poll = pfring_dna_poll;
 
   ring->set_poll_watermark = pfring_mod_set_poll_watermark;
   ring->set_poll_duration = pfring_mod_set_poll_duration;
@@ -183,7 +184,6 @@ int pfring_dna_open(pfring *ring) {
   ring->get_selectable_fd = pfring_mod_get_selectable_fd;
   ring->set_socket_mode = pfring_mod_set_socket_mode;
   ring->get_ring_id = pfring_mod_get_ring_id;
-  ring->poll = pfring_mod_poll;
   ring->version = pfring_mod_version;
   ring->get_bound_device_address = pfring_mod_get_bound_device_address;
   ring->get_slot_header_len = pfring_mod_get_slot_header_len;
@@ -394,5 +394,13 @@ int pfring_dna_enable_ring(pfring *ring) {
   rc = ring->dna_enable(ring);
 
   return rc;
+}
+
+/* *********************************** */
+
+
+int pfring_dna_poll(pfring *ring, u_int wait_duration) {
+  pfring_sync_indexes_with_kernel(ring);
+  return pfring_mod_poll(ring, wait_duration);
 }
 

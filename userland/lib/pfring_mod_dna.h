@@ -23,6 +23,7 @@ int  pfring_dna_recv (pfring *ring, u_char** buffer, u_int buffer_len,
 int  pfring_dna_send(pfring *ring, char *pkt, u_int pkt_len);
 int  pfring_dna_enable_ring(pfring *ring);
 int  pfring_dna_set_direction(pfring *ring, packet_direction direction);
+int  pfring_dna_poll(pfring *ring, u_int wait_duration);
 
 /* DNA */
 int dna_init(pfring* ring, u_int len);
