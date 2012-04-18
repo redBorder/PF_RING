@@ -41,6 +41,7 @@ void printHelp(void) {
   printf("pfbridge - Forwards traffic from -a -> -b device\n\n");
   printf("-h              [Print help]\n");
   printf("-v              [Verbose]\n");
+  printf("-p              [Use pfring_send() instead of bridge]\n");
   printf("-a <device>     [First device name]\n");
   printf("-b <device>     [Second device name]\n");
 }
@@ -50,10 +51,10 @@ void printHelp(void) {
 int main(int argc, char* argv[]) {
   pfring *a_ring, *b_ring;
   char *a_dev = NULL, *b_dev = NULL, c;
-  u_int8_t verbose = 0;
+  u_int8_t verbose = 0, use_pfring_send = 0;
   int a_device_id, b_device_id;
 
-  while((c = getopt(argc,argv, "ha:b:c:fv")) != -1) {
+  while((c = getopt(argc,argv, "ha:b:c:fvp")) != -1) {
     switch(c) {
       case 'h':
 	printHelp();
@@ -64,6 +65,9 @@ int main(int argc, char* argv[]) {
 	break;
       case 'b':
 	b_dev = strdup(optarg);
+	break;
+      case 'p':
+	use_pfring_send = 1;
 	break;
       case 'v':
 	verbose = 1;
@@ -104,26 +108,38 @@ int main(int argc, char* argv[]) {
   /* Enable rings */
   pfring_enable_ring(a_ring);
 
-#if 0
-  pfring_enable_ring(b_ring);
-#endif
+  if(use_pfring_send)
+    pfring_enable_ring(b_ring);
+  else
+    pfring_close(b_ring);
 
   while(1) {
     u_char *buffer;
     struct pfring_pkthdr hdr;
     
     if(pfring_recv(a_ring, &buffer, 0, &hdr, 1) > 0) {
-      int rc = pfring_send_last_rx_packet(a_ring, b_device_id);
+      int rc;
+      
+      if(use_pfring_send) {
+	rc = pfring_send(b_ring, buffer, hdr.caplen, 1);
 
-      if(rc < 0)
-	printf("pfring_send_last_rx_packet() error %d\n", rc);
-      else if(verbose)
-	printf("Forwarded %d bytes packet\n", hdr.len);
+	if(rc < 0)
+	  printf("pfring_send_last_rx_packet() error %d\n", rc);
+	else if(verbose)
+	  printf("Forwarded %d bytes packet\n", hdr.len);	
+      } else {
+	rc = pfring_send_last_rx_packet(a_ring, b_device_id);
+	
+	if(rc < 0)
+	  printf("pfring_send_last_rx_packet() error %d\n", rc);
+	else if(verbose)
+	  printf("Forwarded %d bytes packet\n", hdr.len);
+      }
     }
   }
   
   pfring_close(a_ring);
-  pfring_close(b_ring);
+  if(use_pfring_send) pfring_close(b_ring);
   
   return(0);
 }
