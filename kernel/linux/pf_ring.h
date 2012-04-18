@@ -1229,7 +1229,8 @@ extern void do_ring_dna_device_handler(dna_device_operation operation,
 				       dna_device_notify dev_notify_function_ptr);
 
 typedef int (*handle_ring_skb)(struct sk_buff *skb, u_char recv_packet,
-			       u_char real_skb, u_int32_t channel_id,
+			       u_char real_skb, u_int8_t *skb_reference_in_use,
+			       u_int32_t channel_id,
 			       u_int32_t num_rx_channels);
 typedef int (*handle_ring_buffer)(struct net_device *dev,
 				  char *data, int len);

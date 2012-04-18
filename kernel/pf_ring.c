@@ -299,7 +299,7 @@ static struct proto ring_proto;
 #endif
 
 static int skb_ring_handler(struct sk_buff *skb, u_char recv_packet,
-			    u_char real_skb,
+			    u_int8_t real_skb, u_int8_t *skb_reference_in_use,
 			    u_int32_t channel_id, u_int32_t num_rx_channels);
 static int buffer_ring_handler(struct net_device *dev, char *data, int len);
 static int remove_from_cluster(struct sock *sock, struct pf_ring_socket *pfr);
@@ -2406,7 +2406,8 @@ inline int copy_data_to_ring(struct sk_buff *skb,
 			     struct pf_ring_socket *pfr,
 			     struct pfring_pkthdr *hdr,
 			     int displ, int offset, void *plugin_mem,
-			     void *raw_data, uint raw_data_len) {
+			     void *raw_data, uint raw_data_len,
+			     int *clone_id) {
   char *ring_bucket;
   u_int32_t off;
   u_short do_lock = ((pfr->num_bound_devices > 1) || (pfr->num_channels_per_ring > 1) || (pfr->cluster_id != 0)) ? 1 : 0;
@@ -2474,15 +2475,25 @@ inline int copy_data_to_ring(struct sk_buff *skb,
     }
 
     if(pfr->tx.enable_tx_with_bounce
-       && (pfr->header_len == long_pkt_header)) {
-       struct sk_buff *cloned;
+       && (pfr->header_len == long_pkt_header)
+       && (skb != NULL)
+       && (clone_id != NULL) /* Just to be on the safe side */
+       ) {
+      struct sk_buff *cloned;
       /*
-	 The TX transmission is supported only with long_pkt_header
-	 where we can read the id of the output interface
+	The TX transmission is supported only with long_pkt_header
+	where we can read the id of the output interface
       */
-      cloned = skb_clone(skb, GFP_ATOMIC);
-      if(displ > 0) skb_push(cloned, displ);
-      hdr->extended_hdr.tx.reserved = cloned;
+
+      if((*clone_id)++ == 0)
+	hdr->extended_hdr.tx.reserved = skb;
+      else {
+	cloned = skb_clone(skb, GFP_ATOMIC);
+	if(displ > 0) skb_push(cloned, displ);
+	hdr->extended_hdr.tx.reserved = cloned;
+      }
+
+      /* printk("[PF_RING] copy_data_to_ring(): clone_id=%d\n", *clone_id); */
     }
   } else {
     /* Raw data copy mode */
@@ -2528,7 +2539,7 @@ inline int copy_data_to_ring(struct sk_buff *skb,
 inline int copy_raw_data_to_ring(struct pf_ring_socket *pfr,
 				 struct pfring_pkthdr *dummy_hdr,
 				 void *raw_data, uint raw_data_len) {
-  return(copy_data_to_ring(NULL, pfr, dummy_hdr, 0, 0, NULL, raw_data, raw_data_len));
+  return(copy_data_to_ring(NULL, pfr, dummy_hdr, 0, 0, NULL, raw_data, raw_data_len, NULL));
 }
 
 /* ********************************** */
@@ -2538,7 +2549,8 @@ inline int add_pkt_to_ring(struct sk_buff *skb,
 			   struct pf_ring_socket *_pfr,
 			   struct pfring_pkthdr *hdr,
 			   int displ, u_int32_t channel_id,
-			   int offset, void *plugin_mem)
+			   int offset, void *plugin_mem,
+			   int *clone_id)
 {
   struct pf_ring_socket *pfr = (_pfr->master_ring != NULL) ? _pfr->master_ring : _pfr;
   u_int32_t the_bit = 1 << channel_id;
@@ -2567,7 +2579,7 @@ inline int add_pkt_to_ring(struct sk_buff *skb,
   }
 
   if(real_skb)
-    return(copy_data_to_ring(skb, pfr, hdr, displ, offset, plugin_mem, NULL, 0));
+    return(copy_data_to_ring(skb, pfr, hdr, displ, offset, plugin_mem, NULL, 0, clone_id));
   else
     return(copy_raw_data_to_ring(pfr, hdr, skb->data, hdr->len));
 }
@@ -2584,7 +2596,7 @@ static int add_packet_to_ring(struct pf_ring_socket *pfr,
     parse_pkt(skb, real_skb, displ, hdr, 0 /* Do not reset user-specified fields */);
 
   ring_read_lock();
-  add_pkt_to_ring(skb, real_skb, pfr, hdr, 0, RING_ANY_CHANNEL, displ, NULL);
+  add_pkt_to_ring(skb, real_skb, pfr, hdr, 0, RING_ANY_CHANNEL, displ, NULL, NULL);
   ring_read_unlock();
   return(0);
 }
@@ -3467,7 +3479,8 @@ static int add_skb_to_ring(struct sk_buff *skb,
 			   struct pfring_pkthdr *hdr,
 			   int is_ip_pkt, int displ,
 			   u_int8_t channel_id,
-			   u_int8_t num_rx_channels)
+			   u_int8_t num_rx_channels,
+			   int *clone_id)
 {
   int fwd_pkt = 0, rc = 0;
   struct parse_buffer *parse_memory_buffer[MAX_PLUGIN_ID] = { NULL };
@@ -3600,7 +3613,7 @@ static int add_skb_to_ring(struct sk_buff *skb,
       } else
 	offset = 0, hdr->extended_hdr.parsed_header_len = 0, mem = NULL;
 
-      rc = add_pkt_to_ring(skb, real_skb, pfr, hdr, displ, channel_id, offset, mem);
+      rc = add_pkt_to_ring(skb, real_skb, pfr, hdr, displ, channel_id, offset, mem, clone_id);
     }
   }
 
@@ -3880,12 +3893,15 @@ static struct sk_buff* defrag_skb(struct sk_buff *skb,
 
 static int skb_ring_handler(struct sk_buff *skb,
 			    u_int8_t recv_packet,
-			    u_int8_t real_skb /* 1=real skb, 0=faked skb */ ,
+			    u_int8_t real_skb /* 1=real skb, 0=faked skb */,
+			    u_int8_t *skb_reference_in_use, /* This return value is set to 1 in case
+							       the input skb is in use by PF_RING and thus
+							       the caller should NOT free it */
 			    u_int32_t channel_id,
 			    u_int32_t num_rx_channels)
 {
   struct sock *skElement;
-  int rc = 0, is_ip_pkt = 0, room_available = 0;
+  int rc = 0, is_ip_pkt = 0, room_available = 0, clone_id = 0;
   struct pfring_pkthdr hdr;
   int displ;
   int defragmented_skb = 0;
@@ -3895,6 +3911,8 @@ static int skb_ring_handler(struct sk_buff *skb,
   struct sock *sk;
   struct pf_ring_socket *pfr;
   ring_cluster_element *cluster_ptr;
+
+  *skb_reference_in_use = 0;
 
   /* Check if there's at least one PF_RING ring defined that
      could receive the packet: if none just stop here */
@@ -3997,7 +4015,8 @@ static int skb_ring_handler(struct sk_buff *skb,
       /* printk("==>>> [%d][%d]\n", skb->dev->ifindex, channel_id); */
 
       rc = 1, hdr.caplen = min_val(hdr.caplen, pfr->bucket_len);
-      room_available |= copy_data_to_ring(real_skb ? skb : NULL, pfr, &hdr, displ, 0, NULL, NULL, 0);
+      room_available |= copy_data_to_ring(real_skb ? skb : NULL, pfr, &hdr, 
+					  displ, 0, NULL, NULL, 0, real_skb ? &clone_id : NULL);
     }
   } else {
     is_ip_pkt = parse_pkt(skb, real_skb, displ, &hdr, 1);
@@ -4049,7 +4068,7 @@ static int skb_ring_handler(struct sk_buff *skb,
 
 	hdr.caplen = min_val(hdr.caplen, pfr->bucket_len);
 	room_available |= add_skb_to_ring(skb, real_skb, pfr, &hdr, is_ip_pkt,
-					  displ, channel_id, num_rx_channels);
+					  displ, channel_id, num_rx_channels, &clone_id);
 	hdr.caplen = old_caplen;
 	rc = 1;	/* Ring found: we've done our job */
       }
@@ -4098,7 +4117,7 @@ static int skb_ring_handler(struct sk_buff *skb,
 	      if(check_and_init_free_slot(pfr, pfr->slots_info->insert_off) /* Not full */) {
 		/* We've found the ring where the packet can be stored */
 		room_available |= add_skb_to_ring(skb, real_skb, pfr, &hdr, is_ip_pkt,
-						  displ, channel_id, num_rx_channels);
+						  displ, channel_id, num_rx_channels, &clone_id);
 		rc = 1; /* Ring found: we've done our job */
 		break;
 
@@ -4130,16 +4149,25 @@ static int skb_ring_handler(struct sk_buff *skb,
       kfree_skb(skk);
   }
 
-  if(rc == 1) {
+  if(clone_id > 0)
+    *skb_reference_in_use = 1;
+
+  if(rc == 1 /* Ring found */) {
     if(transparent_mode != driver2pf_ring_non_transparent /* 2 */) {
+      /* transparent mode = 0 or 1 */
       /* CHECK: I commented the line below as I have no idea why it has been put there */
       /* rc = 0; */
+#if 0
+      printk("[PF_RING] %s() [clone_id=%d][recv_packet=%d][real_skb=%d]\n", 
+	     __FUNCTION__, clone_id, recv_packet, real_skb);
+#endif
     } else {
       if(recv_packet && real_skb) {
 	if(unlikely(enable_debug))
 	  printk("[PF_RING] kfree_skb()\n");
 
-	kfree_skb(orig_skb); /* Free memory */
+	if(clone_id == 0) /* We have not used the orig_skb */
+	  kfree_skb(orig_skb); /* Free memory */
       }
     }
   }
@@ -4169,6 +4197,8 @@ struct sk_buff skb;
 
 static int buffer_ring_handler(struct net_device *dev, char *data, int len)
 {
+  u_int8_t skb_reference_in_use;
+
   if(unlikely(enable_debug))
     printk("[PF_RING] buffer_ring_handler: [dev=%s][len=%d]\n",
 	   dev->name == NULL ? "<NULL>" : dev->name, len);
@@ -4184,7 +4214,8 @@ static int buffer_ring_handler(struct net_device *dev, char *data, int len)
   skb.tstamp.tv64 = 0;
 #endif
 
-  return(skb_ring_handler(&skb, 1, 0 /* fake skb */ ,
+  return(skb_ring_handler(&skb, 1, 0 /* fake skb */,
+			  &skb_reference_in_use,
 			  UNKNOWN_RX_CHANNEL,
 			  UNKNOWN_NUM_RX_CHANNELS));
 }
@@ -4199,20 +4230,25 @@ static int packet_rcv(struct sk_buff *skb, struct net_device *dev,
 		      )
 {
   int rc;
+  u_int8_t skb_reference_in_use;
 
   if(skb->pkt_type != PACKET_LOOPBACK) {
     rc = skb_ring_handler(skb,
 			  (skb->pkt_type == PACKET_OUTGOING) ? 0 : 1,
-			  1, UNKNOWN_RX_CHANNEL, UNKNOWN_NUM_RX_CHANNELS);
+			  1 /* real_skb */, &skb_reference_in_use,
+			  UNKNOWN_RX_CHANNEL, UNKNOWN_NUM_RX_CHANNELS);
 
   } else
     rc = 0;
 
-  /*
-    This packet has been received by Linux through its standard
-    mechanisms (no PF_RING transparent/TNAPI)
-  */
-  kfree_skb(skb);
+  if(!skb_reference_in_use) {
+    /*
+      This packet has been received by Linux through its standard
+      mechanisms (no PF_RING transparent/TNAPI)
+    */
+    kfree_skb(skb);
+  }
+
   return(rc);
 }
 

@@ -51,7 +51,10 @@ void printHelp(void) {
 /* ******************************** */
 
 void my_sigalarm(int sig) {
-  printf("Forward rate: %u pps\n", num_sent);
+  char buf[32];
+
+  pfring_format_numbers((double)num_sent, buf, sizeof(buf), 0),
+  printf("%s pps\n", buf);
   num_sent = 0;
   alarm(1);
   signal(SIGALRM, my_sigalarm);
