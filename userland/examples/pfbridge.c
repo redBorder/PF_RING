@@ -35,6 +35,8 @@
 
 #include "pfring.h"
 
+u_int32_t num_sent = 0;
+
 /* ****************************************************** */
 
 void printHelp(void) {
@@ -44,6 +46,15 @@ void printHelp(void) {
   printf("-p              [Use pfring_send() instead of bridge]\n");
   printf("-a <device>     [First device name]\n");
   printf("-b <device>     [Second device name]\n");
+}
+
+/* ******************************** */
+
+void my_sigalarm(int sig) {
+  printf("Forward rate: %u pps\n", num_sent);
+  num_sent = 0;
+  alarm(1);
+  signal(SIGALRM, my_sigalarm);
 }
 
 /* ****************************************************** */
@@ -113,6 +124,9 @@ int main(int argc, char* argv[]) {
   else
     pfring_close(b_ring);
 
+  signal(SIGALRM, my_sigalarm);
+  alarm(1);
+
   while(1) {
     u_char *buffer;
     struct pfring_pkthdr hdr;
@@ -135,6 +149,9 @@ int main(int argc, char* argv[]) {
 	else if(verbose)
 	  printf("Forwarded %d bytes packet\n", hdr.len);
       }
+
+      if(rc >= 0) num_sent++;
+	
     }
   }
   
