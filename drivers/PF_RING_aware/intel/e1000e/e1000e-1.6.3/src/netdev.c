@@ -811,12 +811,14 @@ e1000_receive_skb(struct e1000_adapter *adapter,
 		     netdev->name, skb->len);
 
 	    if(*hook->transparent_mode != standard_linux_path) {
+	      u_int8_t skb_reference_in_use;
+	      
 	      if(0) {
 		kfree_skb(skb);
 		return(1);
 	      }
 
-	      rc = hook->ring_handler(skb, 1, 1, -1, 1);
+	      rc = hook->ring_handler(skb, 1, 1, &skb_reference_in_use, -1, 1);
 	      
 	      if(rc > 0 /* Packet handled by PF_RING */) {
 		if(*hook->transparent_mode == driver2pf_ring_non_transparent) {

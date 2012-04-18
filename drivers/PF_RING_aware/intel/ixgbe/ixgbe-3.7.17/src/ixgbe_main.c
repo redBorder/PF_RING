@@ -1706,7 +1706,10 @@ static int pf_ring_handle_skb(struct ixgbe_q_vector *q_vector, struct sk_buff *s
       printk(KERN_INFO "[PF_RING] alive [%s][len=%d]\n", skb->dev->name, skb->len);
 
     if(*hook->transparent_mode != standard_linux_path) {
-      int rc = hook->ring_handler(skb, 1, 1, q_vector->rx.ring->queue_index, q_vector->adapter->num_rx_queues);
+      u_int8_t skb_reference_in_use;
+      int rc = hook->ring_handler(skb, 1, 1, skb_reference_in_use,
+				  q_vector->rx.ring->queue_index, 
+				  q_vector->adapter->num_rx_queues);
 
       if(rc > 0 /* Packet handled by PF_RING */) {
 	if(*hook->transparent_mode == driver2pf_ring_non_transparent) {

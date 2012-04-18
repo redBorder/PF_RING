@@ -3733,13 +3733,14 @@ static void e1000_receive_skb(struct e1000_adapter *adapter, u8 status,
 	  if(hook && (hook->magic == PF_RING)) {
 	    /* Wow: PF_RING is alive & kickin' ! */
 	    int rc;
-		
+	    u_int8_t skb_reference_in_use;
+
 	    if(debug) 
 	      printk(KERN_INFO "[PF_RING] alive [%s][len=%d]\n", 
 		     adapter->netdev->name, skb->len);
 		
 	    if(*hook->transparent_mode != standard_linux_path) {
-	      rc = hook->ring_handler(skb, 1, 1, -1, 1);
+	      rc = hook->ring_handler(skb, 1, 1, &skb_reference_in_use, -1, 1);
 			      
 	      if(rc > 0 /* Packet handled by PF_RING */) {
 		if(*hook->transparent_mode == driver2pf_ring_non_transparent) {
