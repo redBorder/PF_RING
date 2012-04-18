@@ -177,7 +177,8 @@ void printHelp(void) {
   printf("pfsend - (C) 2011 Deri Luca <deri@ntop.org>\n\n");
 
   printf("pfsend -i out_dev [-a] [-f <.pcap file>] [-g <core_id>] [-h]\n"
-         "       [-l <length>] [-n <num>][-r <rate>] [-m <dst MAC>] [-v]\n\n");
+         "       [-l <length>] [-n <num>][-r <rate>] [-m <dst MAC>]\n"
+	 "       [-w <TX watermark>] [-v]\n\n");
 
   printf("-a              Active send retry\n");
 #if 0
@@ -193,6 +194,7 @@ void printHelp(void) {
   printf("-r <rate>       Rate to send (example -r 2.5 sends 2.5 Gbit/sec, -r -1 pcap capture rate)\n");
   printf("-m <dst MAC>    Reforge destination MAC (format AA:BB:CC:DD:EE:FF)\n");
   printf("-b <num>        Number of different IPs (balanced traffic)\n");
+  printf("-w <watermark>  TX watermark (low value=low latency)\n");
   printf("-v              Verbose\n");
   exit(0);
 }
@@ -334,9 +336,9 @@ int main(int argc, char* argv[]) {
   ticks hz = 0;
   struct packet *tosend;
   u_int num_tx_slots = 0;
-  int num_balanced_pkts = 1;
+  int num_balanced_pkts = 1, watermark = 0;
 
-  while((c = getopt(argc,argv,"b:hi:n:g:l:af:r:vm:"
+  while((c = getopt(argc,argv,"b:hi:n:g:l:af:r:vm:w:"
 #if 0
 		    "b:"
 #endif
@@ -388,6 +390,11 @@ int main(int argc, char* argv[]) {
 	mac_address[3] = mac_d, mac_address[4] = mac_e, mac_address[5] = mac_f;
       }
       break;
+    case 'w':
+      watermark = atoi(optarg);
+
+      if(watermark < 1) watermark = 1;
+      break;
     }
   }
 
@@ -407,6 +414,13 @@ int main(int argc, char* argv[]) {
 
     printf("Using PF_RING v.%d.%d.%d\n", (version & 0xFFFF0000) >> 16,
 	   (version & 0x0000FF00) >> 8, version & 0x000000FF);
+  }
+
+  if(watermark > 0) {
+    int rc;
+    
+    if((rc = pfring_set_tx_watermark(pd, watermark)) < 0)
+      printf("pfring_set_tx_watermark() failed [rc=%d]\n", rc);
   }
 
   signal(SIGINT, sigproc);

@@ -235,6 +235,7 @@ int main(int argc, char* argv[]) {
     printf("pfring_open %s error [%s]\n", in_dev, strerror(errno));
     return(-1);
   }
+  pfring_set_socket_mode(pd1, recv_only_mode);
 
   pfring_version(pd1, &version);
   printf("Using PF_RING v.%d.%d.%d\n", (version & 0xFFFF0000) >> 16, 
@@ -242,12 +243,13 @@ int main(int argc, char* argv[]) {
 
   pfring_set_application_name(pd1, "pfdnabounce");
 
-  pd2 = pfring_open(out_dev, 1500 /* snaplen */, PF_RING_PROMISC);
+  pd2 = pfring_open(out_dev, 1500 /* snaplen */, 0 /* PF_RING_PROMISC */);
   if(pd2 == NULL) {
     printf("pfring_open %s error [%s]\n", in_dev, strerror(errno));
     return(-1);
   } 
-  
+  pfring_set_socket_mode(pd2, send_only_mode);
+
   pfring_set_application_name(pd2, "pfdnabounce");
 
   signal(SIGINT, sigproc);

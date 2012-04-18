@@ -689,8 +689,9 @@ static void consume_pending_pkts(struct pf_ring_socket *pfr)
       if(hdr->extended_hdr.tx.bounce_interface != UNKNOWN_INTERFACE) {
 	/* Let's check if the last used device is still the prefered one */
 	if(pfr->tx.last_tx_dev_idx != hdr->extended_hdr.tx.bounce_interface) {
-	  if(pfr->tx.last_tx_dev != NULL)
+	  if(pfr->tx.last_tx_dev != NULL) {
 	    dev_put(pfr->tx.last_tx_dev); /* Release device */
+	  }
 
 	  /* Reset all */
 	  pfr->tx.last_tx_dev = NULL, pfr->tx.last_tx_dev_idx = UNKNOWN_INTERFACE;
@@ -704,6 +705,7 @@ static void consume_pending_pkts(struct pf_ring_socket *pfr)
 	  if(pfr->tx.last_tx_dev != NULL) {
 	    /* We have found the device */
 	    pfr->tx.last_tx_dev_idx = hdr->extended_hdr.tx.bounce_interface;
+	    dev_hold(pfr->tx.last_tx_dev); /* Prevent it from being freed */
 	  }
 	}
 
@@ -2489,10 +2491,10 @@ inline int copy_data_to_ring(struct sk_buff *skb,
 	hdr->extended_hdr.tx.reserved = skb;
       else {
 	cloned = skb_clone(skb, GFP_ATOMIC);
-	if(displ > 0) skb_push(cloned, displ);
 	hdr->extended_hdr.tx.reserved = cloned;
       }
 
+      if(displ > 0) skb_push(hdr->extended_hdr.tx.reserved, displ);
       /* printk("[PF_RING] copy_data_to_ring(): clone_id=%d\n", *clone_id); */
     }
   } else {
