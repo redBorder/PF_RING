@@ -121,7 +121,7 @@ int main(int argc, char* argv[]) {
       int rc;
       
       if(use_pfring_send) {
-	rc = pfring_send(b_ring, buffer, hdr.caplen, 1);
+	rc = pfring_send(b_ring, (char*)buffer, hdr.caplen, 1);
 
 	if(rc < 0)
 	  printf("pfring_send_last_rx_packet() error %d\n", rc);
