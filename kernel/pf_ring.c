@@ -2487,7 +2487,8 @@ inline int copy_data_to_ring(struct sk_buff *skb,
 	where we can read the id of the output interface
       */
 
-      if((*clone_id)++ == 0)
+      if(((*clone_id)++ == 0)
+	 && (transparent_mode != driver2pf_ring_transparent /* mode=1 */))
 	hdr->extended_hdr.tx.reserved = skb;
       else {
 	cloned = skb_clone(skb, GFP_ATOMIC);
@@ -4164,6 +4165,7 @@ static int skb_ring_handler(struct sk_buff *skb,
 	     __FUNCTION__, clone_id, recv_packet, real_skb);
 #endif
     } else {
+      /* transparent mode = 2 */
       if(recv_packet && real_skb) {
 	if(unlikely(enable_debug))
 	  printk("[PF_RING] kfree_skb()\n");
