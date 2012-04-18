@@ -2475,12 +2475,14 @@ inline int copy_data_to_ring(struct sk_buff *skb,
 
     if(pfr->tx.enable_tx_with_bounce
        && (pfr->header_len == long_pkt_header)) {
+       struct sk_buff *cloned;
       /*
 	 The TX transmission is supported only with long_pkt_header
 	 where we can read the id of the output interface
       */
-
-      hdr->extended_hdr.tx.reserved = skb_clone(skb, GFP_ATOMIC);
+      cloned = skb_clone(skb, GFP_ATOMIC);
+      if(displ > 0) skb_push(cloned, displ);
+      hdr->extended_hdr.tx.reserved = cloned;
     }
   } else {
     /* Raw data copy mode */
