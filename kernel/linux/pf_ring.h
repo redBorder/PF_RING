@@ -124,11 +124,6 @@
 
 /* *********************************** */
 
-struct pkt_aggregation_info {
-  u_int32_t num_pkts, num_bytes;
-  struct timeval first_seen, last_seen;
-};
-
 /*
   Note that as offsets *can* be negative,
   please do not change them to unsigned
@@ -139,10 +134,6 @@ struct pkt_offset {
   int16_t l3_offset;
   int16_t l4_offset;
   int16_t payload_offset;
-};
-
-struct pkt_flow_info {
-  u_int32_t in_iface, out_iface, samplingPopulation, flow_sequence;
 };
 
 #ifndef ETH_ALEN
@@ -170,11 +161,6 @@ typedef union {
 #define host4_peer_b host_peer_b.v4
 #define host6_peer_a host_peer_a.v6
 #define host6_peer_b host_peer_b.v6
-
-typedef union {
-  struct pkt_flow_info flow; /* Flow Information */
-  struct pkt_aggregation_info aggregation; /* Future or plugin use */
-} packet_user_detail;
 
 #define GTP_SIGNALING_PORT         2123
 #define GTP_U_DATA_PORT            2152
@@ -217,9 +203,6 @@ struct pkt_parsing_info {
   u_int16_t last_matched_plugin_id; /* If > 0 identifies a plugin to that matched the packet */
   u_int16_t last_matched_rule_id; /* If > 0 identifies a rule that matched the packet */
   struct pkt_offset offset; /* Offsets of L3/L4/payload elements */
-
-  /* Leave it at the end of the structure */
-  packet_user_detail pkt_detail;
 };
 
 #define UNKNOWN_INTERFACE          -1

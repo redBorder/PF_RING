@@ -1729,15 +1729,12 @@ inline u_int32_t hash_pkt_header(struct pfring_pkthdr * hdr, u_char mask_src, u_
 /* ******************************************************* */
 
 static int parse_raw_pkt(char *data, u_int data_len,
-			 struct pfring_pkthdr *hdr, u_int8_t reset_all)
+			 struct pfring_pkthdr *hdr)
 {
   struct ethhdr *eh = (struct ethhdr *)data;
   u_int16_t displ, ip_len, fragment_offset = 0;
 
-  if(reset_all)
-    memset(&hdr->extended_hdr.parsed_pkt, 0, sizeof(hdr->extended_hdr.parsed_pkt));
-  else
-    memset(&hdr->extended_hdr.parsed_pkt, 0, sizeof(hdr->extended_hdr.parsed_pkt)-sizeof(packet_user_detail) /* Preserve user data */);
+  memset(&hdr->extended_hdr.parsed_pkt, 0, sizeof(hdr->extended_hdr.parsed_pkt));
 
   if(data_len < sizeof(struct ethhdr)) return(0);
 
@@ -1906,10 +1903,9 @@ static int parse_raw_pkt(char *data, u_int data_len,
 static int parse_pkt(struct sk_buff *skb,
 		     u_int8_t real_skb,
 		     u_int16_t skb_displ,
-		     struct pfring_pkthdr *hdr,
-		     u_int8_t reset_all)
+		     struct pfring_pkthdr *hdr)
 {
-  int rc = parse_raw_pkt(&skb->data[real_skb ? -skb_displ : 0], (skb->len + skb_displ), hdr, reset_all);
+  int rc = parse_raw_pkt(&skb->data[real_skb ? -skb_displ : 0], (skb->len + skb_displ), hdr);
   hdr->extended_hdr.parsed_pkt.offset.eth_offset = -skb_displ;
 
   return(rc);
@@ -2601,7 +2597,7 @@ static int add_packet_to_ring(struct pf_ring_socket *pfr,
 			      int displ, u_int8_t parse_pkt_first)
 {
   if(parse_pkt_first)
-    parse_pkt(skb, real_skb, displ, hdr, 0 /* Do not reset user-specified fields */);
+    parse_pkt(skb, real_skb, displ, hdr);
 
   ring_read_lock();
   add_pkt_to_ring(skb, real_skb, pfr, hdr, 0, RING_ANY_CHANNEL, displ, NULL, NULL);
@@ -2616,7 +2612,7 @@ static int add_raw_packet_to_ring(struct pf_ring_socket *pfr, struct pfring_pkth
 				  u_int8_t parse_pkt_first)
 {
   if(parse_pkt_first)
-    parse_raw_pkt(data, data_len, hdr, 0 /* Do not reset user-specified fields */);
+    parse_raw_pkt(data, data_len, hdr);
 
   ring_read_lock();
   copy_raw_data_to_ring(pfr, hdr, data, data_len);
@@ -3865,7 +3861,7 @@ static struct sk_buff* defrag_skb(struct sk_buff *skb,
 	  skb = skk;
 	  *defragmented_skb = 1;
 	  hdr->len = hdr->caplen = skb->len + displ;
-	  parse_pkt(skb, 1, displ, hdr, 1);
+	  parse_pkt(skb, 1, displ, hdr);
 	} else {
 	  //printk("[PF_RING] Fragment queued \n");
 	  return(NULL);	/* mask rcvd fragments */
@@ -4012,7 +4008,7 @@ static int skb_ring_handler(struct sk_buff *skb,
     hdr.extended_hdr.parsed_header_len = 0;
 
     if(pfr && pfr->rehash_rss && skb->dev) {
-      parse_pkt(skb, real_skb, displ, &hdr, 1);
+      parse_pkt(skb, real_skb, displ, &hdr);
 
       channel_id = hash_pkt_header(&hdr, 0, 0, 0, 0, 0) % get_num_rx_queues(skb->dev);
     }
@@ -4027,7 +4023,7 @@ static int skb_ring_handler(struct sk_buff *skb,
 					  displ, 0, NULL, NULL, 0, real_skb ? &clone_id : NULL);
     }
   } else {
-    is_ip_pkt = parse_pkt(skb, real_skb, displ, &hdr, 1);
+    is_ip_pkt = parse_pkt(skb, real_skb, displ, &hdr);
 
     if(enable_ip_defrag) {
       if(real_skb
