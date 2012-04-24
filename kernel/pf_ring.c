@@ -662,11 +662,11 @@ inline u_int get_num_ring_free_slots(struct pf_ring_socket * pfr)
   Consume packets that have been read by userland but not
   yet by kernel
 */
-static void consume_pending_pkts(struct pf_ring_socket *pfr)
+static void consume_pending_pkts(struct pf_ring_socket *pfr, u_int8_t synchronized)
 {
   while(pfr->slots_info->remove_off != pfr->slots_info->kernel_remove_off &&
         /* one slot back (pfring_mod_send_last_rx_packet is called after pfring_recv has updated remove_off) */
-        pfr->slots_info->remove_off != get_next_slot_offset(pfr, pfr->slots_info->kernel_remove_off)) {
+        (synchronized || pfr->slots_info->remove_off != get_next_slot_offset(pfr, pfr->slots_info->kernel_remove_off))) {
     struct pfring_pkthdr *hdr = (struct pfring_pkthdr*) &pfr->ring_slots[pfr->slots_info->kernel_remove_off];
 
     if(unlikely(enable_debug))
@@ -2421,9 +2421,11 @@ inline int copy_data_to_ring(struct sk_buff *skb,
   if(do_lock) write_lock(&pfr->ring_index_lock);
   // smp_rmb();
 
-  if(pfr->tx.enable_tx_with_bounce && pfr->header_len == long_pkt_header) {
+  if(pfr->tx.enable_tx_with_bounce && pfr->header_len == long_pkt_header
+     && pfr->slots_info->remove_off != pfr->slots_info->kernel_remove_off /* optimization to avoid too many locks */
+     && pfr->slots_info->remove_off != get_next_slot_offset(pfr, pfr->slots_info->kernel_remove_off)) {
     write_lock(&pfr->tx.consume_tx_packets_lock);
-    consume_pending_pkts(pfr);
+    consume_pending_pkts(pfr, 0);
     write_unlock(&pfr->tx.consume_tx_packets_lock);
   }
 
@@ -5807,7 +5809,7 @@ unsigned int ring_poll(struct file *file,
 
     if(pfr->tx.enable_tx_with_bounce && pfr->header_len == long_pkt_header) {
       write_lock_bh(&pfr->tx.consume_tx_packets_lock);
-      consume_pending_pkts(pfr);
+      consume_pending_pkts(pfr, 1);
       write_unlock_bh(&pfr->tx.consume_tx_packets_lock);
     }
 
