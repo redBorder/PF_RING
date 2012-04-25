@@ -3246,9 +3246,9 @@ int check_wildcard_rules(struct sk_buff *skb,
 	   * (we can reuse entry, ptr, tmp_ptr because we will stop rule evaluation) */
 	  free_rule_element_id = 0;
           list_for_each_safe(ptr, tmp_ptr, &pfr->sw_filtering_rules) {
-            entry = list_entry(ptr, sw_filtering_rule_element, list);
-            if(entry->rule.rule_id == free_rule_element_id)
-	      free_rule_element_id = entry->rule.rule_id + 1;
+            sw_filtering_rule_element *tmp_entry = list_entry(ptr, sw_filtering_rule_element, list);
+            if(tmp_entry->rule.rule_id == free_rule_element_id)
+              free_rule_element_id++;
 	    else break; /* we found an hole */
 	  }
 
