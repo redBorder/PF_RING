@@ -357,10 +357,9 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u
   }
 
   if(verbose) {
-    struct ether_header ehdr;
-    u_short eth_type, vlan_id;
+    struct ether_header *ehdr;
     char buf1[32], buf2[32];
-    struct ip ip;
+    struct ip *ip;
     int s;
     uint usec;
     uint nsec=0;
@@ -410,30 +409,24 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u
 	     etheraddr_string(h->extended_hdr.parsed_pkt.dmac, buf2));    
     }
 
-    memcpy(&ehdr, p+h->extended_hdr.parsed_header_len, sizeof(struct ether_header));
-    eth_type = ntohs(ehdr.ether_type);
-
+    ehdr = (struct ether_header *) p;
     printf("%s[if_index=%d][%s -> %s][eth_type=0x%04X] ",
 	   use_extended_pkt_header ? (h->extended_hdr.rx_direction ? "[RX]" : "[TX]") : "",
 	   h->extended_hdr.if_index,
-	   etheraddr_string(ehdr.ether_shost, buf1),
-	   etheraddr_string(ehdr.ether_dhost, buf2), eth_type);
+	   etheraddr_string(ehdr->ether_shost, buf1),
+	   etheraddr_string(ehdr->ether_dhost, buf2), 
+	   h->extended_hdr.parsed_pkt.eth_type);
 
+    if(h->extended_hdr.parsed_pkt.offset.vlan_offset)
+      printf("[vlan %u] ", h->extended_hdr.parsed_pkt.vlan_id);
 
-    if(eth_type == 0x8100) {
-      vlan_id = (p[14] & 15)*256 + p[15];
-      eth_type = (p[16])*256 + p[17];
-      printf("[vlan %u] ", vlan_id);
-      p+=4;
-    }
+    if(h->extended_hdr.parsed_pkt.eth_type == 0x0800) {
+      ip = (struct ip *) &p[h->extended_hdr.parsed_pkt.offset.l3_offset];
+      printf("[%s]", proto2str(ip->ip_p));
+      printf("[%s:%d ", intoa(ntohl(ip->ip_src.s_addr)), h->extended_hdr.parsed_pkt.l4_src_port);
+      printf("-> %s:%d] ", intoa(ntohl(ip->ip_dst.s_addr)), h->extended_hdr.parsed_pkt.l4_dst_port);
 
-    if(eth_type == 0x0800) {
-      memcpy(&ip, p+h->extended_hdr.parsed_header_len+sizeof(ehdr), sizeof(struct ip));
-      printf("[%s]", proto2str(ip.ip_p));
-      printf("[%s:%d ", intoa(ntohl(ip.ip_src.s_addr)), h->extended_hdr.parsed_pkt.l4_src_port);
-      printf("-> %s:%d] ", intoa(ntohl(ip.ip_dst.s_addr)), h->extended_hdr.parsed_pkt.l4_dst_port);
-
-      if((ip.ip_p == IPPROTO_UDP) 
+      if((ip->ip_p == IPPROTO_UDP) 
 	 && use_extended_pkt_header
 	 && (h->extended_hdr.parsed_pkt.gtp.tunnel_id != NO_GTP_TUNNEL_ID))
 	printf("[GTP Version=%s/TEID=0x%08X/MsgType=0x%02X]",
@@ -452,10 +445,10 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u
 	     h->extended_hdr.parsed_pkt.offset.payload_offset);
 
     } else {
-      if(eth_type == 0x0806)
+      if(h->extended_hdr.parsed_pkt.eth_type == 0x0806)
 	printf("[ARP]");
       else
-	printf("[eth_type=0x%04X]", eth_type);
+	printf("[eth_type=0x%04X]", h->extended_hdr.parsed_pkt.eth_type);
 
       printf("[caplen=%d][len=%d][parsed_header_len=%d]"
 	     "[eth_offset=%d][l3_offset=%d][l4_offset=%d][payload_offset=%d]\n",
@@ -571,7 +564,7 @@ void* packet_consumer_thread(void* _id) {
     u_int len;
 
     if(do_shutdown) break;
-
+      
     if(pfring_recv(pd, &buffer, 0, &hdr, wait_for_packet) > 0) {
       if(do_shutdown) break;
       dummyProcesssPacket(&hdr, buffer, (u_char*)thread_id);
@@ -781,8 +774,8 @@ int main(int argc, char* argv[]) {
     pfring_get_bound_device_id(pd, &device_id);
 
     printf("Capturing from %s [%s][ifIndex: %d]\n", 
-	   device, etheraddr_string(mac_address, buf),
-	   device_id);
+      device, etheraddr_string(mac_address, buf), 
+      device_id);
   }
 
   printf("# Device RX channels: %d\n", pfring_get_num_rx_channels(pd));
