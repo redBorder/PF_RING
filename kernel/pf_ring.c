@@ -454,7 +454,10 @@ int lockless_list_add(lockless_list *l, void *elem) {
   if(unlikely(enable_debug))
     printk("[PF_RING] -> BEGIN %s() [total=%u]\n", __FUNCTION__, l->num_elements);
 
-  if(l->num_elements >= MAX_NUM_LIST_ELEMENTS) return(-1); /* Too many */
+  if(l->num_elements >= MAX_NUM_LIST_ELEMENTS) {
+    printk("[PF_RING] Exceeded the maximum number of list items\n");
+    return(-1); /* Too many */
+  }
 
   /* I could avoid mutexes but ... */
   write_lock_bh(&l->list_lock);
@@ -1620,17 +1623,21 @@ static int ring_alloc_mem(struct sock *sk)
  * store the sk in a new element and add it
  * to the head of the list.
  */
-static inline void ring_insert(struct sock *sk)
+static inline int ring_insert(struct sock *sk)
 {
   struct pf_ring_socket *pfr;
 
   if(unlikely(enable_debug))
     printk("[PF_RING] ring_insert()\n");
 
-  lockless_list_add(&ring_table, sk);
+  if (lockless_list_add(&ring_table, sk) == -1)
+    return -1;
+
   pfr = (struct pf_ring_socket *)ring_sk(sk);
   pfr->ring_pid = current->pid;
   bitmap_zero(pfr->netdev_mask, MAX_NUM_DEVICES_ID), pfr->num_bound_devices = 0;
+
+  return 0;
 }
 
 /* ********************************** */
@@ -4326,10 +4333,8 @@ static int ring_create(
 
   ring_sk(sk) = ring_sk_datatype(kmalloc(sizeof(*pfr), GFP_KERNEL));
 
-  if(!(pfr = ring_sk(sk))) {
-    sk_free(sk);
-    goto out;
-  }
+  if(!(pfr = ring_sk(sk)))
+    goto free_sk;
 
   memset(pfr, 0, sizeof(*pfr));
   pfr->ring_shutdown = 0;
@@ -4357,7 +4362,9 @@ static int ring_create(
   rwlock_init(&pfr->tx.consume_tx_packets_lock);
   pfr->tx.enable_tx_with_bounce = 0;
   pfr->tx.last_tx_dev_idx = UNKNOWN_INTERFACE, pfr->tx.last_tx_dev = NULL;
-  ring_insert(sk);
+  
+  if (ring_insert(sk) == -1)
+    goto free_pfr;
 
   ring_proc_add(pfr);
 
@@ -4365,7 +4372,12 @@ static int ring_create(
     printk("[PF_RING] ring_create(): created\n");
 
   return(0);
- out:
+
+free_pfr:
+  kfree(ring_sk(sk));
+free_sk:
+  sk_free(sk);
+out:
   return err;
 }
 
