@@ -30,11 +30,7 @@
 #define DEFAULT_BUCKET_LEN            128
 #define MAX_NUM_DEVICES               256
 
-/*
-  Do NOT extend MAX_NUM_RING_SOCKETS over 64 as this is the size
-  of ring_table_bitmap (pf_ring.c)
-*/
-#define MAX_NUM_RING_SOCKETS          64 /* sizeof(u_int64_t) */
+// #define MAX_NUM_RING_SOCKETS          64 /* see MAX_NUM_LIST_ELEMENTS */
 
 /* Watermark */
 #define DEFAULT_MIN_PKT_QUEUED        128
