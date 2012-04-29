@@ -194,7 +194,8 @@ void printHelp(void) {
   printf("-r <rate>       Rate to send (example -r 2.5 sends 2.5 Gbit/sec, -r -1 pcap capture rate)\n");
   printf("-m <dst MAC>    Reforge destination MAC (format AA:BB:CC:DD:EE:FF)\n");
   printf("-b <num>        Number of different IPs (balanced traffic)\n");
-  printf("-w <watermark>  TX watermark (low value=low latency)\n");
+  printf("-w <watermark>  TX watermark (low value=low latency) [not effective on DNA]\n");
+  printf("-z              Disable zero-copy, if supported [DNA only]\n");
   printf("-v              Verbose\n");
   exit(0);
 }
@@ -324,7 +325,7 @@ static void forge_udp_packet(char *buffer, u_int idx) {
 
 int main(int argc, char* argv[]) {
   char c, *pcap_in = NULL;
-  int i, verbose = 0, active_poll = 0;
+  int i, verbose = 0, active_poll = 0, disable_zero_copy = 0;
   int use_zero_copy_tx = 0;
   u_int mac_a, mac_b, mac_c, mac_d, mac_e, mac_f;
   char buffer[9000];
@@ -338,7 +339,7 @@ int main(int argc, char* argv[]) {
   u_int num_tx_slots = 0;
   int num_balanced_pkts = 1, watermark = 0;
 
-  while((c = getopt(argc,argv,"b:hi:n:g:l:af:r:vm:w:"
+  while((c = getopt(argc,argv,"b:hi:n:g:l:af:r:vm:w:z"
 #if 0
 		    "b:"
 #endif
@@ -394,6 +395,9 @@ int main(int argc, char* argv[]) {
       watermark = atoi(optarg);
 
       if(watermark < 1) watermark = 1;
+      break;
+    case 'z':
+      disable_zero_copy = 1;
       break;
     }
   }
@@ -572,7 +576,8 @@ int main(int argc, char* argv[]) {
 
   use_zero_copy_tx = 0;
 
-  if(pd->dna_copy_tx_packet_into_slot != NULL) {
+  if((!disable_zero_copy) 
+     && (pd->dna_copy_tx_packet_into_slot != NULL)) {
     tosend = pkt_head;
 
     num_tx_slots = pd->dna_get_num_tx_slots(pd);
@@ -593,9 +598,8 @@ int main(int argc, char* argv[]) {
       }
     }
   }
-
-  if(use_zero_copy_tx)
-    printf("Using zero-copy TX\n");
+  
+  printf("%s zero-copy TX\n", use_zero_copy_tx ? "Using" : "NOT using");
 
   tosend = pkt_head;
   i = 0;
@@ -620,10 +624,14 @@ int main(int argc, char* argv[]) {
     if(rc < 0) {
       /* Not enough space in buffer */
       if(!active_poll) {
+#if 1
+	usleep(1); 
+#else
         if(bind_core >= 0)
 	  usleep(1);
 	else
 	  pfring_poll(pd, 0); //sched_yield();
+#endif
       }
       goto redo;
     }
