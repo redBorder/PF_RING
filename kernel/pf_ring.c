@@ -4780,7 +4780,7 @@ static void free_extra_dma_memory(struct dma_memory_info *dma_memory) {
 
 static struct dna_cluster* dna_cluster_create(u_int32_t dna_cluster_id, u_int32_t num_slots,
                                               u_int32_t num_slaves, u_int32_t slave_mem_len, 
-					      u_int32_t master_persistent_mem_len,
+					      u_int32_t master_persistent_mem_len, socket_mode mode,
                                               struct device *hwdev, u_int32_t slot_len, u_int32_t chunk_len)
 {
   struct list_head *ptr, *tmp_ptr;
@@ -4825,6 +4825,7 @@ static struct dna_cluster* dna_cluster_create(u_int32_t dna_cluster_id, u_int32_
 
     dnac->id = dna_cluster_id;
     dnac->num_slaves = num_slaves;
+    dnac->mode = mode;
 
     atomic_set(&dnac->master, 0);
     atomic_set(&dnac->slaves, 0);
@@ -4921,7 +4922,7 @@ static void dna_cluster_remove(struct dna_cluster *dnac, dna_cluster_client_type
   write_unlock(&dna_cluster_lock);
 }
 
-static struct dna_cluster* dna_cluster_attach(u_int32_t dna_cluster_id, wait_queue_head_t *slave_waitqueue, u_int32_t *slave_id) {
+static struct dna_cluster* dna_cluster_attach(u_int32_t dna_cluster_id, wait_queue_head_t *slave_waitqueue, u_int32_t *slave_id, u_int32_t *mode) {
   struct list_head *ptr, *tmp_ptr;
   struct dna_cluster *entry;
   struct dna_cluster *dnac = NULL;
@@ -4952,6 +4953,7 @@ static struct dna_cluster* dna_cluster_attach(u_int32_t dna_cluster_id, wait_que
         if (dnac->slave_waitqueue[i] == NULL) {
           dnac->slave_waitqueue[i] = slave_waitqueue;
 	  *slave_id = i;
+	  *mode = dnac->mode;
 	  slot_found = 1;
 	  break;
 	}
@@ -4974,7 +4976,7 @@ unlock:
   if(unlikely(enable_debug)) {
     if(dnac != NULL)
       printk("[PF_RING] %s(%u) attached to DNA cluster [master: %u][slaves: %u]\n",
-           __FUNCTION__, dna_cluster_id, atomic_read(&dnac->master), atomic_read(&dnac->slaves));
+        __FUNCTION__, dna_cluster_id, atomic_read(&dnac->master), atomic_read(&dnac->slaves));
     else
       printk("[PF_RING] %s() error\n", __FUNCTION__);
   }
@@ -7072,6 +7074,7 @@ static int ring_setsockopt(struct socket *sock,
 
       pfr->dna_cluster = dna_cluster_create(cdnaci.cluster_id, cdnaci.num_slots, cdnaci.num_slaves,
                                             cdnaci.slave_mem_len, cdnaci.master_persistent_mem_len,
+					    cdnaci.mode,
 					    pfr->dna_device->hwdev,
                                             pfr->dna_device->mem_info.rx.packet_memory_slot_len,
                                             pfr->dna_device->mem_info.rx.packet_memory_chunk_len);
@@ -7106,7 +7109,7 @@ static int ring_setsockopt(struct socket *sock,
       if(copy_from_user(&adnaci, optval, sizeof(adnaci)))
 	return -EFAULT;
 
-      pfr->dna_cluster = dna_cluster_attach(adnaci.cluster_id, &pfr->ring_slots_waitqueue, &adnaci.slave_id);
+      pfr->dna_cluster = dna_cluster_attach(adnaci.cluster_id, &pfr->ring_slots_waitqueue, &adnaci.slave_id, &adnaci.mode);
 
       if(pfr->dna_cluster == NULL) {
 	if(unlikely(enable_debug))
