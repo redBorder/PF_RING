@@ -4873,6 +4873,18 @@ static struct dna_cluster* dna_cluster_create(u_int32_t dna_cluster_id, u_int32_
 
     *recovered = 0;
   } else {
+    /* recovering an old cluster */
+
+    /* checking cluster parameters */
+    if (dnac->num_slaves != num_slaves 
+	|| dnac->slave_shared_memory_len != PAGE_ALIGN(slave_mem_len)
+	|| dnac->master_persistent_memory_len != PAGE_ALIGN(master_persistent_mem_len)
+	|| dnac->mode != mode
+        || dnac->extra_dma_memory->num_slots != num_slots) {
+      dnac = NULL;
+      goto unlock;
+    }
+
     *recovered = 1;
   }
 
