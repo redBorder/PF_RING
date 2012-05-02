@@ -127,7 +127,11 @@
   please do not change them to unsigned
 */
 struct pkt_offset {
-  int16_t eth_offset; /* This offset *must* be added to all offsets below */
+  int16_t eth_offset; /* 
+			 This offset *must* be added to all offsets below 
+			 ONLY if you are inside the kernel (e.g. when you
+			 code a pf_ring plugin). Ignore it in user-space.
+		       */
   int16_t vlan_offset;
   int16_t l3_offset;
   int16_t l4_offset;
