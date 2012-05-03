@@ -58,7 +58,8 @@ LIBS       = ${LIBPFRING} @DAG_LIB@ -lpthread @SYSLIBS@ @BPF_LIB@  @SILICOM_LIBS
 #
 PFPROGS   = pfcount pfcount_multichannel preflect pfbounce pfdnabounce pfmap \
 	    pfbridge alldevs dummy_plugin_pfcount pcap2nspcap pfcount_dummy_plugin pffilter_test \
-	    pfcount_aggregator pfcount_bundle pfcount_82599 vdevice_simulator pfsystest pfsend
+	    pfcount_aggregator pfcount_bundle pfcount_82599 vdevice_simulator pfsystest pfsend \
+	    pfdnacluster_master
 
 PCAPPROGS = pcount pwrite
 TARGETS   = ${PFPROGS} ${PCAPPROGS}
@@ -147,6 +148,9 @@ vdevice_simulator: vdevice_simulator.o ${LIBPCAP} ${LIBPFRING}
 
 pfsystest: pfsystest.o ${LIBPFRING}
 	${CC} ${CFLAGS} pfsystest.o ${LIBS} -o $@
+
+pfdnacluster_master: pfdnacluster_master.o ${LIBPFRING}
+	${CC} ${CFLAGS} pfdnacluster_master.o ${LIBPCAP} ${LIBS} -o $@
 
 clean:
 	@rm -f ${TARGETS} *.o *~
