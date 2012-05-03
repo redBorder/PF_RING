@@ -49,6 +49,7 @@ void    *dna_cluster_handle;
 
 char *in_dev = NULL;
 u_int8_t wait_for_packet = 1, do_shutdown = 0;
+socket_mode mode = recv_only_mode;
 
 static struct timeval startTime;
 
@@ -105,21 +106,21 @@ void print_stats() {
     nTXPkts  = tx_packets;
     nRXProcPkts  = rx_processed_packets;
 
-    fprintf(stderr, "---\nAbsolute Stats: RX %s pkts", pfring_format_numbers((double)nRXPkts, buf1, sizeof(buf1), 0));
-
-    if(print_all) 
-      fprintf(stderr, " [%s pkt/sec]", pfring_format_numbers((double)(nRXPkts*1000)/deltaMillisec, buf1, sizeof(buf1), 1));
-    
-    fprintf(stderr, " TX %s pkts", pfring_format_numbers((double)nTXPkts, buf1, sizeof(buf1), 0));
-
-    if(print_all)
-      fprintf(stderr, " [%s pkt/sec]", pfring_format_numbers((double)(nTXPkts*1000)/deltaMillisec, buf1, sizeof(buf1), 1));
-
-    fprintf(stderr, " RX Processed %s pkts", pfring_format_numbers((double)nRXProcPkts, buf1, sizeof(buf1), 0));
-
-    if(print_all)
-      fprintf(stderr, " [%s pkt/sec]", pfring_format_numbers((double)(nRXProcPkts*1000)/deltaMillisec, buf1, sizeof(buf1), 1));
-
+    fprintf(stderr, "---\nAbsolute Stats:");
+ 
+    if (mode != send_only_mode) {
+      fprintf(stderr, " RX %s pkts", pfring_format_numbers((double)nRXPkts, buf1, sizeof(buf1), 0));
+      if(print_all) fprintf(stderr, " [%s pkt/sec]", pfring_format_numbers((double)(nRXPkts*1000)/deltaMillisec, buf1, sizeof(buf1), 1));
+      
+      fprintf(stderr, " RX Processed %s pkts", pfring_format_numbers((double)nRXProcPkts, buf1, sizeof(buf1), 0));
+        if(print_all) fprintf(stderr, " [%s pkt/sec]", pfring_format_numbers((double)(nRXProcPkts*1000)/deltaMillisec, buf1, sizeof(buf1), 1));
+    }
+	   
+    if (mode != recv_only_mode) {
+      fprintf(stderr, " TX %s pkts", pfring_format_numbers((double)nTXPkts, buf1, sizeof(buf1), 0));
+      if(print_all) fprintf(stderr, " [%s pkt/sec]", pfring_format_numbers((double)(nTXPkts*1000)/deltaMillisec, buf1, sizeof(buf1), 1));
+    }
+	        
     fprintf(stderr, "\n");
 
     if(print_all && (lastTime.tv_sec > 0)) {
@@ -128,21 +129,28 @@ void print_stats() {
       TXdiff = nTXPkts - lastTXPkts;
       RXProcdiff = nRXProcPkts - lastRXProcPkts;
 
-      fprintf(stderr, "Actual Stats:   RX %llu pkts [%s ms][%s pps]",
-	      (long long unsigned int)RXdiff,
-	      pfring_format_numbers(deltaMillisec, buf1, sizeof(buf1), 1),
-	      pfring_format_numbers(((double)RXdiff/(double)(deltaMillisec/1000)),  buf2, sizeof(buf2), 1));
+      fprintf(stderr, "Actual Stats:  ");
 
-      fprintf(stderr, " TX %llu pkts [%s ms][%s pps]",
-	      (long long unsigned int)TXdiff,
-	      pfring_format_numbers(deltaMillisec, buf1, sizeof(buf1), 1),
-	      pfring_format_numbers(((double)TXdiff/(double)(deltaMillisec/1000)),  buf2, sizeof(buf2), 1));
+      if (mode != send_only_mode) {
+        fprintf(stderr, " RX %llu pkts [%s ms][%s pps]",
+	        (long long unsigned int)RXdiff,
+	        pfring_format_numbers(deltaMillisec, buf1, sizeof(buf1), 1),
+	        pfring_format_numbers(((double)RXdiff/(double)(deltaMillisec/1000)),  buf2, sizeof(buf2), 1));
+			   
+        fprintf(stderr, " RX Processed %llu pkts [%s ms][%s pps]",
+                (long long unsigned int)RXProcdiff,
+                pfring_format_numbers(deltaMillisec, buf1, sizeof(buf1), 1),
+                pfring_format_numbers(((double)RXProcdiff/(double)(deltaMillisec/1000)),  buf2, sizeof(buf2), 1));
+      }
+						    
+      if (mode != recv_only_mode) {
+        fprintf(stderr, " TX %llu pkts [%s ms][%s pps]",
+	        (long long unsigned int)TXdiff,
+	        pfring_format_numbers(deltaMillisec, buf1, sizeof(buf1), 1),
+                pfring_format_numbers(((double)TXdiff/(double)(deltaMillisec/1000)),  buf2, sizeof(buf2), 1));
+      }
 
-      fprintf(stderr, " RX Processed %llu pkts [%s ms][%s pps]\n",
-	      (long long unsigned int)RXProcdiff,
-	      pfring_format_numbers(deltaMillisec, buf1, sizeof(buf1), 1),
-	      pfring_format_numbers(((double)RXProcdiff/(double)(deltaMillisec/1000)),  buf2, sizeof(buf2), 1));
-
+      fprintf(stderr, "\n");
     }
 
     lastRXPkts = nRXPkts;
@@ -202,11 +210,10 @@ int main(int argc, char* argv[]) {
   u_int32_t version;
   int rx_bind_core = 0, tx_bind_core = 1;
   int cluster_id = -1, num_app = 1;
-  socket_mode mode = recv_only_mode;
 
   startTime.tv_sec = 0;
 
-  while((c = getopt(argc,argv,"ac:or:t:hi:n:")) != -1) {
+  while((c = getopt(argc,argv,"ac:r:st:hi:n:")) != -1) {
     switch(c) {
     case 'a':
       wait_for_packet = 0;
