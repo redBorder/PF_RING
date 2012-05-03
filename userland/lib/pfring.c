@@ -1253,16 +1253,16 @@ void pfring_set_pkt_buff_len(pfring *ring, pfring_pkt_buff *pkt_handle, u_int32_
 
 /* **************************************************** */
 
-void pfring_set_pkt_buff_ifindex(pfring *ring, pfring_pkt_buff *pkt_handle, u_int32_t if_id) {
+void pfring_set_pkt_buff_ifindex(pfring *ring, pfring_pkt_buff *pkt_handle, int if_index) {
   if(ring && ring->set_pkt_buff_ifindex)
-    ring->set_pkt_buff_ifindex(ring, pkt_handle, if_id);
+    ring->set_pkt_buff_ifindex(ring, pkt_handle, if_index);
 }
 
 /* **************************************************** */
 
-void pfring_add_pkt_buff_ifindex(pfring *ring, pfring_pkt_buff *pkt_handle, u_int32_t if_id) {
+void pfring_add_pkt_buff_ifindex(pfring *ring, pfring_pkt_buff *pkt_handle, int if_index) {
   if(ring && ring->add_pkt_buff_ifindex)
-    ring->add_pkt_buff_ifindex(ring, pkt_handle, if_id);
+    ring->add_pkt_buff_ifindex(ring, pkt_handle, if_index);
 }
 
 /* **************************************************** */
