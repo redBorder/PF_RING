@@ -44,8 +44,8 @@
 
 #define ALARM_SLEEP             1
 
-pfring  *pd;
-void    *dna_cluster_handle;
+pfring *pd;
+pfring_dna_cluster *dna_cluster_handle;
 
 char *in_dev = NULL;
 u_int8_t wait_for_packet = 1, do_shutdown = 0;
@@ -199,7 +199,7 @@ void printHelp(void) {
   printf("-s              Enable TX\n");
   printf("-r <core_id>    Bind the RX thread to a core\n");
   printf("-t <core_id>    Bind the TX thread to a core\n");
-  // printf("-a              Active packet wait\n");
+  printf("-a              Active packet wait\n");
   exit(0);
 }
 
