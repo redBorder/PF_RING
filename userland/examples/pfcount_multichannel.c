@@ -391,7 +391,7 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u
     }
   }
 
-  numPkts[threadId]++, numBytes[threadId] += h->len;
+  numPkts[threadId]++, numBytes[threadId] += h->len+24 /* 8 Preamble + 4 CRC + 12 IFG */;
 }
 
 /* *************************************** */

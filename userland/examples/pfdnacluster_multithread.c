@@ -123,13 +123,15 @@ void print_stats() {
       double thpt = ((double)8*numBytes[i])/(deltaABS*1000);
 
       fprintf(stderr, "=========================\n"
-	      "Absolute Stats: [thread=%d][%u pkts rcvd][%u pkts dropped]\n"
-	      "Total Pkts=%u/Dropped=%.1f %%\n",
-	      i, (unsigned int)numPkts[i], (unsigned int)pfringStat.drop,
-	      (unsigned int)(numPkts[i]+pfringStat.drop),
-	      numPkts[i] == 0 ? 0 : (double)(pfringStat.drop*100)/(double)(numPkts[i]+pfringStat.drop));
-      fprintf(stderr, "%lu pkts - %lu bytes", numPkts[i], numBytes[i]);
-      fprintf(stderr, " [%s pkt/sec - %.2f Mbit/sec]\n", 
+              "Thread %d\n"
+	      "Absolute Stats: [%u pkts rcvd][%lu bytes rcvd]\n"
+	      "                [%u total pkts][%u pkts dropped (%.1f %%)]\n"
+              "                [%s pkt/sec][%.2f Mbit/sec]\n", i,
+	      (unsigned int) numPkts[i],
+	      numBytes[i],
+	      (unsigned int) (numPkts[i]+pfringStat.drop),
+	      (unsigned int) pfringStat.drop,
+	      numPkts[i] == 0 ? 0 : (double)(pfringStat.drop*100)/(double)(numPkts[i]+pfringStat.drop),
               pfring_format_numbers(((double)(numPkts[i]*1000)/deltaABS), buf1, sizeof(buf1), 1),
 	      thpt);
 
@@ -138,9 +140,9 @@ void print_stats() {
 	
 	diff = numPkts[i]-lastPkts[i];
 	pps = ((double)diff/(double)(delta/1000));
-	fprintf(stderr, "=========================\n"
-		"Actual Stats: [thread=%d][%llu pkts][%.1f ms][%s pkt/sec]\n",
-		i, (long long unsigned int)diff, delta,
+	fprintf(stderr, "Actual   Stats: [%llu pkts][%.1f ms][%s pkt/sec]\n",
+		(long long unsigned int) diff, 
+		delta,
 		pfring_format_numbers(((double)diff/(double)(delta/1000)), buf1, sizeof(buf1), 1));
       }
 
@@ -156,8 +158,7 @@ void print_stats() {
       TXdiff = master_tx_packets - lastTXPkts; 
 
       fprintf(stderr, "=========================\n"
-                      "Aggregate Actual stats: [Captured %s pkt/sec][Processed %s pkt/sec][Sent %s pkt/sec]\n"
-                      "=========================\n\n",
+                      "Aggregate Actual stats: [Captured %s pkt/sec][Processed %s pkt/sec][Sent %s pkt/sec]\n",
               pfring_format_numbers(((double)RXdiff/(double)(delta/1000)), buf1, sizeof(buf1), 1),
               pfring_format_numbers(((double)RXProcdiff/(double)(delta/1000)), buf2, sizeof(buf2), 1),
               pfring_format_numbers(((double)TXdiff/(double)(delta/1000)), buf3, sizeof(buf3), 1));
@@ -167,6 +168,8 @@ void print_stats() {
     lastRXProcPkts = master_rx_processed_packets;
     lastTXPkts = master_tx_packets;
   }
+
+  fprintf(stderr, "=========================\n\n");
   
   lastTime.tv_sec = endTime.tv_sec, lastTime.tv_usec = endTime.tv_usec;
 }
@@ -269,7 +272,7 @@ void* packet_consumer_thread(void *_id) {
 
     if (rc > 0) {
       numPkts[thread_id]++;
-      numBytes[thread_id] += hdr.len;
+      numBytes[thread_id] += hdr.len + 24 /* 8 Preamble + 4 CRC + 12 IFG */;
     } else {
       if (!wait_for_packet) 
         sched_yield(); //usleep(1);
