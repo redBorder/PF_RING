@@ -228,7 +228,7 @@ int main(int argc, char* argv[]) {
   if(in_dev == NULL)  printHelp();
   if(out_dev == NULL) out_dev = strdup(in_dev);
 
-  printf("Bouncing packets from %s to %s\n", in_dev, out_dev);
+  printf("Bouncing packets from %s to %s (one way)\n", in_dev, out_dev);
 
   pd1 = pfring_open(in_dev, 1500 /* snaplen */, PF_RING_PROMISC);
   if(pd1 == NULL) {
@@ -265,7 +265,13 @@ int main(int argc, char* argv[]) {
     pfring_bounce_loop(&bounce, dummyProcesssPacketZero, (u_char *) NULL, wait_for_packet);
     pfring_bounce_destroy(&bounce);
     goto end;
+  } else {
+    printf("WARNING: Unable to initialize PF_RING zero-copy library (port already in use ?)\n");
+    goto end;
   }
+
+#else
+  printf("Missing PF_RING zero-copy library\n");
 #endif
 
   printf("Using PF_RING 1-copy library\n");

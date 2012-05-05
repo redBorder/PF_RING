@@ -48,7 +48,7 @@ pfring *pd;
 pfring_dna_cluster *dna_cluster_handle;
 
 char *in_dev = NULL;
-u_int8_t wait_for_packet = 1, do_shutdown = 0;
+u_int8_t wait_for_packet = 1, do_shutdown = 0, hashing_mode = 0;
 socket_mode mode = recv_only_mode;
 
 static struct timeval startTime;
@@ -189,7 +189,7 @@ void sigproc(int sig) {
 /* *************************************** */
 
 void printHelp(void) {
-  printf("pfdnacluster_master\n(C) 2012 Deri Luca <deri@ntop.org>, Alfredo Cardigliano <cardigliano@ntop.org>\n\n");
+  printf("pfdnacluster_master - (C) 2012 ntop.org\n\n");
 
   printf("pfdnacluster_master [-a] -i dev\n");
   printf("-h              Print this help\n");
@@ -199,8 +199,113 @@ void printHelp(void) {
   printf("-s              Enable TX\n");
   printf("-r <core_id>    Bind the RX thread to a core\n");
   printf("-t <core_id>    Bind the TX thread to a core\n");
+  printf("-m <hash mode>  Hashing modes:\n"
+	 "                0 - IP hash (default)\n"
+	 "                1 - MAC Address hash\n"
+	 "                2 - IP protocol hash\n");
   printf("-a              Active packet wait\n");
   exit(0);
+}
+
+/* *************************************** */
+
+struct compact_eth_hdr {
+  unsigned char   h_dest[ETH_ALEN];
+  unsigned char   h_source[ETH_ALEN];
+  u_int16_t       h_proto;
+};
+
+struct compact_ip_hdr {
+  u_int8_t	ihl:4,
+                version:4;
+  u_int8_t	tos;
+  u_int16_t	tot_len;
+  u_int16_t	id;
+  u_int16_t	frag_off;
+  u_int8_t	ttl;
+  u_int8_t	protocol;
+  u_int16_t	check;
+  u_int32_t	saddr;
+  u_int32_t	daddr;
+};
+
+struct compact_ipv6_hdr {
+  __u8		priority:4,
+		version:4;
+  __u8		flow_lbl[3];
+  __be16	payload_len;
+  __u8		nexthdr;
+  __u8		hop_limit;
+  struct in6_addr saddr;
+  struct in6_addr daddr;
+};
+
+
+inline u_int32_t master_custom_hash_function(const u_char *buffer, const u_int16_t buffer_len) {
+  u_int32_t l3_offset = sizeof(struct compact_eth_hdr);
+  u_int16_t eth_type;
+
+  if(hashing_mode == 1 /* MAC hash */)
+    return(buffer[3] + buffer[4] + buffer[5] + buffer[9] + buffer[10] + buffer[11]);
+
+  eth_type = (buffer[12] << 8) + buffer[13];
+
+  if (eth_type == 0x8100) {
+    eth_type = (buffer[16] << 8) + buffer[17];
+    l3_offset += 4;
+  }
+
+  switch (eth_type) {
+  case 0x0800:
+    {
+      /* IPv4 */
+      struct compact_ip_hdr *iph;
+
+      if (unlikely(buffer_len < l3_offset + sizeof(struct compact_ip_hdr)))
+	return 0;
+
+      iph = (struct compact_ip_hdr *) &buffer[l3_offset];
+
+      if(hashing_mode == 0 /* IP hash */)
+	return ntohl(iph->saddr) + ntohl(iph->daddr); /* this can be optimized by avoiding calls to ntohl(), but it can lead to balancing issues */
+      else /* IP protocol hash */
+	return iph->protocol;
+    }
+    break;
+  case 0x86DD:
+    {
+      /* IPv6 */
+      struct compact_ipv6_hdr *ipv6h;
+      u_int32_t *s, *d;
+
+      if (unlikely(buffer_len < l3_offset + sizeof(struct compact_ipv6_hdr)))
+	return 0;
+
+      ipv6h = (struct compact_ipv6_hdr *) &buffer[l3_offset];
+
+      if(hashing_mode == 0 /* IP hash */) {
+	s = (u_int32_t *) &ipv6h->saddr, d = (u_int32_t *) &ipv6h->daddr;
+	return(s[0] + s[1] + s[2] + s[3] + d[0] + d[1] + d[2] + d[3]);
+      } else
+	return(ipv6h->nexthdr);
+    }
+    break;
+  default:
+    return 0; /* Unknown protocol */
+  }
+}
+
+/* ******************************* */
+
+static u_int32_t master_ip_distribution_function(const u_char *buffer, const u_int16_t buffer_len, const u_int32_t num_slaves, u_int32_t *hash) {
+  u_int32_t slave_idx;
+
+  /* computing a bidirectional software hash */
+  *hash = master_custom_hash_function(buffer, buffer_len);
+
+  /* balancing on hash */
+  slave_idx = (*hash) % num_slaves;
+  return (1 << slave_idx);
 }
 
 /* *************************************** */
@@ -213,7 +318,7 @@ int main(int argc, char* argv[]) {
 
   startTime.tv_sec = 0;
 
-  while((c = getopt(argc,argv,"ac:r:st:hi:n:")) != -1) {
+  while((c = getopt(argc,argv,"ac:r:st:hi:n:m:")) != -1) {
     switch(c) {
     case 'a':
       wait_for_packet = 0;
@@ -238,6 +343,11 @@ int main(int argc, char* argv[]) {
       break;
     case 'n':
       num_app = atoi(optarg);
+      break;
+    case 'm':
+      hashing_mode = atoi(optarg);
+      if((hashing_mode < 0) || (hashing_mode > 2))
+	hashing_mode = 0;
       break;
     }
   }
@@ -286,10 +396,22 @@ int main(int argc, char* argv[]) {
   dna_cluster_set_cpu_affinity(dna_cluster_handle, rx_bind_core, tx_bind_core);
 
   /*
-    Let's use the standard distribution function that allows to balance
+    Let's use a standard distribution function that allows to balance
     per IP in a coherent mode (not like RSS that does not do that)
   */
-  /* dna_cluster_set_distribution_function(dna_cluster_handle, func); */
+  dna_cluster_set_distribution_function(dna_cluster_handle, master_ip_distribution_function);
+
+  switch(hashing_mode) {
+  case 0:
+    printf("Hashing packets per-IP Address\n");
+    break;
+  case 1:
+    printf("Hashing packets per-MAC Address\n");
+    break;
+  case 2:
+    printf("Hashing packets per-IP protocol (TCP, UDP, ICMP...)\n");
+    break;
+  }
 
   /* Now enable the cluster */
   if (dna_cluster_enable(dna_cluster_handle) < 0) {

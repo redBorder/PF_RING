@@ -213,7 +213,7 @@ void printHelp(void) {
   printf("-h              Print this help\n");
   printf("-i <device>     Device name\n");
   printf("-c <id>         DNA Cluster ID\n");
-  printf("-n <num>        Number of comsumer threads\n");
+  printf("-n <num>        Number of consumer threads\n");
   printf("-m <mode>       Demo mode: 1=bounce packets (enable TX), 2=fan-out\n");
   printf("-r <core>       Bind the RX thread to a core\n");
   printf("-t <core>       Bind the TX thread to a core\n");
