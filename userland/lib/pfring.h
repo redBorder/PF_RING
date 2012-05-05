@@ -123,6 +123,7 @@ extern "C" {
     /* disabled functions */
     int       (*recv)                         (pfring *, u_char**, u_int, struct pfring_pkthdr *, u_int8_t);
     int       (*send)                         (pfring *, char *, u_int, u_int8_t);
+    int       (*send_ifindex)                 (pfring *, char *, u_int, u_int8_t, int);
     int       (*send_parsed)                  (pfring *, char *, struct pfring_pkthdr *, u_int8_t);
     int       (*send_get_time)                (pfring *, char *, u_int, struct timespec *);    
   } pfring_bounce;
@@ -189,6 +190,7 @@ extern "C" {
     int       (*set_application_name)         (pfring *, char *);
     int       (*bind)                         (pfring *, char *);
     int       (*send)                         (pfring *, char *, u_int, u_int8_t);
+    int       (*send_ifindex)                 (pfring *, char *, u_int, u_int8_t, int);
     int       (*send_parsed)                  (pfring *, char *, struct pfring_pkthdr *, u_int8_t);
     int       (*send_get_time)                (pfring *, char *, u_int, struct timespec *);
     u_int8_t  (*get_num_rx_channels)          (pfring *);
@@ -321,6 +323,7 @@ extern "C" {
   int pfring_set_application_name(pfring *ring, char *name);
   int pfring_bind(pfring *ring, char *device_name);
   int pfring_send(pfring *ring, char *pkt, u_int pkt_len, u_int8_t flush_packet);
+  int pfring_send_ifindex(pfring *ring, char *pkt, u_int pkt_len, u_int8_t flush_packet, int if_index);
   int pfring_send_parsed(pfring *ring, char *pkt, struct pfring_pkthdr *hdr, u_int8_t flush_packet);
   int pfring_send_get_time(pfring *ring, char *pkt, u_int pkt_len, struct timespec *ts);
   u_int8_t pfring_get_num_rx_channels(pfring *ring);

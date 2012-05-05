@@ -486,6 +486,7 @@ int pfring_bounce_init(pfring_bounce *bounce, pfring *ingress_ring, pfring *egre
   /* disabling harmful functions / backing up func ptrs */
   bounce->recv          = ingress_ring->recv,         ingress_ring->recv         = NULL;
   bounce->send          = egress_ring->send,          egress_ring->send          = NULL;
+  bounce->send_ifindex  = egress_ring->send_ifindex,  egress_ring->send_ifindex  = NULL;
   bounce->send_parsed   = egress_ring->send_parsed,   egress_ring->send_parsed   = NULL;
   bounce->send_get_time = egress_ring->send_get_time, egress_ring->send_get_time = NULL;
 
@@ -549,6 +550,7 @@ void pfring_bounce_destroy(pfring_bounce *bounce) {
   /* restoring func ptrs */
   bounce->rx_socket->recv          = bounce->recv;
   bounce->tx_socket->send          = bounce->send;
+  bounce->tx_socket->send_ifindex  = bounce->send_ifindex;
   bounce->tx_socket->send_parsed   = bounce->send_parsed;
   bounce->tx_socket->send_get_time = bounce->send_get_time;
 
@@ -699,6 +701,32 @@ int pfring_send(pfring *ring, char *pkt, u_int pkt_len, u_int8_t flush_packet) {
       pthread_rwlock_wrlock(&ring->tx_lock);
 
     rc =  ring->send(ring, pkt, pkt_len, flush_packet);
+
+    if(unlikely(ring->reentrant))
+      pthread_rwlock_unlock(&ring->tx_lock);
+  }
+
+  return rc;
+}
+
+/* **************************************************** */
+
+int pfring_send_ifindex(pfring *ring, char *pkt, u_int pkt_len, u_int8_t flush_packet, int if_index) {
+  int rc = -1;
+
+  if(unlikely(pkt_len > 9000 /* Jumbo MTU */))
+    return rc;
+
+  if(likely(ring
+	    && ring->enabled
+	    && (!ring->is_shutting_down)
+	    && ring->send_ifindex
+	    && (ring->mode != recv_only_mode))) {
+
+    if(unlikely(ring->reentrant))
+      pthread_rwlock_wrlock(&ring->tx_lock);
+
+    rc =  ring->send_ifindex(ring, pkt, pkt_len, flush_packet, if_index);
 
     if(unlikely(ring->reentrant))
       pthread_rwlock_unlock(&ring->tx_lock);
