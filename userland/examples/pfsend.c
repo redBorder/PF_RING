@@ -91,6 +91,7 @@ struct timeval lastTime, startTime;
 int reforge_mac = 0;
 char mac_address[6];
 int send_len = 60;
+int if_index = -1;
 
 #define DEFAULT_DEVICE     "eth0"
 
@@ -196,6 +197,7 @@ void printHelp(void) {
   printf("-b <num>        Number of different IPs (balanced traffic)\n");
   printf("-w <watermark>  TX watermark (low value=low latency) [not effective on DNA]\n");
   printf("-z              Disable zero-copy, if supported [DNA only]\n");
+  printf("-x <if index>   Send to the selected interface, if supported\n");
   printf("-v              Verbose\n");
   exit(0);
 }
@@ -339,7 +341,7 @@ int main(int argc, char* argv[]) {
   u_int num_tx_slots = 0;
   int num_balanced_pkts = 1, watermark = 0;
 
-  while((c = getopt(argc,argv,"b:hi:n:g:l:af:r:vm:w:z"
+  while((c = getopt(argc,argv,"b:hi:n:g:l:af:r:vm:w:zx:"
 #if 0
 		    "b:"
 #endif
@@ -365,6 +367,9 @@ int main(int argc, char* argv[]) {
       break;
     case 'l':
       send_len = atoi(optarg);
+      break;
+    case 'x':
+      if_index = atoi(optarg);
       break;
     case 'v':
       verbose = 1;
@@ -612,7 +617,9 @@ int main(int argc, char* argv[]) {
 
   redo:
 
-    if(use_zero_copy_tx)
+    if (if_index != -1)
+      rc = pfring_send_ifindex(pd, tosend->pkt, tosend->len, gbit_s < 0 ? 1 : 0 /* Don't flush (it does PF_RING automatically) */, if_index);
+    else if(use_zero_copy_tx)
       /* We pre-filled the TX slots */
       rc = pfring_send(pd, NULL, tosend->len, gbit_s < 0 ? 1 : 0 /* Don't flush (it does PF_RING automatically) */);
     else
