@@ -501,9 +501,16 @@ int32_t gmt2local(time_t t) {
 /* *************************************** */
 
 void printHelp(void) {
-  printf("pfcount\n(C) 2005-12 Deri Luca <deri@ntop.org>\n\n");
+  printf("pfcount - (C) 2005-12 ntop.org\n\n");
   printf("-h              Print this help\n");
-  printf("-i <device>     Device name. Use ethX@Y for channels, dnaX for DNA, dag:dagX:Y for DAG cards\n");
+  printf("-i <device>     Device name. Use:\n"
+	 "                - ethX@Y for channels\n"
+	 "                - dnaX for DNA-based adapters\n"
+	 "                - dnacluster:X for DNA cluster Id X\n"
+#ifdef HAVE_DAG
+	 "                - dag:dagX:Y for Endace DAG cards\n"
+#endif
+	 );
   printf("-n <threads>    Number of polling threads (default %d)\n", num_threads);
   printf("-f <filter>     [BPF filter]\n"); 
   printf("-c <cluster id> cluster id\n");

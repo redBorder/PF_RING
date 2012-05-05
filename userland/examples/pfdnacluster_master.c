@@ -86,7 +86,7 @@ void print_stats() {
   double deltaMillisec;
   static u_int8_t print_all;
   static struct timeval lastTime;
-  char buf1[64], buf2[64];
+  char buf0[64], buf1[64], buf2[64];
   u_int64_t RXdiff, TXdiff, RXProcdiff;
   static u_int64_t lastRXPkts = 0, lastTXPkts = 0, lastRXProcPkts = 0;
   unsigned long long nRXPkts = 0, nTXPkts = 0, nRXProcPkts = 0;
@@ -132,13 +132,13 @@ void print_stats() {
       fprintf(stderr, "Actual Stats:  ");
 
       if (mode != send_only_mode) {
-        fprintf(stderr, " RX %llu pkts [%s ms][%s pps]",
-	        (long long unsigned int)RXdiff,
+        fprintf(stderr, " RX %s pkts [%s ms][%s pps]",
+	        pfring_format_numbers((double)RXdiff, buf0, sizeof(buf0), 0),
 	        pfring_format_numbers(deltaMillisec, buf1, sizeof(buf1), 1),
 	        pfring_format_numbers(((double)RXdiff/(double)(deltaMillisec/1000)),  buf2, sizeof(buf2), 1));
 			   
-        fprintf(stderr, " RX Processed %llu pkts [%s ms][%s pps]",
-                (long long unsigned int)RXProcdiff,
+        fprintf(stderr, " RX Processed %s pkts [%s ms][%s pps]",
+	        pfring_format_numbers((double)RXProcdiff, buf0, sizeof(buf0), 0),
                 pfring_format_numbers(deltaMillisec, buf1, sizeof(buf1), 1),
                 pfring_format_numbers(((double)RXProcdiff/(double)(deltaMillisec/1000)),  buf2, sizeof(buf2), 1));
       }

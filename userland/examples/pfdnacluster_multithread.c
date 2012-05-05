@@ -136,10 +136,10 @@ void print_stats() {
 	      thpt);
 
       if(lastTime.tv_sec > 0) {
-	double pps;
+	// double pps;
 	
 	diff = numPkts[i]-lastPkts[i];
-	pps = ((double)diff/(double)(delta/1000));
+	// pps = ((double)diff/(double)(delta/1000));
 	fprintf(stderr, "Actual   Stats: [%llu pkts][%.1f ms][%s pkt/sec]\n",
 		(long long unsigned int) diff, 
 		delta,
@@ -209,10 +209,10 @@ void my_sigalarm(int sig) {
 /* *************************************** */
 
 void printHelp(void) {
-  printf("pfdnacluster_multithread\n(C) 2012 Deri Luca <deri@ntop.org>, Alfredo Cardigliano <cardigliano@ntop.org>\n\n");
+  printf("pfdnacluster_multithread - (C) 2012 ntop.org\n\n");
   printf("-h              Print this help\n");
   printf("-i <device>     Device name\n");
-  printf("-c <id>         Cluster ID\n");
+  printf("-c <id>         DNA Cluster ID\n");
   printf("-n <num>        Number of comsumer threads\n");
   printf("-m <mode>       Demo mode: 1=bounce packets (enable TX), 2=fan-out\n");
   printf("-r <core>       Bind the RX thread to a core\n");
