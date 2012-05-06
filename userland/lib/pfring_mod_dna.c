@@ -206,12 +206,6 @@ int pfring_dna_open(pfring *ring) {
    * ring->get_device_clock
    */
 
-#ifdef HAVE_ZERO
-  ring->bounce_init = dna_bounce_init;
-  ring->bounce_loop = dna_bounce_loop;
-  ring->bounce_destroy = dna_bounce_destroy;
-#endif
-
   ring->dna.last_dna_operation = remove_device_mapping;
   ring->fd = socket(PF_RING, SOCK_RAW, htons(ETH_P_ALL));
 

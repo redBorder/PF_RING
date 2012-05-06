@@ -112,24 +112,6 @@ extern "C" {
 
   /* ********************************* */
 
-  typedef int (*pfringBounceProcesssPacket)(u_int16_t pkt_len, u_char *pkt, const u_char *user_bytes);
-
-  typedef struct {
-    pfring *rx_socket, *tx_socket;
-    void *priv_data;
-    u_int8_t running, break_loop;
-    pthread_rwlock_t lock;
-
-    /* disabled functions */
-    int       (*recv)                         (pfring *, u_char**, u_int, struct pfring_pkthdr *, u_int8_t);
-    int       (*send)                         (pfring *, char *, u_int, u_int8_t);
-    int       (*send_ifindex)                 (pfring *, char *, u_int, u_int8_t, int);
-    int       (*send_parsed)                  (pfring *, char *, struct pfring_pkthdr *, u_int8_t);
-    int       (*send_get_time)                (pfring *, char *, u_int, struct timespec *);    
-  } pfring_bounce;
-
-  /* ********************************* */
-
   typedef struct {
     u_int64_t recv, drop;
   } pfring_stat;
@@ -236,9 +218,6 @@ extern "C" {
     int       (*adjust_device_clock)          (pfring *, struct timespec *, int8_t);
     void      (*sync_indexes_with_kernel)     (pfring *);
     int       (*send_last_rx_packet)          (pfring *, int);
-    int       (*bounce_init)                  (pfring_bounce *);
-    int       (*bounce_loop)                  (pfring_bounce *, pfringBounceProcesssPacket, const u_char *, u_int8_t);
-    void      (*bounce_destroy)               (pfring_bounce *);
     u_char*   (*get_pkt_buff_data)            (pfring *, pfring_pkt_buff *);
     void      (*set_pkt_buff_len)             (pfring *, pfring_pkt_buff *, u_int32_t);
     void      (*set_pkt_buff_ifindex)         (pfring *, pfring_pkt_buff *, int);
@@ -399,13 +378,6 @@ extern "C" {
 			 u_int8_t wait_for_incoming_packet);
   void pfring_bundle_destroy(pfring_bundle *bundle);
   void pfring_bundle_close(pfring_bundle *bundle);  
-
-  /* PF_RING Bounce */
-  int pfring_bounce_init(pfring_bounce *bounce, pfring *ingress_ring, pfring *egress_ring);
-  int pfring_bounce_loop(pfring_bounce *bounce, pfringBounceProcesssPacket looper, 
-                         const u_char *user_bytes, u_int8_t wait_for_packet);
-  void pfring_bounce_breakloop(pfring_bounce *bounce);
-  void pfring_bounce_destroy(pfring_bounce *bounce);
 
   /* Utils (defined in pfring_utils.c) */
   int pfring_parse_pkt(u_char *pkt, struct pfring_pkthdr *hdr, u_int8_t level /* 2..4 */, 

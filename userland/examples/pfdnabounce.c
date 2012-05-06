@@ -52,7 +52,7 @@ u_int8_t wait_for_packet = 1, do_shutdown = 0;
 static struct timeval startTime;
 unsigned long long numPkts = 0, numBytes = 0;
 #ifdef HAVE_ZERO
-pfring_bounce bounce;
+pfring_dna_bouncer *bouncer_handle = NULL;
 #endif
 
 /* *************************************** */
@@ -160,7 +160,7 @@ void sigproc(int sig) {
   do_shutdown = 1;
 
 #ifdef HAVE_ZERO
-  pfring_bounce_breakloop(&bounce);
+  pfring_dna_bouncer_breakloop(bouncer_handle);
 #else
   pfring_breakloop(pd1);
 #endif
@@ -260,21 +260,22 @@ int main(int argc, char* argv[]) {
   alarm(ALARM_SLEEP);
 
 #ifdef HAVE_ZERO
-  if (pfring_bounce_init(&bounce, pd1, pd2) == 0) {
-    printf("Using PF_RING zero-copy library\n");
-    pfring_bounce_loop(&bounce, dummyProcesssPacketZero, (u_char *) NULL, wait_for_packet);
-    pfring_bounce_destroy(&bounce);
+  if ((bouncer_handle = pfring_dna_bouncer_create(pd1, pd2)) != NULL) {
+    printf("Using libzero zero-copy library\n");
+    pfring_dna_bouncer_loop(bouncer_handle, dummyProcesssPacketZero, (u_char *) NULL, wait_for_packet);
+    pfring_dna_bouncer_destroy(bouncer_handle);
     goto end;
   } else {
     printf("WARNING: Unable to initialize PF_RING zero-copy library (port already in use ?)\n");
+    pfring_close(pd1);
+    pfring_close(pd2);
     goto end;
   }
-
 #else
   printf("Missing PF_RING zero-copy library\n");
 #endif
 
-  printf("Using PF_RING 1-copy library\n");
+  printf("Using 1-copy code\n");
   pfring_set_direction(pd1, rx_only_direction);
   pfring_set_direction(pd2, tx_only_direction);
 
@@ -282,11 +283,12 @@ int main(int argc, char* argv[]) {
   pfring_enable_ring(pd2);
 
   pfring_loop(pd1, dummyProcesssPacket, (u_char*) NULL, wait_for_packet);
-#ifdef HAVE_ZERO
- end:
-#endif
+#ifndef HAVE_ZERO
   pfring_close(pd1);
   pfring_close(pd2);
+#else
+ end:
+#endif
 
   sleep(3);
 
