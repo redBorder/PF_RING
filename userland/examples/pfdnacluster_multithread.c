@@ -45,21 +45,21 @@
 
 #define ALARM_SLEEP             1
 #define MAX_NUM_THREADS        32
+#define MAX_NUM_DEV            32
+#define DEFAULT_DEVICE     "dna0"
 
-int num_threads = 1;
+int num_threads = 1, num_dev = 0;
 pfring_stat pfringStats;
 static struct timeval startTime;
 u_int8_t wait_for_packet = 1,  do_shutdown = 0;
 int rx_bind_core = 1, tx_bind_core = 2; /* core 0 free if possible */
 int demo_mode = 0;
 pfring_dna_cluster *dna_cluster_handle;
-pfring *pd;
+pfring *pd[MAX_NUM_DEV];
 pfring *ring[MAX_NUM_THREADS] = { NULL };
 u_int64_t numPkts[MAX_NUM_THREADS] = { 0 };
 u_int64_t numBytes[MAX_NUM_THREADS] = { 0 };
 pthread_t pd_thread[MAX_NUM_THREADS];
-
-#define DEFAULT_DEVICE     "dna0"
 
 /* *************************************** */
 /*
@@ -218,7 +218,7 @@ void printHelp(void) {
   printf("-r <core>       Bind the RX thread to a core\n");
   printf("-t <core>       Bind the TX thread to a core\n");
   printf("-a              Active packet wait\n");
-  exit(-1);
+  exit(0);
 }
 
 /* *************************************** */
@@ -286,7 +286,8 @@ void* packet_consumer_thread(void *_id) {
 
 int main(int argc, char* argv[]) {
   char c;
-  char *device = NULL;
+  char buf[32];
+  char *device = NULL, *dev, *dev_pos = NULL;
   u_int32_t version;
   int cluster_id = -1;
   socket_mode mode = recv_only_mode;
@@ -335,18 +336,6 @@ int main(int argc, char* argv[]) {
 
   printf("Capturing from %s\n", device);
 
-  pd = pfring_open(device, 1500 /* snaplen */, PF_RING_PROMISC);
-  if (pd == NULL) {
-    printf("pfring_open %s error [%s]\n", device, strerror(errno));
-    return(-1);
-  }
-
-  pfring_version(pd, &version);
-  printf("Using PF_RING v.%d.%d.%d\n", (version & 0xFFFF0000) >> 16, 
-	 (version & 0x0000FF00) >> 8, version & 0x000000FF);
-
-  pfring_set_application_name(pd, "pfdnacluster_multithreaded");
-
   /* Create the DNA cluster */
   if ((dna_cluster_handle = dna_cluster_create(cluster_id, num_threads)) == NULL) {
     fprintf(stderr, "Error creating DNA Cluster\n");
@@ -358,11 +347,43 @@ int main(int argc, char* argv[]) {
     mode = send_and_recv_mode;
   dna_cluster_set_mode(dna_cluster_handle, mode);
 
-  /* Add the ring we created to the cluster */
-  if (dna_cluster_register_ring(dna_cluster_handle, pd) < 0) {
-    fprintf(stderr, "Error registering rx socket\n");
+  dev = strtok_r(device, ",", &dev_pos);
+  while(dev != NULL) {
+    pd[num_dev] = pfring_open(dev, 1500 /* snaplen */, PF_RING_PROMISC);
+    if(pd[num_dev] == NULL) {
+      printf("pfring_open %s error [%s]\n", dev, strerror(errno));
+      return(-1);
+    }
+
+    if (num_dev == 0) {
+      pfring_version(pd[num_dev], &version);
+      printf("Using PF_RING v.%d.%d.%d\n", (version & 0xFFFF0000) >> 16, 
+	     (version & 0x0000FF00) >> 8, version & 0x000000FF);
+    }
+
+    snprintf(buf, sizeof(buf), "pfdnacluster_multithread-cluster-%d-socket-%d", cluster_id, num_dev);
+    pfring_set_application_name(pd[num_dev], buf);
+
+    /* Add the ring we created to the cluster */
+    if (dna_cluster_register_ring(dna_cluster_handle, pd[num_dev]) < 0) {
+      fprintf(stderr, "Error registering rx socket\n");
+      dna_cluster_destroy(dna_cluster_handle);
+      return -1;
+    }
+
+    num_dev++;
+
+    dev = strtok_r(NULL, ",", &dev_pos);
+
+    if (num_dev == MAX_NUM_DEV && dev != NULL) {
+      printf("Too many devices\n");
+      break;
+    }
+  }
+
+  if (num_dev == 0) {
     dna_cluster_destroy(dna_cluster_handle);
-    return -1;
+    printHelp();
   }
 
   /* Setting up important details... */
@@ -387,8 +408,6 @@ int main(int argc, char* argv[]) {
 	 cluster_id, num_threads);
 
   for (i = 0; i < num_threads; i++) {
-    char buf[32];
-    
     snprintf(buf, sizeof(buf), "pfdnacluster:%d", cluster_id);
     ring[i] = pfring_open(buf, 1500 /* snaplen */, PF_RING_PROMISC);
     if (ring[i] == NULL) {
@@ -396,7 +415,7 @@ int main(int argc, char* argv[]) {
       return(-1);
     }
 
-    snprintf(buf, sizeof(buf), "pfdnacluster_multithrea-thread-%ld", i);
+    snprintf(buf, sizeof(buf), "pfdnacluster_multithread-cluster-%d-thread-%ld", cluster_id, i);
     pfring_set_application_name(ring[i], buf);
 
     if((rc = pfring_set_socket_mode(ring[i], mode)) != 0)

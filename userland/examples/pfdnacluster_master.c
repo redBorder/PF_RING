@@ -43,11 +43,14 @@
 #include "pfring.h"
 
 #define ALARM_SLEEP             1
+#define MAX_NUM_APP            32
+#define MAX_NUM_DEV            32
+#define DEFAULT_DEVICE     "dna0"
 
-pfring *pd;
+int num_app = 1, num_dev = 0;
+pfring *pd[MAX_NUM_DEV];
 pfring_dna_cluster *dna_cluster_handle;
 
-char *in_dev = NULL;
 u_int8_t wait_for_packet = 1, do_shutdown = 0, hashing_mode = 0;
 socket_mode mode = recv_only_mode;
 
@@ -312,9 +315,11 @@ static u_int32_t master_ip_distribution_function(const u_char *buffer, const u_i
 
 int main(int argc, char* argv[]) {
   char c;
+  char buf[32];
   u_int32_t version;
   int rx_bind_core = 0, tx_bind_core = 1;
-  int cluster_id = -1, num_app = 1;
+  int cluster_id = -1;
+  char *device = NULL, *dev, *dev_pos = NULL;
 
   startTime.tv_sec = 0;
 
@@ -336,7 +341,7 @@ int main(int argc, char* argv[]) {
       mode = send_and_recv_mode;
       break;
     case 'i':
-      in_dev = strdup(optarg);
+      device = strdup(optarg);
       break;
     case 'c':
       cluster_id = atoi(optarg);
@@ -352,28 +357,15 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  if(in_dev == NULL || cluster_id < 0 || num_app < 1)  printHelp();
+  if(cluster_id < 0 || num_app < 1)
+    printHelp();
 
-  printf("Reading packets from %s\n", in_dev);
+  if (num_app > MAX_NUM_APP)
+    num_app = MAX_NUM_APP;
 
-  pd = pfring_open(in_dev, 1500 /* snaplen */, PF_RING_PROMISC);
-  if(pd == NULL) {
-    printf("pfring_open %s error [%s]\n", in_dev, strerror(errno));
-    return(-1);
-  }
+  if (device == NULL) device = DEFAULT_DEVICE;
 
-  pfring_version(pd, &version);
-  printf("Using PF_RING v.%d.%d.%d\n", (version & 0xFFFF0000) >> 16, 
-	 (version & 0x0000FF00) >> 8, version & 0x000000FF);
-
-  pfring_set_application_name(pd, "pfdnacluster_master");
-
-  signal(SIGINT, sigproc);
-  signal(SIGTERM, sigproc);
-  signal(SIGINT, sigproc);
-
-  signal(SIGALRM, my_sigalarm);
-  alarm(ALARM_SLEEP);
+  printf("Capturing from %s\n", device);
 
   /* Create the DNA cluster */
   if ((dna_cluster_handle = dna_cluster_create(cluster_id, num_app)) == NULL) {
@@ -384,11 +376,43 @@ int main(int argc, char* argv[]) {
   /* Setting the cluster mode */
   dna_cluster_set_mode(dna_cluster_handle, mode);
 
-  /* Add the ring we created to the cluster */
-  if (dna_cluster_register_ring(dna_cluster_handle, pd) < 0) {
-    fprintf(stderr, "Error registering rx socket\n");
+  dev = strtok_r(device, ",", &dev_pos);
+  while(dev != NULL) {
+    pd[num_dev] = pfring_open(dev, 1500 /* snaplen */, PF_RING_PROMISC);
+    if(pd[num_dev] == NULL) {
+      printf("pfring_open %s error [%s]\n", dev, strerror(errno));
+      return(-1);
+    }
+
+    if (num_dev == 0) {
+      pfring_version(pd[num_dev], &version);
+      printf("Using PF_RING v.%d.%d.%d\n", (version & 0xFFFF0000) >> 16, 
+	     (version & 0x0000FF00) >> 8, version & 0x000000FF);
+    }
+
+    snprintf(buf, sizeof(buf), "pfdnacluster_master-cluster-%d-socket-%d", cluster_id, num_dev);
+    pfring_set_application_name(pd[num_dev], buf);
+
+    /* Add the ring we created to the cluster */
+    if (dna_cluster_register_ring(dna_cluster_handle, pd[num_dev]) < 0) {
+      fprintf(stderr, "Error registering rx socket\n");
+      dna_cluster_destroy(dna_cluster_handle);
+      return -1;
+    }
+
+    num_dev++;
+
+    dev = strtok_r(NULL, ",", &dev_pos);
+
+    if (num_dev == MAX_NUM_DEV && dev != NULL) {
+      printf("Too many devices\n");
+      break;
+    }
+  }
+
+  if (num_dev == 0) {
     dna_cluster_destroy(dna_cluster_handle);
-    return -1;
+    printHelp();
   }
 
   /* Setting up important details... */
@@ -424,6 +448,13 @@ int main(int argc, char* argv[]) {
 	 cluster_id, num_app);
   printf("You can now attach to DNA cluster up to %d slaves as follows:\n", num_app);
   printf("\tpfcount -i dnacluster:%d\n", cluster_id);
+
+  signal(SIGINT, sigproc);
+  signal(SIGTERM, sigproc);
+  signal(SIGINT, sigproc);
+
+  signal(SIGALRM, my_sigalarm);
+  alarm(ALARM_SLEEP);
 
   while (!do_shutdown) sleep(1); /* do something in the main */
  
