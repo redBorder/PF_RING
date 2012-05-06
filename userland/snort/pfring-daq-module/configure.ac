@@ -18,8 +18,8 @@ AC_ENABLE_VISIBILITY()
 AC_SF_COMPILER_SETUP()
 
 # Checks for the DAQ API headers and the SFBPF headers/library.
-#AC_CHECK_DAQ_API
-#AC_CHECK_SFBPF
+AC_CHECK_DAQ_API
+AC_CHECK_SFBPF
 
 # Checks for PF_RING
 AC_ARG_WITH(libpfring_includes,
@@ -41,10 +41,9 @@ fi
 
 if test "x$with_pfring_libraries" != "xno"; then
 	LDFLAGS="${LDFLAGS} -L${with_pfring_libraries}"
-
 fi
 
-LDFLAGS="${LDFLAGS} -lpcap"
+#LDFLAGS="${LDFLAGS} -lpcap"
 
 # Library checks
 AC_CHECK_HEADER([pfring.h], [], [AC_MSG_ERROR([Could not find pfring.h!])])
