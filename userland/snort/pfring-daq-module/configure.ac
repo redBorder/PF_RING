@@ -43,7 +43,7 @@ if test "x$with_pfring_libraries" != "xno"; then
 	LDFLAGS="${LDFLAGS} -L${with_pfring_libraries}"
 fi
 
-#LDFLAGS="${LDFLAGS} -lpcap"
+LDFLAGS="${LDFLAGS} -lpcap"
 
 # Library checks
 AC_CHECK_HEADER([pfring.h], [], [AC_MSG_ERROR([Could not find pfring.h!])])
