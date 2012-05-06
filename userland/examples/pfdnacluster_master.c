@@ -415,7 +415,7 @@ int main(int argc, char* argv[]) {
 
   /* Now enable the cluster */
   if (dna_cluster_enable(dna_cluster_handle) < 0) {
-    fprintf(stderr, "Error powering ON the engine\n");
+    fprintf(stderr, "Error enabling the engine; dna NICs already in use?\n");
     dna_cluster_destroy(dna_cluster_handle);
     return -1;
   }
