@@ -73,7 +73,7 @@ Aggregate Actual stats: [Captured 14'881'406.51 pkt/sec][Processed 14'881'497.50
 
 Test 3. Deliver each incoming packet to all threads and read them (2 threads)
 
-Goal: Same as test 2 with the difference that here we test fan-out: the same packet is send to two threads in zero-copy.
+Goal: Same as test 2 with the difference that here we test fan-out: the same packet is sent to two threads in zero-copy.
 
 Command: pfdnacluster_multithread -i dna0 -c 1 -n 2 -m 2 [fan out]
 
@@ -219,11 +219,11 @@ See http://www.ntop.org/wp-content/uploads/2012/04/DNA_ip_forward_RFC2544.pdf
 
 Additional tests
 
-The above tests are just a few examples of what you can do with DNA and libzero. The best is that you link you favourite application (e.g. snort, nProbe, or wireshark) with libzero and see yourself what you can do with it.
+The above tests are just a few examples of what you can do with DNA and libzero. The best is that you link you favourite application (e.g. snort, nProbe, or tcpdump) with libzero and see yourself what you can do with it.
 
 Examples:
-nprobe  -i dnacluster:10 
-wireshark  -i dnacluster:10 
+- nprobe -i dnacluster:10 
+- tcpdump -i dnacluster:10 
 
 *******************************************************************************
 *******************************************************************************
