@@ -128,7 +128,7 @@ void print_stats() {
 	      "                [%u total pkts][%u pkts dropped (%.1f %%)]\n"
               "                [%s pkt/sec][%.2f Mbit/sec]\n", i,
 	      (unsigned int) numPkts[i],
-	      numBytes[i],
+	      (long unsigned int)numBytes[i],
 	      (unsigned int) (numPkts[i]+pfringStat.drop),
 	      (unsigned int) pfringStat.drop,
 	      numPkts[i] == 0 ? 0 : (double)(pfringStat.drop*100)/(double)(numPkts[i]+pfringStat.drop),

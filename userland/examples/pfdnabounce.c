@@ -262,7 +262,10 @@ int main(int argc, char* argv[]) {
 #ifdef HAVE_ZERO
   if ((bouncer_handle = pfring_dna_bouncer_create(pd1, pd2)) != NULL) {
     printf("Using libzero zero-copy library\n");
-    pfring_dna_bouncer_loop(bouncer_handle, dummyProcesssPacketZero, (u_char *) NULL, wait_for_packet);
+    if(pfring_dna_bouncer_loop(bouncer_handle, dummyProcesssPacketZero, (u_char *) NULL, wait_for_packet) == -1) {
+      printf("Problems while starting bouncer. See dmesg for details.\n");
+    }
+
     pfring_dna_bouncer_destroy(bouncer_handle);
     goto end;
   } else {
