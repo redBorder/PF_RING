@@ -4955,12 +4955,13 @@ static void dna_cluster_remove(struct dna_cluster *dnac, dna_cluster_client_type
   write_unlock(&dna_cluster_lock);
 }
 
-static struct dna_cluster* dna_cluster_attach(u_int32_t dna_cluster_id, u_int32_t slave_id, 
+static struct dna_cluster* dna_cluster_attach(u_int32_t dna_cluster_id, u_int32_t *slave_id, u_int32_t auto_slave_id, 
                                               wait_queue_head_t *slave_waitqueue, u_int32_t *mode) 
 {
   struct list_head *ptr, *tmp_ptr;
   struct dna_cluster *entry;
   struct dna_cluster *dnac = NULL;
+  int i, free_id_found = 0;
 
   write_lock(&dna_cluster_lock);
 
@@ -4975,20 +4976,38 @@ static struct dna_cluster* dna_cluster_attach(u_int32_t dna_cluster_id, u_int32_
 
       dnac = entry;
 
-      if (slave_id >= dnac->num_slaves) {
-        printk("[PF_RING] %s() slave id is %u, max slave id is %u\n", __FUNCTION__, slave_id, dnac->num_slaves - 1);
-        dnac = NULL;
-        goto unlock;
-      }
+      if (auto_slave_id) {
+        for (i = 0; i < dnac->num_slaves; i++) {
+          if (atomic_add_return(1, &dnac->active_slaves[i]) > 1)
+            atomic_dec(&dnac->active_slaves[i]);
+          else {
+	    *slave_id = i;
+	    free_id_found = 1;
+	    break;
+	  }
+	}
 
-      if (atomic_add_return(1, &dnac->active_slaves[slave_id]) > 1) {
-        printk("[PF_RING] %s() slave %u@%u already running\n", __FUNCTION__, slave_id, dna_cluster_id);
-        atomic_dec(&dnac->active_slaves[slave_id]);
-	dnac = NULL;
-        goto unlock;
-      }
+	if (!free_id_found) {
+          dnac = NULL;
+          goto unlock;
+	}
 
-      dnac->slave_waitqueue[slave_id] = slave_waitqueue;
+      } else {
+        if (*slave_id >= dnac->num_slaves) {
+          printk("[PF_RING] %s() slave id is %u, max slave id is %u\n", __FUNCTION__, *slave_id, dnac->num_slaves - 1);
+          dnac = NULL;
+          goto unlock;
+        }
+
+        if (atomic_add_return(1, &dnac->active_slaves[*slave_id]) > 1) {
+          printk("[PF_RING] %s() slave %u@%u already running\n", __FUNCTION__, *slave_id, dna_cluster_id);
+          atomic_dec(&dnac->active_slaves[*slave_id]);
+          dnac = NULL;
+          goto unlock;
+        }
+      }
+      
+      dnac->slave_waitqueue[*slave_id] = slave_waitqueue;
       *mode = dnac->mode;
 
       break;
@@ -7143,7 +7162,8 @@ static int ring_setsockopt(struct socket *sock,
       if(copy_from_user(&adnaci, optval, sizeof(adnaci)))
 	return -EFAULT;
 
-      pfr->dna_cluster = dna_cluster_attach(adnaci.cluster_id, adnaci.slave_id, &pfr->ring_slots_waitqueue, &adnaci.mode);
+      pfr->dna_cluster = dna_cluster_attach(adnaci.cluster_id, &adnaci.slave_id, adnaci.auto_slave_id,
+        &pfr->ring_slots_waitqueue, &adnaci.mode);
 
       if(pfr->dna_cluster == NULL) {
 	if(unlikely(enable_debug))

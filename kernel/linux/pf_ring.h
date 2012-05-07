@@ -755,6 +755,7 @@ struct create_dna_cluster_info {
 struct attach_dna_cluster_info {
   u_int32_t cluster_id;
   u_int32_t slave_id;
+  u_int32_t auto_slave_id; /* ask for the next free id (bool) */
   u_int32_t mode; /* socket_mode */
 };
 

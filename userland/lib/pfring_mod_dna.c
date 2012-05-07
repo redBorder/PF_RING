@@ -392,9 +392,10 @@ int pfring_dna_enable_ring(pfring *ring) {
 
 /* *********************************** */
 
-
 int pfring_dna_poll(pfring *ring, u_int wait_duration) {
   pfring_sync_indexes_with_kernel(ring);
   return pfring_mod_poll(ring, wait_duration);
 }
+
+/* *********************************** */
 
