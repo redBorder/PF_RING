@@ -4579,7 +4579,8 @@ unlock:
 /* ********************************** */
 
 static int userspace_ring_remove(struct pf_userspace_ring *usr,
-                                 userspace_ring_client_type type) {
+                                 userspace_ring_client_type type) 
+{
   struct list_head *ptr, *tmp_ptr;
   struct pf_userspace_ring *entry;
   int ret = 0;
@@ -4619,7 +4620,8 @@ static int userspace_ring_remove(struct pf_userspace_ring *usr,
 
 /* ************************************* */
 
-void reserve_memory(unsigned long base, unsigned long mem_len) {
+void reserve_memory(unsigned long base, unsigned long mem_len) 
+{
   struct page *page, *page_end;
 
   page_end = virt_to_page(base + mem_len - 1);
@@ -4627,7 +4629,8 @@ void reserve_memory(unsigned long base, unsigned long mem_len) {
     SetPageReserved(page);
 }
 
-void unreserve_memory(unsigned long base, unsigned long mem_len) {
+void unreserve_memory(unsigned long base, unsigned long mem_len) 
+{
   struct page *page, *page_end;
 
   page_end = virt_to_page(base + mem_len - 1);
@@ -4635,14 +4638,16 @@ void unreserve_memory(unsigned long base, unsigned long mem_len) {
     ClearPageReserved(page);
 }
 
-static void free_contiguous_memory(unsigned long mem, u_int mem_len) {
+static void free_contiguous_memory(unsigned long mem, u_int mem_len) 
+{
   if(mem != 0) {
     unreserve_memory(mem, mem_len);
     free_pages(mem, get_order(mem_len));
   }
 }
 
-static unsigned long alloc_contiguous_memory(u_int mem_len) {
+static unsigned long alloc_contiguous_memory(u_int mem_len) 
+{
   unsigned long mem = 0;
 
   mem = __get_free_pages(GFP_KERNEL, get_order(mem_len));
@@ -4745,7 +4750,8 @@ static struct dma_memory_info *allocate_extra_dma_memory(struct device *hwdev,
   return dma_memory;
 }
 
-static void free_extra_dma_memory(struct dma_memory_info *dma_memory) {
+static void free_extra_dma_memory(struct dma_memory_info *dma_memory) 
+{
   u_int i;
 
   /* Unmapping DMA addresses */
@@ -4788,6 +4794,7 @@ static struct dna_cluster* dna_cluster_create(u_int32_t dna_cluster_id, u_int32_
   struct dna_cluster *entry;
   struct dna_cluster *dnac = NULL;
   u_int32_t shared_mem_size;
+  int i;
 
   write_lock(&dna_cluster_lock);
 
@@ -4798,8 +4805,8 @@ static struct dna_cluster* dna_cluster_create(u_int32_t dna_cluster_id, u_int32_
     if(entry->id == dna_cluster_id) {
 
       if(unlikely(enable_debug))
-        printk("[PF_RING] %s(%u) cluster already exists [master: %u][slaves: %u]\n",
-               __FUNCTION__, dna_cluster_id, atomic_read(&entry->master), atomic_read(&entry->slaves));
+        printk("[PF_RING] %s(%u) cluster already exists [master: %u]\n",
+               __FUNCTION__, dna_cluster_id, atomic_read(&entry->master));
 
       /* Note: a dna cluster can be created by a master only,
        * however one/more slaves can keep it if the master dies */
@@ -4829,7 +4836,8 @@ static struct dna_cluster* dna_cluster_create(u_int32_t dna_cluster_id, u_int32_
     dnac->mode = mode;
 
     atomic_set(&dnac->master, 0);
-    atomic_set(&dnac->slaves, 0);
+    for (i = 0; i < dnac->num_slaves; i++)
+      atomic_set(&dnac->active_slaves[i], 0);
 
     if((dnac->extra_dma_memory = allocate_extra_dma_memory(hwdev, num_slots, slot_len, chunk_len)) == NULL) {
       kfree(dnac);
@@ -4895,17 +4903,19 @@ unlock:
 
   if(dnac != NULL) {
     if(unlikely(enable_debug))
-      printk("[PF_RING] %s(%u) DNA cluster found or created [master: %u][slaves: %u]\n",
-           __FUNCTION__, dna_cluster_id, atomic_read(&dnac->master), atomic_read(&dnac->slaves));
+      printk("[PF_RING] %s(%u) DNA cluster found or created [master: %u]\n",
+           __FUNCTION__, dna_cluster_id, atomic_read(&dnac->master));
   } else
     printk("[PF_RING] %s() error\n", __FUNCTION__);
 
   return dnac;
 }
 
-static void dna_cluster_remove(struct dna_cluster *dnac, dna_cluster_client_type type, u_int32_t slave_id) {
+static void dna_cluster_remove(struct dna_cluster *dnac, dna_cluster_client_type type, u_int32_t slave_id) 
+{
   struct list_head *ptr, *tmp_ptr;
   struct dna_cluster *entry;
+  int i, active_users = 0;
 
   write_lock(&dna_cluster_lock);
 
@@ -4918,10 +4928,16 @@ static void dna_cluster_remove(struct dna_cluster *dnac, dna_cluster_client_type
         atomic_dec(&dnac->master);
       else if (type == dna_cluster_slave) {
         dnac->slave_waitqueue[slave_id] = NULL;
-        atomic_dec(&dnac->slaves);
+        atomic_dec_if_positive(&dnac->active_slaves[slave_id]);
       }
+      
+      if (atomic_read(&dnac->master) > 0)
+        active_users++;
+      for (i = 0; i < dnac->num_slaves; i++)
+        if (atomic_read(&dnac->active_slaves[i]) > 0)
+	  active_users++;
 
-      if(atomic_read(&dnac->master) == 0 && atomic_read(&dnac->slaves) == 0) {
+      if(active_users == 0) {
         list_del(ptr);
         free_extra_dma_memory(entry->extra_dma_memory);
 	vfree(entry->master_persistent_memory);
@@ -4939,12 +4955,12 @@ static void dna_cluster_remove(struct dna_cluster *dnac, dna_cluster_client_type
   write_unlock(&dna_cluster_lock);
 }
 
-static struct dna_cluster* dna_cluster_attach(u_int32_t dna_cluster_id, wait_queue_head_t *slave_waitqueue, u_int32_t *slave_id, u_int32_t *mode) {
+static struct dna_cluster* dna_cluster_attach(u_int32_t dna_cluster_id, u_int32_t slave_id, 
+                                              wait_queue_head_t *slave_waitqueue, u_int32_t *mode) 
+{
   struct list_head *ptr, *tmp_ptr;
   struct dna_cluster *entry;
   struct dna_cluster *dnac = NULL;
-  u_int32_t i;
-  int slot_found = 0;
 
   write_lock(&dna_cluster_lock);
 
@@ -4954,34 +4970,26 @@ static struct dna_cluster* dna_cluster_attach(u_int32_t dna_cluster_id, wait_que
     if(entry->id == dna_cluster_id) {
 
       if(unlikely(enable_debug))
-        printk("[PF_RING] %s(%u) cluster found [master: %u][slaves: %u]\n",
-               __FUNCTION__, dna_cluster_id, atomic_read(&entry->master), atomic_read(&entry->slaves));
+        printk("[PF_RING] %s() cluster %u found\n",
+               __FUNCTION__, dna_cluster_id);
 
       dnac = entry;
 
-      if (atomic_add_return(1, &dnac->slaves) > dnac->num_slaves) {
-        printk("[PF_RING] %s(%u) too many slaves\n", __FUNCTION__, dna_cluster_id);
-        atomic_dec(&dnac->slaves);
+      if (slave_id >= dnac->num_slaves) {
+        printk("[PF_RING] %s() slave id is %u, max slave id is %u\n", __FUNCTION__, slave_id, dnac->num_slaves - 1);
+        dnac = NULL;
+        goto unlock;
+      }
+
+      if (atomic_add_return(1, &dnac->active_slaves[slave_id]) > 1) {
+        printk("[PF_RING] %s() slave %u@%u already running\n", __FUNCTION__, slave_id, dna_cluster_id);
+        atomic_dec(&dnac->active_slaves[slave_id]);
 	dnac = NULL;
         goto unlock;
       }
 
-      for(i = 0; i < dnac->num_slaves; i++) {
-        if (dnac->slave_waitqueue[i] == NULL) {
-          dnac->slave_waitqueue[i] = slave_waitqueue;
-	  *slave_id = i;
-	  *mode = dnac->mode;
-	  slot_found = 1;
-	  break;
-	}
-      }
-
-      if(!slot_found) {
-        printk("[PF_RING] %s(%u) can't get a slave id\n", __FUNCTION__, dna_cluster_id);
-        atomic_dec(&dnac->slaves);
-	dnac = NULL;
-        goto unlock;
-      }
+      dnac->slave_waitqueue[slave_id] = slave_waitqueue;
+      *mode = dnac->mode;
 
       break;
     }
@@ -4992,8 +5000,8 @@ unlock:
 
   if(unlikely(enable_debug)) {
     if(dnac != NULL)
-      printk("[PF_RING] %s(%u) attached to DNA cluster [master: %u][slaves: %u]\n",
-        __FUNCTION__, dna_cluster_id, atomic_read(&dnac->master), atomic_read(&dnac->slaves));
+      printk("[PF_RING] %s(%u) attached to DNA cluster\n",
+        __FUNCTION__, dna_cluster_id);
     else
       printk("[PF_RING] %s() error\n", __FUNCTION__);
   }
@@ -7135,11 +7143,11 @@ static int ring_setsockopt(struct socket *sock,
       if(copy_from_user(&adnaci, optval, sizeof(adnaci)))
 	return -EFAULT;
 
-      pfr->dna_cluster = dna_cluster_attach(adnaci.cluster_id, &pfr->ring_slots_waitqueue, &adnaci.slave_id, &adnaci.mode);
+      pfr->dna_cluster = dna_cluster_attach(adnaci.cluster_id, adnaci.slave_id, &pfr->ring_slots_waitqueue, &adnaci.mode);
 
       if(pfr->dna_cluster == NULL) {
 	if(unlikely(enable_debug))
-	  printk("[PF_RING] SO_ATTACH_DNA_CLUSTER [%u]\n", adnaci.cluster_id);
+	  printk("[PF_RING] SO_ATTACH_DNA_CLUSTER [%u@%u]\n", adnaci.slave_id, adnaci.cluster_id);
 
         return -EINVAL;
       }
@@ -7147,7 +7155,7 @@ static int ring_setsockopt(struct socket *sock,
       pfr->dna_cluster_slave_id = adnaci.slave_id;
       pfr->dna_cluster_type = dna_cluster_slave;
 
-      if(copy_to_user(optval, &adnaci, sizeof(adnaci))) {
+      if(copy_to_user(optval, &adnaci, sizeof(adnaci))) { /* copying back values (return adnaci.mode) */
         dna_cluster_remove(pfr->dna_cluster, pfr->dna_cluster_type, pfr->dna_cluster_slave_id);
 	pfr->dna_cluster = NULL;
         return -EFAULT;

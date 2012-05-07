@@ -748,7 +748,7 @@ struct create_dna_cluster_info {
   u_int32_t num_slaves;
   u_int32_t slave_mem_len; /* per slave shared memory size */
   u_int32_t master_persistent_mem_len;
-  u_int32_t recovered; /* fresh or recovered */
+  u_int32_t recovered; /* fresh or recovered */ 
   u_int64_t dma_addr[];
 };
 
@@ -895,7 +895,7 @@ struct dna_cluster {
   socket_mode mode;
 
   atomic_t master;
-  atomic_t slaves;
+  atomic_t active_slaves[DNA_CLUSTER_MAX_NUM_SLAVES];
 
   struct dma_memory_info *extra_dma_memory;
 

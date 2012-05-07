@@ -408,7 +408,7 @@ int main(int argc, char* argv[]) {
 	 cluster_id, num_threads);
 
   for (i = 0; i < num_threads; i++) {
-    snprintf(buf, sizeof(buf), "pfdnacluster:%d", cluster_id);
+    snprintf(buf, sizeof(buf), "pfdnacluster:%ld@%d", i, cluster_id);
     ring[i] = pfring_open(buf, 1500 /* snaplen */, PF_RING_PROMISC);
     if (ring[i] == NULL) {
       printf("pfring_open %s error [%s]\n", device, strerror(errno));
