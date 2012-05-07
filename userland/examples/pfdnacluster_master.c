@@ -300,7 +300,7 @@ inline u_int32_t master_custom_hash_function(const u_char *buffer, const u_int16
 
 /* ******************************* */
 
-static u_int32_t master_ip_distribution_function(const u_char *buffer, const u_int16_t buffer_len, const u_int32_t num_slaves, u_int32_t *hash) {
+static u_int32_t master_distribution_function(const u_char *buffer, const u_int16_t buffer_len, const u_int32_t num_slaves, u_int32_t *hash) {
   u_int32_t slave_idx;
 
   /* computing a bidirectional software hash */
@@ -419,11 +419,10 @@ int main(int argc, char* argv[]) {
   dna_cluster_set_wait_mode(dna_cluster_handle, !wait_for_packet /* active_wait */);
   dna_cluster_set_cpu_affinity(dna_cluster_handle, rx_bind_core, tx_bind_core);
 
-  /*
-    Let's use a standard distribution function that allows to balance
-    per IP in a coherent mode (not like RSS that does not do that)
-  */
-  dna_cluster_set_distribution_function(dna_cluster_handle, master_ip_distribution_function);
+  /* The default distribution function allows to balance per IP 
+    in a coherent mode (not like RSS that does not do that) */
+  if (hashing_mode > 0)
+    dna_cluster_set_distribution_function(dna_cluster_handle, master_distribution_function);
 
   switch(hashing_mode) {
   case 0:
