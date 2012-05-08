@@ -1313,74 +1313,69 @@ static int ring_proc_get_info(char *buf, char **start, off_t offset,
     /* Detailed statistics about a PF_RING */
     struct pf_ring_socket *pfr = (struct pf_ring_socket *)data;
 
-    if(data) {
+    if(pfr) {
+      int num = 0;
+      struct list_head *ptr, *tmp_ptr;
       fsi = pfr->slots_info;
 
-      if(fsi) {
-	int num = 0;
-	struct list_head *ptr, *tmp_ptr;
+      rlen = sprintf(buf,         "Bound Device(s)    : ");
 
-	rlen = sprintf(buf,         "Bound Device(s)    : ");
+      list_for_each_safe(ptr, tmp_ptr, &ring_aware_device_list) {
+        ring_device_element *dev_ptr = list_entry(ptr, ring_device_element, device_list);
 
-	list_for_each_safe(ptr, tmp_ptr, &ring_aware_device_list) {
-	  ring_device_element *dev_ptr = list_entry(ptr, ring_device_element, device_list);
+        if(test_bit(dev_ptr->dev->ifindex, pfr->netdev_mask)) {
+          rlen += sprintf(buf + rlen, "%s%s", (num > 0) ? "," : "", dev_ptr->dev->name);
+          num++;
+        }
+      }
 
-	  if(test_bit(dev_ptr->dev->ifindex, pfr->netdev_mask)) {
-	    rlen += sprintf(buf + rlen, "%s%s", (num > 0) ? "," : "", dev_ptr->dev->name);
-	    num++;
-	  }
-	}
+      rlen += sprintf(buf + rlen, "\n");
 
-	rlen += sprintf(buf + rlen, "\n");
+      rlen += sprintf(buf + rlen, "Active             : %d\n", pfr->ring_active || pfr->dna_cluster);
+      rlen += sprintf(buf + rlen, "Breed              : %s\n", (pfr->dna_device_entry != NULL) ? "DNA" : "Non-DNA");
+      rlen += sprintf(buf + rlen, "Sampling Rate      : %d\n", pfr->sample_rate);
+      rlen += sprintf(buf + rlen, "Capture Direction  : %s\n", direction2string(pfr->direction));
+      rlen += sprintf(buf + rlen, "Socket Mode        : %s\n", sockmode2string(pfr->mode));
+      rlen += sprintf(buf + rlen, "Appl. Name         : %s\n", pfr->appl_name ? pfr->appl_name : "<unknown>");
+      rlen += sprintf(buf + rlen, "IP Defragment      : %s\n", enable_ip_defrag ? "Yes" : "No");
+      rlen += sprintf(buf + rlen, "BPF Filtering      : %s\n", pfr->bpfFilter ? "Enabled" : "Disabled");
+      rlen += sprintf(buf + rlen, "# Sw Filt. Rules   : %d\n", pfr->num_sw_filtering_rules);
+      rlen += sprintf(buf + rlen, "# Hw Filt. Rules   : %d\n", pfr->num_hw_filtering_rules);
+      rlen += sprintf(buf + rlen, "Poll Pkt Watermark : %d\n", pfr->poll_num_pkts_watermark);
+      rlen += sprintf(buf + rlen, "Num Poll Calls     : %u\n", pfr->num_poll_calls);
 
+      if(pfr->dna_device_entry != NULL) {
+        /* DNA */
+        rlen += sprintf(buf + rlen, "Channel Id         : %d\n", pfr->dna_device_entry->dev.channel_id);
+        rlen += sprintf(buf + rlen, "Num RX Slots       : %d\n", pfr->dna_device_entry->dev.mem_info.rx.packet_memory_num_slots);
+	rlen += sprintf(buf + rlen, "Num TX Slots       : %d\n", pfr->dna_device_entry->dev.mem_info.tx.packet_memory_num_slots);
+	rlen += sprintf(buf + rlen, "Tot Memory         : %u bytes\n",
+			( pfr->dna_device_entry->dev.mem_info.rx.packet_memory_num_chunks *
+			  pfr->dna_device_entry->dev.mem_info.rx.packet_memory_chunk_len   )
+			+(pfr->dna_device_entry->dev.mem_info.tx.packet_memory_num_chunks *
+			  pfr->dna_device_entry->dev.mem_info.tx.packet_memory_chunk_len   )
+			+ pfr->dna_device_entry->dev.mem_info.rx.descr_packet_memory_tot_len
+			+ pfr->dna_device_entry->dev.mem_info.tx.descr_packet_memory_tot_len);
+      } else if (fsi != NULL) {
+        /* Standard PF_RING */
+	rlen += sprintf(buf + rlen, "Channel Id         : %d\n", pfr->channel_id);
+	rlen += sprintf(buf + rlen, "Cluster Id         : %d\n", pfr->cluster_id);
 	rlen += sprintf(buf + rlen, "Slot Version       : %d [%s]\n", fsi->version, RING_VERSION);
-	rlen += sprintf(buf + rlen, "Active             : %d\n", pfr->ring_active);
-	rlen += sprintf(buf + rlen, "Breed              : %s\n", (pfr->dna_device_entry != NULL) ? "DNA" : "Non-DNA");
-	rlen += sprintf(buf + rlen, "Sampling Rate      : %d\n", pfr->sample_rate);
-	rlen += sprintf(buf + rlen, "Capture Direction  : %s\n", direction2string(pfr->direction));
-	rlen += sprintf(buf + rlen, "Socket Mode        : %s\n", sockmode2string(pfr->mode));
-	rlen += sprintf(buf + rlen, "Appl. Name         : %s\n", pfr->appl_name ? pfr->appl_name : "<unknown>");
-	rlen += sprintf(buf + rlen, "IP Defragment      : %s\n", enable_ip_defrag ? "Yes" : "No");
-	rlen += sprintf(buf + rlen, "BPF Filtering      : %s\n", pfr->bpfFilter ? "Enabled" : "Disabled");
-	rlen += sprintf(buf + rlen, "# Sw Filt. Rules   : %d\n", pfr->num_sw_filtering_rules);
-	rlen += sprintf(buf + rlen, "# Hw Filt. Rules   : %d\n", pfr->num_hw_filtering_rules);
-	rlen += sprintf(buf + rlen, "Poll Pkt Watermark : %d\n", pfr->poll_num_pkts_watermark);
-	rlen += sprintf(buf + rlen, "Num Poll Calls     : %u\n", pfr->num_poll_calls);
-
-	if(pfr->dna_device_entry != NULL) {
-	  /* DNA */
-	  rlen += sprintf(buf + rlen, "Channel Id         : %d\n", pfr->dna_device_entry->dev.channel_id);
-          rlen += sprintf(buf + rlen, "Num RX Slots       : %d\n", pfr->dna_device_entry->dev.mem_info.rx.packet_memory_num_slots);
-	  rlen += sprintf(buf + rlen, "Num TX Slots       : %d\n", pfr->dna_device_entry->dev.mem_info.tx.packet_memory_num_slots);
-	  rlen += sprintf(buf + rlen, "Tot Memory         : %u bytes\n",
-			  ( pfr->dna_device_entry->dev.mem_info.rx.packet_memory_num_chunks *
-			    pfr->dna_device_entry->dev.mem_info.rx.packet_memory_chunk_len   )
-			  +(pfr->dna_device_entry->dev.mem_info.tx.packet_memory_num_chunks *
-			    pfr->dna_device_entry->dev.mem_info.tx.packet_memory_chunk_len   )
-			  + pfr->dna_device_entry->dev.mem_info.rx.descr_packet_memory_tot_len
-			  + pfr->dna_device_entry->dev.mem_info.tx.descr_packet_memory_tot_len);
-	} else {
-	  rlen += sprintf(buf + rlen, "Channel Id         : %d\n", pfr->channel_id);
-	  rlen += sprintf(buf + rlen, "Cluster Id         : %d\n", pfr->cluster_id);
-	  rlen += sprintf(buf + rlen, "Min Num Slots      : %d\n", fsi->min_num_slots);
-	  rlen += sprintf(buf + rlen, "Bucket Len         : %d\n", fsi->data_len);
-	  rlen += sprintf(buf + rlen, "Slot Len           : %d [bucket+header]\n", fsi->slot_len);
-	  rlen += sprintf(buf + rlen, "Tot Memory         : %d\n", fsi->tot_mem);
-	  rlen += sprintf(buf + rlen, "Tot Packets        : %lu\n", (unsigned long)fsi->tot_pkts);
-	  rlen += sprintf(buf + rlen, "Tot Pkt Lost       : %lu\n", (unsigned long)fsi->tot_lost);
-	  rlen += sprintf(buf + rlen, "Tot Insert         : %lu\n", (unsigned long)fsi->tot_insert);
-	  rlen += sprintf(buf + rlen, "Tot Read           : %lu\n", (unsigned long)fsi->tot_read);
-	  rlen += sprintf(buf + rlen, "Insert Offset      : %lu\n", (unsigned long)fsi->insert_off);
-	  rlen += sprintf(buf + rlen, "Remove Offset      : %lu\n", (unsigned long)fsi->remove_off);
-	  rlen += sprintf(buf + rlen, "TX: Send Ok        : %lu\n", (unsigned long)fsi->good_pkt_sent);
-	  rlen += sprintf(buf + rlen, "TX: Send Errors    : %lu\n", (unsigned long)fsi->pkt_send_error);
-	  rlen += sprintf(buf + rlen, "Reflect: Fwd Ok    : %lu\n", (unsigned long)fsi->tot_fwd_ok);
-	  rlen += sprintf(buf + rlen, "Reflect: Fwd Errors: %lu\n", (unsigned long)fsi->tot_fwd_notok);
-	  rlen += sprintf(buf + rlen, "Num Free Slots     : %u\n",  get_num_ring_free_slots(pfr));
-	}
-
-      } else {
-	rlen = sprintf(buf, "WARNING ring not active (fsi == NULL)\n");
+	rlen += sprintf(buf + rlen, "Min Num Slots      : %d\n", fsi->min_num_slots);
+	rlen += sprintf(buf + rlen, "Bucket Len         : %d\n", fsi->data_len);
+	rlen += sprintf(buf + rlen, "Slot Len           : %d [bucket+header]\n", fsi->slot_len);
+	rlen += sprintf(buf + rlen, "Tot Memory         : %d\n", fsi->tot_mem);
+	rlen += sprintf(buf + rlen, "Tot Packets        : %lu\n", (unsigned long)fsi->tot_pkts);
+	rlen += sprintf(buf + rlen, "Tot Pkt Lost       : %lu\n", (unsigned long)fsi->tot_lost);
+	rlen += sprintf(buf + rlen, "Tot Insert         : %lu\n", (unsigned long)fsi->tot_insert);
+	rlen += sprintf(buf + rlen, "Tot Read           : %lu\n", (unsigned long)fsi->tot_read);
+	rlen += sprintf(buf + rlen, "Insert Offset      : %lu\n", (unsigned long)fsi->insert_off);
+	rlen += sprintf(buf + rlen, "Remove Offset      : %lu\n", (unsigned long)fsi->remove_off);
+	rlen += sprintf(buf + rlen, "TX: Send Ok        : %lu\n", (unsigned long)fsi->good_pkt_sent);
+	rlen += sprintf(buf + rlen, "TX: Send Errors    : %lu\n", (unsigned long)fsi->pkt_send_error);
+	rlen += sprintf(buf + rlen, "Reflect: Fwd Ok    : %lu\n", (unsigned long)fsi->tot_fwd_ok);
+	rlen += sprintf(buf + rlen, "Reflect: Fwd Errors: %lu\n", (unsigned long)fsi->tot_fwd_notok);
+	rlen += sprintf(buf + rlen, "Num Free Slots     : %u\n",  get_num_ring_free_slots(pfr));
       }
     } else
       rlen = sprintf(buf, "WARNING data == NULL\n");
