@@ -356,7 +356,7 @@ extern "C" {
   int pfring_send_last_rx_packet(pfring *ring, int tx_interface_id);
 
   u_int pfring_get_num_tx_slots(pfring* ring);
-  u_int pfring_dna_get_num_rx_slots(pfring* ring);
+  u_int pfring_get_num_rx_slots(pfring* ring);
   int   pfring_copy_tx_packet_into_slot(pfring* ring, u_int16_t tx_slot_id, char* buffer, u_int len);
 
   u_char* pfring_get_pkt_buff_data(pfring *ring, pfring_pkt_buff *pkt_handle);
