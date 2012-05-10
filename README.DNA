@@ -1,5 +1,5 @@
 The PF_RING library is now able to handle DNA adapters simply using the prefix dna:
-before their name. Example "pfcount -i dna:eth1".
+before their name. Example "pfcount -i dna1".
 
 With DNA you can dramatically increase the packet capture and transmission speed as the 
 kernel layer is bypassed and applications can communicate directly with drivers.
