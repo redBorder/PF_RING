@@ -433,6 +433,27 @@ static inline void skb_reset_transport_header(struct sk_buff *skb)
 
 /* ************************************************** */
 
+#if defined(REDHAT_PATCHED_KERNEL)
+/* Always the same RH crap */
+static inline int atomic_dec_if_positive(atomic_t *v)
+{
+  int c, old, dec;
+  c = atomic_read(v);
+  for (;;) {
+    dec = c - 1;
+    if (unlikely(dec < 0))
+      break;
+    old = atomic_cmpxchg((v), c, dec);
+    if (likely(old == c))
+      break;
+    c = old;
+  }
+  return dec;
+}
+#endif
+
+/* ************************************************** */
+
 void init_lockless_list(lockless_list *l) {
   memset(l, 0, sizeof(lockless_list));
 
