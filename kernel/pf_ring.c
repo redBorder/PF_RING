@@ -435,6 +435,18 @@ static inline void skb_reset_transport_header(struct sk_buff *skb)
 
 #if defined(REDHAT_PATCHED_KERNEL)
 /* Always the same RH crap */
+
+#if ((RHEL_MAJOR == 5) && (RHEL_MINOR < 2))
+void msleep(unsigned int msecs)
+{
+  unsigned long timeout = msecs_to_jiffies(msecs) + 1;
+  
+  while (timeout)
+    timeout = schedule_timeout_uninterruptible(timeout);
+}
+#endif
+
+
 static inline int atomic_dec_if_positive(atomic_t *v)
 {
   int c, old, dec;
