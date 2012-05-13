@@ -426,7 +426,7 @@ enum ixgbe_ring_f_enum {
 #define MAX_RX_QUEUES IXGBE_MAX_FDIR_INDICES
 #define MAX_TX_QUEUES IXGBE_MAX_FDIR_INDICES
 #endif /* IXGBE_FCOE */
-#ifdef ENABLE_DNA
+#if 0 //#ifdef ENABLE_DNA
 #undef IXGBE_MAX_RSS_INDICES
 #define IXGBE_MAX_RSS_INDICES MAX_RX_QUEUES
 #endif
