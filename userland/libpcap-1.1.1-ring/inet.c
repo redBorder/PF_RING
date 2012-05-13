@@ -751,10 +751,14 @@ pcap_lookupnet(device, netp, maskp, errbuf)
 #ifdef HAVE_SNF_API
 	    || strstr(device, "snf") != NULL
 #endif
+#ifdef HAVE_PF_RING
+	    || (strncmp(device, "dna", 3) == 0)
+#endif
 	    ) {
 		*netp = *maskp = 0;
 		return 0;
 	}
+
 
 	fd = socket(AF_INET, SOCK_DGRAM, 0);
 	if (fd < 0) {

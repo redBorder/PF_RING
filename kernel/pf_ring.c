@@ -5876,9 +5876,10 @@ unsigned int ring_poll(struct file *file,
   struct pf_ring_socket *pfr = ring_sk(sock->sk);
   int rc, mask = 0;
 
-  /* if(unlikely(enable_debug))
-    printk("[PF_RING] -- poll called\n"); */
-
+  if(unlikely(enable_debug))
+    printk("[PF_RING] -- poll called [DNA: %p][%s]\n", pfr->dna_device,
+	   pfr->ring_netdev->dev->name ? pfr->ring_netdev->dev->name : "???");
+  
   pfr->num_poll_calls++;
 
   if(unlikely(pfr->ring_shutdown))
@@ -5892,6 +5893,12 @@ unsigned int ring_poll(struct file *file,
 
     pfr->ring_active = 1;
     // smp_rmb();
+
+    /* This is a work-around for the dnacluster. We need to fix this properly */
+    if(strncmp(pfr->ring_netdev->dev->name, "dna", 3) == 0) {
+      poll_wait(file, &pfr->ring_slots_waitqueue, wait);
+      return(POLLIN | POLLRDNORM);
+    }
 
     if(pfr->tx.enable_tx_with_bounce && pfr->header_len == long_pkt_header) {
       write_lock_bh(&pfr->tx.consume_tx_packets_lock);
