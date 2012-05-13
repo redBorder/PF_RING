@@ -4674,11 +4674,25 @@ static void free_contiguous_memory(unsigned long mem, u_int mem_len)
   }
 }
 
-static unsigned long alloc_contiguous_memory(u_int mem_len) 
+static unsigned long __get_free_pages_node(int nid, gfp_t gfp_mask, unsigned int order) {
+  struct page *page;
+  
+  VM_BUG_ON((gfp_mask & __GFP_HIGHMEM) != 0);
+  
+  page = alloc_pages_node(nid, gfp_mask, order);
+  
+  if (!page)
+    return 0;
+
+  return (unsigned long) page_address(page);
+}
+
+static unsigned long alloc_contiguous_memory(u_int mem_len, int node)
 {
   unsigned long mem = 0;
 
-  mem = __get_free_pages(GFP_KERNEL, get_order(mem_len));
+  //mem = __get_free_pages(GFP_KERNEL, get_order(mem_len));
+  mem = __get_free_pages_node(node, GFP_KERNEL, get_order(mem_len));
 
   if(mem)
     reserve_memory(mem, mem_len);
@@ -4696,6 +4710,7 @@ static struct dma_memory_info *allocate_extra_dma_memory(struct device *hwdev,
 {
   u_int i, num_slots_per_chunk, num_chunks;
   struct dma_memory_info *dma_memory;
+  int numa_node = dev_to_node(hwdev);
 
   /* Note: this function allocates up to num_slots slots. You can check the exact number by ... */
 
@@ -4731,7 +4746,7 @@ static struct dma_memory_info *allocate_extra_dma_memory(struct device *hwdev,
 
   /* Allocating memory chunks */
   for(i=0; i < dma_memory->num_chunks; i++) {
-    dma_memory->virtual_addr[i] = alloc_contiguous_memory(dma_memory->chunk_len);
+    dma_memory->virtual_addr[i] = alloc_contiguous_memory(dma_memory->chunk_len, numa_node);
 
     if(!dma_memory->virtual_addr[i]) {
       printk("[PF_RING] %s() Warning: no more free memory available! Allocated %d of %d chunks.\n",
