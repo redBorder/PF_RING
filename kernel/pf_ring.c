@@ -5895,7 +5895,7 @@ unsigned int ring_poll(struct file *file,
     // smp_rmb();
 
     /* This is a work-around for the dnacluster. We need to fix this properly */
-    if(strncmp(pfr->ring_netdev->dev->name, "dna", 3) == 0) {
+    if(pfr->dna_cluster != NULL && pfr->dna_cluster_type == dna_cluster_slave) {
       poll_wait(file, &pfr->ring_slots_waitqueue, wait);
       return(POLLIN | POLLRDNORM);
     }
