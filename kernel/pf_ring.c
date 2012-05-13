@@ -4691,8 +4691,11 @@ static unsigned long alloc_contiguous_memory(u_int mem_len, int node)
 {
   unsigned long mem = 0;
 
-  //mem = __get_free_pages(GFP_KERNEL, get_order(mem_len));
+  /* trying to allocate memory on the selected numa node */
   mem = __get_free_pages_node(node, GFP_KERNEL, get_order(mem_len));
+
+  if (!mem)
+    __get_free_pages(GFP_KERNEL, get_order(mem_len));
 
   if(mem)
     reserve_memory(mem, mem_len);
@@ -4743,6 +4746,12 @@ static struct dma_memory_info *allocate_extra_dma_memory(struct device *hwdev,
   if(unlikely(enable_debug))
     printk("[PF_RING] %s() Allocating %d chunks of %d bytes [slots per chunk=%d]\n",
            __FUNCTION__, dma_memory->num_chunks, dma_memory->chunk_len, num_slots_per_chunk);
+
+  if (numa_node == -1)
+    numa_node = numa_node_id(); /* using current node if not set */
+
+  if(unlikely(enable_debug))
+    printk("[PF_RING] %s() allocating extra DMA memory on node %d\n", __FUNCTION__, numa_node);
 
   /* Allocating memory chunks */
   for(i=0; i < dma_memory->num_chunks; i++) {
