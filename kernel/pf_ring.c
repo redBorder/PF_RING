@@ -445,8 +445,11 @@ void msleep(unsigned int msecs)
     timeout = schedule_timeout_uninterruptible(timeout);
 }
 #endif
+#endif
 
+/* ************************************************** */
 
+#if(LINUX_VERSION_CODE < KERNEL_VERSION(2,6,35))
 static inline int atomic_dec_if_positive(atomic_t *v)
 {
   int c, old, dec;
