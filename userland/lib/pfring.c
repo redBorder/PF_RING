@@ -152,6 +152,9 @@ pfring* pfring_open(char *device_name, u_int32_t caplen, u_int32_t flags) {
 
   ring->rdi.device_id = ring->rdi.port_id = -1; /* Default */
 
+  ring->mtu_len = pfring_get_mtu_size(ring);
+  if(ring->mtu_len == 0) ring->mtu_len =  9000 /* Jumbo MTU */;
+
   ring->initialized = 1;
 
 #ifdef RING_DEBUG
@@ -590,8 +593,8 @@ int pfring_bind(pfring *ring, char *device_name) {
 int pfring_send(pfring *ring, char *pkt, u_int pkt_len, u_int8_t flush_packet) {
   int rc = -1;
 
-  if(unlikely(pkt_len > 9000 /* Jumbo MTU */))
-    return rc;
+  if(unlikely(pkt_len > ring->mtu_len))
+    return(PF_RING_ERROR_INVALID_ARGUMENT); /* Packet too long */
 
   if(likely(ring
 	    && ring->enabled
@@ -616,8 +619,8 @@ int pfring_send(pfring *ring, char *pkt, u_int pkt_len, u_int8_t flush_packet) {
 int pfring_send_ifindex(pfring *ring, char *pkt, u_int pkt_len, u_int8_t flush_packet, int if_index) {
   int rc = -1;
 
-  if(unlikely(pkt_len > 9000 /* Jumbo MTU */))
-    return rc;
+  if(unlikely(pkt_len > ring->mtu_len))
+    return(PF_RING_ERROR_INVALID_ARGUMENT); /* Packet too long */
 
   if(likely(ring
 	    && ring->enabled

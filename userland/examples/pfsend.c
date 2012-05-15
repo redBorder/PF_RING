@@ -628,7 +628,10 @@ int main(int argc, char* argv[]) {
     if(verbose)
       printf("[%d] pfring_send(%d) returned %d\n", i, tosend->len, rc);
 
-    if(rc < 0) {
+    if(rc == PF_RING_ERROR_INVALID_ARGUMENT) {
+      printf("Attempting to send invalid packet [len: %u][MTU: %u]\n",
+	     tosend->len, pd->mtu_len);
+    } else if(rc < 0) {
       /* Not enough space in buffer */
       if(!active_poll) {
 #if 1

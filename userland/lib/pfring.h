@@ -249,7 +249,7 @@ extern "C" {
     /* All devices */
     char *buffer, *slots, *device_name;
     u_int32_t caplen;
-    u_int16_t slot_header_len;
+    u_int16_t slot_header_len, mtu_len /* 0 = unknown */;
     u_int8_t kernel_packet_consumer, is_shutting_down, socket_default_accept_policy;
     int fd;
     FlowSlotInfo *slots_info;
@@ -385,6 +385,7 @@ extern "C" {
   int pfring_set_if_promisc(const char *device, int set_promisc);
   char* pfring_format_numbers(double val, char *buf, u_int buf_len, u_int8_t add_decimals);
   int pfring_enable_hw_timestamp(pfring* ring, char *device_name, u_int8_t enable_rx, u_int8_t enable_tx);
+  int pfring_get_mtu_size(pfring* ring);
 
   /* ********************************* */
 
