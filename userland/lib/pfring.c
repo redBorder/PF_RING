@@ -19,6 +19,7 @@
 #include <pthread.h>
 
 #include "pfring.h"
+#include <net/ethernet.h>
 
 // #define RING_DEBUG
 
@@ -154,6 +155,7 @@ pfring* pfring_open(char *device_name, u_int32_t caplen, u_int32_t flags) {
 
   ring->mtu_len = pfring_get_mtu_size(ring);
   if(ring->mtu_len == 0) ring->mtu_len =  9000 /* Jumbo MTU */;
+  ring->mtu_len += sizeof(struct ether_header);
 
   ring->initialized = 1;
 
