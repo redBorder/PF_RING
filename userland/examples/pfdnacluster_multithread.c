@@ -48,10 +48,11 @@
 #define MAX_NUM_DEV            32
 #define DEFAULT_DEVICE     "dna0"
 
+u_int numCPU;
 int num_threads = 1, num_dev = 0;
 pfring_stat pfringStats;
 static struct timeval startTime;
-u_int8_t wait_for_packet = 1,  do_shutdown = 0;
+u_int8_t wait_for_packet = 1, do_shutdown = 0;
 int rx_bind_core = 1, tx_bind_core = 2; /* core 0 free if possible */
 int demo_mode = 0, hashing_mode = 0;
 pfring_dna_cluster *dna_cluster_handle;
@@ -60,6 +61,7 @@ pfring *ring[MAX_NUM_THREADS] = { NULL };
 u_int64_t numPkts[MAX_NUM_THREADS] = { 0 };
 u_int64_t numBytes[MAX_NUM_THREADS] = { 0 };
 pthread_t pd_thread[MAX_NUM_THREADS];
+int thread_core_affinity[MAX_NUM_THREADS];
 
 /* *************************************** */
 /*
@@ -334,8 +336,6 @@ u_int32_t fanout_distribution_function(const u_char *buffer, const u_int16_t buf
 void* packet_consumer_thread(void *_id) {
   int s, rc;
   long thread_id = (long)_id; 
-  u_int numCPU = sysconf( _SC_NPROCESSORS_ONLN );
-  u_long core_id = ((demo_mode != 1 ? rx_bind_core : tx_bind_core) + 1 + thread_id) % numCPU;
   pfring_pkt_buff *pkt_handle = NULL;
   struct pfring_pkthdr hdr;
   u_char *buffer = NULL;
@@ -343,6 +343,12 @@ void* packet_consumer_thread(void *_id) {
   if (numCPU > 1) {
     /* Bind this thread to a specific core */
     cpu_set_t cpuset;
+    u_long core_id;
+    
+    if (thread_core_affinity[thread_id] != -1)
+       core_id = thread_core_affinity[thread_id] % numCPU;
+    else
+      core_id = ((demo_mode != 1 ? rx_bind_core : tx_bind_core) + 1 + thread_id) % numCPU; 
 
     CPU_ZERO(&cpuset);
     CPU_SET(core_id, &cpuset);
@@ -395,16 +401,19 @@ void* packet_consumer_thread(void *_id) {
 int main(int argc, char* argv[]) {
   char c;
   char buf[32];
+  char *bind_mask = NULL;
   char *device = NULL, *dev, *dev_pos = NULL;
   u_int32_t version;
   int cluster_id = -1;
   socket_mode mode = recv_only_mode;
   int rc;
   long i;
-
+  
+  numCPU = sysconf( _SC_NPROCESSORS_ONLN );
+  memset(thread_core_affinity, -1, sizeof(thread_core_affinity));
   startTime.tv_sec = 0;
 
-  while ((c = getopt(argc,argv,"ahi:c:d:n:m:r:t:")) != -1) {
+  while ((c = getopt(argc,argv,"ahi:c:d:n:m:r:t:g:")) != -1) {
     switch (c) {
     case 'a':
       wait_for_packet = 0;
@@ -414,6 +423,9 @@ int main(int argc, char* argv[]) {
       break;
     case 't':
       tx_bind_core = atoi(optarg);
+      break;
+    case 'g':
+      bind_mask = strdup(optarg);
       break;
     case 'h':
       printHelp();      
@@ -445,6 +457,17 @@ int main(int argc, char* argv[]) {
     num_threads = MAX_NUM_THREADS;
 
   if (device == NULL) device = DEFAULT_DEVICE;
+
+  if(bind_mask != NULL) {
+    char *id = strtok(bind_mask, ":");
+    int idx = 0;
+
+    while(id != NULL) {
+      thread_core_affinity[idx++] = atoi(id) % numCPU;
+      if(idx >= num_threads) break;
+      id = strtok(NULL, ":");
+    }
+  }
 
   printf("Capturing from %s\n", device);
 

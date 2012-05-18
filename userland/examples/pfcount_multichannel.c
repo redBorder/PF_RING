@@ -439,17 +439,17 @@ int32_t gmt2local(time_t t) {
 
 void* packet_consumer_thread(void* _id) {
   int s;
-  long thread_id = (long)_id; 
+  long thread_id = (long)_id;
 
   if(numCPU > 1) {
     /* Bind this thread to a specific core */
     cpu_set_t cpuset;
-    u_long core_id = thread_core_affinity[thread_id];
+    u_long core_id;
 
-    if(core_id == -1) {
-      core_id = ((thread_id + 1) * 2) % numCPU;
-      core_id = thread_id % numCPU;
-    }
+    if (thread_core_affinity[thread_id] != -1)
+      core_id = thread_core_affinity[thread_id] % numCPU;
+    else
+      core_id = (thread_id + 1) % numCPU;
 
     CPU_ZERO(&cpuset);
     CPU_SET(core_id, &cpuset);
@@ -491,7 +491,7 @@ int main(int argc, char* argv[]) {
   numCPU = sysconf( _SC_NPROCESSORS_ONLN );
   memset(thread_core_affinity, -1, sizeof(thread_core_affinity));
 
-  while((c = getopt(argc,argv,"hi:l:vae:w:b:rp:t:")) != -1) {
+  while((c = getopt(argc,argv,"hi:l:vae:w:b:rp:g:")) != -1) {
     switch(c) {
     case 'h':
       printHelp();
@@ -530,7 +530,7 @@ int main(int argc, char* argv[]) {
     case 'p':
       poll_duration = atoi(optarg);
       break;
-    case 't':
+    case 'g':
       bind_mask = strdup(optarg);
       break;
     }
@@ -553,7 +553,7 @@ int main(int argc, char* argv[]) {
     printf("WARNING: Too many channels (%d), using %d channels\n", num_channels, MAX_NUM_THREADS);
     num_channels = MAX_NUM_THREADS;
   } else if (num_channels > numCPU) {
-    printf("WARNING: More channels (%d) than available cores (%d), using %d channels\n", num_channels, numCPU, MAX_NUM_THREADS);
+    printf("WARNING: More channels (%d) than available cores (%d), using %d channels\n", num_channels, numCPU, numCPU);
     num_channels = numCPU;
   } else 
     printf("Found %d channels\n", num_channels);
