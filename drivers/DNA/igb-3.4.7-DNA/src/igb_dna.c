@@ -1,32 +1,29 @@
-/*******************************************************************************
-
-   Copyright(c) 2008 - 2011 - Luca Deri <deri@ntop.org>
-   Copyright(c) 2011 - Silicom Ltd
-
-   This program is free software; you can redistribute it and/or modify it
-   under the terms and conditions of the GNU General Public License,
-   version 2, as published by the Free Software Foundation.
-
-   This program is distributed in the hope it will be useful, but WITHOUT
-   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
-   FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
-   more details.
-
-   You should have received a copy of the GNU General Public License along with
-   this program; if not, write to the Free Software Foundation, Inc.,
-   51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
-
-   The full GNU General Public License is included in this distribution in
-  the file called "COPYING".
-
-*******************************************************************************/
+/*
+ *
+ * (C) 2008-11 - Luca Deri <deri@ntop.org>
+ *
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software Foundation,
+ * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ */
 
 #define MAX_NUM_ADAPTERS       8
 
 char *adapters_to_enable[MAX_NUM_ADAPTERS] = { 0 };
 module_param_array(adapters_to_enable, charp, NULL, 0444);
 MODULE_PARM_DESC(adapters_to_enable,
-                 "Comma separated list of adapters (MAC address) where DNA "
+		 "Comma separated list of adapters (MAC address) where DNA "
 		 "will be enabled");
 
 static unsigned int enable_debug = 0;
@@ -37,28 +34,21 @@ static unsigned int mtu = 1500;
 module_param(mtu, uint, 0644);
 MODULE_PARM_DESC(mtu, "Change the default Maximum Transmission Unit");
 
-static unsigned int num_rx_slots = DNA_IXGBE_DEFAULT_RXD;
+static unsigned int num_rx_slots = DNA_IGB_DEFAULT_RXD;
 module_param(num_rx_slots, uint, 0644);
-MODULE_PARM_DESC(num_rx_slots, "Specify the number of RX slots. Default: 8192");
+MODULE_PARM_DESC(num_rx_slots, "Specify the number of RX slots. Default: 2048");
 
-static unsigned int num_tx_slots = DNA_IXGBE_DEFAULT_TXD;
+static unsigned int num_tx_slots = DNA_IGB_DEFAULT_TXD;
 module_param(num_tx_slots, uint, 0644);
-MODULE_PARM_DESC(num_tx_slots, "Specify the number of TX slots. Default: 8192");
-
-static unsigned int bind_to_node[MAX_NUM_ADAPTERS] = { 0 };
-module_param_array(bind_to_node, uint, NULL, 0444);
-MODULE_PARM_DESC(bind_to_node,
-                 "Comma separated list of NUMA node IDs where the DMA memory will be allocated");
+MODULE_PARM_DESC(num_tx_slots, "Specify the number of TX slots. Default: 2048");
 
 /* Forward */
-static inline void ixgbe_irq_disable(struct ixgbe_adapter *adapter);
-void ixgbe_irq_enable_queues(struct ixgbe_adapter *adapter, u64 qmask);
-void ixgbe_irq_disable_queues(struct ixgbe_adapter *adapter, u64 qmask);
-static inline void ixgbe_release_rx_desc(struct ixgbe_ring *rx_ring, u32 val);
+static void igb_irq_enable(struct igb_adapter *adapter);
+static void igb_irq_disable(struct igb_adapter *adapter);
 
 /* ****************************** */
 
-void dna_check_enable_adapter(struct ixgbe_adapter *adapter) {
+void dna_check_enable_adapter(struct igb_adapter *adapter) {
   adapter->dna.dna_enabled = 0; /* Default */
   
   if(adapters_to_enable[0] == NULL) {
@@ -84,10 +74,25 @@ void dna_check_enable_adapter(struct ixgbe_adapter *adapter) {
 
 /* ****************************** */
 
+void igb_irq_enable_queues(struct igb_adapter *adapter, u32 queue_id) {
+  /* TODO - handle queue_id */
+  // void igb_ring_irq_enable(struct igb_q_vector *q_vector)
+  igb_irq_enable(adapter);
+}
+
+/* ****************************** */
+
+void igb_irq_disable_queues(struct igb_adapter *adapter, u32 queue_id) {
+  /* TODO */
+  igb_irq_disable(adapter);
+}
+
+/* ****************************** */
+
 void reserve_memory(unsigned long base, unsigned long len) {
   struct page *page, *page_end;
 
-  if(unlikely(enable_debug)) printk("[DNA] reserve_memory()\n");
+  // if(unlikely(enable_debug)) printk("[DNA] reserve_memory()\n");
 
   page_end = virt_to_page(base + len - 1);
   for(page = virt_to_page(base); page <= page_end; page++)
@@ -99,7 +104,7 @@ void reserve_memory(unsigned long base, unsigned long len) {
 void unreserve_memory(unsigned long base, unsigned long len) {
   struct page *page, *page_end;
 
-  if(unlikely(enable_debug)) printk("[DNA] unreserve_memory()\n");
+  // if(unlikely(enable_debug)) printk("[DNA] unreserve_memory()\n");
 
   page_end = virt_to_page(base + len - 1);
   for(page = virt_to_page(base); page <= page_end; page++)
@@ -108,47 +113,25 @@ void unreserve_memory(unsigned long base, unsigned long len) {
 
 /* ********************************** */
 
-static unsigned long __get_free_pages_node(int nid, gfp_t gfp_mask, unsigned int order) {
-  struct page *page;
-  
-  VM_BUG_ON((gfp_mask & __GFP_HIGHMEM) != 0);
-  
-  page = alloc_pages_node(nid, gfp_mask, order);
-  
-  if (!page)
-    return 0;
+static unsigned long alloc_contiguous_memory(u_int *tot_mem_len, u_int *mem_order) {
+  unsigned long mem;
 
-  return (unsigned long) page_address(page);
-}
-
-/* ********************************** */
-
-static unsigned long alloc_contiguous_memory(u_int *tot_mem_len, u_int *mem_order, int node) {
-  unsigned long mem = 0;
-
-  if(unlikely(enable_debug)) printk("[DNA] %s(%d)\n", __FUNCTION__, *tot_mem_len);
+  if(unlikely(enable_debug)) printk("[DNA] alloc_contiguous_memory(%d)\n", *tot_mem_len);
 
   *mem_order = get_order(*tot_mem_len);
   *tot_mem_len = PAGE_SIZE << *mem_order;
 
-  if (node >= 0) {
-    mem = __get_free_pages_node(node, GFP_ATOMIC, *mem_order);
-    if (!mem)
-      printk("[DNA] Warning: memory allocation on node %d failed, using another node", node);
-  }
-
-  if (!mem)
-    mem = __get_free_pages(GFP_ATOMIC, *mem_order);
+  mem = __get_free_pages(GFP_ATOMIC, *mem_order);
 
   if(mem) {
     if(unlikely(enable_debug))
-      printk("[DNA] %s() success [tot_mem_len=%d,mem=%lu,mem_order=%d]\n",
-	     __FUNCTION__, *tot_mem_len, mem, *mem_order);
+      printk("[DNA] alloc_contiguous_memory: success (%d,0x%08lx,%d)\n",
+	     *tot_mem_len, mem, *mem_order);
     reserve_memory(mem, *tot_mem_len);
   } else {
     if(unlikely(enable_debug))
-      printk("[DNA] %s() failure (len=%d,order=%d)\n",
-	     __FUNCTION__, *tot_mem_len, *mem_order);
+      printk("[DNA] alloc_contiguous_memory: failure (len=%d,order=%d)\n",
+	     *tot_mem_len, *mem_order);
   }
 
   return(mem);
@@ -159,7 +142,7 @@ static unsigned long alloc_contiguous_memory(u_int *tot_mem_len, u_int *mem_orde
 static void free_contiguous_memory(unsigned long mem,
 				   u_int tot_mem_len, u_int mem_order) {
   if(unlikely(enable_debug))
-    printk("[DNA] free_contiguous_memory(%lu,%d,%d)\n",
+    printk("[DNA] free_contiguous_memory(0x%08lx,%u,%d)\n",
 	   mem, tot_mem_len, mem_order);
 
   if(mem != 0) {
@@ -170,8 +153,10 @@ static void free_contiguous_memory(unsigned long mem,
 
 /* ********************************** */
 
-static void print_adv_rx_descr(union ixgbe_adv_rx_desc	*descr) {
+static void print_adv_rx_descr(union e1000_adv_rx_desc	*descr) {
   if(likely(!enable_debug)) return;
+
+  return; // FIX
 
   printk("[hdr_addr 0x%llx][pkt_addr 0x%llx]\n",
 	 le64_to_cpu(descr->read.hdr_addr),
@@ -191,29 +176,116 @@ static void print_adv_rx_descr(union ixgbe_adv_rx_desc	*descr) {
 
 /* ********************************** */
 
-dna_device_model dna_model(struct ixgbe_hw *hw){
+dna_device_model dna_model(struct e1000_hw *hw){
   switch (hw->mac.type) {
-    case ixgbe_mac_82598EB:
-      return intel_ixgbe_82598;
-    case ixgbe_mac_82599EB:
-      return intel_ixgbe_82599;
+    case e1000_82580:
+    case e1000_i350:
+      return intel_igb_82580;
     default:
-      return intel_ixgbe;
+      return intel_igb;
   }
 }
 
 /* ********************************** */
 
+#if 0 /* Currently ring cleanup happens in userspace */
+
+void dna_cleanup_rx_ring(struct igb_ring *rx_ring) {
+  struct igb_adapter	  *adapter = netdev_priv(rx_ring->netdev);
+  struct e1000_hw	  *hw = &adapter->hw;
+  union e1000_adv_rx_desc *rx_desc, *shadow_rx_desc;
+  u32 head = E1000_READ_REG(hw, E1000_RDH(rx_ring->reg_idx));
+  u32 tail;
+  
+  /*
+  tail = E1000_READ_REG(hw, E1000_RDT(rx_ring->reg_idx))
+  u32 count = rx_ring->count;
+  
+  if(unlikely(enable_debug))
+    printk("[DNA] dna_cleanup_rx_ring(%d): [head=%u][tail=%u]\n", rx_ring->queue_index, head, tail);
+
+  // We now point to the next slot where packets will be received
+  if(++tail == rx_ring->count) tail = 0;
+
+  while(count > 0) {
+    if(tail == head) break; // Do not go beyond head
+
+    rx_desc = IGB_RX_DESC(rx_ring, tail);
+    shadow_rx_desc = IGB_RX_DESC(rx_ring, tail + rx_ring->count);
+    
+    if(rx_desc->wb.upper.status_error != 0) {
+      print_adv_rx_descr(rx_desc);
+      break;
+    }
+
+    // Writeback
+    rx_desc->wb.upper.status_error = 0;
+    rx_desc->read.hdr_addr = shadow_rx_desc->read.hdr_addr, rx_desc->read.pkt_addr = shadow_rx_desc->read.pkt_addr;
+    E1000_WRITE_REG(hw, E1000_RDT(rx_ring->reg_idx), tail);
+
+    if(unlikely(enable_debug))
+      printk("[DNA] dna_cleanup_rx_ring(%d): idx=%d\n", rx_ring->queue_index, tail);
+
+    if(++tail == rx_ring->count) tail = 0;
+    count--;
+  }
+  */
+
+
+  /* resetting all */
+
+  for (i=0; i<rx_ring->count; i++) {
+    rx_desc = IGB_RX_DESC(rx_ring, i);
+    shadow_rx_desc = IGB_RX_DESC(rx_ring, i + rx_ring->count);
+
+    rx_desc->wb.upper.status_error = 0;
+    rx_desc->read.hdr_addr = shadow_rx_desc->read.hdr_addr;
+    rx_desc->read.pkt_addr = shadow_rx_desc->read.pkt_addr;
+  }
+
+  if (head == 0) tail = rx_ring->count - 1;
+  else tail = head - 1;
+
+  E1000_WRITE_REG(hw, E1000_RDT(rx_ring->reg_idx), tail);
+}
+
+/* ********************************** */
+
+void dna_cleanup_tx_ring(struct ixgbe_ring *tx_ring) {
+  struct igb_adapter	  *adapter = netdev_priv(tx_ring->netdev);
+  struct e1000_hw	  *hw = &adapter->hw;
+  union e1000_adv_tx_desc *tx_desc, *shadow_tx_desc;
+  u32 tail;
+  u32 head = E1000_READ_REG(hw, E1000_TDH(tx_ring->reg_idx));
+  u32 i;
+
+  /* resetting all */
+  for (i=0; i<tx_ring->count; i++) {
+    tx_desc = IGB_TX_DESC(tx_ring, i);
+    shadow_tx_desc = IGB_TX_DESC(tx_ring, i + tx_ring->count);
+
+    tx_desc->read.olinfo_status = 0;
+    tx_desc->read.buffer_addr = shadow_tx_desc->read.buffer_addr;
+  }
+
+  tail = head; //(head + 1) % tx_ring->count;
+
+  E1000_WRITE_REG(hw, E1000_TDT(tx_ring->reg_idx), tail);
+}
+
+#endif
+
+/* ********************************** */
+
 void notify_function_ptr(void *data, u_int8_t device_in_use) {
-  struct ixgbe_ring	*rx_ring = (struct ixgbe_ring*)data;
-  struct ixgbe_adapter	*adapter = netdev_priv(rx_ring->netdev);
-  //struct ixgbe_ring     *tx_ring = adapter->tx_ring[rx_ring->queue_index];
+  struct igb_ring	*rx_ring = (struct igb_ring*)data;
+  struct igb_adapter	*adapter = netdev_priv(rx_ring->netdev);
 
   if(unlikely(enable_debug))
     printk("%s(): device_in_use = %d\n",__FUNCTION__, device_in_use);
 
   /* I need interrupts for purging buckets when queues are not in use */
-  ixgbe_irq_enable_queues(adapter, ((u64)1 << rx_ring->q_vector->v_idx));
+  igb_irq_enable_queues(adapter, rx_ring->queue_index);
 
   if(likely(device_in_use)) {
     /* We start using this device */
@@ -224,11 +296,10 @@ void notify_function_ptr(void *data, u_int8_t device_in_use) {
       printk("[DNA] %s(): %s@%d is IN use\n", __FUNCTION__,
 	     rx_ring->netdev->name, rx_ring->queue_index);
 
-    if(adapter->hw.mac.type != ixgbe_mac_82598EB)
-      ixgbe_irq_disable_queues(adapter, ((u64)1 << rx_ring->q_vector->v_idx));
+    igb_irq_disable_queues(adapter, ((u64)1 << rx_ring->queue_index));
   } else {
     /* We're done using this device */
-
+    
     /* resetting the ring */
     /* we *must* reset the right direction only (doing this in userspace)
     dna_cleanup_rx_ring(rx_ring);
@@ -239,9 +310,8 @@ void notify_function_ptr(void *data, u_int8_t device_in_use) {
 
     rx_ring->dna.queue_in_use = 0;
 
-    if(adapter->hw.mac.type != ixgbe_mac_82598EB)
-      ixgbe_irq_enable_queues(adapter, ((u64)1 << rx_ring->q_vector->v_idx));
-
+    igb_irq_enable_queues(adapter, rx_ring->queue_index);
+    
     if(unlikely(enable_debug))
       printk("[DNA] %s(): %s@%d is NOT IN use\n", __FUNCTION__,
 	     rx_ring->netdev->name, rx_ring->queue_index);
@@ -252,10 +322,9 @@ void notify_function_ptr(void *data, u_int8_t device_in_use) {
 
 int wait_packet_function_ptr(void *data, int mode)
 {
-  struct ixgbe_ring		*rx_ring = (struct ixgbe_ring*)data;
-  struct ixgbe_adapter	*adapter = netdev_priv(rx_ring->netdev);
-  struct ixgbe_hw		*hw = &adapter->hw;
-  struct ixgbe_q_vector	*q_vector = rx_ring->q_vector;
+  struct igb_ring        *rx_ring = (struct igb_ring*)data;
+  struct igb_adapter	 *adapter = netdev_priv(rx_ring->netdev);
+  struct e1000_hw	      *hw = &adapter->hw;
 
   if(unlikely(enable_debug))
     printk("%s(): enter [mode=%d/%s][queueId=%d][next_to_clean=%u][next_to_use=%d]\n",
@@ -265,15 +334,16 @@ int wait_packet_function_ptr(void *data, int mode)
   if(!rx_ring->dna.memory_allocated) return(0);
 
   if(mode == 1 /* Enable interrupt */) {
-    union ixgbe_adv_rx_desc *rx_desc;
+    union e1000_adv_rx_desc *rx_desc;
     u32	staterr;
     u8	reg_idx = rx_ring->reg_idx;
-    u16	i = IXGBE_READ_REG(hw, IXGBE_RDT(reg_idx));
+    u16	i = E1000_READ_REG(hw, E1000_RDT(reg_idx));
 
     /* Very important: update the value from the register set from userland */
     if(++i == rx_ring->count)
       i = 0;
-    /* here i is the last I've read (zero-copy implementation) */
+
+    /* Here i is the last I've read (zero-copy implementation) */
 
     if(++i == rx_ring->count)
       i = 0;
@@ -281,7 +351,7 @@ int wait_packet_function_ptr(void *data, int mode)
 
     rx_ring->next_to_clean = i;
 
-    rx_desc = IXGBE_RX_DESC(rx_ring, i);
+    rx_desc = IGB_RX_DESC(rx_ring, i);
     prefetch(rx_desc);
     staterr = le32_to_cpu(rx_desc->wb.upper.status_error);
 
@@ -292,42 +362,42 @@ int wait_packet_function_ptr(void *data, int mode)
       print_adv_rx_descr(rx_desc);
     }
 
-    if(!(staterr & IXGBE_RXD_STAT_DD)) {
+    if(!(staterr & E1000_RXD_STAT_DD)) {
       rx_ring->dna.rx_tx.rx.interrupt_received = 0;
 
       if(!rx_ring->dna.rx_tx.rx.interrupt_enabled) {
-	if(adapter->hw.mac.type != ixgbe_mac_82598EB)
-	  ixgbe_irq_enable_queues(adapter, ((u64)1 << q_vector->v_idx));
+	igb_irq_enable_queues(adapter, rx_ring->queue_index);
 
-	if(unlikely(enable_debug)) printk("%s(): Enabled interrupts, queue = %d\n", __FUNCTION__, q_vector->v_idx);
+	if(unlikely(enable_debug))
+	  printk("%s(): Enabled interrupts, queue = %d\n", __FUNCTION__, rx_ring->queue_index);
+
 	rx_ring->dna.rx_tx.rx.interrupt_enabled = 1;
 
 	if(unlikely(enable_debug))
 	  printk("%s(): Packet not arrived yet: enabling "
 		 "interrupts, queue=%d, i=%d\n",
-		 __FUNCTION__,q_vector->v_idx, i);
+		 __FUNCTION__,rx_ring->queue_index, i);
       }
 
       /* Refresh the value */
       staterr = le32_to_cpu(rx_desc->wb.upper.status_error);
     } else {
-      rx_ring->dna.rx_tx.rx.interrupt_received = 1;
+      rx_ring->dna.rx_tx.rx.interrupt_received = 1; 
     }
 
     if(unlikely(enable_debug))
-      printk("%s(): Packet received: %d\n", __FUNCTION__, staterr & IXGBE_RXD_STAT_DD);
+      printk("%s(): Packet received: %d\n", __FUNCTION__, staterr & E1000_RXD_STAT_DD);
 
-    return(staterr & IXGBE_RXD_STAT_DD);
+    return(staterr & E1000_RXD_STAT_DD);
   } else {
     /* Disable interrupts */
 
-    if(adapter->hw.mac.type != ixgbe_mac_82598EB)
-      ixgbe_irq_disable_queues(adapter, ((u64)1 << q_vector->v_idx));
+    igb_irq_disable_queues(adapter, ((u64)1 << rx_ring->queue_index));
 
     rx_ring->dna.rx_tx.rx.interrupt_enabled = 0;
 
     if(unlikely(enable_debug))
-      printk("%s(): Disabled interrupts, queue = %d\n", __FUNCTION__, q_vector->v_idx);
+      printk("%s(): Disabled interrupts, queue = %d\n", __FUNCTION__, rx_ring->queue_index);
 
     return(0);
   }
@@ -335,15 +405,14 @@ int wait_packet_function_ptr(void *data, int mode)
 
 /* ********************************** */
 
-#define IXGBE_PCI_DEVICE_CACHE_LINE_SIZE	0x0C
+#define IGB_PCI_DEVICE_CACHE_LINE_SIZE	0x0C
 #define PCI_DEVICE_CACHE_LINE_SIZE_BYTES	8
 
-void dna_ixgbe_alloc_tx_buffers(struct ixgbe_ring *tx_ring, struct pfring_hooks *hook) {
-  union ixgbe_adv_tx_desc *tx_desc, *shadow_tx_desc;
-  struct ixgbe_tx_buffer *bi;
+void dna_igb_alloc_tx_buffers(struct igb_ring *tx_ring, struct pfring_hooks *hook) {
+  union e1000_adv_tx_desc *tx_desc, *shadow_tx_desc;
+  struct igb_tx_buffer *bi;
   u16 i;
   int num_slots_per_page = tx_ring->dna.tot_packet_memory / tx_ring->dna.packet_slot_len;
-  // struct ixgbe_adapter 	*adapter = netdev_priv(tx_ring->netdev);
 
   /* Check if the memory has been already allocated */
   if(tx_ring->dna.memory_allocated) return;
@@ -361,9 +430,8 @@ void dna_ixgbe_alloc_tx_buffers(struct ixgbe_ring *tx_ring, struct pfring_hooks 
   for(i=0; i<tx_ring->dna.num_memory_pages; i++) {
     tx_ring->dna.rx_tx.tx.packet_memory[i] =
       alloc_contiguous_memory(&tx_ring->dna.tot_packet_memory,
-			      &tx_ring->dna.mem_order,
-			      tx_ring->numa_node);
-
+			      &tx_ring->dna.mem_order);
+    
     if (tx_ring->dna.rx_tx.tx.packet_memory[i] == 0) {
       printk("\n\n%s() ERROR: not enough memory for TX DMA ring!!\n\n\n",
 	     __FUNCTION__);
@@ -375,7 +443,7 @@ void dna_ixgbe_alloc_tx_buffers(struct ixgbe_ring *tx_ring, struct pfring_hooks 
 	     "0x%08lx [slot_len=%d]\n",__FUNCTION__,
 	     tx_ring->dna.tot_packet_memory, i,
 	     tx_ring->dna.rx_tx.tx.packet_memory[i],
-	     tx_ring->dna.packet_slot_len);
+	     tx_ring->dna.packet_slot_len);    
   }
 
   for(i=0; i < tx_ring->count; i++) {
@@ -388,20 +456,22 @@ void dna_ixgbe_alloc_tx_buffers(struct ixgbe_ring *tx_ring, struct pfring_hooks 
 
     bi      = &tx_ring->tx_buffer_info[i];
     bi->skb = NULL;
-    tx_desc = IXGBE_TX_DESC(tx_ring, i);
+    tx_desc = IGB_TX_DESC(tx_ring, i);
 
     if(unlikely(enable_debug))
-      printk("%s(): Mapping TX slot %d of %d [pktaddr=%p][tx_desc=%p][offset=%u]\n",
-	     __FUNCTION__, i, tx_ring->dna.packet_num_slots,
+      printk("%s(): [%s@%d] Mapping TX slot %d of %d [pktaddr=%p][tx_desc=%p][offset=%u]\n",
+	     __FUNCTION__, 
+	     tx_ring->netdev->name, tx_ring->queue_index,
+	     i, tx_ring->dna.packet_num_slots,
 	     pkt, tx_desc, offset);
 
     bi->dma = pci_map_single(to_pci_dev(tx_ring->dev), pkt,
 			     tx_ring->dna.packet_slot_len,
-			     PCI_DMA_BIDIRECTIONAL /* PCI_DMA_TODEVICE */ );
+			     PCI_DMA_TODEVICE);
 
     tx_desc->read.buffer_addr = cpu_to_le64(bi->dma);
-    shadow_tx_desc = IXGBE_TX_DESC(tx_ring, i + tx_ring->count);
-    memcpy(shadow_tx_desc, tx_desc, sizeof(union ixgbe_adv_tx_desc));
+    shadow_tx_desc = IGB_TX_DESC(tx_ring, i + tx_ring->count);
+    memcpy(shadow_tx_desc, tx_desc, sizeof(union e1000_adv_tx_desc));
   } /* for */
 
   tx_ring->dna.memory_allocated = 1;
@@ -409,15 +479,42 @@ void dna_ixgbe_alloc_tx_buffers(struct ixgbe_ring *tx_ring, struct pfring_hooks 
 
 /* ********************************** */
 
-void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
-  union ixgbe_adv_rx_desc *rx_desc, *shadow_rx_desc;
-  struct ixgbe_rx_buffer *bi;
+static inline void igb_release_rx_desc(struct igb_ring *rx_ring, u32 val)
+{
+  rx_ring->next_to_use = val;
+  wmb();
+  writel(val, rx_ring->tail);
+}
+
+/* ********************************** */
+
+void dna_reset_rx_ring(struct igb_ring *rx_ring) {
+  igb_release_rx_desc(rx_ring, rx_ring->count-1);
+
+  rx_ring->next_to_clean = 0;
+}
+
+/* ********************************** */
+
+u16 igb_read_pci_cfg_word(struct e1000_hw *hw, u32 reg)
+{
+  u16 value;
+  struct igb_adapter *adapter = hw->back;
+  
+  pci_read_config_word(adapter->pdev, reg, &value);
+  return value;
+}
+
+/* ********************************** */
+
+void dna_igb_alloc_rx_buffers(struct igb_ring *rx_ring, struct pfring_hooks *hook) {
+  union e1000_adv_rx_desc *rx_desc, *shadow_rx_desc;
+  struct igb_rx_buffer *bi;
   u16 i;
-  struct ixgbe_adapter 	*adapter = netdev_priv(rx_ring->netdev);
-  struct ixgbe_hw       *hw = &adapter->hw;
-  u16	                cache_line_size;
-  struct ixgbe_ring     *tx_ring = adapter->tx_ring[rx_ring->queue_index];
-  struct pfring_hooks   *hook = (struct pfring_hooks*)rx_ring->netdev->pfring_ptr;
+  struct igb_adapter 	*adapter = netdev_priv(rx_ring->netdev);
+  struct e1000_hw	*hw = &adapter->hw;
+  u16			cache_line_size;
+  struct igb_ring	*tx_ring = adapter->tx_ring[rx_ring->queue_index];
   mem_ring_info         rx_info = {0};
   mem_ring_info         tx_info = {0};
   int                   num_slots_per_page;
@@ -437,7 +534,7 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
 
   init_waitqueue_head(&rx_ring->dna.rx_tx.rx.packet_waitqueue);
 
-  cache_line_size = cpu_to_le16(IXGBE_READ_PCIE_WORD(hw, IXGBE_PCI_DEVICE_CACHE_LINE_SIZE));
+  cache_line_size = cpu_to_le16(igb_read_pci_cfg_word(hw, IGB_PCI_DEVICE_CACHE_LINE_SIZE));
   cache_line_size &= 0x00FF;
   cache_line_size *= PCI_DEVICE_CACHE_LINE_SIZE_BYTES;
   if(cache_line_size == 0) cache_line_size = 64;
@@ -445,7 +542,7 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
   if(unlikely(enable_debug))
     printk("%s(): pci cache line size %d\n",__FUNCTION__, cache_line_size);
 
-  rx_ring->dna.packet_slot_len  = ALIGN(rx_ring->rx_buf_len, cache_line_size);
+  rx_ring->dna.packet_slot_len  = ALIGN(rx_ring->rx_buffer_len, cache_line_size);
   rx_ring->dna.packet_num_slots = rx_ring->count;
 
   rx_ring->dna.tot_packet_memory = PAGE_SIZE << DNA_MAX_CHUNK_ORDER;
@@ -454,105 +551,81 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
 
   rx_ring->dna.num_memory_pages = (rx_ring->dna.packet_num_slots + num_slots_per_page-1) / num_slots_per_page;
 
-
-  /* Packet Split disabled in DNA mode */
-  //if (ring_is_ps_enabled(rx_ring)) {
-    /* data will be put in this buffer */
-    /* Original fuction allocate PAGE_SIZE/2 for this buffer*/
-  //  rx_ring->dna.packet_slot_len  += PAGE_SIZE/2;
-  //}
-
-  if(unlikely(enable_debug))
-    printk("%s(): RX dna.packet_slot_len=%d tot_packet_memory=%d num_memory_pages=%u num_slots_per_page=%d\n",
-	   __FUNCTION__, 
-	   rx_ring->dna.packet_slot_len,
-	   rx_ring->dna.tot_packet_memory,
-	   rx_ring->dna.num_memory_pages,
-	   num_slots_per_page);
-
   for(i=0; i<rx_ring->dna.num_memory_pages; i++) {
     rx_ring->dna.rx_tx.rx.packet_memory[i] =
-      alloc_contiguous_memory(&rx_ring->dna.tot_packet_memory, 
-      			      &rx_ring->dna.mem_order, 
-      			      rx_ring->numa_node);
-
+      alloc_contiguous_memory(&rx_ring->dna.tot_packet_memory, &rx_ring->dna.mem_order);
+  
     if (rx_ring->dna.rx_tx.rx.packet_memory[i] == 0) {
       printk("\n\n%s() ERROR: not enough memory for RX DMA ring!!\n\n\n",
 	     __FUNCTION__);
       return;
     }
 
+    /*
     if(unlikely(enable_debug))
       printk("[DNA] %s(): Successfully allocated RX %u@%u bytes at 0x%08lx [slot_len=%d]\n",
 	     __FUNCTION__, rx_ring->dna.tot_packet_memory, i,
 	     rx_ring->dna.rx_tx.rx.packet_memory[i], rx_ring->dna.packet_slot_len);
+    */
   }
 
   for(i=0; i < rx_ring->count; i++) {
     u_int offset, page_index;
     char *pkt;
-
+    
     page_index = i / num_slots_per_page;
     offset = (i % num_slots_per_page) * rx_ring->dna.packet_slot_len;
     pkt = (char *)(rx_ring->dna.rx_tx.rx.packet_memory[page_index] + offset);
 
-    /*
     if(unlikely(enable_debug))
-      printk("[DNA] %s(): Successfully remapped RX %u@%u bytes at 0x%08lx [slot_len=%d][page_index=%u][offset=%u]\n",
+      printk("[DNA] %s(): Successfully allocated RX %u@%u bytes at 0x%08lx [slot_len=%d][page_index=%u][offset=%u]\n",
 	     __FUNCTION__, rx_ring->dna.tot_packet_memory, i,
 	     rx_ring->dna.rx_tx.rx.packet_memory[i],
 	     rx_ring->dna.packet_slot_len, page_index, offset);
-    */
 
     bi      = &rx_ring->rx_buffer_info[i];
     bi->skb = NULL;
-    rx_desc = IXGBE_RX_DESC(rx_ring, i);
+    rx_desc = IGB_RX_DESC(rx_ring, i);
 
+    /*
     if(unlikely(enable_debug))
-      printk("%s(): Mapping RX slot %d of %d [pktaddr=%p][rx_desc=%p][offset=%u]\n",
-	     __FUNCTION__, i, rx_ring->dna.packet_num_slots,
+      printk("%s(): [%s@%d] Mapping RX slot %d of %d [pktaddr=%p][rx_desc=%p][offset=%u]\n",
+	     __FUNCTION__, 
+	     rx_ring->netdev->name, rx_ring->queue_index,
+	     i, rx_ring->dna.packet_num_slots,
 	     pkt, rx_desc, offset);
+    */
 
     bi->dma = pci_map_single(to_pci_dev(rx_ring->dev), pkt,
 			     rx_ring->dna.packet_slot_len,
-			     PCI_DMA_BIDIRECTIONAL /* PCI_DMA_FROMDEVICE */ );
+			     PCI_DMA_FROMDEVICE);
 
-    /* Packet Split disabled in DNA mode */
-    //if (!ring_is_ps_enabled(rx_ring)) {
-      rx_desc->read.hdr_addr = 0;
-      rx_desc->read.pkt_addr = cpu_to_le64(bi->dma);
-    //} else {
-    //  rx_desc->read.hdr_addr = cpu_to_le64(bi->dma);
-    //  rx_desc->read.pkt_addr = cpu_to_le64(bi->dma + rx_ring->dna.packet_slot_len);
-    //}
-
+    /* Standard MTU */
+    rx_desc->read.hdr_addr = 0;
+    rx_desc->read.pkt_addr = cpu_to_le64(bi->dma);
     rx_desc->wb.upper.status_error = 0;
 
-    shadow_rx_desc = IXGBE_RX_DESC(rx_ring, i + rx_ring->count);
-    memcpy(shadow_rx_desc, rx_desc, sizeof(union ixgbe_adv_rx_desc));
+    shadow_rx_desc = IGB_RX_DESC(rx_ring, i + rx_ring->count);
+    memcpy(shadow_rx_desc, rx_desc, sizeof(union e1000_adv_rx_desc));
 
     if(unlikely(enable_debug)) {
       print_adv_rx_descr(rx_desc);
       print_adv_rx_descr(shadow_rx_desc);
     }
 
-    ixgbe_release_rx_desc(rx_ring, i);
+    igb_release_rx_desc(rx_ring, i);
   } /* for */
 
-  /* Shadow */
-  rx_desc = IXGBE_RX_DESC(rx_ring, 0);
-
-  /* Resetting index
-     rx_ring->next_to_use   = the last slot where the next incoming packets can be copied (tail) */
-  ixgbe_release_rx_desc(rx_ring, rx_ring->count-1);
-  /* rx_ring->next_to_clean = the slot where the next incoming packet will be read (head) */
-  rx_ring->next_to_clean = 0;
+    /* Shadow */
+  rx_desc = IGB_RX_DESC(rx_ring, 0);
 
   /* Register with PF_RING */
+  dna_reset_rx_ring(rx_ring);
 
   if(unlikely(enable_debug))
-    printk("[DNA] next_to_clean=%u/next_to_use=%u [register=%d]\n",
-	   rx_ring->next_to_clean, rx_ring->next_to_use, IXGBE_READ_REG(hw, IXGBE_RDT(rx_ring->reg_idx)));
+  printk("[DNA] next_to_clean=%u/next_to_use=%u [register=%d]\n",
+	 rx_ring->next_to_clean, rx_ring->next_to_use, 
+	 E1000_READ_REG(hw, E1000_RDT(rx_ring->reg_idx)));
 
   /* Allocate TX memory */
   tx_ring->dna.tot_packet_memory = rx_ring->dna.tot_packet_memory;
@@ -561,7 +634,7 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
   tx_ring->dna.mem_order         = rx_ring->dna.mem_order;
   tx_ring->dna.num_memory_pages  = (tx_ring->dna.packet_num_slots + num_slots_per_page-1) / num_slots_per_page;
 
-  dna_ixgbe_alloc_tx_buffers(tx_ring, hook);
+  dna_igb_alloc_tx_buffers(tx_ring, hook);
 
   rx_info.packet_memory_num_chunks    = rx_ring->dna.num_memory_pages;
   rx_info.packet_memory_chunk_len     = rx_ring->dna.tot_packet_memory;
@@ -587,7 +660,7 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
 				rx_ring->netdev->mem_end - rx_ring->netdev->mem_start,
 				rx_ring->queue_index, /* Channel Id */
 				rx_ring->netdev,
-				rx_ring->dev, /* for DMA mapping */
+				rx_ring->dev,
 				dna_model(hw),
 				rx_ring->netdev->dev_addr,
 				&rx_ring->dna.rx_tx.rx.packet_waitqueue,
@@ -597,56 +670,33 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
 				notify_function_ptr);
 
   if(unlikely(enable_debug))
-    printk("[DNA] ixgbe: %s: Enabled DNA on queue %d [RX][size=%u][count=%d] [TX][size=%u][count=%d]\n",
+    printk("[DNA] igb: %s: Enabled DNA on queue %d [RX][size=%u][count=%d] [TX][size=%u][count=%d]\n",
 	   rx_ring->netdev->name, rx_ring->queue_index, rx_ring->size, rx_ring->count, tx_ring->size, tx_ring->count);
-#if 0
-  if(adapter->hw.mac.type != ixgbe_mac_82598EB)
-    ixgbe_irq_disable_queues(rx_ring->q_vector->adapter, ((u64)1 << rx_ring->queue_index));
-#endif
 
   rx_ring->dna.memory_allocated = 1;
 }
 
-#undef IXGBE_PCI_DEVICE_CACHE_LINE_SIZE
+#undef IGB_PCI_DEVICE_CACHE_LINE_SIZE
 #undef PCI_DEVICE_CACHE_LINE_SIZE_BYTES
 
 /* ********************************** */
 
-static int dna_ixgbe_rx_dump(struct ixgbe_ring *rx_ring) {
-  int j, found=0;
-
-  for(j=0; j<rx_ring->count; j++) {
-    union ixgbe_adv_rx_desc *rx_desc = IXGBE_RX_DESC(rx_ring, j);
-
-    if(rx_desc->wb.upper.status_error) {
-      printk("[%d][status=%u]\n", j, rx_desc->wb.upper.status_error);
-      // for(i=0; i<16; i++) printf("%02X ", ptr[i+offset] & 0xFF);
-      found++;
-    }
-  }
-
-  return(found);
-}
-
-/* ********************************** */
-
-static bool dna_ixgbe_clean_rx_irq(struct ixgbe_q_vector *q_vector,
-				  struct ixgbe_ring *rx_ring, int budget) {
-  union ixgbe_adv_rx_desc	*rx_desc, *shadow_rx_desc;
+static int dna_igb_clean_rx_irq(struct igb_q_vector *q_vector,
+				  struct igb_ring *rx_ring, int budget) {
+  union e1000_adv_rx_desc	*rx_desc;
   u32				staterr;
-  u16				i, num_laps = 0, last_cleaned_idx;
-  struct ixgbe_adapter	        *adapter = q_vector->adapter;
-  struct ixgbe_hw		*hw = &adapter->hw;
-  unsigned int total_rx_packets = 0;
+  u16				i, last_cleaned_idx;
+  struct igb_adapter	        *adapter = q_vector->adapter;
+  struct e1000_hw		*hw = &adapter->hw;
 
-  last_cleaned_idx  = i = IXGBE_READ_REG(hw, IXGBE_RDT(rx_ring->reg_idx));
+  last_cleaned_idx  = i = E1000_READ_REG(hw, E1000_RDT(rx_ring->reg_idx));
   if(++i == rx_ring->count)
     i = 0;
 
   rx_ring->next_to_clean = i;
 
-  //i = IXGBE_READ_REG(hw, IXGBE_RDT(rx_ring->reg_idx));
-  rx_desc = IXGBE_RX_DESC(rx_ring, i);
+  //i = E1000_READ_REG(hw, E1000_RDT(rx_ring->reg_idx));
+  rx_desc = IGB_RX_DESC(rx_ring, i);
   staterr = le32_to_cpu(rx_desc->wb.upper.status_error);
 
   if(rx_ring->dna.queue_in_use) {
@@ -655,7 +705,7 @@ static bool dna_ixgbe_clean_rx_irq(struct ixgbe_q_vector *q_vector,
       mess up with indexes but just to wakeup apps (if waiting)
     */
 
-    if(staterr & IXGBE_RXD_STAT_DD) {
+    if(staterr & E1000_RXD_STAT_DD) {
       if(unlikely(enable_debug))
 	printk(KERN_INFO "DNA: got a packet [index=%d]!\n", i);
 
@@ -671,86 +721,8 @@ static bool dna_ixgbe_clean_rx_irq(struct ixgbe_q_vector *q_vector,
     }
 
     // goto dump_stats;
-    return(!!budget);
   }
 
-  /* Only 82598 needs kernel housekeeping (82599 does not need that thanks
-     to the drop bit), as the drop flag does not seem to work
-  */
-  if(adapter->hw.mac.type != ixgbe_mac_82598EB)
-    return(!!budget);
-
-  if( /* staterr || */ enable_debug) {
-    if(strcmp(rx_ring->netdev->name, "eth7") == 0)
-      printk("[DNA] %s(): %s@%d [used=%d][idx=%d][next_to_use=%u][#unused=%d][staterr=%d][full=%d][pkt_ptr=%llu]\n", __FUNCTION__,
-	     rx_ring->netdev->name, rx_ring->queue_index,
-	     rx_ring->dna.queue_in_use, i, rx_ring->next_to_use,
-	     ixgbe_desc_unused(rx_ring), staterr, dna_ixgbe_rx_dump(rx_ring), rx_desc->read.pkt_addr);
-  }
-
-  /*
-    This RX queue is not in use
-
-    IMPORTANT
-    We need to poll queues not in use as otherwise they will stop the operations
-    also on queues where there is an application running that consumes the packets
-  */
-  while(staterr & IXGBE_RXD_STAT_DD) {
-    shadow_rx_desc = IXGBE_RX_DESC(rx_ring, i+rx_ring->count);
-    rx_desc->wb.upper.status_error = 0, last_cleaned_idx = i;
-    rx_desc->read.hdr_addr = shadow_rx_desc->read.hdr_addr, rx_desc->read.pkt_addr = shadow_rx_desc->read.pkt_addr;
-
-    rmb();
-
-    // REMOVE BELOW
-    // ixgbe_release_rx_desc(rx_ring, i); /* Not needed */
-
-    i++, num_laps++, budget--;
-    if(i == rx_ring->count)
-      i = 0;
-
-    rx_desc = IXGBE_RX_DESC(rx_ring, i);
-    prefetch(rx_desc);
-    staterr = le32_to_cpu(rx_desc->wb.upper.status_error);
-
-    if(budget == 0) break;
-  }
-
-  rx_ring->stats.packets += total_rx_packets;
-  // rx_ring->stats.bytes += total_rx_bytes;
-  q_vector->rx.total_packets += total_rx_packets;
-  // q_vector->rx.total_bytes += total_rx_bytes;
-
-  /* Update register */
-  rx_ring->next_to_clean = i, IXGBE_WRITE_REG(&adapter->hw, IXGBE_RDT(rx_ring->reg_idx), last_cleaned_idx);
-
-  if(unlikely(enable_debug)) {
-    int j=0, full = 0, other = 0, null_dma = 0;
-    struct ixgbe_rx_buffer *bi;
-
-    for(j=0; j<rx_ring->count; j++) {
-      rx_desc = IXGBE_RX_DESC(rx_ring, j);
-      prefetch(rx_desc);
-      staterr = le32_to_cpu(rx_desc->wb.upper.status_error);
-
-      bi = &rx_ring->rx_buffer_info[i];
-
-      if(staterr & IXGBE_RXD_STAT_DD)
-	full++;
-      else if(staterr)
-	other++;
-
-      if(bi->dma == 0) null_dma++;
-    }
-
-    printk("[DNA] %s(): %s@%d [laps=%d][budget=%d][full=%d/other=%d][next_to_clean=%u][next_to_use=%d][#unused=%d][null_dma=%d]\n",
-	   __FUNCTION__,
-	   rx_ring->netdev->name, rx_ring->queue_index,
-	   num_laps, budget, full, other,
-	   rx_ring->next_to_clean, rx_ring->next_to_use,
-	   ixgbe_desc_unused(rx_ring), null_dma);
-  }
-
-  return(!!budget);
+  return(budget);
 }
 
