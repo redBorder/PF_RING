@@ -53,7 +53,7 @@ pfring_stat pfringStats;
 static struct timeval startTime;
 u_int8_t wait_for_packet = 1,  do_shutdown = 0;
 int rx_bind_core = 1, tx_bind_core = 2; /* core 0 free if possible */
-int demo_mode = 0;
+int demo_mode = 0, hashing_mode = 0;
 pfring_dna_cluster *dna_cluster_handle;
 pfring *pd[MAX_NUM_DEV];
 pfring *ring[MAX_NUM_THREADS] = { NULL };
@@ -82,15 +82,6 @@ double delta_time (struct timeval * now,
     -- delta_seconds;
   }
   return((double)(delta_seconds * 1000) + (double)delta_microseconds/1000);
-}
-
-/* ******************************** */
-
-u_int32_t fanout_distribution_function(const u_char *buffer, const u_int16_t buffer_len, const u_int32_t num_slaves, u_int32_t *hash) {
-  u_int32_t n_zero_bits = 32 - num_slaves;
-
-  /* returning slave id bitmap */
-  return ((0xFFFFFFFF << n_zero_bits) >> n_zero_bits);
 }
 
 /* ******************************** */
@@ -214,11 +205,128 @@ void printHelp(void) {
   printf("-i <device>     Device name\n");
   printf("-c <id>         DNA Cluster ID\n");
   printf("-n <num>        Number of consumer threads\n");
-  printf("-m <mode>       Demo mode: 1=bounce packets (enable TX), 2=fan-out\n");
+  printf("-d <mode>       Demo mode:\n"
+	 "                0 - recv only (default)\n"
+	 "                1 - bounce packets (enable TX)\n"
+	 "                2 - fan-out\n");
   printf("-r <core>       Bind the RX thread to a core\n");
   printf("-t <core>       Bind the TX thread to a core\n");
+  printf("-m <hash mode>  Hashing modes:\n"
+	 "                0 - IP hash (default)\n"
+	 "                1 - MAC Address hash\n"
+	 "                2 - IP protocol hash\n");
   printf("-a              Active packet wait\n");
   exit(0);
+}
+
+/* *************************************** */
+
+struct compact_eth_hdr {
+  unsigned char   h_dest[ETH_ALEN];
+  unsigned char   h_source[ETH_ALEN];
+  u_int16_t       h_proto;
+};
+
+struct compact_ip_hdr {
+  u_int8_t	ihl:4,
+                version:4;
+  u_int8_t	tos;
+  u_int16_t	tot_len;
+  u_int16_t	id;
+  u_int16_t	frag_off;
+  u_int8_t	ttl;
+  u_int8_t	protocol;
+  u_int16_t	check;
+  u_int32_t	saddr;
+  u_int32_t	daddr;
+};
+
+struct compact_ipv6_hdr {
+  __u8		priority:4,
+		version:4;
+  __u8		flow_lbl[3];
+  __be16	payload_len;
+  __u8		nexthdr;
+  __u8		hop_limit;
+  struct in6_addr saddr;
+  struct in6_addr daddr;
+};
+
+
+inline u_int32_t master_custom_hash_function(const u_char *buffer, const u_int16_t buffer_len) {
+  u_int32_t l3_offset = sizeof(struct compact_eth_hdr);
+  u_int16_t eth_type;
+
+  if(hashing_mode == 1 /* MAC hash */)
+    return(buffer[3] + buffer[4] + buffer[5] + buffer[9] + buffer[10] + buffer[11]);
+
+  eth_type = (buffer[12] << 8) + buffer[13];
+
+  if (eth_type == 0x8100) {
+    eth_type = (buffer[16] << 8) + buffer[17];
+    l3_offset += 4;
+  }
+
+  switch (eth_type) {
+  case 0x0800:
+    {
+      /* IPv4 */
+      struct compact_ip_hdr *iph;
+
+      if (unlikely(buffer_len < l3_offset + sizeof(struct compact_ip_hdr)))
+	return 0;
+
+      iph = (struct compact_ip_hdr *) &buffer[l3_offset];
+
+      if(hashing_mode == 0 /* IP hash */)
+	return ntohl(iph->saddr) + ntohl(iph->daddr); /* this can be optimized by avoiding calls to ntohl(), but it can lead to balancing issues */
+      else /* IP protocol hash */
+	return iph->protocol;
+    }
+    break;
+  case 0x86DD:
+    {
+      /* IPv6 */
+      struct compact_ipv6_hdr *ipv6h;
+      u_int32_t *s, *d;
+
+      if (unlikely(buffer_len < l3_offset + sizeof(struct compact_ipv6_hdr)))
+	return 0;
+
+      ipv6h = (struct compact_ipv6_hdr *) &buffer[l3_offset];
+
+      if(hashing_mode == 0 /* IP hash */) {
+	s = (u_int32_t *) &ipv6h->saddr, d = (u_int32_t *) &ipv6h->daddr;
+	return(s[0] + s[1] + s[2] + s[3] + d[0] + d[1] + d[2] + d[3]);
+      } else
+	return(ipv6h->nexthdr);
+    }
+    break;
+  default:
+    return 0; /* Unknown protocol */
+  }
+}
+
+/* ******************************* */
+
+static u_int32_t master_distribution_function(const u_char *buffer, const u_int16_t buffer_len, const u_int32_t num_slaves, u_int32_t *hash) {
+  u_int32_t slave_idx;
+
+  /* computing a bidirectional software hash */
+  *hash = master_custom_hash_function(buffer, buffer_len);
+
+  /* balancing on hash */
+  slave_idx = (*hash) % num_slaves;
+  return (1 << slave_idx);
+}
+
+/* ******************************** */
+
+u_int32_t fanout_distribution_function(const u_char *buffer, const u_int16_t buffer_len, const u_int32_t num_slaves, u_int32_t *hash) {
+  u_int32_t n_zero_bits = 32 - num_slaves;
+
+  /* returning slave id bitmap */
+  return ((0xFFFFFFFF << n_zero_bits) >> n_zero_bits);
 }
 
 /* *************************************** */
@@ -296,7 +404,7 @@ int main(int argc, char* argv[]) {
 
   startTime.tv_sec = 0;
 
-  while ((c = getopt(argc,argv,"ahi:c:n:m:r:t:")) != -1) {
+  while ((c = getopt(argc,argv,"ahi:c:d:n:m:r:t:")) != -1) {
     switch (c) {
     case 'a':
       wait_for_packet = 0;
@@ -319,14 +427,18 @@ int main(int argc, char* argv[]) {
     case 'n':
       num_threads = atoi(optarg);
       break;
-    case 'm':
+    case 'd':
       demo_mode = atoi(optarg);
+      break;
+    case 'm':
+      hashing_mode = atoi(optarg);
       break;
     }
   }
 
   if (cluster_id < 0 || num_threads < 1
-      || demo_mode < 0 || demo_mode > 2)
+      || demo_mode    < 0 || demo_mode    > 2
+      || hashing_mode < 0 || hashing_mode > 2)
     printHelp();
 
   if (num_threads > MAX_NUM_THREADS)
@@ -390,10 +502,11 @@ int main(int argc, char* argv[]) {
   dna_cluster_set_wait_mode(dna_cluster_handle, !wait_for_packet /* active_wait */);
   dna_cluster_set_cpu_affinity(dna_cluster_handle, rx_bind_core, tx_bind_core);
 
-  /*
-    The standard distribution function allows to balance per IP 
-    in a coherent mode (not like RSS that does not do that)
-  */
+  /* The default distribution function allows to balance per IP 
+    in a coherent mode (not like RSS that does not do that) */
+  if (hashing_mode > 0)
+    dna_cluster_set_distribution_function(dna_cluster_handle, master_distribution_function);
+
   if (demo_mode == 2)
     dna_cluster_set_distribution_function(dna_cluster_handle, fanout_distribution_function);
 

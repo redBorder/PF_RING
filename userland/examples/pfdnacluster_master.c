@@ -351,13 +351,12 @@ int main(int argc, char* argv[]) {
       break;
     case 'm':
       hashing_mode = atoi(optarg);
-      if((hashing_mode < 0) || (hashing_mode > 2))
-	hashing_mode = 0;
       break;
     }
   }
 
-  if(cluster_id < 0 || num_app < 1)
+  if (cluster_id < 0 || num_app < 1
+      || hashing_mode < 0 || hashing_mode > 2)
     printHelp();
 
   if (num_app > MAX_NUM_APP)
