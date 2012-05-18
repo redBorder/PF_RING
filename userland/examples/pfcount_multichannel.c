@@ -1,6 +1,6 @@
 /*
  *
- * (C) 2005-10 - Luca Deri <deri@ntop.org>
+ * (C) 2005-12 - Luca Deri <deri@ntop.org>
  *
  *
  * This program is free software; you can redistribute it and/or modify
@@ -56,6 +56,8 @@ pfring  *ring[MAX_NUM_THREADS] = { NULL };
 unsigned long long numPkts[MAX_NUM_THREADS] = { 0 }, numBytes[MAX_NUM_THREADS] = { 0 };
 u_int8_t wait_for_packet = 1,  do_shutdown = 0;
 pthread_t pd_thread[MAX_NUM_THREADS];
+int thread_core_affinity[MAX_NUM_THREADS];
+static u_int numCPU;
 
 #define DEFAULT_DEVICE     "eth0"
 
@@ -158,12 +160,17 @@ void sigproc(int sig) {
   do_shutdown = 1;
   print_stats();
 
-  for(i=0; i<num_channels; i++)
+  fprintf(stderr, "Shutting down sockets...\n");
+  for(i=0; i<num_channels; i++) {
     pfring_shutdown(ring[i]);
+    printf("\t%d...\n", i);
+  }
 
+  fprintf(stderr, "Joining threads...\n");
   for(i=0; i<num_channels; i++) {
     pthread_join(pd_thread[i], NULL);
     pfring_close(ring[i]);
+    printf("\t%d...\n", i);
   }
 
   exit(0);
@@ -192,6 +199,10 @@ void printHelp(void) {
   printf("-p <poll wait>  Poll wait (msec)\n");
   printf("-b <cpu %%>      CPU pergentage priority (0-99)\n");
   printf("-a              Active packet wait\n");
+  printf("-t <id:id...>   Specifies the thread affinity mask. Each <id> represents\n"
+	 "                the codeId where the i-th will bind. Example: -t 7:6:5:4\n"
+	 "                binds thread <device>@0 on coreId 7, <device>@1 on coreId 6\n"
+	 "                and so on.\n");
   printf("-r              Rehash RSS packets\n");
   printf("-v              Verbose\n");
 }
@@ -305,6 +316,8 @@ static int32_t thiszone;
 
 void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u_char *user_bytes) {
   long threadId = (long)user_bytes;
+
+  if(unlikely(do_shutdown)) return;
 
   if(verbose) {
     struct ether_header ehdr;
@@ -427,12 +440,16 @@ int32_t gmt2local(time_t t) {
 void* packet_consumer_thread(void* _id) {
   int s;
   long thread_id = (long)_id; 
-  u_int numCPU = sysconf( _SC_NPROCESSORS_ONLN );
-  u_long core_id = thread_id % numCPU;
- 
+
   if(numCPU > 1) {
     /* Bind this thread to a specific core */
     cpu_set_t cpuset;
+    u_long core_id = thread_core_affinity[thread_id];
+
+    if(core_id == -1) {
+      core_id = ((thread_id + 1) * 2) % numCPU;
+      core_id = thread_id % numCPU;
+    }
 
     CPU_ZERO(&cpuset);
     CPU_SET(core_id, &cpuset);
@@ -444,14 +461,11 @@ void* packet_consumer_thread(void* _id) {
     }
   }
 
-  while(1) {
+  while(!do_shutdown) {
     u_char *buffer = NULL;
     struct pfring_pkthdr hdr;
 
-    if(do_shutdown) break;
-
     if(pfring_recv(ring[thread_id], &buffer, 0, &hdr, wait_for_packet) > 0) {
-      if(do_shutdown) break;
       dummyProcesssPacket(&hdr, buffer, (u_char*)thread_id);
     } else {
       if(wait_for_packet == 0) sched_yield();
@@ -465,17 +479,19 @@ void* packet_consumer_thread(void* _id) {
 /* *************************************** */
 
 int main(int argc, char* argv[]) {
-  char *device = NULL, c;
+  char *device = NULL, c, *bind_mask = NULL;
   int snaplen = DEFAULT_SNAPLEN, rc, watermark = 0, rehash_rss = 0;
-  packet_direction direction = rx_and_tx_direction;
+  packet_direction direction = rx_only_direction;
   long i;
   u_int16_t cpu_percentage = 0, poll_duration = 0;
   u_int32_t version;
 
   startTime.tv_sec = 0;
   thiszone = gmt2local(0);
+  numCPU = sysconf( _SC_NPROCESSORS_ONLN );
+  memset(thread_core_affinity, -1, sizeof(thread_core_affinity));
 
-  while((c = getopt(argc,argv,"hi:l:vae:w:b:rp:" /* "f:" */)) != -1) {
+  while((c = getopt(argc,argv,"hi:l:vae:w:b:rp:t:")) != -1) {
     switch(c) {
     case 'h':
       printHelp();
@@ -514,6 +530,9 @@ int main(int argc, char* argv[]) {
     case 'p':
       poll_duration = atoi(optarg);
       break;
+    case 't':
+      bind_mask = strdup(optarg);
+      break;
     }
   }
 
@@ -531,10 +550,24 @@ int main(int argc, char* argv[]) {
   }
 
   if (num_channels > MAX_NUM_THREADS) {
-    printf("Too many channels (%d), using %d channels\n", num_channels, MAX_NUM_THREADS);
+    printf("WARNING: Too many channels (%d), using %d channels\n", num_channels, MAX_NUM_THREADS);
     num_channels = MAX_NUM_THREADS;
+  } else if (num_channels > numCPU) {
+    printf("WARNING: More channels (%d) than available cores (%d), using %d channels\n", num_channels, numCPU, MAX_NUM_THREADS);
+    num_channels = numCPU;
   } else 
     printf("Found %d channels\n", num_channels);
+
+  if(bind_mask != NULL) {
+    char *id = strtok(bind_mask, ":");
+    int idx = 0;
+
+    while(id != NULL) {
+      thread_core_affinity[idx++] = atoi(id) % numCPU;
+      if(idx >= num_channels) break;
+      id = strtok(NULL, ":");
+    }
+  }
 
   pfring_version(ring[0], &version);  
   printf("Using PF_RING v.%d.%d.%d\n",
@@ -568,6 +601,7 @@ int main(int argc, char* argv[]) {
     pfring_enable_ring(ring[i]);
 
     pthread_create(&pd_thread[i], NULL, packet_consumer_thread, (void*)i);
+    usleep(500);
   }
 
   if(cpu_percentage > 0) {
@@ -583,7 +617,7 @@ int main(int argc, char* argv[]) {
     signal(SIGALRM, my_sigalarm);
     alarm(ALARM_SLEEP);
   }
-  
+
   for(i=0; i<num_channels; i++)
     pthread_join(pd_thread[i], NULL);
 
