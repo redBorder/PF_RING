@@ -55,6 +55,7 @@ static struct timeval startTime;
 u_int8_t wait_for_packet = 1, do_shutdown = 0;
 int rx_bind_core = 1, tx_bind_core = 2; /* core 0 free if possible */
 int demo_mode = 0, hashing_mode = 0;
+int if_index = -1;
 pfring_dna_cluster *dna_cluster_handle;
 pfring *pd[MAX_NUM_DEV];
 pfring *ring[MAX_NUM_THREADS] = { NULL };
@@ -62,6 +63,7 @@ u_int64_t numPkts[MAX_NUM_THREADS] = { 0 };
 u_int64_t numBytes[MAX_NUM_THREADS] = { 0 };
 pthread_t pd_thread[MAX_NUM_THREADS];
 int thread_core_affinity[MAX_NUM_THREADS];
+
 
 /* *************************************** */
 /*
@@ -204,13 +206,14 @@ void my_sigalarm(int sig) {
 void printHelp(void) {
   printf("pfdnacluster_multithread - (C) 2012 ntop.org\n\n");
   printf("-h              Print this help\n");
-  printf("-i <device>     Device name\n");
+  printf("-i <device>     Device name (comma-separated list)\n");
   printf("-c <id>         DNA Cluster ID\n");
   printf("-n <num>        Number of consumer threads\n");
   printf("-d <mode>       Demo mode:\n"
 	 "                0 - recv only (default)\n"
-	 "                1 - bounce packets (enable TX)\n"
+	 "                1 - forward packets (use -x <if index>)\n"
 	 "                2 - fan-out\n");
+  printf("-x <if index>   TX interface for demo mode 1 (default: rx interface)\n");
   printf("-r <core>       Bind the RX thread to a core\n");
   printf("-t <core>       Bind the TX thread to a core\n");
   printf("-m <hash mode>  Hashing modes:\n"
@@ -253,7 +256,6 @@ struct compact_ipv6_hdr {
   struct in6_addr saddr;
   struct in6_addr daddr;
 };
-
 
 inline u_int32_t master_custom_hash_function(const u_char *buffer, const u_int16_t buffer_len) {
   u_int32_t l3_offset = sizeof(struct compact_eth_hdr);
@@ -377,9 +379,12 @@ void* packet_consumer_thread(void *_id) {
 
       if (rc > 0) {
         buffer = pfring_get_pkt_buff_data(ring[thread_id], pkt_handle);
-        /* Note: interface id and len are already set
-           pfring_set_pkt_buff_len(ring[thread_id], pkt_handle, len);
-           pfring_set_pkt_buff_ifindex(ring[thread_id], pkt_handle, if_id); */
+        /* len already set pfring_set_pkt_buff_len(ring[thread_id], pkt_handle, len); */
+        
+	if (if_index >= 0)
+          pfring_set_pkt_buff_ifindex(ring[thread_id], pkt_handle, if_index);
+        /* else use incoming interface (already set) */
+
         pfring_send_pkt_buff(ring[thread_id], pkt_handle, 0 /* flush flag */);
       }
     }
@@ -413,7 +418,7 @@ int main(int argc, char* argv[]) {
   memset(thread_core_affinity, -1, sizeof(thread_core_affinity));
   startTime.tv_sec = 0;
 
-  while ((c = getopt(argc,argv,"ahi:c:d:n:m:r:t:g:")) != -1) {
+  while ((c = getopt(argc,argv,"ahi:c:d:n:m:r:t:g:x:")) != -1) {
     switch (c) {
     case 'a':
       wait_for_packet = 0;
@@ -444,6 +449,9 @@ int main(int argc, char* argv[]) {
       break;
     case 'm':
       hashing_mode = atoi(optarg);
+      break;
+    case 'x':
+      if_index = atoi(optarg);
       break;
     }
   }

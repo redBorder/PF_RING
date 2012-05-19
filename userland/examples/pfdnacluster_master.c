@@ -196,7 +196,7 @@ void printHelp(void) {
 
   printf("pfdnacluster_master [-a] -i dev\n");
   printf("-h              Print this help\n");
-  printf("-i <device>     Device name\n");
+  printf("-i <device>     Device name (comma-separated list)\n");
   printf("-c <cluster>    Cluster ID\n");
   printf("-n <num app>    Number of applications\n");
   printf("-s              Enable TX\n");

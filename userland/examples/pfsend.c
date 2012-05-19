@@ -425,6 +425,11 @@ int main(int argc, char* argv[]) {
 	   (version & 0x0000FF00) >> 8, version & 0x000000FF);
   }
 
+  if (!pd->send && pd->send_ifindex && if_index == -1) {
+    printf("Please use -x <if index>\n");
+    return -1;
+  } 
+
   if(watermark > 0) {
     int rc;
     
