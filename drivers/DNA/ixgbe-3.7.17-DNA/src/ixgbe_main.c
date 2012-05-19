@@ -4061,7 +4061,7 @@ static void ixgbe_set_rx_buffer_len(struct ixgbe_adapter *adapter)
 #ifdef ENABLE_DNA
 	if(adapter->dna.dna_enabled) {
 		if(unlikely(enable_debug))
-			printk("%s(): RX +JUMBOEN mtu=%d max_frame=%d rx_buf_len=%d\n",
+			printk("[DNA] %s(): RX +JUMBOEN mtu=%d max_frame=%d rx_buf_len=%d\n",
 	         	       __FUNCTION__, netdev->mtu, max_frame, rx_buf_len);
 
 		hlreg0 &= ~IXGBE_HLREG0_RXCRCSTRP; /* Disable CRC strip */
@@ -5545,7 +5545,7 @@ void ixgbe_clean_rx_ring(struct ixgbe_ring *rx_ring)
 	      tx_ring->next_to_use = 0;
 
 	      if(unlikely(enable_debug)) 
-		printk("%s(): Deallocating TX DMA memory\n", __FUNCTION__);
+		printk("[DNA] %s(): Deallocating TX DMA memory\n", __FUNCTION__);
 
 	      tx_ring->dna.memory_allocated = 0;
 	      for(i=0; i<tx_ring->dna.num_memory_pages; i++) {
@@ -5558,7 +5558,7 @@ void ixgbe_clean_rx_ring(struct ixgbe_ring *rx_ring)
 
 	    if(rx_ring->dna.memory_allocated) {
 	      if(unlikely(enable_debug)) 
-		printk("%s(): Deallocating RX DMA memory\n", __FUNCTION__);
+		printk("[DNA] %s(): Deallocating RX DMA memory\n", __FUNCTION__);
 
 	      for(i=0; i<rx_ring->dna.num_memory_pages; i++) {
 		free_contiguous_memory(rx_ring->dna.rx_tx.rx.packet_memory[i],
@@ -6500,11 +6500,33 @@ static int ixgbe_alloc_queues(struct ixgbe_adapter *adapter)
 {
 	int i;
 	int rx_count;
+#ifdef ENABLE_DNA
+	int selected_cpu;
+	int selected_node = -1;
+#endif
 #ifdef HAVE_DEVICE_NUMA_NODE
 	int orig_node = adapter->node;
 
 	WARN_ON(orig_node != -1 && !node_online(orig_node));
 #endif /* HAVE_DEVICE_NUMA_NODE */
+
+#ifdef ENABLE_DNA
+	selected_cpu = numa_cpu_affinity[adapter->bd_number];
+	if (selected_cpu != -1) {
+		if (cpu_online(selected_cpu)) {
+			selected_node = cpu_to_node(selected_cpu);
+			if (!node_online(selected_node)) {
+				printk("[DNA] %s(): Warning: numa node %d is not available\n",
+				       __FUNCTION__, selected_node);
+				selected_node = -1;
+			}
+		
+		} else {
+			printk("[DNA] %s(): Warning: cpu %d is not available\n",
+			       __FUNCTION__, selected_cpu);
+		}
+	}
+#endif
 
 	for (i = 0; i < adapter->num_tx_queues; i++) {
 		struct ixgbe_ring *ring = adapter->tx_ring[i];
@@ -6516,6 +6538,10 @@ static int ixgbe_alloc_queues(struct ixgbe_adapter *adapter)
 			adapter->node = cur_node;
 		}
 #endif /* HAVE_DEVICE_NUMA_NODE */
+#ifdef ENABLE_DNA
+		if (selected_node != -1)
+			adapter->node = selected_node;
+#endif
 		ring = kzalloc_node(sizeof(struct ixgbe_ring), GFP_KERNEL,
 				    adapter->node);
 		if (!ring)
@@ -6547,6 +6573,10 @@ static int ixgbe_alloc_queues(struct ixgbe_adapter *adapter)
 			adapter->node = cur_node;
 		}
 #endif /* HAVE_DEVICE_NUMA_NODE */
+#ifdef ENABLE_DNA
+		if (selected_node != -1)
+			adapter->node = selected_node;
+#endif
 		ring = kzalloc_node(sizeof(struct ixgbe_ring), GFP_KERNEL,
 				    adapter->node);
 		if (!ring)
@@ -9821,7 +9851,7 @@ static int __devinit ixgbe_probe(struct pci_dev *pdev,
 		netdev->mem_end = mmio_start + mmio_len;
 
 		if(unlikely(enable_debug))
-			printk("[mmio_start=0x%lx][mmio_len=0x%x]\n", mmio_start, mmio_len);
+			printk("[DNA] [mmio_start=0x%lx][mmio_len=0x%x]\n", mmio_start, mmio_len);
 	}
 #endif
 	if (!hw->hw_addr) {

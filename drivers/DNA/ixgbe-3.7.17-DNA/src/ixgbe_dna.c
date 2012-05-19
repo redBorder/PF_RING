@@ -21,7 +21,7 @@
 
 *******************************************************************************/
 
-#define MAX_NUM_ADAPTERS       8
+#define MAX_NUM_ADAPTERS       8 /* Note: IXGBE_MAX_NIC is 32 */
 
 char *adapters_to_enable[MAX_NUM_ADAPTERS] = { 0 };
 module_param_array(adapters_to_enable, charp, NULL, 0444);
@@ -45,10 +45,13 @@ static unsigned int num_tx_slots = DNA_IXGBE_DEFAULT_TXD;
 module_param(num_tx_slots, uint, 0644);
 MODULE_PARM_DESC(num_tx_slots, "Specify the number of TX slots. Default: 8192");
 
-static unsigned int bind_to_node[MAX_NUM_ADAPTERS] = { 0 };
-module_param_array(bind_to_node, uint, NULL, 0444);
-MODULE_PARM_DESC(bind_to_node,
-                 "Comma separated list of NUMA node IDs where the DMA memory will be allocated");
+/* Note: currently numa cpu affinity is per-adapter, but this can be easily 
+ * changed to per-queue (MAX_NUM_ADAPTERS * MAX_RX_QUEUES items) */
+static int numa_cpu_affinity[MAX_NUM_ADAPTERS] = 
+  { [0 ... (MAX_NUM_ADAPTERS - 1)] = -1 };
+module_param_array(numa_cpu_affinity, int, NULL, 0444);
+MODULE_PARM_DESC(numa_cpu_affinity,
+                 "Comma separated list of core ids where per-adapter memory will be allocated");
 
 /* Forward */
 static inline void ixgbe_irq_disable(struct ixgbe_adapter *adapter);
@@ -133,8 +136,10 @@ static unsigned long alloc_contiguous_memory(u_int *tot_mem_len, u_int *mem_orde
 
   if (node >= 0) {
     mem = __get_free_pages_node(node, GFP_ATOMIC, *mem_order);
-    if (!mem)
+    if (!mem) {
       printk("[DNA] Warning: memory allocation on node %d failed, using another node", node);
+      node = -1;
+    }
   }
 
   if (!mem)
@@ -142,8 +147,8 @@ static unsigned long alloc_contiguous_memory(u_int *tot_mem_len, u_int *mem_orde
 
   if(mem) {
     if(unlikely(enable_debug))
-      printk("[DNA] %s() success [tot_mem_len=%d,mem=%lu,mem_order=%d]\n",
-	     __FUNCTION__, *tot_mem_len, mem, *mem_order);
+      printk("[DNA] %s() success [tot_mem_len=%d,mem=%lu,mem_order=%d,node=%d]\n",
+	     __FUNCTION__, *tot_mem_len, mem, *mem_order, node);
     reserve_memory(mem, *tot_mem_len);
   } else {
     if(unlikely(enable_debug))
