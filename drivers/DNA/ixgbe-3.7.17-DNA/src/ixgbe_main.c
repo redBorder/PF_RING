@@ -6516,8 +6516,8 @@ static int ixgbe_alloc_queues(struct ixgbe_adapter *adapter)
 		if (cpu_online(selected_cpu)) {
 			selected_node = cpu_to_node(selected_cpu);
 			if (node_online(selected_node)) {
-				e_dev_info("dna%d: Selected numa node %d for memory allocation\n", 
-				           adapter->bd_number, selected_node);
+				e_dev_info("selected numa node %d for memory allocation\n", 
+				           selected_node);
 			} else {
 				printk("[DNA] %s(): Warning: numa node %d is not available\n",
 				       __FUNCTION__, selected_node);
