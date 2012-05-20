@@ -6515,7 +6515,10 @@ static int ixgbe_alloc_queues(struct ixgbe_adapter *adapter)
 	if (selected_cpu != -1) {
 		if (cpu_online(selected_cpu)) {
 			selected_node = cpu_to_node(selected_cpu);
-			if (!node_online(selected_node)) {
+			if (node_online(selected_node)) {
+				e_dev_info("dna%d: Selected numa node %d for memory allocation\n", 
+				           adapter->bd_number, selected_node);
+			} else {
 				printk("[DNA] %s(): Warning: numa node %d is not available\n",
 				       __FUNCTION__, selected_node);
 				selected_node = -1;
@@ -6944,7 +6947,7 @@ static int __devinit ixgbe_sw_init(struct ixgbe_adapter *adapter)
 	   && (mtu + ETH_HLEN + ETH_FCS_LEN) <= IXGBE_MAX_JUMBO_FRAME_SIZE) {
 	
         	if(unlikely(enable_debug))
-			printk("%s(): Setting mtu (%d) to %d\n",
+			printk("[DNA] %s(): Setting mtu (%d) to %d\n",
 	        	       __FUNCTION__, adapter->netdev->mtu, mtu);
 
 		adapter->netdev->mtu = mtu;
