@@ -145,7 +145,7 @@ Actual Stats: 7440640 pkts [1'000.05 ms][7'440'223.34 pps/5.00 Gbps]
 
 Test 5. Send packets through a cluster to an interface
 
-Goal: demonstrate transmission capabilities of applications via a libzero cluster. As the cluster is designed to handle multiple DNA interfaces, the sender application (pfsend in this test) must specify the interface id ot the egress interface. The current pfdnacluster_master demo application is limited to one interface (-i): this is a limitation of the demo application, not of the cluster.
+Goal: demonstrate transmission capabilities of applications via a libzero cluster. As the cluster is designed to handle multiple DNA interfaces, the sender application (pfsend in this test) must specify the interface id of the egress interface. The current pfdnacluster_master demo application is limited to one interface (-i): this is a limitation of the demo application, not of the cluster.
 
 Commands:
 - Master:  pfdnacluster_master -i dna0 -c 10 -n 1 -s
