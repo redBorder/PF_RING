@@ -44,6 +44,10 @@ Note that
 
   insmod ./ixgbe.ko mtu=9000
 
+- you can set the coreId of the numa node where memory has to be allocated as follows
+
+  insmod ./ixgbe.ko numa_cpu_affinity=0,0,0,0
+
 Testing DNA
 -----------
 Supposing that you have cross-connected the DNA interfaces dnaX and dnaY, you can send packet 
