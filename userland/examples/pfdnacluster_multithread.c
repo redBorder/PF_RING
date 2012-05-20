@@ -216,6 +216,9 @@ void printHelp(void) {
   printf("-x <if index>   TX interface for demo mode 1 (default: rx interface)\n");
   printf("-r <core>       Bind the RX thread to a core\n");
   printf("-t <core>       Bind the TX thread to a core\n");
+  printf("-g <id:id...>   Specifies the thread affinity mask (consumers). Each <id> represents\n"
+         "                the codeId where the i-th will bind. Example: -g 7:6:5:4 binds thread\n"
+         "                <device>@0 on coreId 7, <device>@1 on coreId 6 and so on.\n");
   printf("-m <hash mode>  Hashing modes:\n"
 	 "                0 - IP hash (default)\n"
 	 "                1 - MAC Address hash\n"
