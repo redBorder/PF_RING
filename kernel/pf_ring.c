@@ -1392,6 +1392,10 @@ static int ring_proc_get_info(char *buf, char **start, off_t offset,
 			  pfr->dna_device_entry->dev.mem_info.tx.packet_memory_chunk_len   )
 			+ pfr->dna_device_entry->dev.mem_info.rx.descr_packet_memory_tot_len
 			+ pfr->dna_device_entry->dev.mem_info.tx.descr_packet_memory_tot_len);
+	if (pfr->dna_cluster && pfr->dna_cluster_type == dna_cluster_master && pfr->dna_cluster->stats) {
+	  rlen += sprintf(buf + rlen, "Cluster: Tot Recvd : %lu\n", (unsigned long)pfr->dna_cluster->stats->tot_rx_packets);
+	  rlen += sprintf(buf + rlen, "Cluster: Tot Sent  : %lu\n", (unsigned long)pfr->dna_cluster->stats->tot_tx_packets);
+	}
       } else if (fsi != NULL) {
         /* Standard PF_RING */
 	rlen += sprintf(buf + rlen, "Channel Id         : %d\n", pfr->channel_id);
@@ -4928,6 +4932,9 @@ static struct dna_cluster* dna_cluster_create(u_int32_t dna_cluster_id, u_int32_
       dnac = NULL;
       goto unlock;
     }
+
+    /* global stats are at the beginning of the persistent memory */
+    dnac->stats = (struct dna_cluster_global_stats *) dnac->master_persistent_memory;
 
     list_add(&dnac->list, &dna_cluster_list);
 

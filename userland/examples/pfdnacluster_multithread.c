@@ -54,7 +54,7 @@ pfring_stat pfringStats;
 static struct timeval startTime;
 u_int8_t wait_for_packet = 1, do_shutdown = 0;
 int rx_bind_core = 1, tx_bind_core = 2; /* core 0 free if possible */
-int demo_mode = 0, hashing_mode = 0;
+int forward_packets = 0, hashing_mode = 0;
 int if_index = -1;
 pfring_dna_cluster *dna_cluster_handle;
 pfring *pd[MAX_NUM_DEV];
@@ -209,11 +209,7 @@ void printHelp(void) {
   printf("-i <device>     Device name (comma-separated list)\n");
   printf("-c <id>         DNA Cluster ID\n");
   printf("-n <num>        Number of consumer threads\n");
-  printf("-d <mode>       Demo mode:\n"
-	 "                0 - recv only (default)\n"
-	 "                1 - forward packets (use -x <if index>)\n"
-	 "                2 - fan-out\n");
-  printf("-x <if index>   TX interface for demo mode 1 (default: rx interface)\n");
+  printf("-x <if index>   Forward packets to the selected TX interface\n");
   printf("-r <core>       Bind the RX thread to a core\n");
   printf("-t <core>       Bind the TX thread to a core\n");
   printf("-g <id:id...>   Specifies the thread affinity mask (consumers). Each <id> represents\n"
@@ -222,7 +218,8 @@ void printHelp(void) {
   printf("-m <hash mode>  Hashing modes:\n"
 	 "                0 - IP hash (default)\n"
 	 "                1 - MAC Address hash\n"
-	 "                2 - IP protocol hash\n");
+	 "                2 - IP protocol hash\n"
+	 "                3 - Fan-Out\n");
   printf("-a              Active packet wait\n");
   exit(0);
 }
@@ -353,7 +350,7 @@ void* packet_consumer_thread(void *_id) {
     if (thread_core_affinity[thread_id] != -1)
        core_id = thread_core_affinity[thread_id] % numCPU;
     else
-      core_id = ((demo_mode != 1 ? rx_bind_core : tx_bind_core) + 1 + thread_id) % numCPU; 
+      core_id = ((!forward_packets ? rx_bind_core : tx_bind_core) + 1 + thread_id) % numCPU; 
 
     CPU_ZERO(&cpuset);
     CPU_SET(core_id, &cpuset);
@@ -367,7 +364,7 @@ void* packet_consumer_thread(void *_id) {
 
   memset(&hdr, 0, sizeof(hdr));
 
-  if (demo_mode == 1) {
+  if (forward_packets) {
     if ((pkt_handle = pfring_alloc_pkt_buff(ring[thread_id])) == NULL) {
       printf("Error allocating pkt buff\n");
       return NULL;
@@ -375,7 +372,7 @@ void* packet_consumer_thread(void *_id) {
   }
 
   while (!do_shutdown) {
-    if (demo_mode != 1) {
+    if (!forward_packets) {
       rc = pfring_recv(ring[thread_id], &buffer, 0, &hdr, wait_for_packet);
     } else {
       rc = pfring_recv_pkt_buff(ring[thread_id], pkt_handle, &hdr, wait_for_packet);
@@ -384,13 +381,18 @@ void* packet_consumer_thread(void *_id) {
         buffer = pfring_get_pkt_buff_data(ring[thread_id], pkt_handle);
         /* len already set pfring_set_pkt_buff_len(ring[thread_id], pkt_handle, len); */
         
-	if (if_index >= 0)
-          pfring_set_pkt_buff_ifindex(ring[thread_id], pkt_handle, if_index);
+	if (if_index >= 0) {
+          if (pfring_set_pkt_buff_ifindex(ring[thread_id], pkt_handle, if_index) == PF_RING_ERROR_INVALID_ARGUMENT) {
+	    printf("Wrong interface id, packet will not be forwarded\n");
+	    goto next_pkt;
+          }
+	}
         /* else use incoming interface (already set) */
 
         pfring_send_pkt_buff(ring[thread_id], pkt_handle, 0 /* flush flag */);
       }
     }
+next_pkt:
 
     if (rc > 0) {
       numPkts[thread_id]++;
@@ -421,7 +423,7 @@ int main(int argc, char* argv[]) {
   memset(thread_core_affinity, -1, sizeof(thread_core_affinity));
   startTime.tv_sec = 0;
 
-  while ((c = getopt(argc,argv,"ahi:c:d:n:m:r:t:g:x:")) != -1) {
+  while ((c = getopt(argc,argv,"ahi:c:n:m:r:t:g:x:")) != -1) {
     switch (c) {
     case 'a':
       wait_for_packet = 0;
@@ -447,21 +449,18 @@ int main(int argc, char* argv[]) {
     case 'n':
       num_threads = atoi(optarg);
       break;
-    case 'd':
-      demo_mode = atoi(optarg);
-      break;
     case 'm':
       hashing_mode = atoi(optarg);
       break;
     case 'x':
+      forward_packets = 1;
       if_index = atoi(optarg);
       break;
     }
   }
 
   if (cluster_id < 0 || num_threads < 1
-      || demo_mode    < 0 || demo_mode    > 2
-      || hashing_mode < 0 || hashing_mode > 2)
+      || hashing_mode < 0 || hashing_mode > 3)
     printHelp();
 
   if (num_threads > MAX_NUM_THREADS)
@@ -489,7 +488,7 @@ int main(int argc, char* argv[]) {
   }
   
   /* Setting the cluster mode */
-  if (demo_mode == 1)
+  if (forward_packets)
     mode = send_and_recv_mode;
   dna_cluster_set_mode(dna_cluster_handle, mode);
 
@@ -538,11 +537,27 @@ int main(int argc, char* argv[]) {
 
   /* The default distribution function allows to balance per IP 
     in a coherent mode (not like RSS that does not do that) */
-  if (hashing_mode > 0)
-    dna_cluster_set_distribution_function(dna_cluster_handle, master_distribution_function);
+  if (hashing_mode > 0) {
+    if (hashing_mode <= 2)
+      dna_cluster_set_distribution_function(dna_cluster_handle, master_distribution_function);
+    else /* hashing_mode == 2 */
+      dna_cluster_set_distribution_function(dna_cluster_handle, fanout_distribution_function);
+  }
 
-  if (demo_mode == 2)
-    dna_cluster_set_distribution_function(dna_cluster_handle, fanout_distribution_function);
+  switch(hashing_mode) {
+  case 0:
+    printf("Hashing packets per-IP Address\n");
+    break;
+  case 1:
+    printf("Hashing packets per-MAC Address\n");
+    break;
+  case 2:
+    printf("Hashing packets per-IP protocol (TCP, UDP, ICMP...)\n");
+    break;
+  case 3:
+    printf("Replicating each packet on all threads (no copy)\n");
+    break;
+  }
 
   /* Now enable the cluster */
   if (dna_cluster_enable(dna_cluster_handle) < 0) {

@@ -219,9 +219,9 @@ extern "C" {
     void      (*sync_indexes_with_kernel)     (pfring *);
     int       (*send_last_rx_packet)          (pfring *, int);
     u_char*   (*get_pkt_buff_data)            (pfring *, pfring_pkt_buff *);
-    void      (*set_pkt_buff_len)             (pfring *, pfring_pkt_buff *, u_int32_t);
-    void      (*set_pkt_buff_ifindex)         (pfring *, pfring_pkt_buff *, int);
-    void      (*add_pkt_buff_ifindex)         (pfring *, pfring_pkt_buff *, int);
+    int       (*set_pkt_buff_len)             (pfring *, pfring_pkt_buff *, u_int32_t);
+    int       (*set_pkt_buff_ifindex)         (pfring *, pfring_pkt_buff *, int);
+    int       (*add_pkt_buff_ifindex)         (pfring *, pfring_pkt_buff *, int);
     pfring_pkt_buff* (*alloc_pkt_buff)        (pfring *);
     void      (*release_pkt_buff)             (pfring *, pfring_pkt_buff *);
     int       (*recv_pkt_buff)                (pfring *, pfring_pkt_buff *, struct pfring_pkthdr *, u_int8_t);
@@ -360,9 +360,9 @@ extern "C" {
   int   pfring_copy_tx_packet_into_slot(pfring* ring, u_int16_t tx_slot_id, char* buffer, u_int len);
 
   u_char* pfring_get_pkt_buff_data(pfring *ring, pfring_pkt_buff *pkt_handle);
-  void pfring_set_pkt_buff_len(pfring *ring, pfring_pkt_buff *pkt_handle, u_int32_t len);
-  void pfring_set_pkt_buff_ifindex(pfring *ring, pfring_pkt_buff *pkt_handle, int if_index);
-  void pfring_add_pkt_buff_ifindex(pfring *ring, pfring_pkt_buff *pkt_handle, int if_index);
+  int pfring_set_pkt_buff_len(pfring *ring, pfring_pkt_buff *pkt_handle, u_int32_t len);
+  int pfring_set_pkt_buff_ifindex(pfring *ring, pfring_pkt_buff *pkt_handle, int if_index);
+  int pfring_add_pkt_buff_ifindex(pfring *ring, pfring_pkt_buff *pkt_handle, int if_index);
   pfring_pkt_buff* pfring_alloc_pkt_buff(pfring *ring);
   void pfring_release_pkt_buff(pfring *ring, pfring_pkt_buff *pkt_handle);
   int pfring_recv_pkt_buff(pfring *ring, pfring_pkt_buff *pkt_handle, struct pfring_pkthdr *hdr, u_int8_t wait_for_incoming_packet); /* Note: this function fills the buffer pointed by pkt_handle */

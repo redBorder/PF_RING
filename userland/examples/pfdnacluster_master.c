@@ -205,7 +205,8 @@ void printHelp(void) {
   printf("-m <hash mode>  Hashing modes:\n"
 	 "                0 - IP hash (default)\n"
 	 "                1 - MAC Address hash\n"
-	 "                2 - IP protocol hash\n");
+	 "                2 - IP protocol hash\n"
+	 "                3 - Fan-Out\n");
   printf("-a              Active packet wait\n");
   exit(0);
 }
@@ -311,6 +312,15 @@ static u_int32_t master_distribution_function(const u_char *buffer, const u_int1
   return (1 << slave_idx);
 }
 
+/* ******************************** */
+
+u_int32_t fanout_distribution_function(const u_char *buffer, const u_int16_t buffer_len, const u_int32_t num_slaves, u_int32_t *hash) {
+  u_int32_t n_zero_bits = 32 - num_slaves;
+
+  /* returning slave id bitmap */
+  return ((0xFFFFFFFF << n_zero_bits) >> n_zero_bits);
+}
+
 /* *************************************** */
 
 int main(int argc, char* argv[]) {
@@ -356,7 +366,7 @@ int main(int argc, char* argv[]) {
   }
 
   if (cluster_id < 0 || num_app < 1
-      || hashing_mode < 0 || hashing_mode > 2)
+      || hashing_mode < 0 || hashing_mode > 3)
     printHelp();
 
   if (num_app > MAX_NUM_APP)
@@ -420,8 +430,12 @@ int main(int argc, char* argv[]) {
 
   /* The default distribution function allows to balance per IP 
     in a coherent mode (not like RSS that does not do that) */
-  if (hashing_mode > 0)
-    dna_cluster_set_distribution_function(dna_cluster_handle, master_distribution_function);
+  if (hashing_mode > 0) {
+    if (hashing_mode <= 2)
+      dna_cluster_set_distribution_function(dna_cluster_handle, master_distribution_function);
+    else /* hashing_mode == 2 */
+      dna_cluster_set_distribution_function(dna_cluster_handle, fanout_distribution_function);
+  }
 
   switch(hashing_mode) {
   case 0:
@@ -432,6 +446,9 @@ int main(int argc, char* argv[]) {
     break;
   case 2:
     printf("Hashing packets per-IP protocol (TCP, UDP, ICMP...)\n");
+    break;
+  case 3:
+    printf("Replicating each packet on all applications (no copy)\n");
     break;
   }
 

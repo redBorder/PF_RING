@@ -1181,23 +1181,29 @@ u_char* pfring_get_pkt_buff_data(pfring *ring, pfring_pkt_buff *pkt_handle) {
 
 /* **************************************************** */
 
-void pfring_set_pkt_buff_len(pfring *ring, pfring_pkt_buff *pkt_handle, u_int32_t len) {
+int pfring_set_pkt_buff_len(pfring *ring, pfring_pkt_buff *pkt_handle, u_int32_t len) {
   if(ring && ring->set_pkt_buff_len)
-    ring->set_pkt_buff_len(ring, pkt_handle, len);
+    return ring->set_pkt_buff_len(ring, pkt_handle, len);
+  
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
 
-void pfring_set_pkt_buff_ifindex(pfring *ring, pfring_pkt_buff *pkt_handle, int if_index) {
+int pfring_set_pkt_buff_ifindex(pfring *ring, pfring_pkt_buff *pkt_handle, int if_index) {
   if(ring && ring->set_pkt_buff_ifindex)
-    ring->set_pkt_buff_ifindex(ring, pkt_handle, if_index);
+    return ring->set_pkt_buff_ifindex(ring, pkt_handle, if_index);
+  
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
 
-void pfring_add_pkt_buff_ifindex(pfring *ring, pfring_pkt_buff *pkt_handle, int if_index) {
+int pfring_add_pkt_buff_ifindex(pfring *ring, pfring_pkt_buff *pkt_handle, int if_index) {
   if(ring && ring->add_pkt_buff_ifindex)
-    ring->add_pkt_buff_ifindex(ring, pkt_handle, if_index);
+    return ring->add_pkt_buff_ifindex(ring, pkt_handle, if_index);
+
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */

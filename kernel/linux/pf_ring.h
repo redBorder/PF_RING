@@ -759,6 +759,11 @@ struct attach_dna_cluster_info {
   u_int32_t mode; /* socket_mode */
 };
 
+struct dna_cluster_global_stats {
+  u_int64_t tot_rx_packets;
+  u_int64_t tot_tx_packets;
+};
+
 #ifdef __KERNEL__
 
 #define CLUSTER_LEN       32
@@ -905,6 +910,7 @@ struct dna_cluster {
 
   u_int32_t master_persistent_memory_len;
   char *master_persistent_memory;
+  struct dna_cluster_global_stats *stats;
 
   wait_queue_head_t *slave_waitqueue[DNA_CLUSTER_MAX_NUM_SLAVES];
 

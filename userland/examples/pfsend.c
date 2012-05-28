@@ -634,8 +634,9 @@ int main(int argc, char* argv[]) {
       printf("[%d] pfring_send(%d) returned %d\n", i, tosend->len, rc);
 
     if(rc == PF_RING_ERROR_INVALID_ARGUMENT) {
-      printf("Attempting to send invalid packet [len: %u][MTU: %u]\n",
-	     tosend->len, pd->mtu_len);
+      printf("Attempting to send invalid packet [len: %u][MTU: %u]%s\n",
+	     tosend->len, pd->mtu_len,
+      	     if_index != -1 ? " or using a wrong interface id" : "");
     } else if(rc < 0) {
       /* Not enough space in buffer */
       if(!active_poll) {
