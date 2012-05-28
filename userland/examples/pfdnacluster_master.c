@@ -199,7 +199,6 @@ void printHelp(void) {
   printf("-i <device>     Device name (comma-separated list)\n");
   printf("-c <cluster>    Cluster ID\n");
   printf("-n <num app>    Number of applications\n");
-  printf("-s              Enable TX\n");
   printf("-r <core_id>    Bind the RX thread to a core\n");
   printf("-t <core_id>    Bind the TX thread to a core\n");
   printf("-m <hash mode>  Hashing modes:\n"
@@ -207,6 +206,7 @@ void printHelp(void) {
 	 "                1 - MAC Address hash\n"
 	 "                2 - IP protocol hash\n"
 	 "                3 - Fan-Out\n");
+  printf("-s              Enable TX\n");
   printf("-a              Active packet wait\n");
   exit(0);
 }

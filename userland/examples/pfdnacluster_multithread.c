@@ -54,10 +54,12 @@ pfring_stat pfringStats;
 static struct timeval startTime;
 u_int8_t wait_for_packet = 1, do_shutdown = 0;
 int rx_bind_core = 1, tx_bind_core = 2; /* core 0 free if possible */
-int forward_packets = 0, hashing_mode = 0;
-int if_index = -1;
+int hashing_mode = 0;
+int forward_packets = 0, bridge_interfaces = 0, enable_tx = 0;
+int tx_if_index;
 pfring_dna_cluster *dna_cluster_handle;
 pfring *pd[MAX_NUM_DEV];
+int if_indexes[MAX_NUM_DEV];
 pfring *ring[MAX_NUM_THREADS] = { NULL };
 u_int64_t numPkts[MAX_NUM_THREADS] = { 0 };
 u_int64_t numBytes[MAX_NUM_THREADS] = { 0 };
@@ -209,7 +211,6 @@ void printHelp(void) {
   printf("-i <device>     Device name (comma-separated list)\n");
   printf("-c <id>         DNA Cluster ID\n");
   printf("-n <num>        Number of consumer threads\n");
-  printf("-x <if index>   Forward packets to the selected TX interface\n");
   printf("-r <core>       Bind the RX thread to a core\n");
   printf("-t <core>       Bind the TX thread to a core\n");
   printf("-g <id:id...>   Specifies the thread affinity mask (consumers). Each <id> represents\n"
@@ -220,6 +221,8 @@ void printHelp(void) {
 	 "                1 - MAC Address hash\n"
 	 "                2 - IP protocol hash\n"
 	 "                3 - Fan-Out\n");
+  printf("-x <if index>   Forward all packets to the selected interface (Enable TX)\n");
+  printf("-b              Bridge the interfaces listed in -i in pairs (Enable TX)\n");
   printf("-a              Active packet wait\n");
   exit(0);
 }
@@ -336,7 +339,7 @@ u_int32_t fanout_distribution_function(const u_char *buffer, const u_int16_t buf
 /* *************************************** */
 
 void* packet_consumer_thread(void *_id) {
-  int s, rc;
+  int i, s, rc;
   long thread_id = (long)_id; 
   pfring_pkt_buff *pkt_handle = NULL;
   struct pfring_pkthdr hdr;
@@ -350,7 +353,7 @@ void* packet_consumer_thread(void *_id) {
     if (thread_core_affinity[thread_id] != -1)
        core_id = thread_core_affinity[thread_id] % numCPU;
     else
-      core_id = ((!forward_packets ? rx_bind_core : tx_bind_core) + 1 + thread_id) % numCPU; 
+      core_id = ((!enable_tx ? rx_bind_core : tx_bind_core) + 1 + thread_id) % numCPU; 
 
     CPU_ZERO(&cpuset);
     CPU_SET(core_id, &cpuset);
@@ -364,7 +367,7 @@ void* packet_consumer_thread(void *_id) {
 
   memset(&hdr, 0, sizeof(hdr));
 
-  if (forward_packets) {
+  if (enable_tx) {
     if ((pkt_handle = pfring_alloc_pkt_buff(ring[thread_id])) == NULL) {
       printf("Error allocating pkt buff\n");
       return NULL;
@@ -372,7 +375,7 @@ void* packet_consumer_thread(void *_id) {
   }
 
   while (!do_shutdown) {
-    if (!forward_packets) {
+    if (!enable_tx) {
       rc = pfring_recv(ring[thread_id], &buffer, 0, &hdr, wait_for_packet);
     } else {
       rc = pfring_recv_pkt_buff(ring[thread_id], pkt_handle, &hdr, wait_for_packet);
@@ -380,14 +383,20 @@ void* packet_consumer_thread(void *_id) {
       if (rc > 0) {
         buffer = pfring_get_pkt_buff_data(ring[thread_id], pkt_handle);
         /* len already set pfring_set_pkt_buff_len(ring[thread_id], pkt_handle, len); */
-        
-	if (if_index >= 0) {
-          if (pfring_set_pkt_buff_ifindex(ring[thread_id], pkt_handle, if_index) == PF_RING_ERROR_INVALID_ARGUMENT) {
+       
+        if (bridge_interfaces) {
+	  for (i = 0; i < num_dev; i++) {
+	    if (if_indexes[i] == hdr.extended_hdr.if_index) {
+	      pfring_set_pkt_buff_ifindex(ring[thread_id], pkt_handle, if_indexes[i ^ 0x1]);
+	      break;
+	    }
+	  }
+	} else if (forward_packets) {
+	  if (pfring_set_pkt_buff_ifindex(ring[thread_id], pkt_handle, tx_if_index) == PF_RING_ERROR_INVALID_ARGUMENT) {
 	    printf("Wrong interface id, packet will not be forwarded\n");
 	    goto next_pkt;
           }
-	}
-        /* else use incoming interface (already set) */
+	} /* else use incoming interface (already set) */
 
         pfring_send_pkt_buff(ring[thread_id], pkt_handle, 0 /* flush flag */);
       }
@@ -423,7 +432,7 @@ int main(int argc, char* argv[]) {
   memset(thread_core_affinity, -1, sizeof(thread_core_affinity));
   startTime.tv_sec = 0;
 
-  while ((c = getopt(argc,argv,"ahi:c:n:m:r:t:g:x:")) != -1) {
+  while ((c = getopt(argc,argv,"ahi:bc:n:m:r:t:g:x:")) != -1) {
     switch (c) {
     case 'a':
       wait_for_packet = 0;
@@ -454,13 +463,17 @@ int main(int argc, char* argv[]) {
       break;
     case 'x':
       forward_packets = 1;
-      if_index = atoi(optarg);
+      tx_if_index = atoi(optarg);
+      break;
+    case 'b':
+      bridge_interfaces = 1;
       break;
     }
   }
 
   if (cluster_id < 0 || num_threads < 1
-      || hashing_mode < 0 || hashing_mode > 3)
+      || hashing_mode < 0 || hashing_mode > 3 
+      || (forward_packets && tx_if_index < 0))
     printHelp();
 
   if (num_threads > MAX_NUM_THREADS)
@@ -488,8 +501,11 @@ int main(int argc, char* argv[]) {
   }
   
   /* Setting the cluster mode */
-  if (forward_packets)
+  if (forward_packets || bridge_interfaces)  {
+    enable_tx = 1;
     mode = send_and_recv_mode;
+  }
+
   dna_cluster_set_mode(dna_cluster_handle, mode);
 
   dev = strtok_r(device, ",", &dev_pos);
@@ -508,6 +524,15 @@ int main(int argc, char* argv[]) {
 
     snprintf(buf, sizeof(buf), "pfdnacluster_multithread-cluster-%d-socket-%d", cluster_id, num_dev);
     pfring_set_application_name(pd[num_dev], buf);
+
+    if (bridge_interfaces && pfring_get_bound_device_id(pd[num_dev], &if_indexes[num_dev]) < 0) {
+      fprintf(stderr, "Error reading interface id\n");
+      dna_cluster_destroy(dna_cluster_handle);
+      return -1;
+    }
+
+    if (num_dev & 0x1)
+      printf("Bridging interfaces %d <-> %d\n", if_indexes[num_dev & ~0x1], if_indexes[num_dev]);
 
     /* Add the ring we created to the cluster */
     if (dna_cluster_register_ring(dna_cluster_handle, pd[num_dev]) < 0) {
@@ -528,6 +553,11 @@ int main(int argc, char* argv[]) {
 
   if (num_dev == 0) {
     dna_cluster_destroy(dna_cluster_handle);
+    printHelp();
+  }
+
+  if (bridge_interfaces && (num_dev & 0x1)) {
+    fprintf(stderr, "Bridge mode requires an even number of interfaces\n");
     printHelp();
   }
 
