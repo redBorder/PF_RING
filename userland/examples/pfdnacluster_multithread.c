@@ -398,7 +398,7 @@ void* packet_consumer_thread(void *_id) {
           }
 	} /* else use incoming interface (already set) */
 
-        pfring_send_pkt_buff(ring[thread_id], pkt_handle, 0 /* flush flag */);
+        pfring_send_pkt_buff(ring[thread_id], pkt_handle, bridge_interfaces ? 1 : 0 /* flush flag */);
       }
     }
 next_pkt:
