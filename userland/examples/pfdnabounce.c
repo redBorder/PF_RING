@@ -175,7 +175,6 @@ void printHelp(void) {
   printf("-h              Print this help\n");
   printf("-i <device>     Device name (RX)\n");
   printf("-o <device>     Device name (TX)\n");
-  printf("-v              Verbose\n");
   printf("-a              Active packet wait\n");
   exit(0);
 }
