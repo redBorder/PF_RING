@@ -347,7 +347,8 @@ char* gtp_version2str(gtp_version v) {
 
 static int32_t thiszone;
 
-void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u_char *user_bytes) {
+void dummyProcesssPacket(const struct pfring_pkthdr *h, 
+			 const u_char *p, const u_char *user_bytes) {
   long threadId = (long)user_bytes;
 
   if(touch_payload) {
@@ -392,7 +393,9 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u
     }
 #endif
 
-    if(use_extended_pkt_header && (h->extended_hdr.parsed_header_len > 0)) {
+    ehdr = (struct ether_header *) p;
+
+    if(use_extended_pkt_header) {
       printf("[eth_type=0x%04X]", 
 	     h->extended_hdr.parsed_pkt.eth_type);
       printf("[l3_proto=%u]", (unsigned int)h->extended_hdr.parsed_pkt.l3_proto);
@@ -407,66 +410,70 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u
       printf("[%s -> %s] ",
 	     etheraddr_string(h->extended_hdr.parsed_pkt.smac, buf1),
 	     etheraddr_string(h->extended_hdr.parsed_pkt.dmac, buf2));    
+
+      printf("%s[if_index=%d][%s -> %s][eth_type=0x%04X] ",
+	     use_extended_pkt_header ? (h->extended_hdr.rx_direction ? "[RX]" : "[TX]") : "",
+	     h->extended_hdr.if_index,
+	     etheraddr_string(ehdr->ether_shost, buf1),
+	     etheraddr_string(ehdr->ether_dhost, buf2), 
+	     ntohs(ehdr->ether_type));
+
+      if(h->extended_hdr.parsed_pkt.offset.vlan_offset)
+	printf("[vlan %u] ", h->extended_hdr.parsed_pkt.vlan_id);
+
+      if(h->extended_hdr.parsed_pkt.eth_type == 0x0800) {
+	ip = (struct ip *) &p[h->extended_hdr.parsed_pkt.offset.l3_offset];
+	printf("[%s]", proto2str(ip->ip_p));
+	printf("[%s:%d ", intoa(ntohl(ip->ip_src.s_addr)), h->extended_hdr.parsed_pkt.l4_src_port);
+	printf("-> %s:%d] ", intoa(ntohl(ip->ip_dst.s_addr)), h->extended_hdr.parsed_pkt.l4_dst_port);
+
+	if((ip->ip_p == IPPROTO_UDP) 
+	   && use_extended_pkt_header
+	   && (h->extended_hdr.parsed_pkt.gtp.tunnel_id != NO_GTP_TUNNEL_ID))
+	  printf("[GTP Version=%s/TEID=0x%08X/MsgType=0x%02X]",
+		 gtp_version2str(h->extended_hdr.parsed_pkt.gtp.version),
+		 h->extended_hdr.parsed_pkt.gtp.tunnel_id,
+		 h->extended_hdr.parsed_pkt.gtp.message_type);
+
+	printf("[hash=%u][tos=%d][tcp_seq_num=%u][caplen=%d][len=%d][parsed_header_len=%d]"
+	       "[eth_offset=%d][l3_offset=%d][l4_offset=%d][payload_offset=%d]\n",
+	       h->extended_hdr.pkt_hash,
+	       h->extended_hdr.parsed_pkt.ipv4_tos, h->extended_hdr.parsed_pkt.tcp.seq_num,
+	       h->caplen, h->len, h->extended_hdr.parsed_header_len,
+	       h->extended_hdr.parsed_pkt.offset.eth_offset,
+	       h->extended_hdr.parsed_pkt.offset.l3_offset,
+	       h->extended_hdr.parsed_pkt.offset.l4_offset,
+	       h->extended_hdr.parsed_pkt.offset.payload_offset);
+
+      } else {
+	if(h->extended_hdr.parsed_pkt.eth_type == 0x0806)
+	  printf("[ARP]");
+	else
+	  printf("[eth_type=0x%04X]", h->extended_hdr.parsed_pkt.eth_type);
+
+	printf("[caplen=%d][len=%d][parsed_header_len=%d]"
+	       "[eth_offset=%d][l3_offset=%d][l4_offset=%d][payload_offset=%d]\n",
+	       h->caplen, h->len, h->extended_hdr.parsed_header_len,
+	       h->extended_hdr.parsed_pkt.offset.eth_offset,
+	       h->extended_hdr.parsed_pkt.offset.l3_offset,
+	       h->extended_hdr.parsed_pkt.offset.l4_offset,
+	       h->extended_hdr.parsed_pkt.offset.payload_offset);
+      }
+    } else
+      printf("[%s -> %s][eth_type=0x%04X][caplen=%d][len=%d] (use -m for details)\n",
+	     etheraddr_string(ehdr->ether_shost, buf1),
+	     etheraddr_string(ehdr->ether_dhost, buf2), 
+	     ntohs(ehdr->ether_type),
+	     h->caplen, h->len);
+	     
+    numPkts[threadId]++, numBytes[threadId] += h->len+24 /* 8 Preamble + 4 CRC + 12 IFG */;
+
+    if(unlikely(add_drop_rule)) {
+      if(h->ts.tv_sec == 0)
+	pfring_parse_pkt((u_char*)p, (struct pfring_pkthdr*)h, 4, 0, 1);
+
+      drop_packet_rule(h);
     }
-
-    ehdr = (struct ether_header *) p;
-    printf("%s[if_index=%d][%s -> %s][eth_type=0x%04X] ",
-	   use_extended_pkt_header ? (h->extended_hdr.rx_direction ? "[RX]" : "[TX]") : "",
-	   h->extended_hdr.if_index,
-	   etheraddr_string(ehdr->ether_shost, buf1),
-	   etheraddr_string(ehdr->ether_dhost, buf2), 
-	   h->extended_hdr.parsed_pkt.eth_type);
-
-    if(h->extended_hdr.parsed_pkt.offset.vlan_offset)
-      printf("[vlan %u] ", h->extended_hdr.parsed_pkt.vlan_id);
-
-    if(h->extended_hdr.parsed_pkt.eth_type == 0x0800) {
-      ip = (struct ip *) &p[h->extended_hdr.parsed_pkt.offset.l3_offset];
-      printf("[%s]", proto2str(ip->ip_p));
-      printf("[%s:%d ", intoa(ntohl(ip->ip_src.s_addr)), h->extended_hdr.parsed_pkt.l4_src_port);
-      printf("-> %s:%d] ", intoa(ntohl(ip->ip_dst.s_addr)), h->extended_hdr.parsed_pkt.l4_dst_port);
-
-      if((ip->ip_p == IPPROTO_UDP) 
-	 && use_extended_pkt_header
-	 && (h->extended_hdr.parsed_pkt.gtp.tunnel_id != NO_GTP_TUNNEL_ID))
-	printf("[GTP Version=%s/TEID=0x%08X/MsgType=0x%02X]",
-	       gtp_version2str(h->extended_hdr.parsed_pkt.gtp.version),
-	       h->extended_hdr.parsed_pkt.gtp.tunnel_id,
-	       h->extended_hdr.parsed_pkt.gtp.message_type);
-
-      printf("[hash=%u][tos=%d][tcp_seq_num=%u][caplen=%d][len=%d][parsed_header_len=%d]"
-	     "[eth_offset=%d][l3_offset=%d][l4_offset=%d][payload_offset=%d]\n",
-	     h->extended_hdr.pkt_hash,
-	     h->extended_hdr.parsed_pkt.ipv4_tos, h->extended_hdr.parsed_pkt.tcp.seq_num,
-	     h->caplen, h->len, h->extended_hdr.parsed_header_len,
-	     h->extended_hdr.parsed_pkt.offset.eth_offset,
-	     h->extended_hdr.parsed_pkt.offset.l3_offset,
-	     h->extended_hdr.parsed_pkt.offset.l4_offset,
-	     h->extended_hdr.parsed_pkt.offset.payload_offset);
-
-    } else {
-      if(h->extended_hdr.parsed_pkt.eth_type == 0x0806)
-	printf("[ARP]");
-      else
-	printf("[eth_type=0x%04X]", h->extended_hdr.parsed_pkt.eth_type);
-
-      printf("[caplen=%d][len=%d][parsed_header_len=%d]"
-	     "[eth_offset=%d][l3_offset=%d][l4_offset=%d][payload_offset=%d]\n",
-	     h->caplen, h->len, h->extended_hdr.parsed_header_len,
-	     h->extended_hdr.parsed_pkt.offset.eth_offset,
-	     h->extended_hdr.parsed_pkt.offset.l3_offset,
-	     h->extended_hdr.parsed_pkt.offset.l4_offset,
-	     h->extended_hdr.parsed_pkt.offset.payload_offset);
-    }
-  }
-
-  numPkts[threadId]++, numBytes[threadId] += h->len+24 /* 8 Preamble + 4 CRC + 12 IFG */;
-
-  if(unlikely(add_drop_rule)) {
-    if(h->ts.tv_sec == 0)
-      pfring_parse_pkt((u_char*)p, (struct pfring_pkthdr*)h, 4, 0, 1);
-
-    drop_packet_rule(h);
   }
 }
 
