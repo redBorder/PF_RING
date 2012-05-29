@@ -3589,11 +3589,9 @@ static void ixgbe_configure_srrctl(struct ixgbe_adapter *adapter,
 static void ixgbe_setup_mrqc(struct ixgbe_adapter *adapter)
 {
 	struct ixgbe_hw *hw = &adapter->hw;
-#ifndef ENABLE_DNA
 	static const u32 seed[10] = { 0xE291D73D, 0x1805EC6C, 0x2A94B30D,
 			  0xA54F2BEC, 0xEA49AF7C, 0xE214AD3D, 0xB855AABE,
 			  0x6A3E67EA, 0x14364D17, 0x3BED200D};
-#endif
 	u32 mrqc = 0, reta = 0;
 	u32 rxcsum;
 	int i, j;
@@ -3608,23 +3606,9 @@ static void ixgbe_setup_mrqc(struct ixgbe_adapter *adapter)
 
 	/* Fill out hash function seeds */
 	for (i = 0; i < 10; i++)
-#ifdef ENABLE_DNA
-		IXGBE_WRITE_REG(hw, IXGBE_RSSRK(i), 0xAFE3AFE3);
-#else
 		IXGBE_WRITE_REG(hw, IXGBE_RSSRK(i), seed[i]);
-#endif
 
 	/* Fill out redirection table */
-#ifdef ENABLE_DNA
-	for (i = 0; i < 32; i++) {
-		reta = 0;
-		for (j = 0; j < 4; j++) {
-			u32 entry = (maxq * ((i * 4) + j)) >> 7;
-			reta |= entry << (8 * j);
-		}
-		IXGBE_WRITE_REG(hw, IXGBE_RETA(i), reta);
-	}
-#else
 	for (i = 0, j = 0; i < 128; i++, j++) {
 		if (j == maxq)
 			j = 0;
@@ -3634,7 +3618,6 @@ static void ixgbe_setup_mrqc(struct ixgbe_adapter *adapter)
 		if ((i & 3) == 3)
 			IXGBE_WRITE_REG(hw, IXGBE_RETA(i >> 2), reta);
 	}
-#endif
 
 	/* Disable indicating checksum in descriptor, enables RSS hash */
 	rxcsum = IXGBE_READ_REG(hw, IXGBE_RXCSUM);
