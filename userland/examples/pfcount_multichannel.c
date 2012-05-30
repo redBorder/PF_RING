@@ -166,13 +166,6 @@ void sigproc(int sig) {
     printf("\t%d...\n", i);
   }
 
-  fprintf(stderr, "Joining threads...\n");
-  for(i=0; i<num_channels; i++) {
-    pthread_join(pd_thread[i], NULL);
-    pfring_close(ring[i]);
-    printf("\t%d...\n", i);
-  }
-
   exit(0);
 }
 
@@ -467,6 +460,7 @@ void* packet_consumer_thread(void* _id) {
 
     if(pfring_recv(ring[thread_id], &buffer, 0, &hdr, wait_for_packet) > 0) {
       dummyProcesssPacket(&hdr, buffer, (u_char*)thread_id);
+
     } else {
       if(wait_for_packet == 0) sched_yield();
       //usleep(1);
@@ -618,8 +612,10 @@ int main(int argc, char* argv[]) {
     alarm(ALARM_SLEEP);
   }
 
-  for(i=0; i<num_channels; i++)
+  for(i=0; i<num_channels; i++) {
     pthread_join(pd_thread[i], NULL);
+    pfring_close(ring[i]);
+  }
 
   return(0);
 }
