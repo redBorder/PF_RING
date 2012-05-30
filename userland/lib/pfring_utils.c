@@ -87,7 +87,7 @@ int pfring_parse_pkt(u_char *pkt, struct pfring_pkthdr *hdr, u_int8_t level /* 2
 		     u_int8_t add_timestamp /* 0,1 */, u_int8_t add_hash /* 0,1 */) {
   struct eth_hdr *eh = (struct eth_hdr*) pkt;
   u_int32_t displ = 0, ip_len;
-  u_int16_t analized = 0, fragment_offset = 0;
+  u_int16_t analyzed = 0, fragment_offset = 0;
 
   /* Note: in order to optimize the computation, this function expects a zero-ed 
    * or partially parsed pkthdr */
@@ -118,7 +118,7 @@ int pfring_parse_pkt(u_char *pkt, struct pfring_pkthdr *hdr, u_int8_t level /* 2
 
 L3:
 
-  analized = 2;
+  analyzed = 2;
 
   if (level < 3)
     goto TIMESTAMP;
@@ -189,7 +189,7 @@ L3:
 
 L4:
 
-  analized = 3;
+  analyzed = 3;
 
   if (level < 4 || fragment_offset)
     goto TIMESTAMP;
@@ -240,7 +240,7 @@ L4:
     hdr->extended_hdr.parsed_pkt.l4_src_port = hdr->extended_hdr.parsed_pkt.l4_dst_port = 0;
   }
 
-  analized = 4;
+  analyzed = 4;
 
 TIMESTAMP:
 
@@ -250,7 +250,7 @@ TIMESTAMP:
   if (add_hash && hdr->extended_hdr.pkt_hash == 0)
     hdr->extended_hdr.pkt_hash = pfring_hash_pkt(hdr);
 
-  return analized;
+  return analyzed;
 }
 
 /* ******************************* */
