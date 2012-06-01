@@ -7621,13 +7621,44 @@ static int ring_getsockopt(struct socket *sock,
       return -EFAULT;
     break;
 
-  case SO_GET_BOUND_DEVICE_ID:
+  case SO_GET_BOUND_DEVICE_IFINDEX:
     if((len < sizeof(int))
        || (pfr->ring_netdev == NULL))
       return -EINVAL;
 
     if(copy_to_user(optval, &pfr->ring_netdev->dev->ifindex, sizeof(int)))
       return -EFAULT;
+    break;
+
+  case SO_GET_DEVICE_IFINDEX:
+    {
+      struct list_head *ptr, *tmp_ptr;
+      char dev_name[32];
+      int ifindex_found = 0;
+
+      if(len < sizeof(int) || len > sizeof(dev_name))
+        return -EINVAL;
+
+      if(copy_from_user(&dev_name, optval, len))
+        return -EFAULT;
+      dev_name[sizeof(dev_name)-1] = 0;
+
+      list_for_each_safe(ptr, tmp_ptr, &ring_aware_device_list) {
+        ring_device_element *dev_ptr = list_entry(ptr, ring_device_element, device_list);
+
+        if(strcmp(dev_ptr->dev->name, dev_name) == 0) {
+          ifindex_found = 1;
+
+          if(copy_to_user(optval, &dev_ptr->dev->ifindex, sizeof(int)))
+            return -EFAULT;
+
+          break;
+        }
+      }
+
+      if (!ifindex_found)
+        return -EINVAL;
+    }
     break;
 
   case SO_GET_NUM_QUEUED_PKTS:

@@ -104,6 +104,8 @@ int pfring_mod_open(pfring *ring) {
   ring->poll = pfring_mod_poll;
   ring->version = pfring_mod_version;
   ring->get_bound_device_address = pfring_mod_get_bound_device_address;
+  ring->get_bound_device_ifindex = pfring_mod_get_bound_device_ifindex;
+  ring->get_device_ifindex = pfring_mod_get_device_ifindex;
   ring->get_slot_header_len = pfring_mod_get_slot_header_len;
   ring->set_virtual_device = pfring_mod_set_virtual_device;
   ring->add_hw_rule = pfring_hw_ft_add_hw_rule;
@@ -802,12 +804,39 @@ int pfring_mod_loopback_test(pfring *ring, char *buffer, u_int buffer_len, u_int
   return(getsockopt(ring->fd, 0, SO_GET_LOOPBACK_TEST, (char*)buffer, &len));
 }
 
-/* *********************************** */
+/* **************************************************** */
 
 int pfring_mod_get_bound_device_address(pfring *ring, u_char mac_address[6]) {
   socklen_t len = 6;
 
   return(getsockopt(ring->fd, 0, SO_GET_BOUND_DEVICE_ADDRESS, mac_address, &len));
+}
+
+/* **************************************************** */
+
+int pfring_mod_get_bound_device_ifindex(pfring *ring, int *if_index) {
+  socklen_t len = sizeof(int);
+
+  return(getsockopt(ring->fd, 0, SO_GET_BOUND_DEVICE_IFINDEX, if_index, &len));
+}
+
+/* **************************************************** */
+
+int pfring_mod_get_device_ifindex(pfring *ring, char *device_name, int *if_index) {
+  char buffer[32];
+  socklen_t len = sizeof(buffer);
+  int rc;
+
+  memset(buffer, 0, sizeof(buffer));
+  strncpy(buffer, device_name, sizeof(buffer) - 1);
+  
+  rc = getsockopt(ring->fd, 0, SO_GET_DEVICE_IFINDEX, buffer, &len);
+
+  if (rc < 0)
+    return rc;
+
+  memcpy(if_index, buffer, sizeof(if_index));
+  return 0;
 }
 
 /* **************************************************** */

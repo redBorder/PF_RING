@@ -525,7 +525,7 @@ int main(int argc, char* argv[]) {
     snprintf(buf, sizeof(buf), "pfdnacluster_multithread-cluster-%d-socket-%d", cluster_id, num_dev);
     pfring_set_application_name(pd[num_dev], buf);
 
-    if (bridge_interfaces && pfring_get_bound_device_id(pd[num_dev], &if_indexes[num_dev]) < 0) {
+    if (bridge_interfaces && pfring_get_bound_device_ifindex(pd[num_dev], &if_indexes[num_dev]) < 0) {
       fprintf(stderr, "Error reading interface id\n");
       dna_cluster_destroy(dna_cluster_handle);
       return -1;

@@ -203,6 +203,8 @@ extern "C" {
     int       (*next_pkt_raw_timestamp)       (pfring *, u_int64_t *);
     int       (*version)                      (pfring *, u_int32_t *);
     int       (*get_bound_device_address)     (pfring *, u_char [6]);
+    int       (*get_bound_device_ifindex)     (pfring *, int *);
+    int       (*get_device_ifindex)           (pfring *, char *, int *);
     u_int16_t (*get_slot_header_len)          (pfring *);
     int       (*set_virtual_device)           (pfring *, virtual_filtering_device_info *);
     int       (*add_hw_rule)                  (pfring *, hw_filtering_rule *);
@@ -341,7 +343,8 @@ extern "C" {
   int pfring_set_reflector_device(pfring *ring, char *device_name);
   int pfring_get_bound_device_address(pfring *ring, u_char mac_address[6]);
   u_int16_t pfring_get_slot_header_len(pfring *ring);
-  int pfring_get_bound_device_id(pfring *ring, int *device_id);
+  int pfring_get_bound_device_ifindex(pfring *ring, int *if_index);
+  int pfring_get_device_ifindex(pfring *ring, char *device_name, int *if_index);
   int pfring_set_virtual_device(pfring *ring, virtual_filtering_device_info *info);
   int pfring_loopback_test(pfring *ring, char *buffer, u_int buffer_len, u_int test_len);
   int pfring_enable_ring(pfring *ring);

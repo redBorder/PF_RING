@@ -186,6 +186,8 @@ int pfring_dna_open(pfring *ring) {
   ring->get_ring_id = pfring_mod_get_ring_id;
   ring->version = pfring_mod_version;
   ring->get_bound_device_address = pfring_mod_get_bound_device_address;
+  ring->get_bound_device_ifindex = pfring_mod_get_bound_device_ifindex;
+  ring->get_device_ifindex = pfring_mod_get_device_ifindex;
   ring->get_slot_header_len = pfring_mod_get_slot_header_len;
   ring->set_virtual_device = pfring_mod_set_virtual_device;
   ring->add_hw_rule = pfring_hw_ft_add_hw_rule;

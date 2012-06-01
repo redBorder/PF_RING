@@ -61,6 +61,8 @@ int pfring_mod_enable_rss_rehash(pfring *ring);
 int pfring_mod_poll(pfring *ring, u_int wait_duration);
 int pfring_mod_version(pfring *ring, u_int32_t *version);
 int pfring_mod_get_bound_device_address(pfring *ring, u_char mac_address[6]);
+int pfring_mod_get_bound_device_ifindex(pfring *ring, int *if_index);
+int pfring_mod_get_device_ifindex(pfring *ring, char *device_name, int *if_index);
 u_int16_t pfring_mod_get_slot_header_len(pfring *ring);
 int pfring_mod_set_virtual_device(pfring *ring, virtual_filtering_device_info *info);
 int pfring_mod_loopback_test(pfring *ring, char *buffer, u_int buffer_len, u_int test_len);

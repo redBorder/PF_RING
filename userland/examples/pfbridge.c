@@ -66,7 +66,7 @@ int main(int argc, char* argv[]) {
   pfring *a_ring, *b_ring;
   char *a_dev = NULL, *b_dev = NULL, c;
   u_int8_t verbose = 0, use_pfring_send = 0;
-  int a_device_id, b_device_id;
+  int a_ifindex, b_ifindex;
 
   while((c = getopt(argc,argv, "ha:b:c:fvp")) != -1) {
     switch(c) {
@@ -106,7 +106,7 @@ int main(int argc, char* argv[]) {
   } else {
     pfring_set_application_name(a_ring, "pfbridge-a");
     pfring_set_direction(a_ring, rx_and_tx_direction);
-    pfring_get_bound_device_id(a_ring, &a_device_id);
+    pfring_get_bound_device_ifindex(a_ring, &a_ifindex);
   }
 
   if((b_ring = pfring_open(b_dev, 1500, PF_RING_PROMISC|PF_RING_LONG_HEADER)) == NULL) {
@@ -116,7 +116,7 @@ int main(int argc, char* argv[]) {
   } else {
     pfring_set_application_name(b_ring, "pfbridge-b");
     pfring_set_direction(b_ring, rx_and_tx_direction);
-    pfring_get_bound_device_id(b_ring, &b_device_id);
+    pfring_get_bound_device_ifindex(b_ring, &b_ifindex);
   }
   
   /* Enable rings */
@@ -145,7 +145,7 @@ int main(int argc, char* argv[]) {
 	else if(verbose)
 	  printf("Forwarded %d bytes packet\n", hdr.len);	
       } else {
-	rc = pfring_send_last_rx_packet(a_ring, b_device_id);
+	rc = pfring_send_last_rx_packet(a_ring, b_ifindex);
 	
 	if(rc < 0)
 	  printf("pfring_send_last_rx_packet() error %d\n", rc);

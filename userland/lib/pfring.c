@@ -960,10 +960,20 @@ int pfring_get_bound_device_address(pfring *ring, u_char mac_address[6]) {
 
 /* **************************************************** */
 
-int pfring_get_bound_device_id(pfring *ring, int *device_id) {
-  socklen_t len = sizeof(int);
+int pfring_get_bound_device_ifindex(pfring *ring, int *if_index) {
+  if(ring && ring->get_bound_device_ifindex)
+    return ring->get_bound_device_ifindex(ring, if_index);
 
-  return(getsockopt(ring->fd, 0, SO_GET_BOUND_DEVICE_ID, device_id, &len));
+  return(PF_RING_ERROR_NOT_SUPPORTED);
+}
+
+/* **************************************************** */
+
+int pfring_get_device_ifindex(pfring *ring, char *device_name, int *if_index) {
+  if(ring && ring->get_device_ifindex)
+    return ring->get_device_ifindex(ring, device_name, if_index);
+
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */

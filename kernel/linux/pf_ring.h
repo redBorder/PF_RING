@@ -92,7 +92,8 @@
 #define SO_GET_BUCKET_LEN                181
 #define SO_GET_DEVICE_TYPE               182
 #define SO_GET_EXTRA_DMA_MEMORY          183
-#define SO_GET_BOUND_DEVICE_ID           184
+#define SO_GET_BOUND_DEVICE_IFINDEX      184
+#define SO_GET_DEVICE_IFINDEX            185
 
 /* Map */
 #define SO_MAP_DNA_DEVICE                190

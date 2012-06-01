@@ -786,13 +786,13 @@ int main(int argc, char* argv[]) {
     if(pfring_get_bound_device_address(pd, mac_address) != 0)
       fprintf(stderr, "Unable to read the device address\n");
     else {
-      int device_id = -1;
+      int ifindex = -1;
       
-      pfring_get_bound_device_id(pd, &device_id);
+      pfring_get_bound_device_ifindex(pd, &ifindex);
       
       printf("Capturing from %s [%s][ifIndex: %d]\n", 
 	     device, etheraddr_string(mac_address, buf), 
-	     device_id);
+	     ifindex);
     }
   }
 
