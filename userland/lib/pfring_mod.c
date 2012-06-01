@@ -835,7 +835,7 @@ int pfring_mod_get_device_ifindex(pfring *ring, char *device_name, int *if_index
   if (rc < 0)
     return rc;
 
-  memcpy(if_index, buffer, sizeof(if_index));
+  memcpy(if_index, buffer, sizeof(*if_index));
   return 0;
 }
 
