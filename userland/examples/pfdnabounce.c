@@ -1,6 +1,7 @@
 /*
  *
  * (C) 2005-12 - Luca Deri <deri@ntop.org>
+ *               Alfredo Cardigliano <cardigliano@ntop.org>
  *
  *
  * This program is free software; you can redistribute it and/or modify
@@ -48,12 +49,15 @@
 pfring  *pd1, *pd2;
 pfring_stat pfringStats;
 char *in_dev = NULL, *out_dev = NULL;
+int in_ifindex, out_ifindex;
 u_int8_t wait_for_packet = 1, do_shutdown = 0;
 static struct timeval startTime;
 unsigned long long numPkts = 0, numBytes = 0;
-#ifdef HAVE_ZERO
 pfring_dna_bouncer *bouncer_handle = NULL;
-#endif
+int mode = 0;
+int bidirectional = 0;
+int cluster_id = -1;
+int flush = 0;
 
 /* *************************************** */
 /*
@@ -76,6 +80,22 @@ double delta_time (struct timeval * now,
     -- delta_seconds;
   }
   return((double)(delta_seconds * 1000) + (double)delta_microseconds/1000);
+}
+
+/* ******************************** */
+
+int bind2core(u_int core_id) {
+  cpu_set_t cpuset;
+  int s;
+
+  CPU_ZERO(&cpuset);
+  CPU_SET(core_id, &cpuset);
+  if((s = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset)) != 0) {
+    fprintf(stderr, "Error while binding to core %u: errno=%i\n", core_id, s);
+    return(-1);
+  } else {
+    return(0);
+  }
 }
 
 /* ******************************** */
@@ -159,11 +179,15 @@ void sigproc(int sig) {
   if(called) return; else called = 1;
   do_shutdown = 1;
 
-#ifdef HAVE_ZERO
-  pfring_dna_bouncer_breakloop(bouncer_handle);
-#else
-  pfring_breakloop(pd1);
-#endif
+  switch (mode) {
+  case 0: 
+    pfring_dna_bouncer_breakloop(bouncer_handle); 
+  break;
+  case 1:
+  case 2: 
+    pfring_breakloop(pd1);
+  break;
+  }
 }
 
 /* *************************************** */
@@ -176,14 +200,21 @@ void printHelp(void) {
   printf("-h              Print this help\n");
   printf("-i <device>     Device name (RX)\n");
   printf("-o <device>     Device name (TX)\n");
+  printf("-m <mode>       Specifies the library support to use\n"
+	 "                0 - DNA Bouncer (default)\n"
+	 "                1 - DNA Cluster (use -c <id>)\n"
+	 "                2 - Standard DNA\n");
+  printf("-c <id>         DNA Cluster id\n");
+  printf("-b              Bridge mode: forward in both directions (DNA Cluster only)\n");
+  printf("-f              Flush packets immediately (do not use watermarks)\n");
+  printf("-g <core id>    Bind this app to a core\n");
   printf("-a              Active packet wait\n");
   exit(0);
 }
 
 /* *************************************** */
 
-
-int dummyProcesssPacketZero(u_int16_t pkt_len, u_char *pkt, const u_char *user_bytes) {
+int dummyProcessPacketZero(u_int16_t pkt_len, u_char *pkt, const u_char *user_bytes) {
   numPkts++;
   numBytes += pkt_len + 24 /* 8 Preamble + 4 CRC + 12 IFG */;
 
@@ -192,9 +223,51 @@ int dummyProcesssPacketZero(u_int16_t pkt_len, u_char *pkt, const u_char *user_b
 
 /* *************************************** */
 
-void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u_char *user_bytes) { 
-  /* Bounce back */
-  pfring_send(pd2, (char*)p, h->caplen, 0 /* !flush out */);
+void packetConsumerLoopZeroCluster() { 
+  struct pfring_pkthdr h;
+  int tx_ifindex;
+  pfring_pkt_buff *pkt_handle = NULL;
+
+  memset(&h, 0, sizeof(h));
+
+  if ((pkt_handle = pfring_alloc_pkt_buff(pd1)) == NULL) {
+    printf("Error allocating pkt buff\n");
+    return;
+  }
+
+  while (!do_shutdown) {
+    if (pfring_recv_pkt_buff(pd1, pkt_handle, &h, wait_for_packet) > 0) {
+
+      if (bidirectional && h.extended_hdr.if_index == in_ifindex)
+        tx_ifindex = out_ifindex;
+      else if (bidirectional && h.extended_hdr.if_index == out_ifindex)
+        tx_ifindex = in_ifindex;
+      else if (!bidirectional && h.extended_hdr.if_index == in_ifindex)
+        tx_ifindex = out_ifindex;
+      else {
+        /* unexpected packet, skipping */
+        printf("Unexpected packet from interface %d: skipping\n", h.extended_hdr.if_index);
+        continue;
+      }
+
+      if (pfring_set_pkt_buff_ifindex(pd1, pkt_handle, tx_ifindex) == PF_RING_ERROR_INVALID_ARGUMENT) {
+        printf("Wrong interface id: skipping packet\n");
+        continue;
+      }
+
+      pfring_send_pkt_buff(pd1, pkt_handle, flush);
+    }
+
+    numPkts++;
+    numBytes += h.len + 24 /* 8 Preamble + 4 CRC + 12 IFG */; 
+  }
+}
+
+/* *************************************** */
+
+void dummyProcessPacket(const struct pfring_pkthdr *h, const u_char *p, const u_char *user_bytes) { 
+  
+  pfring_send(pd2, (char*)p, h->caplen, flush);
 
   numPkts++;
   numBytes += h->len + 24 /* 8 Preamble + 4 CRC + 12 IFG */; 
@@ -204,11 +277,13 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u
 
 int main(int argc, char* argv[]) {
   char c;
+  int bind_core = -1;
+  char buf[32];
   u_int32_t version;
 
   startTime.tv_sec = 0;
 
-  while((c = getopt(argc,argv,"hai:o:")) != -1) {
+  while((c = getopt(argc,argv,"hai:o:m:bc:g:f")) != -1) {
     switch(c) {
     case 'h':
       printHelp();      
@@ -222,35 +297,68 @@ int main(int argc, char* argv[]) {
     case 'o':
       out_dev = strdup(optarg);
       break;
+    case 'm':
+      mode = atoi(optarg);
+      break;
+    case 'c':
+      cluster_id = atoi(optarg);
+      break;
+    case 'b':
+      bidirectional = 1;
+      break;
+    case 'f':
+      flush = 1;
+      break;
+    case 'g':
+      bind_core = atoi(optarg);
+      break;
     }
   }
 
   if(in_dev == NULL)  printHelp();
   if(out_dev == NULL) out_dev = strdup(in_dev);
+  if (mode < 0 || mode > 2) printHelp();
+  if (bidirectional && mode != 1) printHelp();
+  if (mode == 1 && cluster_id < 0) printHelp();
 
-  printf("Bouncing packets from %s to %s (one way)\n", in_dev, out_dev);
+  printf("Bouncing packets from %s to %s (%s)\n", in_dev, out_dev, bidirectional ? "two-way" : "one-way");
 
-  pd1 = pfring_open(in_dev, 1500 /* snaplen */, PF_RING_PROMISC);
-  if(pd1 == NULL) {
-    printf("pfring_open %s error [%s]\n", in_dev, strerror(errno));
-    return(-1);
+  switch (mode) {
+  case 0:
+  case 2:
+    pd1 = pfring_open(in_dev, 1500 /* snaplen */, PF_RING_PROMISC);
+    if(pd1 == NULL) {
+      printf("pfring_open %s error [%s]\n", in_dev, strerror(errno));
+      return(-1);
+    }
+    pfring_set_socket_mode(pd1, recv_only_mode);
+
+    pd2 = pfring_open(out_dev, 1500 /* snaplen */, 0 /* PF_RING_PROMISC */);
+    if(pd2 == NULL) {
+      printf("pfring_open %s error [%s]\n", out_dev, strerror(errno));
+      return(-1);
+    } 
+    pfring_set_socket_mode(pd2, send_only_mode);
+
+    pfring_set_application_name(pd2, "pfdnabounce");
+  break;
+
+  case 1:
+    snprintf(buf, sizeof(buf), "dnacluster:%d", cluster_id);
+    pd1 = pfring_open(buf, 1500 /* snaplen */, PF_RING_PROMISC);
+    if(pd1 == NULL) {
+      printf("pfring_open %s error [%s]\n", buf, strerror(errno));
+      return(-1);
+    }
+    pfring_set_socket_mode(pd1, send_and_recv_mode);
+  break;
   }
-  pfring_set_socket_mode(pd1, recv_only_mode);
 
   pfring_version(pd1, &version);
   printf("Using PF_RING v.%d.%d.%d\n", (version & 0xFFFF0000) >> 16, 
-	 (version & 0x0000FF00) >> 8, version & 0x000000FF);
+         (version & 0x0000FF00) >> 8, version & 0x000000FF);
 
   pfring_set_application_name(pd1, "pfdnabounce");
-
-  pd2 = pfring_open(out_dev, 1500 /* snaplen */, 0 /* PF_RING_PROMISC */);
-  if(pd2 == NULL) {
-    printf("pfring_open %s error [%s]\n", in_dev, strerror(errno));
-    return(-1);
-  } 
-  pfring_set_socket_mode(pd2, send_only_mode);
-
-  pfring_set_application_name(pd2, "pfdnabounce");
 
   signal(SIGINT, sigproc);
   signal(SIGTERM, sigproc);
@@ -259,39 +367,56 @@ int main(int argc, char* argv[]) {
   signal(SIGALRM, my_sigalarm);
   alarm(ALARM_SLEEP);
 
-#ifdef HAVE_ZERO
-  if ((bouncer_handle = pfring_dna_bouncer_create(pd1, pd2)) != NULL) {
-    printf("Using libzero zero-copy library\n");
-    if(pfring_dna_bouncer_loop(bouncer_handle, dummyProcesssPacketZero, (u_char *) NULL, wait_for_packet) == -1) {
-      printf("Problems while starting bouncer. See dmesg for details.\n");
-    }
+  if(bind_core >= 0)
+    bind2core(bind_core);
 
-    pfring_dna_bouncer_destroy(bouncer_handle);
-    goto end;
-  } else {
-    printf("WARNING: Unable to initialize PF_RING zero-copy library (port already in use ?)\n");
+  switch (mode) {
+  case 0: 
+    printf("Using Libzero DNA Bouncer (zero-copy)\n");
+
+    if ((bouncer_handle = pfring_dna_bouncer_create(pd1, pd2)) != NULL) {
+      if(pfring_dna_bouncer_loop(bouncer_handle, dummyProcessPacketZero, (u_char *) NULL, wait_for_packet) == -1) {
+        printf("Problems while starting bouncer. See dmesg for details.\n");
+      }
+
+      pfring_dna_bouncer_destroy(bouncer_handle);
+    } else {
+      printf("WARNING: Unable to initialize the DNA Bouncer (ports already in use ?)\n");
+      pfring_close(pd1);
+      pfring_close(pd2);
+    }  
+  break;
+  case 1: 
+    printf("Using Libzero DNA Cluster (0-copy)\n");
+
+    if (pfring_get_device_ifindex(pd1, in_dev,  &in_ifindex ) < 0 ||
+        pfring_get_device_ifindex(pd1, out_dev, &out_ifindex) < 0) {
+       printf("Error retrieving interface id\n");
+      pfring_close(pd1);
+      return(-1);
+    }
+   
+    pfring_enable_ring(pd1);
+
+    packetConsumerLoopZeroCluster();
+
+    pfring_close(pd1);
+  break;
+  case 2: 
+    printf("Using Standard DNA (1-copy)\n");
+
+    pfring_set_direction(pd1, rx_only_direction);
+    pfring_set_direction(pd2, tx_only_direction);
+
+    pfring_enable_ring(pd1);
+    pfring_enable_ring(pd2);
+
+    pfring_loop(pd1, dummyProcessPacket, (u_char*) NULL, wait_for_packet);
+
     pfring_close(pd1);
     pfring_close(pd2);
-    goto end;
+  break;
   }
-#else
-  printf("Missing PF_RING zero-copy library\n");
-#endif
-
-  printf("Using 1-copy code\n");
-  pfring_set_direction(pd1, rx_only_direction);
-  pfring_set_direction(pd2, tx_only_direction);
-
-  pfring_enable_ring(pd1);
-  pfring_enable_ring(pd2);
-
-  pfring_loop(pd1, dummyProcesssPacket, (u_char*) NULL, wait_for_packet);
-#ifndef HAVE_ZERO
-  pfring_close(pd1);
-  pfring_close(pd2);
-#else
- end:
-#endif
 
   sleep(3);
 
