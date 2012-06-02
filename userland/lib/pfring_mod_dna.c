@@ -71,7 +71,7 @@ void pfring_dna_close(pfring *ring) {
   
   for(i=0; i<ring->dna.dna_dev.mem_info.tx.packet_memory_num_chunks; i++)
     if(ring->dna.dna_dev.tx_packet_memory[i] != 0)
-      munmap((void*)ring->dna.dna_dev.tx_packet_memory,
+      munmap((void*)ring->dna.dna_dev.tx_packet_memory[i],
 	     ring->dna.dna_dev.mem_info.tx.packet_memory_chunk_len);
 
   if(ring->dna.dna_dev.tx_descr_packet_memory != NULL)
