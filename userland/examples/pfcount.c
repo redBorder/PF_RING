@@ -466,12 +466,13 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h,
 	     ntohs(ehdr->ether_type),
 	     h->caplen, h->len);
 	     
-    if(unlikely(add_drop_rule)) {
-      if(h->ts.tv_sec == 0)
-	pfring_parse_pkt((u_char*)p, (struct pfring_pkthdr*)h, 4, 0, 1);
+  }
+  
+  if(unlikely(add_drop_rule)) {
+    if(h->ts.tv_sec == 0)
+      pfring_parse_pkt((u_char*)p, (struct pfring_pkthdr*)h, 4, 0, 1);
 
-      drop_packet_rule(h);
-    }
+    drop_packet_rule(h);
   }
 
   numPkts[threadId]++, numBytes[threadId] += h->len+24 /* 8 Preamble + 4 CRC + 12 IFG */;
