@@ -4912,14 +4912,16 @@ static struct dna_cluster* dna_cluster_create(u_int32_t dna_cluster_id, u_int32_
       goto unlock;
     }
 
-    dnac->slave_shared_memory_len = PAGE_ALIGN(slave_mem_len);
-    shared_mem_size = dnac->slave_shared_memory_len * num_slaves;
-    if((dnac->shared_memory = allocate_shared_memory(&shared_mem_size)) == NULL) {
-      printk("[PF_RING] %s() ERROR: not enough memory for DNA Cluster shared memory\n", __FUNCTION__);
-      free_extra_dma_memory(dnac->extra_dma_memory);
-      kfree(dnac);
-      dnac = NULL;
-      goto unlock;
+    if (num_slaves > 0) {
+      dnac->slave_shared_memory_len = PAGE_ALIGN(slave_mem_len);
+      shared_mem_size = dnac->slave_shared_memory_len * num_slaves;
+      if((dnac->shared_memory = allocate_shared_memory(&shared_mem_size)) == NULL) {
+        printk("[PF_RING] %s() ERROR: not enough memory for DNA Cluster shared memory\n", __FUNCTION__);
+        free_extra_dma_memory(dnac->extra_dma_memory);
+        kfree(dnac);
+        dnac = NULL;
+        goto unlock;
+      }
     }
 
     dnac->master_persistent_memory_len = PAGE_ALIGN(master_persistent_mem_len);
@@ -4947,7 +4949,7 @@ static struct dna_cluster* dna_cluster_create(u_int32_t dna_cluster_id, u_int32_
 
     /* checking cluster parameters */
     if (dnac->num_slaves != num_slaves 
-	|| dnac->slave_shared_memory_len != PAGE_ALIGN(slave_mem_len)
+	|| (num_slaves > 0 && dnac->slave_shared_memory_len != PAGE_ALIGN(slave_mem_len))
 	|| dnac->master_persistent_memory_len != PAGE_ALIGN(master_persistent_mem_len)
 	|| dnac->mode != mode
         || dnac->extra_dma_memory->num_slots != num_slots) {
@@ -5003,7 +5005,8 @@ static void dna_cluster_remove(struct dna_cluster *dnac, dna_cluster_client_type
         list_del(ptr);
         free_extra_dma_memory(entry->extra_dma_memory);
 	vfree(entry->master_persistent_memory);
-        vfree(entry->shared_memory);
+	if (entry->shared_memory != NULL)
+          vfree(entry->shared_memory);
         kfree(entry);
 
 	if(unlikely(enable_debug))
@@ -7172,8 +7175,7 @@ static int ring_setsockopt(struct socket *sock,
       if(copy_from_user(&cdnaci, optval, sizeof(cdnaci)))
 	return -EFAULT;
 
-      if(cdnaci.num_slots == 0 || cdnaci.num_slaves == 0 || cdnaci.slave_mem_len == 0 ||
-         cdnaci.num_slaves > DNA_CLUSTER_MAX_NUM_SLAVES)
+      if(cdnaci.num_slots == 0 || cdnaci.slave_mem_len == 0 || cdnaci.num_slaves > DNA_CLUSTER_MAX_NUM_SLAVES)
         return -EINVAL;
 
       if(pfr->dna_device == NULL || pfr->dna_device->hwdev == NULL)
