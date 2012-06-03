@@ -9,7 +9,7 @@ are currently available:
 
 1 Gbit
 - e1000e (RX and TX)
-- ixgbe  (RX and TX)
+- igbe   (RX and TX)
 
 10 Gbit
 - ixgbe (RX and TX)
