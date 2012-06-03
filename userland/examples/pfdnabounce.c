@@ -218,7 +218,7 @@ int dummyProcessPacketZero(u_int16_t pkt_len, u_char *pkt, const u_char *user_by
   numPkts++;
   numBytes += pkt_len + 24 /* 8 Preamble + 4 CRC + 12 IFG */;
 
-  return 0; /* bounce back */
+  return DNA_BOUNCER_PASS;
 }
 
 /* *************************************** */

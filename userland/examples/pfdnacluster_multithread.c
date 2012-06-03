@@ -316,7 +316,7 @@ inline u_int32_t master_custom_hash_function(const u_char *buffer, const u_int16
 
 /* ******************************* */
 
-static u_int32_t master_distribution_function(const u_char *buffer, const u_int16_t buffer_len, const u_int32_t num_slaves, u_int32_t *hash) {
+static int master_distribution_function(const u_char *buffer, const u_int16_t buffer_len, const u_int32_t num_slaves, u_int32_t *id_mask, u_int32_t *hash) {
   u_int32_t slave_idx;
 
   /* computing a bidirectional software hash */
@@ -324,16 +324,20 @@ static u_int32_t master_distribution_function(const u_char *buffer, const u_int1
 
   /* balancing on hash */
   slave_idx = (*hash) % num_slaves;
-  return (1 << slave_idx);
+  *id_mask = (1 << slave_idx);
+
+  return DNA_CLUSTER_PASS;
 }
 
 /* ******************************** */
 
-u_int32_t fanout_distribution_function(const u_char *buffer, const u_int16_t buffer_len, const u_int32_t num_slaves, u_int32_t *hash) {
+static int fanout_distribution_function(const u_char *buffer, const u_int16_t buffer_len, const u_int32_t num_slaves, u_int32_t *id_mask, u_int32_t *hash) {
   u_int32_t n_zero_bits = 32 - num_slaves;
 
   /* returning slave id bitmap */
-  return ((0xFFFFFFFF << n_zero_bits) >> n_zero_bits);
+  *id_mask = ((0xFFFFFFFF << n_zero_bits) >> n_zero_bits);
+
+  return DNA_CLUSTER_PASS;
 }
 
 /* *************************************** */
@@ -495,7 +499,7 @@ int main(int argc, char* argv[]) {
   printf("Capturing from %s\n", device);
 
   /* Create the DNA cluster */
-  if ((dna_cluster_handle = dna_cluster_create(cluster_id, num_threads)) == NULL) {
+  if ((dna_cluster_handle = dna_cluster_create(cluster_id, num_threads, DNA_CLUSTER_DIRECT_FORWARDING)) == NULL) {
     fprintf(stderr, "Error creating DNA Cluster\n");
     return(-1);
   }
@@ -506,7 +510,10 @@ int main(int argc, char* argv[]) {
     mode = send_and_recv_mode;
   }
 
-  dna_cluster_set_mode(dna_cluster_handle, mode);
+  if (dna_cluster_set_mode(dna_cluster_handle, mode) < 0) {
+    printf("dna_cluster_set_mode error\n");
+    return(-1);
+  }
 
   dev = strtok_r(device, ",", &dev_pos);
   while(dev != NULL) {
