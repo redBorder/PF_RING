@@ -1830,9 +1830,9 @@ pcap_stats_linux(pcap_t *handle, struct pcap_stat *stats)
 
 	  if(pfring_stats(handle->ring, &ring_stats) == 0) {
 	    handle->md.stat.ps_recv = ring_stats.recv;
-	    //if (ring->dna.dna_mapped_device)
-	    //  handle->md.stat.ps_ifdrop = ring_stats.drop;
-	    //else
+	    if (handle->ring->dna.dna_mapped_device)
+	      handle->md.stat.ps_ifdrop = ring_stats.drop;
+	    else
 	    handle->md.stat.ps_drop = ring_stats.drop;
 	    *stats = handle->md.stat;
 	    return 0;
