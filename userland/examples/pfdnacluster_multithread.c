@@ -44,9 +44,9 @@
 #include "pfring.h"
 
 #define ALARM_SLEEP             1
-#define MAX_NUM_THREADS        32
-#define MAX_NUM_DEV            32
-#define DEFAULT_DEVICE     "dna0"
+#define MAX_NUM_THREADS         DNA_CLUSTER_MAX_NUM_SLAVES
+#define MAX_NUM_DEV             DNA_CLUSTER_MAX_NUM_SOCKETS
+#define DEFAULT_DEVICE          "dna0"
 
 u_int numCPU;
 int num_threads = 1, num_dev = 0;
@@ -480,8 +480,10 @@ int main(int argc, char* argv[]) {
       || (forward_packets && tx_if_index < 0))
     printHelp();
 
-  if (num_threads > MAX_NUM_THREADS)
+  if (num_threads > MAX_NUM_THREADS) {
+    printf("WARNING: You cannot instantiate more than %u slave threads\n", MAX_NUM_THREADS);
     num_threads = MAX_NUM_THREADS;
+  }
 
   if (device == NULL) device = DEFAULT_DEVICE;
 

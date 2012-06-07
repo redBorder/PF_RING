@@ -42,10 +42,10 @@
 
 #include "pfring.h"
 
-#define ALARM_SLEEP             1
-#define MAX_NUM_APP            32
-#define MAX_NUM_DEV            32
-#define DEFAULT_DEVICE     "dna0"
+#define ALARM_SLEEP            1
+#define MAX_NUM_APP            DNA_CLUSTER_MAX_NUM_SLAVES
+#define MAX_NUM_DEV            DNA_CLUSTER_MAX_NUM_SOCKETS
+#define DEFAULT_DEVICE         "dna0"
 
 int num_app = 1, num_dev = 0;
 pfring *pd[MAX_NUM_DEV];
@@ -361,10 +361,6 @@ int main(int argc, char* argv[]) {
       break;
     case 'n':
       num_app = atoi(optarg);
-      if(num_app > 32) {
-	printf("WARNING: You cannot instantiate more than 32 slave applications\n");
-	num_app = 32;
-      }
       break;
     case 'm':
       hashing_mode = atoi(optarg);
@@ -376,8 +372,10 @@ int main(int argc, char* argv[]) {
       || hashing_mode < 0 || hashing_mode > 3)
     printHelp();
 
-  if (num_app > MAX_NUM_APP)
+  if (num_app > MAX_NUM_APP) {
+    printf("WARNING: You cannot instantiate more than %u slave applications\n", MAX_NUM_APP);
     num_app = MAX_NUM_APP;
+  }
 
   if (device == NULL) device = DEFAULT_DEVICE;
 
