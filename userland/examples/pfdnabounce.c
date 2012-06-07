@@ -205,7 +205,7 @@ void printHelp(void) {
 	 "                1 - DNA Cluster (use -c <id>)\n"
 	 "                2 - Standard DNA\n");
   printf("-c <id>         DNA Cluster id\n");
-  printf("-b              Bridge mode: forward in both directions (DNA Cluster only)\n");
+  printf("-b              Bridge mode: forward in both directions (DNA Cluster and Bouncer only)\n");
   printf("-f              Flush packets immediately (do not use watermarks)\n");
   printf("-g <core id>    Bind this app to a core\n");
   printf("-a              Active packet wait\n");
@@ -315,10 +315,11 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  if(in_dev == NULL)  printHelp();
-  if(out_dev == NULL) out_dev = strdup(in_dev);
+  if (in_dev == NULL)  printHelp();
+  if (out_dev == NULL) out_dev = strdup(in_dev);
   if (mode < 0 || mode > 2) printHelp();
-  if (bidirectional && mode != 1) printHelp();
+  if (bidirectional && mode != 0 && mode != 1) printHelp();
+  if (bidirectional && strcmp(in_dev, out_dev) == 0) printHelp();
   if (mode == 1 && cluster_id < 0) printHelp();
 
   printf("Bouncing packets from %s to %s (%s)\n", in_dev, out_dev, bidirectional ? "two-way" : "one-way");
@@ -374,17 +375,26 @@ int main(int argc, char* argv[]) {
   case 0: 
     printf("Using Libzero DNA Bouncer (zero-copy)\n");
 
-    if ((bouncer_handle = pfring_dna_bouncer_create(pd1, pd2)) != NULL) {
-      if(pfring_dna_bouncer_loop(bouncer_handle, dummyProcessPacketZero, (u_char *) NULL, wait_for_packet) == -1) {
-        printf("Problems while starting bouncer. See dmesg for details.\n");
-      }
-
-      pfring_dna_bouncer_destroy(bouncer_handle);
-    } else {
+    if ((bouncer_handle = pfring_dna_bouncer_create(pd1, pd2)) == NULL) {
       printf("WARNING: Unable to initialize the DNA Bouncer (ports already in use ?)\n");
       pfring_close(pd1);
       pfring_close(pd2);
-    }  
+      return(-1);
+    }
+      
+    if (bidirectional) {
+      if (pfring_dna_bouncer_set_mode(bouncer_handle, two_way_mode) < 0) {
+        printf("Error setting the DNA Bouncer to bidirectional\n");
+	pfring_dna_bouncer_destroy(bouncer_handle);
+	return(-1);
+      }
+    }
+
+    if(pfring_dna_bouncer_loop(bouncer_handle, dummyProcessPacketZero, (u_char *) NULL, wait_for_packet) == -1) {
+      printf("Problems while starting bouncer. See dmesg for details.\n");
+    }
+
+    pfring_dna_bouncer_destroy(bouncer_handle);
   break;
   case 1: 
     printf("Using Libzero DNA Cluster (0-copy)\n");
