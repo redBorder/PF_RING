@@ -193,8 +193,8 @@ void sigproc(int sig) {
 /* *************************************** */
 
 void printHelp(void) {
- printf("pfdnabounce - (C) 2011-12 ntop.org\n\n");
- printf("\n\tForwards traffic from -a -> -b device using DNA\n\n");
+ printf("pfdnabounce - (C) 2011-12 ntop.org\n");
+ printf("\nForward traffic from -a -> -b device using DNA\n\n");
 
   printf("pfdnabounce [-v] [-a] -i in_dev\n");
   printf("-h              Print this help\n");

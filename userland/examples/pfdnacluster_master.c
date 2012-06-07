@@ -361,6 +361,10 @@ int main(int argc, char* argv[]) {
       break;
     case 'n':
       num_app = atoi(optarg);
+      if(num_app > 32) {
+	printf("WARNING: You cannot instantiate more than 32 slave applications\n");
+	num_app = 32;
+      }
       break;
     case 'm':
       hashing_mode = atoi(optarg);
