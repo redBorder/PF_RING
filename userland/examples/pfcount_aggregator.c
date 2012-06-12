@@ -523,6 +523,7 @@ int main(int argc, char* argv[]) {
   packet_direction direction = rx_and_tx_direction;
   u_int16_t watermark = 0, cpu_percentage = 0;
   u_int32_t version;
+  u_int32_t flags = 0;
   int i = 0;
 
   startTime.tv_sec = 0;
@@ -591,7 +592,9 @@ int main(int argc, char* argv[]) {
 
   dev = strtok_r(devices, "+", &tmp);
   while(i<MAX_NUM_DEVS && dev != NULL) {
-    pd[i] = pfring_open(dev, snaplen, PF_RING_PROMISC);
+    flags |= PF_RING_PROMISC;
+    flags |= PF_RING_DNA_SYMMETRIC_RSS;  /* Note that symmetric RSS is ignored by non-DNA drivers */
+    pd[i] = pfring_open(dev, snaplen, flags);
 
     if(pd[i] == NULL) {
       fprintf(stderr, "pfring_open error [%s] (pf_ring not loaded or perhaps you use quick mode and have already a socket bound to %s ?)\n",

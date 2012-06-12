@@ -131,7 +131,7 @@ extern "C" {
   /* ********************************* */
   
   struct __pfring {
-    u_int8_t initialized, enabled, long_header;
+    u_int8_t initialized, enabled, long_header, symmetric_rss;
     packet_direction direction; /* Specify the capture direction for packets */
     socket_mode mode;
 
@@ -269,9 +269,10 @@ extern "C" {
 
   /* ********************************* */
 
-  #define PF_RING_REENTRANT        1 << 1
-  #define PF_RING_LONG_HEADER     1 << 2
-  #define PF_RING_PROMISC          1 << 3
+  #define PF_RING_DNA_SYMMETRIC_RSS 1 << 0
+  #define PF_RING_REENTRANT         1 << 1
+  #define PF_RING_LONG_HEADER       1 << 2
+  #define PF_RING_PROMISC           1 << 3
 
   /* ********************************* */
 

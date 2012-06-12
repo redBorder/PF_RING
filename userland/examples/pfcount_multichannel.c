@@ -479,6 +479,7 @@ int main(int argc, char* argv[]) {
   long i;
   u_int16_t cpu_percentage = 0, poll_duration = 0;
   u_int32_t version;
+  u_int32_t flags = 0;
 
   startTime.tv_sec = 0;
   thiszone = gmt2local(0);
@@ -535,8 +536,10 @@ int main(int argc, char* argv[]) {
 
   printf("Capturing from %s\n", device);
 
-  /* hardcode: promisc=1, to_ms=500 */
-  num_channels = pfring_open_multichannel(device, snaplen, PF_RING_PROMISC, ring);
+  flags |= PF_RING_PROMISC; /* hardcode: promisc=1 */
+  flags |= PF_RING_DNA_SYMMETRIC_RSS;  /* Note that symmetric RSS is ignored by non-DNA drivers */
+  
+  num_channels = pfring_open_multichannel(device, snaplen, flags, ring);
   
   if(num_channels <= 0) {
     fprintf(stderr, "pfring_open_multichannel() returned %d [%s]\n", num_channels, strerror(errno));

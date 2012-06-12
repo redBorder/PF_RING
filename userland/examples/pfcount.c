@@ -621,7 +621,8 @@ int main(int argc, char* argv[]) {
   char *device = NULL, c, buf[32], *reflector_device = NULL;
   u_char mac_address[6] = { 0 };
   int promisc, snaplen = DEFAULT_SNAPLEN, rc;
-  u_int clusterId = 0, flags = 0;
+  u_int clusterId = 0;
+  u_int32_t flags = 0;
   int bind_core = -1;
   packet_direction direction = rx_and_tx_direction;
   u_int16_t watermark = 0, poll_duration = 0, 
@@ -762,6 +763,7 @@ int main(int argc, char* argv[]) {
   if(num_threads > 1)         flags |= PF_RING_REENTRANT;
   if(use_extended_pkt_header) flags |= PF_RING_LONG_HEADER;
   if(promisc)                 flags |= PF_RING_PROMISC;
+  flags |= PF_RING_DNA_SYMMETRIC_RSS;  /* Note that symmetric RSS is ignored by non-DNA drivers */
 
   pd = pfring_open(device, snaplen, flags);
 
