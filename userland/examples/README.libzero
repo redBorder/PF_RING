@@ -208,11 +208,19 @@ Test 7. Demonstrate flexible packet-forward capabilities across interfaces
 
 Goal: Demonstrate how to forward packets at line rate across interfaces using a custom function that accesses the packet payload and can decide which packets to forward, and which to filter/drop.
 
-Commands:
-- pfdnabounce -i dna0 -o dna1 -a (forward packets at line rate dna0 -> dna1)
+Command: pfdnabounce -i dna0 -o dna1 -a (forward packets at line rate dna0 -> dna1)
 
 Test Results:
 See http://www.ntop.org/wp-content/uploads/2012/04/DNA_ip_forward_RFC2544.pdf
+
+*******************************************************************************
+*******************************************************************************
+
+Test 8. Aggregate traffic from multiple interfaces, hash packets and read them on 2 threads
+
+Goal: Receive packets from multiple interfaces on one thread in a Round-Robin manner, hash them based on the IPs, and distribute them to consumer threads. In this example one thread will receive and hash packets, and two (-n) consumer thread will count them.
+
+Command: pfdnacluster_multithread -i dna0,dna1 -c 1 -n 2
 
 *******************************************************************************
 *******************************************************************************
