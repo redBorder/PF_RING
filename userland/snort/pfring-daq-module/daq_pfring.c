@@ -89,6 +89,7 @@ static pfring* pfring_daq_open(Pfring_Context_t *context, char *device, int td) 
     context->pkt_buffer = NULL;
 
     if(context->promisc_flag) flags |= PF_RING_PROMISC;
+    flags |= PF_RING_DNA_SYMMETRIC_RSS;  /* Note that symmetric RSS is ignored by non-DNA drivers */
 
     ring_handle = pfring_open(device, context->snaplen, PF_RING_LONG_HEADER | flags);
 
