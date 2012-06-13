@@ -17,7 +17,6 @@
 #include <sys/types.h>
 #include <stdio.h>
 #include <stdarg.h>
-#include <sys/types.h>
 
 #ifndef HAVE_PCAP
 #include <stdio.h>
