@@ -195,7 +195,7 @@ int pfring_dag_recv(pfring *ring, u_char** buffer, u_int buffer_len, struct pfri
   d = (pfring_dag *) ring->priv_data;
 
   if(ring->reentrant)
-    pthread_rwlock_wrlock(&ring->lock);
+    pthread_rwlock_wrlock(&ring->rx_lock);
 
  check_and_poll:
 
@@ -345,7 +345,7 @@ int pfring_dag_recv(pfring *ring, u_char** buffer, u_int buffer_len, struct pfri
  exit:
 
   if(ring->reentrant) 
-    pthread_rwlock_unlock(&ring->spinlock);
+    pthread_rwlock_unlock(&ring->rx_lock);
 
   return retval;
 }
