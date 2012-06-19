@@ -436,7 +436,7 @@ static inline void skb_reset_transport_header(struct sk_buff *skb)
 #if defined(REDHAT_PATCHED_KERNEL)
 /* Always the same RH crap */
 
-#if ((RHEL_MAJOR == 5) && (RHEL_MINOR < 2))
+#if ((RHEL_MAJOR == 5) && (RHEL_MINOR < 4 /* 2 */))
 void msleep(unsigned int msecs)
 {
   unsigned long timeout = msecs_to_jiffies(msecs) + 1;
@@ -4684,7 +4684,8 @@ static void free_contiguous_memory(unsigned long mem, u_int mem_len)
 static unsigned long __get_free_pages_node(int nid, gfp_t gfp_mask, unsigned int order) {
   struct page *page;
   
-  VM_BUG_ON((gfp_mask & __GFP_HIGHMEM) != 0);
+  /* Just remember to do not use highmem flag:
+   * VM_BUG_ON((gfp_mask & __GFP_HIGHMEM) != 0); */
   
   page = alloc_pages_node(nid, gfp_mask, order);
   
@@ -4720,7 +4721,13 @@ static struct dma_memory_info *allocate_extra_dma_memory(struct device *hwdev,
 {
   u_int i, num_slots_per_chunk, num_chunks;
   struct dma_memory_info *dma_memory;
-  int numa_node = dev_to_node(hwdev);
+  int numa_node = 
+#ifdef CONFIG_NUMA
+    dev_to_node(hwdev)
+#else
+    -1
+#endif
+  ;
 
   /* Note: this function allocates up to num_slots slots. You can check the exact number by ... */
 
