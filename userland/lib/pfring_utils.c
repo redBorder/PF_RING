@@ -245,7 +245,7 @@ L4:
 TIMESTAMP:
 
   if(add_timestamp && hdr->ts.tv_sec == 0)
-    gettimeofday(&hdr->ts, NULL);
+    gettimeofday(&hdr->ts, NULL); /* TODO What about using clock_gettime(CLOCK_REALTIME, ts) ? */
 
   if (add_hash && hdr->extended_hdr.pkt_hash == 0)
     hdr->extended_hdr.pkt_hash = pfring_hash_pkt(hdr);
