@@ -436,7 +436,7 @@ static inline void skb_reset_transport_header(struct sk_buff *skb)
 #if defined(REDHAT_PATCHED_KERNEL)
 /* Always the same RH crap */
 
-#if ((RHEL_MAJOR == 5) && (RHEL_MINOR < 4 /* 2 */))
+#if ((RHEL_MAJOR == 5) && (RHEL_MINOR <= 4 /* 2 */))
 void msleep(unsigned int msecs)
 {
   unsigned long timeout = msecs_to_jiffies(msecs) + 1;
@@ -4722,7 +4722,7 @@ static struct dma_memory_info *allocate_extra_dma_memory(struct device *hwdev,
   u_int i, num_slots_per_chunk, num_chunks;
   struct dma_memory_info *dma_memory;
   int numa_node = 
-#ifdef CONFIG_NUMA
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,26)) && defined(CONFIG_NUMA)
     dev_to_node(hwdev)
 #else
     -1
