@@ -160,11 +160,14 @@ int wait_packet_function_ptr(void *data, int mode) {
     struct e1000_rx_desc *rx_desc;
     int ret;
 
-    rx_ring->next_to_clean = E1000_READ_REG(&adapter->hw, E1000_RDT(0));
-
-    /* Here i is the last I've read (zero-copy implementation) */
-    if(++rx_ring->next_to_clean == rx_ring->count)
-      rx_ring->next_to_clean = 0;
+    u16 i = E1000_READ_REG(&adapter->hw, E1000_RDT(0));
+    
+    /* Very important: update the value from the register set from userland.
+     * Here i is the last I've read (zero-copy implementation) */
+    if(++i == rx_ring->count) i = 0;
+    /* Here i is the next I have to read */
+    
+    rx_ring->next_to_clean = i;
 
     rx_desc = E1000_RX_DESC(*rx_ring, rx_ring->next_to_clean);
     ret = rx_desc->status & E1000_RXD_STAT_DD;
@@ -368,25 +371,12 @@ void alloc_dna_memory(struct e1000_adapter *adapter) {
 
       wmb();
 
-      /* Tell the card that we have allocated all buckets */
-      writel(rx_ring->count-1, adapter->hw.hw_addr + rx_ring->rdt);
+      // writel(rx_ring->count-1, adapter->hw.hw_addr + rx_ring->rdt);
+      // E1000_WRITE_REG(&adapter->hw, E1000_RDT(0), rx_ring->next_to_clean);
 
-#if 0
-      //rx_ring->next_to_clean = E1000_READ_REG(&adapter->hw, E1000_RDT(0));
-      rx_ring->next_to_clean = 0;
-      printk("[DNA] [rx_ring->next_to_clean=%u][RDT=%u]\n",
-	     rx_ring->next_to_clean, E1000_READ_REG(&adapter->hw, E1000_RDT(0)));
-
-      rx_desc = E1000_RX_DESC_EXT(*rx_ring, rx_ring->count);
-      rx_desc->read.reserved = rx_ring->next_to_clean;
-      printk("[DNA] [idx=%u][rx_desc->read.reserved=%llu]\n", rx_ring->count, rx_desc->read.reserved);
-#endif
-
-      /* The statement below syncs the value of next_to_clean with
-	 the corresponding register, hence sync the kernel with
-	 userland
-      */
-      E1000_WRITE_REG(&adapter->hw, E1000_RDT(0), rx_ring->next_to_clean);
+      /* The statement below syncs the value of tail (next to read) to 
+       * count-1 instead of 0 for zero-copy (one slot back) */
+      E1000_WRITE_REG(&adapter->hw, E1000_RDT(0), rx_ring->count-1);
 
       e1000_irq_disable(adapter);
       //e1000_irq_enable(adapter);
