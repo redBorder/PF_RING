@@ -339,15 +339,11 @@ int wait_packet_function_ptr(void *data, int mode)
     u8	reg_idx = rx_ring->reg_idx;
     u16	i = E1000_READ_REG(hw, E1000_RDT(reg_idx));
 
-    /* Very important: update the value from the register set from userland */
+    /* Very important: update the value from the register set from userland
+     * Here i is the last I've read (zero-copy implementation) */
     if(++i == rx_ring->count)
       i = 0;
-
-    /* Here i is the last I've read (zero-copy implementation) */
-
-    if(++i == rx_ring->count)
-      i = 0;
-    /* here i is the next I have to read */
+    /* Here i is the next I have to read */
 
     rx_ring->next_to_clean = i;
 
