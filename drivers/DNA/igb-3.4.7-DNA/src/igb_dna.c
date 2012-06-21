@@ -619,7 +619,6 @@ void dna_igb_alloc_rx_buffers(struct igb_ring *rx_ring, struct pfring_hooks *hoo
     /* Shadow */
   rx_desc = IGB_RX_DESC(rx_ring, 0);
 
-  /* Register with PF_RING */
   dna_reset_rx_ring(rx_ring);
 
   if(unlikely(enable_debug))
@@ -628,6 +627,7 @@ void dna_igb_alloc_rx_buffers(struct igb_ring *rx_ring, struct pfring_hooks *hoo
 	 E1000_READ_REG(hw, E1000_RDT(rx_ring->reg_idx)));
 
   /* Allocate TX memory */
+  
   tx_ring->dna.tot_packet_memory = rx_ring->dna.tot_packet_memory;
   tx_ring->dna.packet_slot_len   = rx_ring->dna.packet_slot_len;
   tx_ring->dna.packet_num_slots  = tx_ring->count;
@@ -647,6 +647,8 @@ void dna_igb_alloc_rx_buffers(struct igb_ring *rx_ring, struct pfring_hooks *hoo
   tx_info.packet_memory_num_slots     = tx_ring->dna.packet_num_slots;
   tx_info.packet_memory_slot_len      = tx_ring->dna.packet_slot_len;
   tx_info.descr_packet_memory_tot_len = 2 * tx_ring->size;
+
+  /* Register with PF_RING */
 
   hook->ring_dna_device_handler(add_device_mapping,
 				dna_v1,
