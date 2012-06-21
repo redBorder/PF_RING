@@ -501,7 +501,7 @@ int main(int argc, char* argv[]) {
   printf("Capturing from %s\n", device);
 
   /* Create the DNA cluster */
-  if ((dna_cluster_handle = dna_cluster_create(cluster_id, num_threads, DNA_CLUSTER_DIRECT_FORWARDING)) == NULL) {
+  if ((dna_cluster_handle = dna_cluster_create(cluster_id, num_threads, 0)) == NULL) {
     fprintf(stderr, "Error creating DNA Cluster\n");
     return(-1);
   }
