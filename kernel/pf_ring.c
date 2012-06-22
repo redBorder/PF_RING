@@ -105,6 +105,7 @@
 #include <net/ip.h>
 #include <net/ipv6.h>
 #include <linux/pci.h>
+#include <asm/shmparam.h>
 
 #if(LINUX_VERSION_CODE > KERNEL_VERSION(2,6,30))
 #include <linux/eventfd.h>
