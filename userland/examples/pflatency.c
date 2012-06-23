@@ -108,7 +108,7 @@ void printHelp(void) {
   printf("(C) 2012 ntop\n\n");
   printf("-i <device>     Device name. Use device\n");
   printf("-l <length>     Packet length to send. Ignored with -f\n");
-  printf("-f <.pcap file> Send packets as read from a pcap file\n");
+  printf("-f <.pcap file> Send the first packet of a pcap file\n");
   printf("-g <core_id>    Bind this app to a code (only with -n 0)\n");
   printf("-m <dst MAC>    Reforge destination MAC (format AA:BB:CC:DD:EE:FF)\n");
   printf("-z              Disable zero-copy, if supported [DNA only]\n");
