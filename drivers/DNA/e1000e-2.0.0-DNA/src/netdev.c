@@ -2009,7 +2009,7 @@ static void e1000_clean_rx_ring(struct e1000_ring *rx_ring)
 	unsigned int i, j;
 
 #ifdef ENABLE_DNA
-	//struct e1000_ring *tx_ring = adapter->tx_ring;
+	struct e1000_ring *tx_ring = adapter->tx_ring;
 	struct pfring_hooks *hook = (struct pfring_hooks*)adapter->netdev->pfring_ptr;
 	mem_ring_info         rx_info = {0}; 
 	mem_ring_info         tx_info = {0}; 
@@ -2058,13 +2058,13 @@ static void e1000_clean_rx_ring(struct e1000_ring *rx_ring)
               rx_info.packet_memory_chunk_len     = adapter->dna.tot_packet_memory;
               rx_info.packet_memory_num_slots     = adapter->dna.packet_num_slots;
               rx_info.packet_memory_slot_len      = adapter->dna.packet_slot_len;
-              rx_info.descr_packet_memory_tot_len = rx_ring->size;
+              rx_info.descr_packet_memory_tot_len = 2 * rx_ring->size;
   
               tx_info.packet_memory_num_chunks    = 1;
               tx_info.packet_memory_chunk_len     = adapter->dna.tot_packet_memory;
               tx_info.packet_memory_num_slots     = adapter->dna.packet_num_slots;
               tx_info.packet_memory_slot_len      = adapter->dna.packet_slot_len;
-              tx_info.descr_packet_memory_tot_len = rx_ring->size;
+              tx_info.descr_packet_memory_tot_len = 2 * tx_ring->size;
 
 	      hook->ring_dna_device_handler(remove_device_mapping,
 					    dna_v1,
@@ -2825,7 +2825,13 @@ int e1000e_setup_tx_resources(struct e1000_ring *tx_ring)
 	tx_ring->size = tx_ring->count * sizeof(struct e1000_tx_desc);
 	tx_ring->size = ALIGN(tx_ring->size, 4096);
 
+#ifdef ENABLE_DNA
+	tx_ring->size *= 2 /* shadow descriptors */;
+#endif
 	err = e1000_alloc_ring_dma(adapter, tx_ring);
+#ifdef ENABLE_DNA
+	tx_ring->size /= 2;
+#endif
 	if (err)
 		goto err;
 
@@ -2986,7 +2992,11 @@ void e1000e_free_tx_resources(struct e1000_ring *tx_ring)
 	vfree(tx_ring->buffer_info);
 	tx_ring->buffer_info = NULL;
 
-	dma_free_coherent(pci_dev_to_dev(pdev), tx_ring->size, tx_ring->desc,
+	dma_free_coherent(pci_dev_to_dev(pdev), 
+#ifdef ENABLE_DNA
+			  2 * /* shadow descriptors */
+#endif
+			  tx_ring->size, tx_ring->desc,
 			  tx_ring->dma);
 	tx_ring->desc = NULL;
 }
@@ -3011,8 +3021,13 @@ void e1000e_free_rx_resources(struct e1000_ring *rx_ring)
 	vfree(rx_ring->buffer_info);
 	rx_ring->buffer_info = NULL;
 
-	dma_free_coherent(pci_dev_to_dev(pdev), rx_ring->size, rx_ring->desc,
+	dma_free_coherent(pci_dev_to_dev(pdev), 
+#ifdef ENABLE_DNA
+			  2 * /* shadow descriptors */
+#endif
+			  rx_ring->size, rx_ring->desc,
 			  rx_ring->dma);
+
 	rx_ring->desc = NULL;
 }
 

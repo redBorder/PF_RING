@@ -262,7 +262,7 @@ void alloc_dna_memory(struct e1000_adapter *adapter) {
   struct pci_dev *pdev = adapter->pdev;
   struct e1000_rx_ring *rx_ring = adapter->rx_ring;
   struct e1000_tx_ring *tx_ring = adapter->tx_ring;
-  struct e1000_tx_desc *tx_desc;
+  struct e1000_tx_desc *tx_desc, *shadow_tx_desc;
   struct pfring_hooks *hook = (struct pfring_hooks*)netdev->pfring_ptr;
   union e1000_rx_desc_extended *rx_desc, *shadow_rx_desc;
   struct e1000_rx_buffer *buffer_rx_info;
@@ -425,6 +425,10 @@ void alloc_dna_memory(struct e1000_adapter *adapter) {
 
 	  tx_desc = E1000_TX_DESC(*tx_ring, i);
 	  tx_desc->buffer_addr = cpu_to_le64(buffer_tx_info->dma);
+
+	  /* Note that shadows are useless for e1000e with standard DNA, but used by libzero */
+	  shadow_tx_desc = E1000_TX_DESC(*tx_ring, i + tx_ring->count); 
+	  memcpy(shadow_tx_desc, tx_desc, sizeof(struct e1000_tx_desc));
 	}
       }
 
@@ -438,7 +442,7 @@ void alloc_dna_memory(struct e1000_adapter *adapter) {
       tx_info.packet_memory_chunk_len     = adapter->dna.tot_packet_memory;
       tx_info.packet_memory_num_slots     = adapter->dna.packet_num_slots;
       tx_info.packet_memory_slot_len      = adapter->dna.packet_slot_len;
-      tx_info.descr_packet_memory_tot_len = rx_ring->size;
+      tx_info.descr_packet_memory_tot_len = 2 * tx_ring->size;
 
       /* Register with PF_RING */
       hook->ring_dna_device_handler(add_device_mapping,
@@ -463,8 +467,8 @@ void alloc_dna_memory(struct e1000_adapter *adapter) {
 				    notify_function_ptr);
 
       if(0) {
-	printk("[DNA] Enabled DNA on %s (len=%u)\n",
-	       adapter->netdev->name, rx_ring->size);
+	printk("[DNA] Enabled DNA on %s (rx len=%u, tx len=%u)\n",
+	       adapter->netdev->name, rx_ring->size, tx_ring->size);
       }
     } else {
       printk("WARNING e1000_alloc_rx_buffers(cleaned_count=%d)"
