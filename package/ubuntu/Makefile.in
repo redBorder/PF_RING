@@ -22,11 +22,12 @@ pre:
 	@echo "- REMEMBER to set the kernel version in debian/control"
 	@echo "- Make sure you have updated the version in debian/changelog"
 	@echo "************************************************************"
-	mkdir -p debian/lib debian/usr/include/linux debian/usr/local/bin
+	mkdir -p debian/lib debian/usr/include/linux debian/usr/local/bin debian/usr/local/pfring/drivers/DNA
 	cd $(PF_RING_HOME)/kernel; make; make install DESTDIR=$(HERE)/debian
 	cd $(PF_RING_HOME)/userland; ./configure; make
 	cd $(PF_RING_HOME)/userland/lib; make install DESTDIR=$(HERE)/debian
 	cd $(PF_RING_HOME)/userland/examples; cp pfcount pfsend $(HERE)/debian/usr/local/bin
+	cd $(PF_RING_HOME)/drivers/DNA/; make igb ixgbe e1000e; cp e1000e-2.0.0-DNA/src/e1000e.ko igb-3.4.7-DNA/src/igb.ko ixgbe-3.7.17-DNA/src/ixgbe.ko $(HERE)/debian/usr/local/pfring/drivers/DNA
 	@find ./debian -name "*~" -exec /bin/rm {} ';' 
 
 build:
