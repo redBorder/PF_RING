@@ -1,20 +1,25 @@
+E1000=e1000-8.0.35
+E1000E=e1000e-2.0.0.1
+IGB=igb-3.4.7
+IXGBE=ixgbe-3.7.17
+
 all: igb ixgbe e1000e e1000
 
 e1000:
-	cd e1000-8.0.35-DNA/src; make
+	cd $(E1000)-DNA/src; make
 
 e1000e:
-	cd e1000e-2.0.0-DNA/src; make
+	cd $(E1000E)-DNA/src; make
 
 igb:
-	cd igb-3.4.7-DNA/src; make
+	cd $(IGB)-DNA/src; make
 
 ixgbe:
-	cd ixgbe-3.7.17-DNA/src; make
+	cd $(IXGBE)-DNA/src; make
 
 clean:
-	cd e1000e-2.0.0-DNA/src; make clean
-	cd igb-3.4.7-DNA/src; make clean
-	cd ixgbe-3.7.17-DNA/src; make clean
-	cd e1000-8.0.35-DNA/src; make clean
+	cd $(E1000)-DNA/src; make clean
+	cd $(E1000E)-DNA/src; make clean
+	cd $(IGB)-DNA/src; make clean
+	cd $(IXGBE)-DNA/src; make clean
 
