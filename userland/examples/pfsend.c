@@ -444,28 +444,6 @@ int main(int argc, char* argv[]) {
   if(send_len < 60)
     send_len = 60;
 
-  if(gbit_s != 0) {
-    /* cumputing usleep delay */
-    tick_start = getticks();
-    usleep(1);
-    tick_delta = getticks() - tick_start;
-    
-    /* cumputing CPU freq */
-    tick_start = getticks();
-    usleep(1001);
-    hz = (getticks() - tick_start - tick_delta) * 1000 /*kHz -> Hz*/;
-    printf("Estimated CPU freq: %lu Hz\n", (long unsigned int)hz);
-
-    /* computing max rate */
-    pps = ((gbit_s * 1000000000) / 8 /*byte*/) / (8 /*Preamble*/ + send_len + 4 /*CRC*/ + 12 /*IFG*/);
-
-    td = (double)(hz / pps);
-    tick_delta = (ticks)td;
-    
-    if (gbit_s > 0)
-      printf("Number of %d-byte Packet Per Second at %.2f Gbit/s: %.2f\n", (send_len + 4 /*CRC*/), gbit_s, pps);
-  }
-
   if(pcap_in) {
     char ebuf[256];
     u_char *pkt;
@@ -473,6 +451,7 @@ int main(int argc, char* argv[]) {
     pcap_t *pt = pcap_open_offline(pcap_in, ebuf);
     u_int num_pcap_pkts = 0;
     struct timeval beginning = { 0, 0 };
+    int avg_send_len = 0;
 
     if(pt) {
       struct packet *last = NULL;
@@ -518,14 +497,18 @@ int main(int argc, char* argv[]) {
 		 p->len, pcap_in, h->ts.tv_sec - beginning.tv_sec, h->ts.tv_usec - beginning.tv_usec,
 		 (long unsigned int)p->ticks_from_beginning, 
 		 (long unsigned int)hz);
+	
+	avg_send_len += p->len;
 	num_pcap_pkts++;
       } /* while */
+      avg_send_len /= num_pcap_pkts;
 
       pcap_close(pt);
       printf("Read %d packets from pcap file %s\n", 
 	     num_pcap_pkts, pcap_in);
       last->next = pkt_head; /* Loop */
       num *= num_pcap_pkts;
+      send_len = avg_send_len;
     } else {
       printf("Unable to open file %s\n", pcap_in);
       pfring_close(pd);
@@ -558,6 +541,28 @@ int main(int argc, char* argv[]) {
 	last = p;
       }
     }
+  }
+
+  if(gbit_s != 0) {
+    /* cumputing usleep delay */
+    tick_start = getticks();
+    usleep(1);
+    tick_delta = getticks() - tick_start;
+    
+    /* cumputing CPU freq */
+    tick_start = getticks();
+    usleep(1001);
+    hz = (getticks() - tick_start - tick_delta) * 1000 /*kHz -> Hz*/;
+    printf("Estimated CPU freq: %lu Hz\n", (long unsigned int)hz);
+
+    /* computing max rate */
+    pps = ((gbit_s * 1000000000) / 8 /*byte*/) / (8 /*Preamble*/ + send_len + 4 /*CRC*/ + 12 /*IFG*/);
+
+    td = (double)(hz / pps);
+    tick_delta = (ticks)td;
+    
+    if (gbit_s > 0)
+      printf("Number of %d-byte Packet Per Second at %.2f Gbit/s: %.2f\n", (send_len + 4 /*CRC*/), gbit_s, pps);
   }
 
   if(bind_core >= 0)

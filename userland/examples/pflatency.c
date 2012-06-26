@@ -106,17 +106,17 @@ void sigproc(int sig) {
 void printHelp(void) {
   printf("pflatency - Sends a packet and wait actively for the packet back, computing the rtt latency\n");
   printf("(C) 2012 ntop\n\n");
-  printf("-i <device>     Device name. Use device\n");
+  printf("-i <device>     Device name\n");
   printf("-l <length>     Packet length to send. Ignored with -f\n");
   printf("-f <.pcap file> Send the first packet of a pcap file\n");
-  printf("-g <core_id>    Bind this app to a code (only with -n 0)\n");
+  printf("-g <core_id>    Bind this app to a core\n");
   printf("-m <dst MAC>    Reforge destination MAC (format AA:BB:CC:DD:EE:FF)\n");
-  printf("-z              Disable zero-copy, if supported [DNA only]\n");
+  printf("-z              Disable zero-copy, if supported (DNA only)\n");
   printf("-x <if index>   Send to the selected interface, if supported\n");
   printf("-h              Print this help\n");
   printf("\nExample for testing the DNA bouncer latency:\n");
   printf("./pfdnabounce -i dna1 -m 0 -g 2 -f -a\n");
-  printf("./pfsend -i dna0 -l 60\n");
+  printf("./pfsend -i dna0 -l 60 -g 1\n");
   exit(0);
 }
 
