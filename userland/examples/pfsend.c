@@ -444,6 +444,19 @@ int main(int argc, char* argv[]) {
   if(send_len < 60)
     send_len = 60;
 
+  if(gbit_s != 0) {
+    /* cumputing usleep delay */
+    tick_start = getticks();
+    usleep(1);
+    tick_delta = getticks() - tick_start;
+    
+    /* cumputing CPU freq */
+    tick_start = getticks();
+    usleep(1001);
+    hz = (getticks() - tick_start - tick_delta) * 1000 /*kHz -> Hz*/;
+    printf("Estimated CPU freq: %lu Hz\n", (long unsigned int)hz);
+  }
+
   if(pcap_in) {
     char ebuf[256];
     u_char *pkt;
@@ -543,26 +556,14 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  if(gbit_s != 0) {
-    /* cumputing usleep delay */
-    tick_start = getticks();
-    usleep(1);
-    tick_delta = getticks() - tick_start;
-    
-    /* cumputing CPU freq */
-    tick_start = getticks();
-    usleep(1001);
-    hz = (getticks() - tick_start - tick_delta) * 1000 /*kHz -> Hz*/;
-    printf("Estimated CPU freq: %lu Hz\n", (long unsigned int)hz);
-
+  if(gbit_s > 0) {
     /* computing max rate */
     pps = ((gbit_s * 1000000000) / 8 /*byte*/) / (8 /*Preamble*/ + send_len + 4 /*CRC*/ + 12 /*IFG*/);
 
     td = (double)(hz / pps);
     tick_delta = (ticks)td;
     
-    if (gbit_s > 0)
-      printf("Number of %d-byte Packet Per Second at %.2f Gbit/s: %.2f\n", (send_len + 4 /*CRC*/), gbit_s, pps);
+    printf("Number of %d-byte Packet Per Second at %.2f Gbit/s: %.2f\n", (send_len + 4 /*CRC*/), gbit_s, pps);
   }
 
   if(bind_core >= 0)
