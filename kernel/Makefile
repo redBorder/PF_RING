@@ -4,7 +4,9 @@
 
 obj-m := pf_ring.o
 
+ifneq (, $(shell which svnversion &> /dev/null))
 SVNDEF := -DSVN_REV="\"$(shell svnversion -n .)\""
+endif
 
 ifeq (,$(BUILD_KERNEL))
 BUILD_KERNEL=$(shell uname -r)
