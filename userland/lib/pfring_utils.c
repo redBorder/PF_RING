@@ -97,6 +97,9 @@ int pfring_parse_pkt(u_char *pkt, struct pfring_pkthdr *hdr, u_int8_t level /* 2
   if (hdr->extended_hdr.parsed_pkt.offset.l3_offset != 0)
     goto L3;
 
+  memcpy(&hdr->extended_hdr.parsed_pkt.dmac, eh->h_dest,   sizeof(eh->h_dest));
+  memcpy(&hdr->extended_hdr.parsed_pkt.smac, eh->h_source, sizeof(eh->h_source));
+
   hdr->extended_hdr.parsed_pkt.eth_type = ntohs(eh->h_proto);
   hdr->extended_hdr.parsed_pkt.offset.eth_offset = 0;
   hdr->extended_hdr.parsed_pkt.offset.vlan_offset = 0;

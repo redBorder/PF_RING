@@ -383,16 +383,7 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h,
 	   s / 3600, (s % 3600) / 60, s % 60,
 	   usec, nsec);
 
-#if 0
-    {
-      int i;
-      for(i=0; i<h->len; i++) printf("%02X ", p[i]);
-        printf("\n");
-    }
-#endif
-
     ehdr = (struct ether_header *) p;
-
 
     if(use_extended_pkt_header) {
 
@@ -455,6 +446,15 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h,
     }
   }
   
+#if 0
+    {
+      int i;
+      for(i = 0; i < h->caplen; i++)
+        printf("%02X ", p[i]);
+      printf("\n");
+    }
+#endif
+
   if(unlikely(add_drop_rule)) {
     if(h->ts.tv_sec == 0)
       pfring_parse_pkt((u_char*)p, (struct pfring_pkthdr*)h, 4, 0, 1);
