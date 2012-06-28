@@ -165,8 +165,43 @@ typedef union {
 #define host6_peer_a host_peer_a.v6
 #define host6_peer_b host_peer_b.v6
 
-#define GTP_SIGNALING_PORT         2123
-#define GTP_U_DATA_PORT            2152
+#define GTP_SIGNALING_PORT 2123
+#define GTP_U_DATA_PORT    2152
+#define GTP_VERSION_1      0x1
+#define GTP_VERSION_2      0x2
+#define GTP_PROTOCOL_TYPE  0x1
+
+struct gtp_v1_hdr {
+#define GTP_FLAGS_VERSION       0xE0
+#define GTP_FLAGS_VERSION_SHIFT 5
+#define GTP_FLAGS_PROTOCOL_TYPE 0x10
+#define GTP_FLAGS_RESERVED      0x08
+#define GTP_FLAGS_EXTENSION     0x04
+#define GTP_FLAGS_SEQ_NUM       0x02
+#define GTP_FLAGS_NPDU_NUM      0x01
+  u_int8_t  flags;
+  u_int8_t  message_type;
+  u_int16_t payload_len;
+  u_int32_t teid;
+} __attribute__((__packed__));
+
+/* Optional: GTP_FLAGS_EXTENSION | GTP_FLAGS_SEQ_NUM | GTP_FLAGS_NPDU_NUM */
+struct gtp_v1_opt_hdr { 
+  u_int16_t seq_num;
+  u_int8_t  npdu_num;
+  u_int8_t  next_ext_hdr;
+} __attribute__((__packed__));
+
+/* Optional: GTP_FLAGS_EXTENSION && next_ext_hdr != 0 */
+struct gtp_v1_ext_hdr {
+#define GTP_EXT_HDR_LEN_UNIT_BYTES 4
+  u_int8_t len; /* 4-byte unit */
+  /*
+   * u_char   contents[len*4-2];
+   * u_int8_t next_ext_hdr;
+   */
+} __attribute__((__packed__));
+
 #define NO_GTP_TUNNEL_ID     0xFFFFFFFF
 
 typedef enum {
@@ -180,7 +215,8 @@ typedef enum {
 typedef struct {
   gtp_version version;
   u_int8_t message_type;
-  u_int32_t tunnel_id;          /* GTP tunnelId or NO_GTP_TUNNEL_ID for no filtering */
+  u_int32_t tunnel_id; /* GTP tunnelId or NO_GTP_TUNNEL_ID for no filtering */
+  ip_addr tunneled_ip_src, tunneled_ip_dst;
 } gtp_parsing;
 
 typedef enum {
@@ -718,6 +754,7 @@ typedef enum {
   cluster_per_flow_2_tuple, /* 2-tuple: <src ip,           dst ip                       >  */
   cluster_per_flow_4_tuple, /* 4-tuple: <src ip, src port, dst ip, dst port             >  */
   cluster_per_flow_5_tuple, /* 5-tuple: <src ip, src port, dst ip, dst port, proto      >  */
+  cluster_per_flow_2_tuple_with_gtp, /* 2-tuple with GTP handling (IPs from GTP payload)   */
 } cluster_type;
 
 struct add_to_cluster {
