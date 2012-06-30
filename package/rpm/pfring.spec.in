@@ -41,7 +41,7 @@ cp $HOME/PF_RING/README.FIRST                  $RPM_BUILD_ROOT/usr/local/pfring/
 # DNA Drivers
 cp $HOME/PF_RING/drivers/DNA/ixgbe-3.7.17-DNA/src/ixgbe.ko $RPM_BUILD_ROOT/usr/local/pfring/drivers/DNA
 cp $HOME/PF_RING/drivers/DNA/igb-3.4.7-DNA/src/igb.ko $RPM_BUILD_ROOT/usr/local/pfring/drivers/DNA
-cp $HOME/PF_RING/drivers/DNA/e1000e-2.0.0-DNA/src/e1000e.ko $RPM_BUILD_ROOT/usr/local/pfring/drivers/DNA
+cp $HOME/PF_RING/drivers/DNA/e1000e-2.0.0.1-DNA/src/e1000e.ko $RPM_BUILD_ROOT/usr/local/pfring/drivers/DNA
 cp $HOME/PF_RING/drivers/DNA/README.DNA $RPM_BUILD_ROOT/usr/local/pfring/drivers/DNA
 
 

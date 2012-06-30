@@ -3,7 +3,7 @@ E1000E=e1000e-2.0.0.1
 IGB=igb-3.4.7
 IXGBE=ixgbe-3.7.17
 
-all: igb ixgbe e1000e e1000
+all: igb ixgbe e1000e #e1000
 
 e1000:
 	cd $(E1000)-DNA/src; make

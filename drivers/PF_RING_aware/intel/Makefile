@@ -4,7 +4,7 @@ IGB=igb/igb-3.4.7
 IXGBE=ixgbe/ixgbe-3.7.17
 
 all:
-	cd $(E1000)/src; make
+#	cd $(E1000)/src; make
 	cd $(E1000E)/src; make
 	cd $(IGB)/src; make
 	cd $(IXGBE)/src; make
