@@ -485,8 +485,13 @@ static int pfring_daq_breakloop(void *handle) {
 
   if(!context->ring_handle)
     return DAQ_ERROR;
-
+  
   context->breakloop = 1;
+
+  pfring_breakloop(context->ring_handle);
+
+  if(context->twin_ring_handle)
+    pfring_breakloop(context->twin_ring_handle);
 
   return DAQ_SUCCESS;
 }
@@ -499,6 +504,11 @@ static int pfring_daq_stop(void *handle) {
     update_hw_stats(context);
     pfring_close(context->ring_handle);
     context->ring_handle = NULL;
+  }
+
+  if(context->twin_ring_handle) {
+    pfring_close(context->twin_ring_handle);
+    context->twin_ring_handle = NULL;
   }
 
   context->state = DAQ_STATE_STOPPED;
