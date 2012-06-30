@@ -1,6 +1,7 @@
 /* ***************************************************************
  *
  * (C) 2004-12 - Luca Deri <deri@ntop.org>
+ *               Alfredo Cardigliano <cardigliano@ntop.org>
  *
  * This code includes contributions courtesy of
  * - Amit D. Chaudhary <amit_ml@rajgad.com>
@@ -34,7 +35,6 @@
  * - Guo Chen <johncg1983@gmail.com>
  * - Dan Kruchinin <dkruchinin@acm.org>
  * - Andreas Tsopelas <tsopelas@kth.se>
- * - Alfredo Cardigliano <cardigliano@ntop.org>
  * - Alex Aronson <alexa@silicom.co.il>
  * - Piotr Romanus <promanus@crossbeamsys.com>
  * - Lior Okman <lior.okman@insightix.com>
@@ -1749,18 +1749,21 @@ inline u_int32_t hash_pkt(u_int16_t vlan_id, u_int8_t proto,
 /* ********************************** */
 
 inline u_int32_t hash_pkt_header(struct pfring_pkthdr * hdr, u_char mask_src, u_char mask_dst,
-				 u_char mask_port, u_char mask_proto, u_char mask_vlan, u_char use_tunneled_peers)
+				 u_int8_t mask_port, u_int8_t mask_proto, u_int8_t mask_vlan)
 {
-  if(hdr->extended_hdr.pkt_hash == 0)
+  if(hdr->extended_hdr.pkt_hash == 0) {
+    u_int8_t use_tunneled_peers = hdr->extended_hdr.parsed_pkt.tunnel.tunnel_id == NO_TUNNEL_ID ? 0 : 1;
+    
     hdr->extended_hdr.pkt_hash = hash_pkt(
       mask_vlan  ? 0 : hdr->extended_hdr.parsed_pkt.vlan_id,
       mask_proto ? 0 : hdr->extended_hdr.parsed_pkt.l3_proto,
-      mask_src ? ip_zero : (use_tunneled_peers ? hdr->extended_hdr.parsed_pkt.gtp.tunneled_ip_src 
+      mask_src ? ip_zero : (use_tunneled_peers ? hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src 
                                                : hdr->extended_hdr.parsed_pkt.ip_src),
-      mask_dst ? ip_zero : (use_tunneled_peers ? hdr->extended_hdr.parsed_pkt.gtp.tunneled_ip_dst 
+      mask_dst ? ip_zero : (use_tunneled_peers ? hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst 
                                                : hdr->extended_hdr.parsed_pkt.ip_dst),
       (mask_src || mask_port) ? 0 : hdr->extended_hdr.parsed_pkt.l4_src_port,
       (mask_dst || mask_port) ? 0 : hdr->extended_hdr.parsed_pkt.l4_dst_port);
+  }
 
   return(hdr->extended_hdr.pkt_hash);
 }
@@ -1776,7 +1779,7 @@ static int parse_raw_pkt(char *data, u_int data_len,
   memset(&hdr->extended_hdr.parsed_pkt, 0, sizeof(hdr->extended_hdr.parsed_pkt));
 
   /* Default */
-  hdr->extended_hdr.parsed_pkt.gtp.tunnel_id = NO_GTP_TUNNEL_ID;
+  hdr->extended_hdr.parsed_pkt.tunnel.tunnel_id = NO_TUNNEL_ID;
 
   if(data_len < sizeof(struct ethhdr)) return(0);
 
@@ -1883,7 +1886,7 @@ static int parse_raw_pkt(char *data, u_int data_len,
   if(unlikely(enable_debug))
     printk("[PF_RING] [l3_proto=%d]\n", hdr->extended_hdr.parsed_pkt.l3_proto);
 
-  if((hdr->extended_hdr.parsed_pkt.l3_proto == IPPROTO_TCP || hdr->extended_hdr.parsed_pkt.l3_proto == IPPROTO_UDP) && !fragment_offset) {
+  if(((hdr->extended_hdr.parsed_pkt.l3_proto == IPPROTO_TCP) || (hdr->extended_hdr.parsed_pkt.l3_proto == IPPROTO_UDP)) && (!fragment_offset)) {
     hdr->extended_hdr.parsed_pkt.offset.l4_offset = hdr->extended_hdr.parsed_pkt.offset.l3_offset+ip_len;
 
     if(hdr->extended_hdr.parsed_pkt.l3_proto == IPPROTO_TCP) {
@@ -1924,9 +1927,7 @@ static int parse_raw_pkt(char *data, u_int data_len,
 	if(((gtp->flags & GTP_FLAGS_VERSION) >> GTP_FLAGS_VERSION_SHIFT) == GTP_VERSION_1) {
           struct iphdr *tunneled_ip;
 
-	  hdr->extended_hdr.parsed_pkt.gtp.version = gtp_version_1;
-	  hdr->extended_hdr.parsed_pkt.gtp.message_type = gtp->message_type;
-	  hdr->extended_hdr.parsed_pkt.gtp.tunnel_id = ntohl(gtp->teid);
+	  hdr->extended_hdr.parsed_pkt.tunnel.tunnel_id = ntohl(gtp->teid);
 
 	  if(gtp->flags & (GTP_FLAGS_EXTENSION | GTP_FLAGS_SEQ_NUM | GTP_FLAGS_NPDU_NUM)) {
 	    struct gtp_v1_opt_hdr *gtpopt;
@@ -1953,20 +1954,20 @@ static int parse_raw_pkt(char *data, u_int data_len,
 	  tunneled_ip = (struct iphdr *) (&data[hdr->extended_hdr.parsed_pkt.offset.payload_offset + gtp_len]);
 
           if(tunneled_ip->version == 4 /* IPv4 */ ) {
-            hdr->extended_hdr.parsed_pkt.gtp.tunneled_ip_src.v4 = ntohl(tunneled_ip->saddr);
-            hdr->extended_hdr.parsed_pkt.gtp.tunneled_ip_dst.v4 = ntohl(tunneled_ip->daddr);
+            hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src.v4 = ntohl(tunneled_ip->saddr);
+            hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst.v4 = ntohl(tunneled_ip->daddr);
 	  } else if(tunneled_ip->version == 6 /* IPv6 */ ) {
             struct ipv6hdr* tunneled_ipv6;
 	    if(data_len < (hdr->extended_hdr.parsed_pkt.offset.payload_offset+gtp_len+sizeof(struct ipv6hdr))) return(1);
 	    tunneled_ipv6 = (struct ipv6hdr *) (&data[hdr->extended_hdr.parsed_pkt.offset.payload_offset + gtp_len]);
 
             /* Values of IPv6 addresses are stored as network byte order */
-            hdr->extended_hdr.parsed_pkt.gtp.tunneled_ip_src.v6 = tunneled_ipv6->saddr;
-            hdr->extended_hdr.parsed_pkt.gtp.tunneled_ip_dst.v6 = tunneled_ipv6->daddr;
+            hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src.v6 = tunneled_ipv6->saddr;
+            hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst.v6 = tunneled_ipv6->daddr;
 	  }
 
           if(unlikely(enable_debug))
-	    printk("[PF_RING] GTP TEID=0x%08X Len=%u\n", hdr->extended_hdr.parsed_pkt.gtp.tunnel_id, gtp_len);
+	    printk("[PF_RING] GTP TEID=0x%08X Len=%u\n", hdr->extended_hdr.parsed_pkt.tunnel.tunnel_id, gtp_len);
 	}
       }
     } else
@@ -1980,7 +1981,7 @@ static int parse_raw_pkt(char *data, u_int data_len,
   } else
     hdr->extended_hdr.parsed_pkt.l4_src_port = hdr->extended_hdr.parsed_pkt.l4_dst_port = 0;
 
-  hash_pkt_header(hdr, 0, 0, 0, 0, 0, 0);
+  hash_pkt_header(hdr, 0, 0, 0, 0, 0);
 
   return(1); /* IP */
 }
@@ -1992,15 +1993,12 @@ static int parse_pkt(struct sk_buff *skb,
 		     u_int16_t skb_displ,
 		     struct pfring_pkthdr *hdr)
 {
-#if 1
   int rc;
-  u_char buffer[1514]; /* DEBUG ONLY!! */
-  skb_copy_bits(skb, -skb_displ, buffer, (skb->len + skb_displ));
-  rc = parse_raw_pkt(buffer, (skb->len + skb_displ), hdr);
-#else
-  int rc = parse_raw_pkt(&skb->data[real_skb ? -skb_displ : 0], (skb->len + skb_displ), hdr);
-#endif
+  u_char buffer[128];
 
+  skb_copy_bits(skb, -skb_displ, buffer, (skb->len + skb_displ));
+
+  rc = parse_raw_pkt(buffer, (skb->len + skb_displ), hdr);
   hdr->extended_hdr.parsed_pkt.offset.eth_offset = -skb_displ;
 
   return(rc);
@@ -2212,22 +2210,8 @@ static int match_filtering_rule(struct pf_ring_socket *pfr,
      && (hdr->extended_hdr.parsed_pkt.l3_proto != rule->rule.core_fields.proto))
     return(0);
 
-  if(rule->rule.extended_fields.gtp.version != ignore_gtp_version) {
-    if(unlikely(enable_debug))
-      printk("[PF_RING] [version=%02X][TEID=0x%08X][MsgType=0x%02X]\n",
-	     hdr->extended_hdr.parsed_pkt.gtp.version,
-	     rule->rule.extended_fields.gtp.tunnel_id,
-	     hdr->extended_hdr.parsed_pkt.gtp.message_type);
-
-    if((hdr->extended_hdr.parsed_pkt.gtp.version != rule->rule.extended_fields.gtp.version)
-       || ((hdr->extended_hdr.parsed_pkt.gtp.message_type < rule->rule.extended_fields.gtp.message_type_low)
-	   || (hdr->extended_hdr.parsed_pkt.gtp.message_type > rule->rule.extended_fields.gtp.message_type_high)))
-      return(0);
-
-    if((rule->rule.extended_fields.gtp.tunnel_id != NO_GTP_TUNNEL_ID)
-       && (hdr->extended_hdr.parsed_pkt.gtp.tunnel_id != rule->rule.extended_fields.gtp.tunnel_id))
-      return(0);
-  }
+  if(hdr->extended_hdr.parsed_pkt.tunnel.tunnel_id != rule->rule.extended_fields.tunnel.tunnel_id)
+    return(0);
 
   if((memcmp(rule->rule.core_fields.dmac, empty_mac, ETH_ALEN) != 0)
      && (memcmp(hdr->extended_hdr.parsed_pkt.dmac, rule->rule.core_fields.dmac, ETH_ALEN) != 0))
@@ -2299,7 +2283,7 @@ swap_direction:
 success:
 
   if(rule->rule.balance_pool > 0) {
-    u_int32_t balance_hash = hash_pkt_header(hdr, 0, 0, 0, 0, 0, 0) % rule->rule.balance_pool;
+    u_int32_t balance_hash = hash_pkt_header(hdr, 0, 0, 0, 0, 0) % rule->rule.balance_pool;
 
     if(balance_hash != rule->rule.balance_id)
       return(0);
@@ -3219,7 +3203,7 @@ int check_perfect_rules(struct sk_buff *skb,
   sw_filtering_hash_bucket *hash_bucket;
   u_int8_t hash_found = 0;
 
-  hash_idx = hash_pkt_header(hdr, 0, 0, 0, 0, 0, 0) % DEFAULT_RING_HASH_SIZE;
+  hash_idx = hash_pkt_header(hdr, 0, 0, 0, 0, 0) % DEFAULT_RING_HASH_SIZE;
   hash_bucket = pfr->sw_filtering_hash[hash_idx];
 
   while(hash_bucket != NULL) {
@@ -3594,7 +3578,7 @@ static int add_skb_to_ring(struct sk_buff *skb,
   u_int8_t hash_found = 0;
 
   if(pfr && pfr->rehash_rss && skb->dev)
-    channel_id = hash_pkt_header(hdr, 0, 0, 0, 0, 0, 0) % get_num_rx_queues(skb->dev);
+    channel_id = hash_pkt_header(hdr, 0, 0, 0, 0, 0) % get_num_rx_queues(skb->dev);
 
   /* This is a memory holder for storing parsed packet information
      that will then be freed when the packet has been handled
@@ -3748,20 +3732,17 @@ static u_int hash_pkt_cluster(ring_cluster_element * cluster_ptr,
       idx = cluster_ptr->cluster.hashing_id++;
       break;
     case cluster_per_flow_2_tuple:
-      idx = hash_pkt_header(hdr, 0, 0, 1, 1, 1, 0);
-      break;
-    case cluster_per_flow_2_tuple_with_gtp:
-      idx = hash_pkt_header(hdr, 0, 0, 1, 1, 1, hdr->extended_hdr.parsed_pkt.gtp.tunnel_id == NO_GTP_TUNNEL_ID ? 0 : 1);
+      idx = hash_pkt_header(hdr, 0, 0, 1, 1, 1);
       break;
     case cluster_per_flow_4_tuple:
-      idx = hash_pkt_header(hdr, 0, 0, 0, 1, 1, 0);
+      idx = hash_pkt_header(hdr, 0, 0, 0, 1, 1);
       break;
     case cluster_per_flow_5_tuple:
-      idx = hash_pkt_header(hdr, 0, 0, 0, 0, 1, 0);
+      idx = hash_pkt_header(hdr, 0, 0, 0, 0, 1);
       break;
     case cluster_per_flow:
     default:
-      idx = hash_pkt_header(hdr, 0, 0, 0, 0, 0, 0);
+      idx = hash_pkt_header(hdr, 0, 0, 0, 0, 0);
       break;
   }
 
@@ -4114,7 +4095,7 @@ static int skb_ring_handler(struct sk_buff *skb,
     if(pfr && pfr->rehash_rss && skb->dev) {
       parse_pkt(skb, real_skb, displ, &hdr);
 
-      channel_id = hash_pkt_header(&hdr, 0, 0, 0, 0, 0, 0) % get_num_rx_queues(skb->dev);
+      channel_id = hash_pkt_header(&hdr, 0, 0, 0, 0, 0) % get_num_rx_queues(skb->dev);
     }
 
     if(unlikely(enable_debug)) printk("[PF_RING] Expecting channel %d [%p]\n", channel_id, pfr);

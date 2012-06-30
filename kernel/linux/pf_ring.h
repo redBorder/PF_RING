@@ -3,6 +3,7 @@
  * Definitions for packet ring
  *
  * 2004-12 Luca Deri <deri@ntop.org>
+ *         Alfredo Cardigliano <cardigliano@ntop.org>
  *
  */
 
@@ -202,22 +203,13 @@ struct gtp_v1_ext_hdr {
    */
 } __attribute__((__packed__));
 
-#define NO_GTP_TUNNEL_ID     0xFFFFFFFF
-
-typedef enum {
-  ignore_gtp_version = 0,
-  gtp_version_0,
-  gtp_version_1,
-  gtp_version_2
-} gtp_version;
+#define NO_TUNNEL_ID     0xFFFFFFFF
 
 /* GPRS Tunneling Protocol */
 typedef struct {
-  gtp_version version;
-  u_int8_t message_type;
-  u_int32_t tunnel_id; /* GTP tunnelId or NO_GTP_TUNNEL_ID for no filtering */
+  u_int32_t tunnel_id; /* GTP/GRE tunnelId or NO_TUNNEL_ID for no filtering */
   ip_addr tunneled_ip_src, tunneled_ip_dst;
-} gtp_parsing;
+} tunnel_info;
 
 typedef enum {
   long_pkt_header = 0, /* it includes PF_RING-extensions over the original pcap header */
@@ -238,7 +230,7 @@ struct pkt_parsing_info {
     u_int32_t seq_num, ack_num; /* TCP sequence number */
   } tcp;
 
-  gtp_parsing gtp;
+  tunnel_info tunnel;
   u_int16_t last_matched_plugin_id; /* If > 0 identifies a plugin to that matched the packet */
   u_int16_t last_matched_rule_id; /* If > 0 identifies a rule that matched the packet */
   struct pkt_offset offset; /* Offsets of L3/L4/payload elements */
@@ -327,9 +319,8 @@ typedef struct {
 
 typedef struct {
   struct {
-    u_int8_t  version, message_type_low, message_type_high;
-    u_int32_t tunnel_id;          /* GTP tunnelId or NO_GTP_TUNNEL_ID for no filtering */
-  } gtp;
+    u_int32_t tunnel_id;          /* GTP/GRE tunnelId or NO_TUNNEL_ID for no filtering */
+  } tunnel;
 
   char payload_pattern[32];         /* If strlen(payload_pattern) > 0, the packet payload
 				       must match the specified pattern */
@@ -754,7 +745,6 @@ typedef enum {
   cluster_per_flow_2_tuple, /* 2-tuple: <src ip,           dst ip                       >  */
   cluster_per_flow_4_tuple, /* 4-tuple: <src ip, src port, dst ip, dst port             >  */
   cluster_per_flow_5_tuple, /* 5-tuple: <src ip, src port, dst ip, dst port, proto      >  */
-  cluster_per_flow_2_tuple_with_gtp, /* 2-tuple with GTP handling (IPs from GTP payload)   */
 } cluster_type;
 
 struct add_to_cluster {
