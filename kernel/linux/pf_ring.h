@@ -217,7 +217,9 @@ struct gtp_v1_ext_hdr {
 /* GPRS Tunneling Protocol */
 typedef struct {
   u_int32_t tunnel_id; /* GTP/GRE tunnelId or NO_TUNNEL_ID for no filtering */
+  u_int8_t tunneled_proto;
   ip_addr tunneled_ip_src, tunneled_ip_dst;
+  /* u_int16_t tunneled_l4_src_port, tunneled_l4_dst_port; */ /* TO add if necessary at some point */
 } tunnel_info;
 
 typedef enum {

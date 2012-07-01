@@ -326,6 +326,7 @@ char* proto2str(u_short proto) {
   case IPPROTO_TCP:  return("TCP");
   case IPPROTO_UDP:  return("UDP");
   case IPPROTO_ICMP: return("ICMP");
+  case IPPROTO_GRE:  return("GRE");
   default:
     snprintf(protoName, sizeof(protoName), "%d", proto);
     return(protoName);
@@ -392,7 +393,6 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h,
         if(h->extended_hdr.parsed_pkt.eth_type == 0x0800 /* IPv4*/ ) {
 	  printf("[IPv4][%s:%d ", intoa(h->extended_hdr.parsed_pkt.ipv4_src), h->extended_hdr.parsed_pkt.l4_src_port);
 	  printf("-> %s:%d] ", intoa(h->extended_hdr.parsed_pkt.ipv4_dst), h->extended_hdr.parsed_pkt.l4_dst_port);
-
         } else {
           printf("[IPv6][%s:%d ",    in6toa(h->extended_hdr.parsed_pkt.ipv6_src), h->extended_hdr.parsed_pkt.l4_src_port);
           printf("-> %s:%d] ", in6toa(h->extended_hdr.parsed_pkt.ipv6_dst), h->extended_hdr.parsed_pkt.l4_dst_port);
@@ -400,9 +400,19 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h,
 
 	printf("[l3_proto=%s]", proto2str(h->extended_hdr.parsed_pkt.l3_proto));
 
-	if((h->extended_hdr.parsed_pkt.l3_proto == IPPROTO_UDP) 
-	   && (h->extended_hdr.parsed_pkt.tunnel.tunnel_id != NO_TUNNEL_ID))
-	  printf("[TEID=0x%08X]", h->extended_hdr.parsed_pkt.tunnel.tunnel_id);
+	if(h->extended_hdr.parsed_pkt.tunnel.tunnel_id != NO_TUNNEL_ID) {
+	  printf("[TEID=0x%08X][tunneled_proto=%s]", 
+		 h->extended_hdr.parsed_pkt.tunnel.tunnel_id,
+		 proto2str(h->extended_hdr.parsed_pkt.tunnel.tunneled_proto));
+
+	  if(h->extended_hdr.parsed_pkt.eth_type == 0x0800 /* IPv4*/ ) {
+	    printf("[IPv4][%s ", intoa(h->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src.v4));
+	    printf("-> %s] ", intoa(h->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst.v4));
+	  } else {
+	    printf("[IPv6][%s ", in6toa(h->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src.v6));
+	    printf("-> %s] ", in6toa(h->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst.v6));
+	  }	  
+	}
 
 	printf("[hash=%u][tos=%d][tcp_seq_num=%u]",
 	  h->extended_hdr.pkt_hash,

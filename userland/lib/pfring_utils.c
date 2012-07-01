@@ -250,40 +250,46 @@ int pfring_parse_pkt(u_char *pkt, struct pfring_pkthdr *hdr, u_int8_t level /* 2
 	    gtpopt = (struct gtp_v1_opt_hdr *) (&pkt[hdr->extended_hdr.parsed_pkt.offset.payload_offset + gtp_len]);
 	    gtp_len += sizeof(struct gtp_v1_opt_hdr);
 
-            if((gtp->flags & GTP_FLAGS_EXTENSION) && gtpopt->next_ext_hdr) {
-	      struct gtp_v1_ext_hdr *gtpext;
-              u_int8_t *next_ext_hdr;
-	      int i = 4;
-	      do {
-                if(hdr->caplen < (hdr->extended_hdr.parsed_pkt.offset.payload_offset+gtp_len +1/* 8bit len field */)) return(1);
-	        gtpext = (struct gtp_v1_ext_hdr *) (&pkt[hdr->extended_hdr.parsed_pkt.offset.payload_offset + gtp_len]);
-	        gtp_len += (gtpext->len * GTP_EXT_HDR_LEN_UNIT_BYTES);
-                if(hdr->caplen < (hdr->extended_hdr.parsed_pkt.offset.payload_offset+gtp_len)) return(1);
-	        next_ext_hdr = (u_int8_t *) (&pkt[hdr->extended_hdr.parsed_pkt.offset.payload_offset + gtp_len - 1/* 8bit next_ext_hdr field*/]);
-	      } while (next_ext_hdr && --i);
+	    if((hdr->extended_hdr.parsed_pkt.l4_src_port == GTP_U_DATA_PORT) 
+	       || (hdr->extended_hdr.parsed_pkt.l4_dst_port == GTP_U_DATA_PORT)) {	    
+	      if((gtp->flags & GTP_FLAGS_EXTENSION) && gtpopt->next_ext_hdr) {
+		struct gtp_v1_ext_hdr *gtpext;
+		u_int8_t *next_ext_hdr;
+		int i = 4;
+
+		do {
+		  if(hdr->caplen < (hdr->extended_hdr.parsed_pkt.offset.payload_offset+gtp_len +1/* 8bit len field */)) return(1);
+		  gtpext = (struct gtp_v1_ext_hdr *) (&pkt[hdr->extended_hdr.parsed_pkt.offset.payload_offset + gtp_len]);
+		  gtp_len += (gtpext->len * GTP_EXT_HDR_LEN_UNIT_BYTES);
+		  if(hdr->caplen < (hdr->extended_hdr.parsed_pkt.offset.payload_offset+gtp_len)) return(1);
+		  next_ext_hdr = (u_int8_t *) (&pkt[hdr->extended_hdr.parsed_pkt.offset.payload_offset + gtp_len - 1/* 8bit next_ext_hdr field*/]);
+		} while (next_ext_hdr && --i);
+	      }
 	    }
-	  }
 
-	  if(hdr->caplen < (hdr->extended_hdr.parsed_pkt.offset.payload_offset+gtp_len+sizeof(struct iphdr))) return(1);
-	  tunneled_ip = (struct iphdr *) (&pkt[hdr->extended_hdr.parsed_pkt.offset.payload_offset + gtp_len]);
+	    if(hdr->caplen < (hdr->extended_hdr.parsed_pkt.offset.payload_offset+gtp_len+sizeof(struct iphdr))) return(1);
+	    tunneled_ip = (struct iphdr *) (&pkt[hdr->extended_hdr.parsed_pkt.offset.payload_offset + gtp_len]);
 
-          if(tunneled_ip->version == 4 /* IPv4 */ ) {
-            hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src.v4 = ntohl(tunneled_ip->saddr);
-            hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst.v4 = ntohl(tunneled_ip->daddr);
-	  } else if(tunneled_ip->version == 6 /* IPv6 */ ) {
-            struct ipv6hdr* tunneled_ipv6;
+	    if(tunneled_ip->version == 4 /* IPv4 */ ) {
+	      hdr->extended_hdr.parsed_pkt.tunnel.tunneled_proto = tunneled_ip->protocol;
+	      hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src.v4 = ntohl(tunneled_ip->saddr);
+	      hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst.v4 = ntohl(tunneled_ip->daddr);
+	    } else if(tunneled_ip->version == 6 /* IPv6 */ ) {
+	      struct ipv6hdr* tunneled_ipv6;
 
-	    if(hdr->caplen < (hdr->extended_hdr.parsed_pkt.offset.payload_offset+gtp_len+sizeof(struct ipv6hdr))) return(1);
-	    tunneled_ipv6 = (struct ipv6hdr *) (&pkt[hdr->extended_hdr.parsed_pkt.offset.payload_offset + gtp_len]);
+	      if(hdr->caplen < (hdr->extended_hdr.parsed_pkt.offset.payload_offset+gtp_len+sizeof(struct ipv6hdr))) return(1);
+	      tunneled_ipv6 = (struct ipv6hdr *) (&pkt[hdr->extended_hdr.parsed_pkt.offset.payload_offset + gtp_len]);
 
-	    /* Values of IPv6 addresses are stored as network byte order */
-	    memcpy(&hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src.v6, &tunneled_ipv6->saddr, sizeof(tunneled_ipv6->saddr));
-	    memcpy(&hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst.v6, &tunneled_ipv6->daddr, sizeof(tunneled_ipv6->daddr));
-	  }
+	      hdr->extended_hdr.parsed_pkt.tunnel.tunneled_proto = tunneled_ipv6->nexthdr;
+	      /* Values of IPv6 addresses are stored as network byte order */
+	      memcpy(&hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src.v6, &tunneled_ipv6->saddr, sizeof(tunneled_ipv6->saddr));
+	      memcpy(&hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst.v6, &tunneled_ipv6->daddr, sizeof(tunneled_ipv6->daddr));
+	    }
 
 #ifdef RING_DEBUG
-	  printk("[PF_RING] GTP TEID=0x%08X Len=%u\n", hdr->extended_hdr.parsed_pkt.tunnel.tunnel_id, gtp_len);
+	    printk("[PF_RING] GTP TEID=0x%08X Len=%u\n", hdr->extended_hdr.parsed_pkt.tunnel.tunnel_id, gtp_len);
 #endif
+	  }
 	}
       }
     }
@@ -307,6 +313,7 @@ int pfring_parse_pkt(u_char *pkt, struct pfring_pkthdr *hdr, u_int8_t level /* 2
       if(hdr->caplen < (hdr->extended_hdr.parsed_pkt.offset.payload_offset+sizeof(struct iphdr))) return(1);
       tunneled_ip = (struct iphdr *)(&pkt[hdr->extended_hdr.parsed_pkt.offset.payload_offset]);
 
+      hdr->extended_hdr.parsed_pkt.tunnel.tunneled_proto = tunneled_ip->protocol;
       hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src.v4 = ntohl(tunneled_ip->saddr);
       hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst.v4 = ntohl(tunneled_ip->daddr);
     } else if(gre->proto == ETH_P_IPV6 /* IPv6 */) {
@@ -315,6 +322,7 @@ int pfring_parse_pkt(u_char *pkt, struct pfring_pkthdr *hdr, u_int8_t level /* 2
       if(hdr->caplen < (hdr->extended_hdr.parsed_pkt.offset.payload_offset+sizeof(struct ipv6hdr))) return(1);
       tunneled_ipv6 = (struct ipv6hdr *)(&pkt[hdr->extended_hdr.parsed_pkt.offset.payload_offset]);
 
+      hdr->extended_hdr.parsed_pkt.tunnel.tunneled_proto = tunneled_ipv6->nexthdr;
       /* Values of IPv6 addresses are stored as network byte order */
       memcpy(&hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src.v6, &tunneled_ipv6->saddr, sizeof(tunneled_ipv6->saddr));
       memcpy(&hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst.v6, &tunneled_ipv6->daddr, sizeof(tunneled_ipv6->daddr));
