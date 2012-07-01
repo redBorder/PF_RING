@@ -1992,7 +1992,7 @@ static int parse_raw_pkt(char *data, u_int data_len,
 	u_int32_t *tunnel_id = (u_int32_t*)(&data[hdr->extended_hdr.parsed_pkt.offset.l4_offset+gre_offset]);
 
 	gre_offset += 4;
-	hdr->extended_hdr.parsed_pkt.tunnel.tunnel_id = ntohl(tunnel_id);
+	hdr->extended_hdr.parsed_pkt.tunnel.tunnel_id = ntohl(*tunnel_id);
       }
       if(gre->flags_and_version & GRE_HEADER_SEQ_NUM)  gre_offset += 4;
 
@@ -2044,8 +2044,7 @@ static int parse_pkt(struct sk_buff *skb,
   int rc;
   u_char buffer[128]; /* Enough for standard and tunneled headers */
 
-  skb_copy_bits(skb, -skb_displ, buffer, min((skb->len + skb_displ), sizeof(buffer)));
-
+  skb_copy_bits(skb, -skb_displ, buffer, min((u_int16_t)(skb->len + skb_displ), (u_int16_t)sizeof(buffer)));
   rc = parse_raw_pkt(buffer, (skb->len + skb_displ), hdr);
   hdr->extended_hdr.parsed_pkt.offset.eth_offset = -skb_displ;
 
