@@ -441,7 +441,7 @@ static inline void skb_reset_transport_header(struct sk_buff *skb)
 void msleep(unsigned int msecs)
 {
   unsigned long timeout = msecs_to_jiffies(msecs) + 1;
-  
+
   while (timeout)
     timeout = schedule_timeout_uninterruptible(timeout);
 }
@@ -1753,13 +1753,13 @@ inline u_int32_t hash_pkt_header(struct pfring_pkthdr * hdr, u_char mask_src, u_
 {
   if(hdr->extended_hdr.pkt_hash == 0) {
     u_int8_t use_tunneled_peers = hdr->extended_hdr.parsed_pkt.tunnel.tunnel_id == NO_TUNNEL_ID ? 0 : 1;
-    
+
     hdr->extended_hdr.pkt_hash = hash_pkt(
       mask_vlan  ? 0 : hdr->extended_hdr.parsed_pkt.vlan_id,
       mask_proto ? 0 : hdr->extended_hdr.parsed_pkt.l3_proto,
-      mask_src ? ip_zero : (use_tunneled_peers ? hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src 
+      mask_src ? ip_zero : (use_tunneled_peers ? hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src
                                                : hdr->extended_hdr.parsed_pkt.ip_src),
-      mask_dst ? ip_zero : (use_tunneled_peers ? hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst 
+      mask_dst ? ip_zero : (use_tunneled_peers ? hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst
                                                : hdr->extended_hdr.parsed_pkt.ip_dst),
       (mask_src || mask_port) ? 0 : hdr->extended_hdr.parsed_pkt.l4_src_port,
       (mask_dst || mask_port) ? 0 : hdr->extended_hdr.parsed_pkt.l4_dst_port);
@@ -1838,8 +1838,8 @@ static int parse_raw_pkt(char *data, u_int data_len,
     ipv6 = (struct ipv6hdr*)(&data[hdr->extended_hdr.parsed_pkt.offset.l3_offset]);
 
     /* Values of IPv6 addresses are stored as network byte order */
-    hdr->extended_hdr.parsed_pkt.ipv6_src = ipv6->saddr;
-    hdr->extended_hdr.parsed_pkt.ipv6_dst = ipv6->daddr;
+    memcpy(&hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src.v6, &ipv6->saddr, sizeof(ipv6->saddr));
+    memcpy(&hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst.v6, &ipv6->daddr, sizeof(ipv6->daddr));
 
     hdr->extended_hdr.parsed_pkt.l3_proto = ipv6->nexthdr;
     hdr->extended_hdr.parsed_pkt.ipv6_tos = ipv6->priority; /* IPv6 class of service */
@@ -1911,11 +1911,11 @@ static int parse_raw_pkt(char *data, u_int data_len,
 
       hdr->extended_hdr.parsed_pkt.l4_src_port = ntohs(udp->source), hdr->extended_hdr.parsed_pkt.l4_dst_port = ntohs(udp->dest);
       hdr->extended_hdr.parsed_pkt.offset.payload_offset = hdr->extended_hdr.parsed_pkt.offset.l4_offset + sizeof(struct udphdr);
-      
+
       /* GTP */
-      if((hdr->extended_hdr.parsed_pkt.l4_src_port == GTP_SIGNALING_PORT) || 
-         (hdr->extended_hdr.parsed_pkt.l4_dst_port == GTP_SIGNALING_PORT) || 
-	 (hdr->extended_hdr.parsed_pkt.l4_src_port == GTP_U_DATA_PORT) || 
+      if((hdr->extended_hdr.parsed_pkt.l4_src_port == GTP_SIGNALING_PORT) ||
+         (hdr->extended_hdr.parsed_pkt.l4_dst_port == GTP_SIGNALING_PORT) ||
+	 (hdr->extended_hdr.parsed_pkt.l4_src_port == GTP_U_DATA_PORT) ||
 	 (hdr->extended_hdr.parsed_pkt.l4_dst_port == GTP_U_DATA_PORT)) {
 	 struct gtp_v1_hdr *gtp;
 	 u_int16_t gtp_len;
@@ -1958,17 +1958,50 @@ static int parse_raw_pkt(char *data, u_int data_len,
             hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst.v4 = ntohl(tunneled_ip->daddr);
 	  } else if(tunneled_ip->version == 6 /* IPv6 */ ) {
             struct ipv6hdr* tunneled_ipv6;
+
 	    if(data_len < (hdr->extended_hdr.parsed_pkt.offset.payload_offset+gtp_len+sizeof(struct ipv6hdr))) return(1);
 	    tunneled_ipv6 = (struct ipv6hdr *) (&data[hdr->extended_hdr.parsed_pkt.offset.payload_offset + gtp_len]);
 
-            /* Values of IPv6 addresses are stored as network byte order */
-            hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src.v6 = tunneled_ipv6->saddr;
-            hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst.v6 = tunneled_ipv6->daddr;
+	    /* Values of IPv6 addresses are stored as network byte order */
+	    memcpy(&hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src.v6, &tunneled_ipv6->saddr, sizeof(tunneled_ipv6->saddr));
+	    memcpy(&hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst.v6, &tunneled_ipv6->daddr, sizeof(tunneled_ipv6->daddr));
 	  }
 
           if(unlikely(enable_debug))
 	    printk("[PF_RING] GTP TEID=0x%08X Len=%u\n", hdr->extended_hdr.parsed_pkt.tunnel.tunnel_id, gtp_len);
 	}
+      }
+    } else if(hdr->extended_hdr.parsed_pkt.l3_proto == IPPROTO_GRE /* 0x47 */) {
+      struct gre_header *gre = (struct gre_header*)(&data[hdr->extended_hdr.parsed_pkt.offset.l4_offset]);
+      int gre_offset;
+
+      gre->flags_and_version = ntohs(gre->flags_and_version);
+      gre->proto = ntohs(gre->proto);
+
+      gre_offset = sizeof(struct gre_header);
+      if(gre->flags_and_version & GRE_HEADER_CHECKSUM) gre_offset += 4;
+      if(gre->flags_and_version & GRE_HEADER_ROUTING)  gre_offset += 4;
+      if(gre->flags_and_version & GRE_HEADER_KEY)      gre_offset += 4;
+      if(gre->flags_and_version & GRE_HEADER_SEQ_NUM)  gre_offset += 4;
+      hdr->extended_hdr.parsed_pkt.offset.payload_offset = hdr->extended_hdr.parsed_pkt.offset.l4_offset + gre_offset;
+
+      if(gre->proto == ETH_P_IP /* IPv4 */) {
+	struct iphdr *tunneled_ip;
+
+	if(data_len < (hdr->extended_hdr.parsed_pkt.offset.payload_offset+sizeof(struct iphdr))) return(1);
+	tunneled_ip = (struct iphdr *)(&data[hdr->extended_hdr.parsed_pkt.offset.payload_offset]);
+
+	hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src.v4 = ntohl(tunneled_ip->saddr);
+	hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst.v4 = ntohl(tunneled_ip->daddr);
+      } else if(gre->proto == ETH_P_IPV6 /* IPv6 */) {
+	struct ipv6hdr* tunneled_ipv6;
+
+	if(data_len < (hdr->extended_hdr.parsed_pkt.offset.payload_offset+sizeof(struct ipv6hdr))) return(1);
+	tunneled_ipv6 = (struct ipv6hdr *)(&data[hdr->extended_hdr.parsed_pkt.offset.payload_offset]);
+
+	/* Values of IPv6 addresses are stored as network byte order */
+	memcpy(&hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src.v6, &tunneled_ipv6->saddr, sizeof(tunneled_ipv6->saddr));
+	memcpy(&hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst.v6, &tunneled_ipv6->daddr, sizeof(tunneled_ipv6->daddr));
       }
     } else
       hdr->extended_hdr.parsed_pkt.offset.payload_offset = hdr->extended_hdr.parsed_pkt.offset.l4_offset;
@@ -1994,7 +2027,7 @@ static int parse_pkt(struct sk_buff *skb,
 		     struct pfring_pkthdr *hdr)
 {
   int rc;
-  u_char buffer[128];
+  u_char buffer[128]; /* Enough for standard and tunneled headers */
 
   skb_copy_bits(skb, -skb_displ, buffer, (skb->len + skb_displ));
 
@@ -2212,6 +2245,19 @@ static int match_filtering_rule(struct pf_ring_socket *pfr,
 
   if(hdr->extended_hdr.parsed_pkt.tunnel.tunnel_id != rule->rule.extended_fields.tunnel.tunnel_id)
     return(0);
+  else if(hdr->extended_hdr.parsed_pkt.tunnel.tunnel_id != NO_TUNNEL_ID) {
+    if(hdr->extended_hdr.parsed_pkt.ip_version == 6) {
+      /* IPv6 */
+      if(!match_ipv6(&hdr->extended_hdr.parsed_pkt.ip_src, &rule->rule.extended_fields.tunnel.dhost_mask, &rule->rule.extended_fields.tunnel.dhost)
+	 || !match_ipv6(&hdr->extended_hdr.parsed_pkt.ip_dst, &rule->rule.extended_fields.tunnel.shost_mask, &rule->rule.extended_fields.tunnel.shost))
+	return(0);
+    } else {
+      /* IPv4 */
+      if((hdr->extended_hdr.parsed_pkt.ip_src.v4 & rule->rule.extended_fields.tunnel.dhost_mask.v4) != rule->rule.extended_fields.tunnel.dhost.v4
+	 || (hdr->extended_hdr.parsed_pkt.ip_dst.v4 & rule->rule.extended_fields.tunnel.shost_mask.v4) != rule->rule.extended_fields.tunnel.shost.v4)
+	return(0);
+    }
+  }
 
   if((memcmp(rule->rule.core_fields.dmac, empty_mac, ETH_ALEN) != 0)
      && (memcmp(hdr->extended_hdr.parsed_pkt.dmac, rule->rule.core_fields.dmac, ETH_ALEN) != 0))
@@ -4104,7 +4150,7 @@ static int skb_ring_handler(struct sk_buff *skb,
       /* printk("==>>> [%d][%d]\n", skb->dev->ifindex, channel_id); */
 
       rc = 1, hdr.caplen = min_val(hdr.caplen, pfr->bucket_len);
-      room_available |= copy_data_to_ring(real_skb ? skb : NULL, pfr, &hdr, 
+      room_available |= copy_data_to_ring(real_skb ? skb : NULL, pfr, &hdr,
 					  displ, 0, NULL, NULL, 0, real_skb ? &clone_id : NULL);
     }
   } else {
@@ -4248,7 +4294,7 @@ static int skb_ring_handler(struct sk_buff *skb,
       /* CHECK: I commented the line below as I have no idea why it has been put there */
       /* rc = 0; */
 #if 0
-      printk("[PF_RING] %s() [clone_id=%d][recv_packet=%d][real_skb=%d]\n", 
+      printk("[PF_RING] %s() [clone_id=%d][recv_packet=%d][real_skb=%d]\n",
 	     __FUNCTION__, clone_id, recv_packet, real_skb);
 #endif
     } else {
@@ -4441,7 +4487,7 @@ static int ring_create(
   rwlock_init(&pfr->tx.consume_tx_packets_lock);
   pfr->tx.enable_tx_with_bounce = 0;
   pfr->tx.last_tx_dev_idx = UNKNOWN_INTERFACE, pfr->tx.last_tx_dev = NULL;
-  
+
   if (ring_insert(sk) == -1)
     goto free_pfr;
 
@@ -4658,7 +4704,7 @@ unlock:
 /* ********************************** */
 
 static int userspace_ring_remove(struct pf_userspace_ring *usr,
-                                 userspace_ring_client_type type) 
+                                 userspace_ring_client_type type)
 {
   struct list_head *ptr, *tmp_ptr;
   struct pf_userspace_ring *entry;
@@ -4699,7 +4745,7 @@ static int userspace_ring_remove(struct pf_userspace_ring *usr,
 
 /* ************************************* */
 
-void reserve_memory(unsigned long base, unsigned long mem_len) 
+void reserve_memory(unsigned long base, unsigned long mem_len)
 {
   struct page *page, *page_end;
 
@@ -4708,7 +4754,7 @@ void reserve_memory(unsigned long base, unsigned long mem_len)
     SetPageReserved(page);
 }
 
-void unreserve_memory(unsigned long base, unsigned long mem_len) 
+void unreserve_memory(unsigned long base, unsigned long mem_len)
 {
   struct page *page, *page_end;
 
@@ -4717,7 +4763,7 @@ void unreserve_memory(unsigned long base, unsigned long mem_len)
     ClearPageReserved(page);
 }
 
-static void free_contiguous_memory(unsigned long mem, u_int mem_len) 
+static void free_contiguous_memory(unsigned long mem, u_int mem_len)
 {
   if(mem != 0) {
     unreserve_memory(mem, mem_len);
@@ -4727,12 +4773,12 @@ static void free_contiguous_memory(unsigned long mem, u_int mem_len)
 
 static unsigned long __get_free_pages_node(int nid, gfp_t gfp_mask, unsigned int order) {
   struct page *page;
-  
+
   /* Just remember to do not use highmem flag:
    * VM_BUG_ON((gfp_mask & __GFP_HIGHMEM) != 0); */
-  
+
   page = alloc_pages_node(nid, gfp_mask, order);
-  
+
   if (!page)
     return 0;
 
@@ -4765,7 +4811,7 @@ static struct dma_memory_info *allocate_extra_dma_memory(struct device *hwdev,
 {
   u_int i, num_slots_per_chunk, num_chunks;
   struct dma_memory_info *dma_memory;
-  int numa_node = 
+  int numa_node =
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,26)) && defined(CONFIG_NUMA)
     dev_to_node(hwdev)
 #else
@@ -4860,7 +4906,7 @@ static struct dma_memory_info *allocate_extra_dma_memory(struct device *hwdev,
   return dma_memory;
 }
 
-static void free_extra_dma_memory(struct dma_memory_info *dma_memory) 
+static void free_extra_dma_memory(struct dma_memory_info *dma_memory)
 {
   u_int i;
 
@@ -4895,7 +4941,7 @@ static void free_extra_dma_memory(struct dma_memory_info *dma_memory)
 /* ********************************** */
 
 static struct dna_cluster* dna_cluster_create(u_int32_t dna_cluster_id, u_int32_t num_slots,
-                                              u_int32_t num_slaves, u_int32_t slave_mem_len, 
+                                              u_int32_t num_slaves, u_int32_t slave_mem_len,
 					      u_int32_t master_persistent_mem_len, socket_mode mode,
                                               struct device *hwdev, u_int32_t slot_len, u_int32_t chunk_len,
 					      u_int32_t *recovered)
@@ -4999,7 +5045,7 @@ static struct dna_cluster* dna_cluster_create(u_int32_t dna_cluster_id, u_int32_
     /* recovering an old cluster */
 
     /* checking cluster parameters */
-    if (dnac->num_slaves != num_slaves 
+    if (dnac->num_slaves != num_slaves
 	|| (num_slaves > 0 && dnac->slave_shared_memory_len != PAGE_ALIGN(slave_mem_len))
 	|| dnac->master_persistent_memory_len != PAGE_ALIGN(master_persistent_mem_len)
 	|| dnac->mode != mode
@@ -5026,7 +5072,7 @@ unlock:
   return dnac;
 }
 
-static void dna_cluster_remove(struct dna_cluster *dnac, dna_cluster_client_type type, u_int32_t slave_id) 
+static void dna_cluster_remove(struct dna_cluster *dnac, dna_cluster_client_type type, u_int32_t slave_id)
 {
   struct list_head *ptr, *tmp_ptr;
   struct dna_cluster *entry;
@@ -5045,7 +5091,7 @@ static void dna_cluster_remove(struct dna_cluster *dnac, dna_cluster_client_type
         dnac->slave_waitqueue[slave_id] = NULL;
         atomic_dec_if_positive(&dnac->active_slaves[slave_id]);
       }
-      
+
       if (atomic_read(&dnac->master) > 0)
         active_users++;
       for (i = 0; i < dnac->num_slaves; i++)
@@ -5071,8 +5117,8 @@ static void dna_cluster_remove(struct dna_cluster *dnac, dna_cluster_client_type
   write_unlock(&dna_cluster_lock);
 }
 
-static struct dna_cluster* dna_cluster_attach(u_int32_t dna_cluster_id, u_int32_t *slave_id, u_int32_t auto_slave_id, 
-                                              wait_queue_head_t *slave_waitqueue, u_int32_t *mode) 
+static struct dna_cluster* dna_cluster_attach(u_int32_t dna_cluster_id, u_int32_t *slave_id, u_int32_t auto_slave_id,
+                                              wait_queue_head_t *slave_waitqueue, u_int32_t *mode)
 {
   struct list_head *ptr, *tmp_ptr;
   struct dna_cluster *entry;
@@ -5122,7 +5168,7 @@ static struct dna_cluster* dna_cluster_attach(u_int32_t dna_cluster_id, u_int32_
           goto unlock;
         }
       }
-      
+
       dnac->slave_waitqueue[*slave_id] = slave_waitqueue;
       *mode = dnac->mode;
 
@@ -5967,7 +6013,7 @@ unsigned int ring_poll(struct file *file,
   if(unlikely(enable_debug))
     printk("[PF_RING] -- poll called [DNA: %p][%s]\n", pfr->dna_device,
 	   pfr->ring_netdev->dev->name ? pfr->ring_netdev->dev->name : "???");
-  
+
   pfr->num_poll_calls++;
 
   if(unlikely(pfr->ring_shutdown))
@@ -7243,7 +7289,7 @@ static int ring_setsockopt(struct socket *sock,
 					    cdnaci.mode,
 					    pfr->dna_device->hwdev,
                                             pfr->dna_device->mem_info.rx.packet_memory_slot_len,
-                                            pfr->dna_device->mem_info.rx.packet_memory_chunk_len, 
+                                            pfr->dna_device->mem_info.rx.packet_memory_chunk_len,
 					    &cdnaci.recovered);
 
       if(pfr->dna_cluster == NULL) {

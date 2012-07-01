@@ -166,11 +166,20 @@ typedef union {
 #define host6_peer_a host_peer_a.v6
 #define host6_peer_b host_peer_b.v6
 
-#define GTP_SIGNALING_PORT 2123
-#define GTP_U_DATA_PORT    2152
-#define GTP_VERSION_1      0x1
-#define GTP_VERSION_2      0x2
-#define GTP_PROTOCOL_TYPE  0x1
+#define GRE_HEADER_CHECKSUM     0x8000 /* 32 bit */
+#define GRE_HEADER_ROUTING      0x4000 /* 32 bit */
+#define GRE_HEADER_KEY          0x2000 /* 32 bit */
+#define GRE_HEADER_SEQ_NUM      0x1000 /* 32 bit */
+
+struct gre_header {
+  u_int16_t flags_and_version;
+  u_int16_t proto;
+};
+#define GTP_SIGNALING_PORT      2123
+#define GTP_U_DATA_PORT         2152
+#define GTP_VERSION_1           0x1
+#define GTP_VERSION_2           0x2
+#define GTP_PROTOCOL_TYPE       0x1
 
 struct gtp_v1_hdr {
 #define GTP_FLAGS_VERSION       0xE0
@@ -319,7 +328,9 @@ typedef struct {
 
 typedef struct {
   struct {
-    u_int32_t tunnel_id;          /* GTP/GRE tunnelId or NO_TUNNEL_ID for no filtering */
+    u_int32_t tunnel_id;              /* GTP/GRE tunnelId or NO_TUNNEL_ID for no filtering */
+    ip_addr   shost, dhost;           /* Filter on tunneled IPs */
+    ip_addr   shost_mask, dhost_mask; /* IPv4/6 network mask */
   } tunnel;
 
   char payload_pattern[32];         /* If strlen(payload_pattern) > 0, the packet payload

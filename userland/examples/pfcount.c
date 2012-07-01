@@ -334,17 +334,6 @@ char* proto2str(u_short proto) {
 
 /* ****************************************************** */
 
-char* gtp_version2str(gtp_version v) {
-  switch(v) {
-  case gtp_version_0: return("v0");    
-  case gtp_version_1: return("v1");    
-  case gtp_version_2: return("v2");    
-  default: return("??");
-  }
-}
-
-/* ****************************************************** */
-
 static int32_t thiszone;
 
 void dummyProcesssPacket(const struct pfring_pkthdr *h, 
@@ -412,11 +401,8 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h,
 	printf("[l3_proto=%s]", proto2str(h->extended_hdr.parsed_pkt.l3_proto));
 
 	if((h->extended_hdr.parsed_pkt.l3_proto == IPPROTO_UDP) 
-	   && (h->extended_hdr.parsed_pkt.gtp.tunnel_id != NO_GTP_TUNNEL_ID))
-	  printf("[GTP Version=%s/TEID=0x%08X/MsgType=0x%02X]",
-		 gtp_version2str(h->extended_hdr.parsed_pkt.gtp.version),
-		 h->extended_hdr.parsed_pkt.gtp.tunnel_id,
-		 h->extended_hdr.parsed_pkt.gtp.message_type);
+	   && (h->extended_hdr.parsed_pkt.tunnel.tunnel_id != NO_TUNNEL_ID))
+	  printf("[TEID=0x%08X]", h->extended_hdr.parsed_pkt.tunnel.tunnel_id);
 
 	printf("[hash=%u][tos=%d][tcp_seq_num=%u]",
 	  h->extended_hdr.pkt_hash,
@@ -882,9 +868,7 @@ int main(int argc, char* argv[]) {
     rule.core_fields.shost.v4 = ntohl(inet_addr(sgsn)),rule.core_fields.shost_mask.v4 = 0xFFFFFFFF;
     rule.core_fields.dhost.v4 = ntohl(inet_addr(ggsn)), rule.core_fields.dhost_mask.v4 = 0xFFFFFFFF;
     
-    rule.extended_fields.gtp.version = gtp_version_1; /* GTPv1 */
-    rule.extended_fields.gtp.message_type_low = 0xff, rule.extended_fields.gtp.message_type_high = 0xff;
-    rule.extended_fields.gtp.tunnel_id = 0x0000a2b6;
+    rule.extended_fields.tunnel.tunnel_id = 0x0000a2b6;
     
     if((rc = pfring_add_filtering_rule(pd, &rule)) < 0)
       fprintf(stderr, "pfring_add_filtering_rule(id=%d) failed: rc=%d\n", rule.rule_id, rc);
@@ -902,9 +886,7 @@ int main(int argc, char* argv[]) {
     rule.core_fields.shost.v4 = ntohl(inet_addr(ggsn)), rule.core_fields.dhost_mask.v4 = 0xFFFFFFFF;
     rule.core_fields.dhost.v4 = ntohl(inet_addr(sgsn)), rule.core_fields.shost_mask.v4 = 0xFFFFFFFF;
     
-    rule.extended_fields.gtp.version = gtp_version_1; /* GTPv1 */
-    rule.extended_fields.gtp.message_type_low = 0xff, rule.extended_fields.gtp.message_type_high = 0xff;
-    rule.extended_fields.gtp.tunnel_id = 0x776C0000;
+    rule.extended_fields.tunnel.tunnel_id = 0x776C0000;
     if((rc = pfring_add_filtering_rule(pd, &rule)) < 0)
       fprintf(stderr, "pfring_add_filtering_rule(id=%d) failed: rc=%d\n", rule.rule_id, rc);
     else
@@ -920,9 +902,7 @@ int main(int argc, char* argv[]) {
     rule.rule_action = forward_packet_and_stop_rule_evaluation;
     rule.core_fields.proto = 17 /* UDP */;
     rule.core_fields.sport_low = rule.core_fields.sport_high = 2123;
-    rule.extended_fields.gtp.version = gtp_version_1; /* GTPv1 */
-    rule.extended_fields.gtp.message_type_low = 0x10, rule.extended_fields.gtp.message_type_high = 0x15;
-    rule.extended_fields.gtp.tunnel_id = NO_GTP_TUNNEL_ID; /* Ignore the tunnel */
+    rule.extended_fields.tunnel.tunnel_id = NO_TUNNEL_ID; /* Ignore the tunnel */
 
     if((rc = pfring_add_filtering_rule(pd, &rule)) < 0)
       fprintf(stderr, "pfring_add_filtering_rule(id=%d) failed: rc=%d\n", rule.rule_id, rc);
@@ -941,9 +921,7 @@ int main(int argc, char* argv[]) {
     rule.rule_action = forward_packet_and_stop_rule_evaluation;
     rule.core_fields.proto = 17 /* UDP */;
     rule.core_fields.dport_low = rule.core_fields.dport_high = 2123;
-    rule.extended_fields.gtp.version = gtp_version_1; /* GTPv1 */
-    rule.extended_fields.gtp.message_type_low = 0x10, rule.extended_fields.gtp.message_type_high = 0x15;
-    rule.extended_fields.gtp.tunnel_id = NO_GTP_TUNNEL_ID; /* Ignore the tunnel */
+    rule.extended_fields.tunnel.tunnel_id = NO_TUNNEL_ID; /* Ignore the tunnel */
 
     if((rc = pfring_add_filtering_rule(pd, &rule)) < 0)
       fprintf(stderr, "pfring_add_filtering_rule(id=%d) failed: rc=%d\n", rule.rule_id, rc);
