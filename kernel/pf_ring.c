@@ -6798,11 +6798,9 @@ static int ring_setsockopt(struct socket *sock,
     if(copy_from_user(&rule_inactivity, optval, sizeof(rule_inactivity)))
       return -EFAULT;
     else {
-      if(rule_inactivity > 0) {
-	write_lock_bh(&pfr->ring_rules_lock);
-	purge_idle_hash_rules(pfr, rule_inactivity);
-	write_unlock_bh(&pfr->ring_rules_lock);
-      }
+      write_lock_bh(&pfr->ring_rules_lock);
+      purge_idle_hash_rules(pfr, rule_inactivity);
+      write_unlock_bh(&pfr->ring_rules_lock);
       ret = 0;
     }
     break;
@@ -6814,11 +6812,9 @@ static int ring_setsockopt(struct socket *sock,
     if(copy_from_user(&rule_inactivity, optval, sizeof(rule_inactivity)))
       return -EFAULT;
     else {
-      if(rule_inactivity > 0) {
-	write_lock_bh(&pfr->ring_rules_lock);
-	purge_idle_rules(pfr, rule_inactivity);
-	write_unlock_bh(&pfr->ring_rules_lock);
-      }
+      write_lock_bh(&pfr->ring_rules_lock);
+      purge_idle_rules(pfr, rule_inactivity);
+      write_unlock_bh(&pfr->ring_rules_lock);
       ret = 0;
     }
     break;
