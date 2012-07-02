@@ -166,15 +166,18 @@ typedef union {
 #define host6_peer_a host_peer_a.v6
 #define host6_peer_b host_peer_b.v6
 
-#define GRE_HEADER_CHECKSUM     0x8000 /* 32 bit */
-#define GRE_HEADER_ROUTING      0x4000 /* 32 bit */
-#define GRE_HEADER_KEY          0x2000 /* 32 bit */
-#define GRE_HEADER_SEQ_NUM      0x1000 /* 32 bit */
+#define GRE_HEADER_CHECKSUM     0x8000
+#define GRE_HEADER_ROUTING      0x4000
+#define GRE_HEADER_KEY          0x2000
+#define GRE_HEADER_SEQ_NUM      0x1000
+#define GRE_HEADER_VERSION      0x0007
 
 struct gre_header {
   u_int16_t flags_and_version;
   u_int16_t proto;
+  /* Optional fields */
 };
+
 #define GTP_SIGNALING_PORT      2123
 #define GTP_U_DATA_PORT         2152
 #define GTP_VERSION_1           0x1

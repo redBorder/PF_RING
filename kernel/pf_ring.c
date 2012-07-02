@@ -1946,7 +1946,6 @@ static int parse_raw_pkt(char *data, u_int data_len,
 	      if((gtp->flags & GTP_FLAGS_EXTENSION) && gtpopt->next_ext_hdr) {
 		struct gtp_v1_ext_hdr *gtpext;
 		u_int8_t *next_ext_hdr;
-		int i = 4;
 
 		do {
 		  if(data_len < (hdr->extended_hdr.parsed_pkt.offset.payload_offset+gtp_len +1/* 8bit len field */)) return(1);
@@ -1954,7 +1953,7 @@ static int parse_raw_pkt(char *data, u_int data_len,
 		  gtp_len += (gtpext->len * GTP_EXT_HDR_LEN_UNIT_BYTES);
 		  if(data_len < (hdr->extended_hdr.parsed_pkt.offset.payload_offset+gtp_len)) return(1);
 		  next_ext_hdr = (u_int8_t *) (&data[hdr->extended_hdr.parsed_pkt.offset.payload_offset + gtp_len - 1/* 8bit next_ext_hdr field*/]);
-		} while (next_ext_hdr && --i);
+		} while (next_ext_hdr);
 	      }
 	    }
 
@@ -1986,37 +1985,39 @@ static int parse_raw_pkt(char *data, u_int data_len,
       gre->flags_and_version = ntohs(gre->flags_and_version);
       gre->proto = ntohs(gre->proto);
       gre_offset = sizeof(struct gre_header);
-      if(gre->flags_and_version & GRE_HEADER_CHECKSUM) gre_offset += 4;
-      if(gre->flags_and_version & GRE_HEADER_ROUTING)  gre_offset += 4;
-      if(gre->flags_and_version & GRE_HEADER_KEY) {
-	u_int32_t *tunnel_id = (u_int32_t*)(&data[hdr->extended_hdr.parsed_pkt.offset.l4_offset+gre_offset]);
+      if((gre->flags_and_version & GRE_HEADER_VERSION) == 0) {
+        if(gre->flags_and_version & (GRE_HEADER_CHECKSUM | GRE_HEADER_ROUTING)) gre_offset += 4;
+        if(gre->flags_and_version & GRE_HEADER_KEY) {
+	  u_int32_t *tunnel_id = (u_int32_t*)(&data[hdr->extended_hdr.parsed_pkt.offset.l4_offset+gre_offset]);
+	  gre_offset += 4;
+	  hdr->extended_hdr.parsed_pkt.tunnel.tunnel_id = ntohl(*tunnel_id);
+        }
+        if(gre->flags_and_version & GRE_HEADER_SEQ_NUM)  gre_offset += 4;
 
-	gre_offset += 4;
-	hdr->extended_hdr.parsed_pkt.tunnel.tunnel_id = ntohl(*tunnel_id);
-      }
-      if(gre->flags_and_version & GRE_HEADER_SEQ_NUM)  gre_offset += 4;
+        hdr->extended_hdr.parsed_pkt.offset.payload_offset = hdr->extended_hdr.parsed_pkt.offset.l4_offset + gre_offset;
 
-      hdr->extended_hdr.parsed_pkt.offset.payload_offset = hdr->extended_hdr.parsed_pkt.offset.l4_offset + gre_offset;
+        if(gre->proto == ETH_P_IP /* IPv4 */) {
+	  struct iphdr *tunneled_ip;
 
-      if(gre->proto == ETH_P_IP /* IPv4 */) {
-	struct iphdr *tunneled_ip;
+	  if(data_len < (hdr->extended_hdr.parsed_pkt.offset.payload_offset+sizeof(struct iphdr))) return(1);
+	  tunneled_ip = (struct iphdr *)(&data[hdr->extended_hdr.parsed_pkt.offset.payload_offset]);
 
-	if(data_len < (hdr->extended_hdr.parsed_pkt.offset.payload_offset+sizeof(struct iphdr))) return(1);
-	tunneled_ip = (struct iphdr *)(&data[hdr->extended_hdr.parsed_pkt.offset.payload_offset]);
+	  hdr->extended_hdr.parsed_pkt.tunnel.tunneled_proto = tunneled_ip->protocol;
+	  hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src.v4 = ntohl(tunneled_ip->saddr);
+	  hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst.v4 = ntohl(tunneled_ip->daddr);
+        } else if(gre->proto == ETH_P_IPV6 /* IPv6 */) {
+	  struct ipv6hdr* tunneled_ipv6;
 
-	hdr->extended_hdr.parsed_pkt.tunnel.tunneled_proto = tunneled_ip->protocol;
-	hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src.v4 = ntohl(tunneled_ip->saddr);
-	hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst.v4 = ntohl(tunneled_ip->daddr);
-      } else if(gre->proto == ETH_P_IPV6 /* IPv6 */) {
-	struct ipv6hdr* tunneled_ipv6;
+	  if(data_len < (hdr->extended_hdr.parsed_pkt.offset.payload_offset+sizeof(struct ipv6hdr))) return(1);
+	  tunneled_ipv6 = (struct ipv6hdr *)(&data[hdr->extended_hdr.parsed_pkt.offset.payload_offset]);
 
-	if(data_len < (hdr->extended_hdr.parsed_pkt.offset.payload_offset+sizeof(struct ipv6hdr))) return(1);
-	tunneled_ipv6 = (struct ipv6hdr *)(&data[hdr->extended_hdr.parsed_pkt.offset.payload_offset]);
-
-	hdr->extended_hdr.parsed_pkt.tunnel.tunneled_proto = tunneled_ipv6->nexthdr;
-	/* Values of IPv6 addresses are stored as network byte order */
-	memcpy(&hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src.v6, &tunneled_ipv6->saddr, sizeof(tunneled_ipv6->saddr));
-	memcpy(&hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst.v6, &tunneled_ipv6->daddr, sizeof(tunneled_ipv6->daddr));
+	  hdr->extended_hdr.parsed_pkt.tunnel.tunneled_proto = tunneled_ipv6->nexthdr;
+	  /* Values of IPv6 addresses are stored as network byte order */
+	  memcpy(&hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src.v6, &tunneled_ipv6->saddr, sizeof(tunneled_ipv6->saddr));
+	  memcpy(&hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst.v6, &tunneled_ipv6->daddr, sizeof(tunneled_ipv6->daddr));
+        }
+      } else { /* TODO handle other GRE versions */  
+	hdr->extended_hdr.parsed_pkt.offset.payload_offset = hdr->extended_hdr.parsed_pkt.offset.l4_offset;
       }
     } else
       hdr->extended_hdr.parsed_pkt.offset.payload_offset = hdr->extended_hdr.parsed_pkt.offset.l4_offset;
