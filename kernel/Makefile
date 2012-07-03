@@ -4,7 +4,7 @@
 
 obj-m := pf_ring.o
 
-ifneq (, $(shell which svnversion &> /dev/null))
+ifneq (, $(shell which svnversion))
 SVNDEF := -DSVN_REV="\"$(shell svnversion -n .)\""
 endif
 
