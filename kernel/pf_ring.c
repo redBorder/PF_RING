@@ -2258,20 +2258,20 @@ static int match_filtering_rule(struct pf_ring_socket *pfr,
      && (hdr->extended_hdr.parsed_pkt.l3_proto != rule->rule.core_fields.proto))
     return(0);
 
-  if(hdr->extended_hdr.parsed_pkt.tunnel.tunnel_id != rule->rule.extended_fields.tunnel.tunnel_id)
+  if((rule->rule.extended_fields.optional_fields & FILTER_TUNNEL_ID_FLAG)
+     && (hdr->extended_hdr.parsed_pkt.tunnel.tunnel_id != rule->rule.extended_fields.tunnel.tunnel_id))
     return(0);
-  else if(hdr->extended_hdr.parsed_pkt.tunnel.tunnel_id != NO_TUNNEL_ID) {
-    if(hdr->extended_hdr.parsed_pkt.ip_version == 6) {
-      /* IPv6 */
-      if(!match_ipv6(&hdr->extended_hdr.parsed_pkt.ip_src, &rule->rule.extended_fields.tunnel.dhost_mask, &rule->rule.extended_fields.tunnel.dhost)
-	 || !match_ipv6(&hdr->extended_hdr.parsed_pkt.ip_dst, &rule->rule.extended_fields.tunnel.shost_mask, &rule->rule.extended_fields.tunnel.shost))
-	return(0);
-    } else {
-      /* IPv4 */
-      if((hdr->extended_hdr.parsed_pkt.ip_src.v4 & rule->rule.extended_fields.tunnel.dhost_mask.v4) != rule->rule.extended_fields.tunnel.dhost.v4
-	 || (hdr->extended_hdr.parsed_pkt.ip_dst.v4 & rule->rule.extended_fields.tunnel.shost_mask.v4) != rule->rule.extended_fields.tunnel.shost.v4)
-	return(0);
-    }
+
+  if(hdr->extended_hdr.parsed_pkt.ip_version == 6) {
+    /* IPv6 */
+    if(!match_ipv6(&hdr->extended_hdr.parsed_pkt.ip_src, &rule->rule.extended_fields.tunnel.dhost_mask, &rule->rule.extended_fields.tunnel.dhost)
+       || !match_ipv6(&hdr->extended_hdr.parsed_pkt.ip_dst, &rule->rule.extended_fields.tunnel.shost_mask, &rule->rule.extended_fields.tunnel.shost))
+      return(0);
+  } else {
+    /* IPv4 */
+    if((hdr->extended_hdr.parsed_pkt.ip_src.v4 & rule->rule.extended_fields.tunnel.dhost_mask.v4) != rule->rule.extended_fields.tunnel.dhost.v4
+       || (hdr->extended_hdr.parsed_pkt.ip_dst.v4 & rule->rule.extended_fields.tunnel.shost_mask.v4) != rule->rule.extended_fields.tunnel.shost.v4)
+      return(0);
   }
 
   if((memcmp(rule->rule.core_fields.dmac, empty_mac, ETH_ALEN) != 0)
@@ -3198,7 +3198,7 @@ static int reflect_packet(struct sk_buff *skb,
 			  u_int8_t do_clone_skb)
 {
   if(unlikely(enable_debug))
-    printk("[PF_RING] reflect_packet called\n");
+    printk("[PF_RING] reflect_packet(%s) called\n", reflector_dev->name);
 
   if((reflector_dev != NULL)
      && (reflector_dev->flags & IFF_UP) /* Interface is up */ ) {
@@ -3358,6 +3358,9 @@ int check_wildcard_rules(struct sk_buff *skb,
 
     entry = list_entry(ptr, sw_filtering_rule_element, list);
 
+    if(unlikely(enable_debug))
+      printk("[PF_RING] Checking rule %d\n", entry->rule.rule_id);
+
     if(match_filtering_rule(pfr, entry, hdr, skb, displ,
 			    parse_memory_buffer, free_parse_mem,
 			    last_matched_plugin, &behaviour)) {
@@ -3365,7 +3368,7 @@ int check_wildcard_rules(struct sk_buff *skb,
 	printk("[PF_RING] Packet MATCH\n");
 
       if(unlikely(enable_debug))
-	printk("[PF_RING] behaviour=%d\n", behaviour);
+	printk("[PF_RING] rule_id=%d behaviour=%d\n", entry->rule.rule_id, behaviour);
 
       hdr->extended_hdr.parsed_pkt.last_matched_rule_id = entry->rule.rule_id;
 

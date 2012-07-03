@@ -332,6 +332,10 @@ typedef struct {
 #define FILTER_PLUGIN_DATA_LEN   256
 
 typedef struct {
+
+#define FILTER_TUNNEL_ID_FLAG 1 << 0
+  u_int16_t optional_fields;          /* Use this mask to activate optional fields */
+
   struct {
     u_int32_t tunnel_id;              /* GTP/GRE tunnelId or NO_TUNNEL_ID for no filtering */
     ip_addr   shost, dhost;           /* Filter on tunneled IPs */
