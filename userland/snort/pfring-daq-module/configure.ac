@@ -2,8 +2,8 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.62)
-AC_INIT([pfring-daq-module], [0.2], [deri@ntop.org])
-AM_INIT_AUTOMAKE([daq], [0.2])
+AC_INIT([pfring-daq-module], [0.1], [deri@ntop.org])
+AM_INIT_AUTOMAKE([daq], [0.1])
 AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_SRCDIR([daq_pfring.c])
 AC_CONFIG_HEADERS([config.h])
@@ -31,8 +31,8 @@ AC_ARG_WITH(libpfring_libraries,
 			[with_pfring_libraries="$withval"], [with_pfring_libraries="no"])
 
 if test -d "${HOME}/PF_RING/"; then
-  CPPFLAGS="${CPPFLAGS} -I ${HOME}/PF_RING/userland/lib -I ${HOME}/PF_RING/kernel"
-  LDFLAGS="${LDFLAGS} -L${HOME}/PF_RING/userland/lib -lpthread"
+	CPPFLAGS="${CPPFLAGS} -I ${HOME}/PF_RING/userland/lib -I ${HOME}/PF_RING/kernel"
+	LDFLAGS="${LDFLAGS} -L${HOME}/PF_RING/userland/lib -lpthread"
 fi
 
 if test "x$with_pfring_includes" != "xno"; then
@@ -43,8 +43,6 @@ if test "x$with_pfring_libraries" != "xno"; then
 	LDFLAGS="${LDFLAGS} -L${with_pfring_libraries}"
 fi
 
-LDFLAGS="${LDFLAGS} -lpcap -lpfring"
-
 # Library checks
 AC_CHECK_HEADER([pfring.h], [], [AC_MSG_ERROR([Could not find pfring.h!])])
 
@@ -54,12 +52,12 @@ LIBPFRING="${HOME}/PF_RING/userland/lib/libpfring.a"
 AC_MSG_CHECKING([presence of PF_RING libraries])
 
 if test -f "${LIBPCAP}"; then
-  if test -f "${LIBPFRING}"; then
-     # All libs found
-     AC_MSG_RESULT([yes])
-  else
-	AC_MSG_ERROR([Missing ${LIBPFRING} library!])
-  fi
+	if test -f "${LIBPFRING}"; then
+		# All libs found
+		AC_MSG_RESULT([yes])
+	else
+		AC_MSG_ERROR([Missing ${LIBPFRING} library!])
+	fi
 else
 	AC_MSG_ERROR([Missing ${LIBPCAP} library!])
 fi
