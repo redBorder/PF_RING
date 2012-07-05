@@ -104,7 +104,7 @@ static int pfring_daq_open(Pfring_Context_t *context, int id) {
   if(device) {
     context->pkt_buffer = NULL;
 
-    ring_handle = pfring_open(device, context->snaplen, 
+    ring_handle = pfring_open(device, context->snaplen,
                               /* PF_RING_REENTRANT |*/ PF_RING_LONG_HEADER | (context->promisc_flag ? PF_RING_PROMISC : 0));
 
     if(!ring_handle) {
@@ -116,7 +116,7 @@ static int pfring_daq_open(Pfring_Context_t *context, int id) {
   pfring_get_bound_device_ifindex(ring_handle, &context->ifindexes[id]);
 
   /* TODO this is because rules purging is not yet available with hw rules */
-  pfring_set_filtering_mode(ring_handle, software_only); 
+  pfring_set_filtering_mode(ring_handle, software_only);
 
   if (context->mode == DAQ_MODE_INLINE) {
     /* Default mode: recv_and_send_mode */
@@ -162,7 +162,7 @@ static int pfring_daq_open(Pfring_Context_t *context, int id) {
 static int update_hw_stats(Pfring_Context_t *context) {
   pfring_stat ps;
   int i;
- 
+
   context->stats.hw_packets_received = 0;
   context->stats.hw_packets_dropped = 0;
 
@@ -235,7 +235,7 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
     free(context);
     return DAQ_ERROR_NOMEM;
   }
-  
+
   if(context->mode == DAQ_MODE_READ_FILE) {
     snprintf(errbuf, len, "%s: function not supported on PF_RING", __FUNCTION__);
     free(context);
@@ -307,10 +307,10 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
 	     || (context->clusterids[i] > 65535)) {
 	    snprintf(errbuf, len, "%s: bad clusterid(%s)\n",
 		     __FUNCTION__, clusterid);
-	  
+
 	    return DAQ_ERROR;
           }
-       
+
           clusterid = strtok_r(NULL, ",", &clusterid_pos);
         }
 	free(clusters);
@@ -371,11 +371,11 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
 	return DAQ_ERROR;
       } else {
         switch (cmode) {
-	  case 2: context->cluster_mode = cluster_per_flow_2_tuple; break;
-	  case 4: context->cluster_mode = cluster_per_flow_4_tuple; break;
-	  case 5: context->cluster_mode = cluster_per_flow_5_tuple; break;
-	  case 6: context->cluster_mode = cluster_per_flow; break;
-          default: break;
+	case 2: context->cluster_mode = cluster_per_flow_2_tuple; break;
+	case 4: context->cluster_mode = cluster_per_flow_4_tuple; break;
+	case 5: context->cluster_mode = cluster_per_flow_5_tuple; break;
+	case 6: context->cluster_mode = cluster_per_flow; break;
+	default: break;
 	}
       }
     } else if(!strcmp(entry->key, "lowlevelbridge")) {
@@ -392,14 +392,14 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
           }
 
 	  if (context->num_reflector_devices != context->num_devices) {
-	    snprintf(errbuf, len, "%s: not enough reflector devices (%d)\n", 
+	    snprintf(errbuf, len, "%s: not enough reflector devices (%d)\n",
 	             __FUNCTION__, context->num_reflector_devices);
 	    return DAQ_ERROR;
 	  }
         }
       } else {
         snprintf(errbuf, len, "%s: lowlevelbridge is for passive mode only\n",
-                      __FUNCTION__);
+		 __FUNCTION__);
         return DAQ_ERROR;
       }
     } else {
@@ -436,14 +436,14 @@ static int pfring_daq_set_filter(void *handle, const char *filter) {
     for (i = 0; i < context->num_devices; i++) {
       if(setsockopt(pfring_get_selectable_fd(context->ring_handles[i]), 0,
 		    SO_ATTACH_FILTER, &fcode, sizeof(fcode)) != 0) {
-        ret = DAQ_ERROR; 
+        ret = DAQ_ERROR;
       }
     }
 
     sfbpf_freecode(&fcode);
   } else {
     /* Just check if the filter is valid */
-    if(sfbpf_compile(context->snaplen, DLT_EN10MB, &fcode, 
+    if(sfbpf_compile(context->snaplen, DLT_EN10MB, &fcode,
     		     filter, 0 /* 1: optimize */, 0 /* netmask */) < 0) {
       DPE(context->errbuf, "%s: BPF state machine compilation failed!", __FUNCTION__);
       return DAQ_ERROR;
@@ -471,7 +471,7 @@ static int pfring_daq_set_filter(void *handle, const char *filter) {
 static int pfring_daq_start(void *handle) {
   Pfring_Context_t *context =(Pfring_Context_t *) handle;
   int i;
-  
+
   for (i = 0; i < context->num_devices; i++) {
     if(context->ring_handles[i] == NULL) {
       if (pfring_daq_open(context, i) == -1)
@@ -490,12 +490,11 @@ static int pfring_daq_start(void *handle) {
   return DAQ_SUCCESS;
 }
 
-static int call_check = 0;
-
-static int pfring_daq_send_packet(Pfring_Context_t *context, pfring *send_ring, u_int pkt_len, pfring *recv_ring, int send_ifindex)
+static int pfring_daq_send_packet(Pfring_Context_t *context, pfring *send_ring,
+				  u_int pkt_len, pfring *recv_ring, int send_ifindex)
 {
   int rc;
-  
+
   if(( !context->use_fast_tx && send_ring == NULL)
      ||(context->use_fast_tx && recv_ring == NULL))
     return(DAQ_SUCCESS);
@@ -503,12 +502,12 @@ static int pfring_daq_send_packet(Pfring_Context_t *context, pfring *send_ring, 
   if(context->use_fast_tx)
     rc = pfring_send_last_rx_packet(recv_ring, send_ifindex);
   else
-    rc = pfring_send(send_ring, (char *) context->pkt_buffer, pkt_len, 1 /* flush packet */); 
-		 
+    rc = pfring_send(send_ring, (char *) context->pkt_buffer, pkt_len, 1 /* flush packet */);
+
   if (rc < 0) {
     DPE(context->errbuf, "%s", "pfring_send() error");
     return DAQ_ERROR;
-  } 
+  }
 
   context->stats.packets_injected++;
 
@@ -540,7 +539,7 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
       current_ring_idx = (current_ring_idx + 1) % context->num_devices;
 
       ret = pfring_recv(context->ring_handles[current_ring_idx], &context->pkt_buffer, 0, &phdr, 0 /* Dont't wait */);
-      
+
       if (ret > 0) break;
     }
 
@@ -565,7 +564,6 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
       }
     } else {
       hash_filtering_rule hash_rule;
-      int rc;
 
       hdr.caplen = phdr.caplen;
       hdr.pktlen = phdr.len;
@@ -593,7 +591,7 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
 	if (context->use_kernel_filters
 	    && !(context->mode == DAQ_MODE_PASSIVE && context->num_reflector_devices > rx_ring_idx && verdict != DAQ_VERDICT_BLACKLIST)
 	    /* when lowlevelbridge is ON we can't set "forward" (reflector won't work) or "reflect" (packets reflected twice) hash rules */ ) {
-	
+
 	  memset(&hash_rule, 0, sizeof(hash_rule));
 
           pfring_parse_pkt(context->pkt_buffer, &phdr, 4, 0, 0);
@@ -618,23 +616,22 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
 	      dont_forward_packet_and_stop_rule_evaluation : forward_packet_and_stop_rule_evaluation;
 	  }
 
-	  rc = pfring_handle_hash_filtering_rule(context->ring_handles[rx_ring_idx], &hash_rule, 1 /* add_rule */);
+	  pfring_handle_hash_filtering_rule(context->ring_handles[rx_ring_idx], &hash_rule, 1 /* add_rule */);
 
 	  /* Purge rules idle (i.e. with no packet matching) for more than 1h */
 	  pfring_purge_idle_hash_rules(context->ring_handles[rx_ring_idx], context->idle_rules_timeout);
 
-	  /*	
-	  printf("[DEBUG] %d.%d.%d.%d:%d -> %d.%d.%d.%d:%d Verdict=%d Action=%d [pfring_handle_hash_filtering_rule=%d]\n", 
+#if DEBUG
+	  printf("[DEBUG] %d.%d.%d.%d:%d -> %d.%d.%d.%d:%d Verdict=%d Action=%d\n",
 	         hash_rule.host_peer_a.v4 >> 24 & 0xFF, hash_rule.host_peer_a.v4 >> 16 & 0xFF,
-	         hash_rule.host_peer_a.v4 >>  8 & 0xFF, hash_rule.host_peer_a.v4 >>  0 & 0xFF, 
-	         hash_rule.port_peer_a & 0xFFFF, 
+	         hash_rule.host_peer_a.v4 >>  8 & 0xFF, hash_rule.host_peer_a.v4 >>  0 & 0xFF,
+	         hash_rule.port_peer_a & 0xFFFF,
 	         hash_rule.host_peer_b.v4 >> 24 & 0xFF, hash_rule.host_peer_b.v4 >> 16 & 0xFF,
 	         hash_rule.host_peer_b.v4 >>  8 & 0xFF, hash_rule.host_peer_b.v4 >>  0 & 0xFF,
-	         hash_rule.port_peer_b & 0xFFFF, 
-	         verdict, 
-		 hash_rule.rule_action,
-		 rc);
-	  */
+	         hash_rule.port_peer_b & 0xFFFF,
+	         verdict,
+		 hash_rule.rule_action);
+#endif
 	}
 
 	if(verdict == DAQ_VERDICT_BLACKLIST) {
@@ -697,14 +694,14 @@ static int pfring_daq_breakloop(void *handle) {
     return DAQ_ERROR;
 
   context->breakloop = 1;
-  
+
   return DAQ_SUCCESS;
 }
 
 static int pfring_daq_stop(void *handle) {
   Pfring_Context_t *context =(Pfring_Context_t *) handle;
   int i;
-  
+
   for (i = 0; i < context->num_devices; i++) {
     if(context->ring_handles[i]) {
       /* Store the hardware stats for post-stop stat calls. */
@@ -764,7 +761,7 @@ static void pfring_daq_reset_stats(void *handle) {
   memset(&context->stats, 0, sizeof(DAQ_Stats_t));
   memset(&ps, 0, sizeof(pfring_stat));
 
-  for (i = 0; i < context->num_devices; i++) 
+  for (i = 0; i < context->num_devices; i++)
     if(context->ring_handles[i]
        && pfring_stats(context->ring_handles[i], &ps) == 0) {
       context->base_recv[i] = ps.recv;
