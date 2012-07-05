@@ -124,7 +124,8 @@ snort -q --pid-path /var/run --create-pidfile -D -c /etc/snort/snort.conf -l /va
 snort -q --pid-path /var/run --create-pidfile -D -c /etc/snort/snort.conf -l /var/log/snort/bpbr0/instance-3 --daq-dir=/usr/local/lib/daq --daq pfring --daq-mode inline -i eth2:eth3 --daq-var fasttx=1 --daq-var clusterid=10,11 --daq-var bindcpu=1
 snort -q --pid-path /var/run --create-pidfile -D -c /etc/snort/snort.conf -l /var/log/snort/bpbr0/instance-4 --daq-dir=/usr/local/lib/daq --daq pfring --daq-mode inline -i eth2:eth3 --daq-var fasttx=1 --daq-var clusterid=10,11 --daq-var bindcpu=1
 
-
 ----
-Luca Deri <deri@ntop.org>, Alfredo Cardigliano <cardigliano@ntop.org> - July 2012
+Luca Deri <deri@ntop.org>
+Alfredo Cardigliano <cardigliano@ntop.org>
+July 2012
 
