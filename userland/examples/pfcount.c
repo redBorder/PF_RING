@@ -305,16 +305,14 @@ char* intoa(unsigned int addr) {
 
 inline char* in6toa(struct in6_addr addr6) {
   static char buf[sizeof "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"];
-
-  snprintf(buf, sizeof(buf),
-	   "%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x",
-	   addr6.s6_addr[0], addr6.s6_addr[1], addr6.s6_addr[2],
-	   addr6.s6_addr[3], addr6.s6_addr[4], addr6.s6_addr[5], addr6.s6_addr[6],
-	   addr6.s6_addr[7], addr6.s6_addr[8], addr6.s6_addr[9], addr6.s6_addr[10],
-	   addr6.s6_addr[11], addr6.s6_addr[12], addr6.s6_addr[13], addr6.s6_addr[14],
-	   addr6.s6_addr[15]);
-
-  return(buf);
+  char *ret = (char*)inet_ntop(AF_INET6, &addr6, buf, sizeof(buf));
+  
+  if(ret == NULL) {
+    printf("Internal error (buffer too short)");
+    buf[0] = '\0';
+  }
+  
+  return(ret);
 }
 
 /* ****************************************************** */
@@ -406,11 +404,19 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h,
 		 proto2str(h->extended_hdr.parsed_pkt.tunnel.tunneled_proto));
 
 	  if(h->extended_hdr.parsed_pkt.eth_type == 0x0800 /* IPv4*/ ) {
-	    printf("[IPv4][%s ", intoa(h->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src.v4));
-	    printf("-> %s] ", intoa(h->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst.v4));
+	    printf("[IPv4][%s:%d ",
+		   intoa(h->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src.v4),
+		   h->extended_hdr.parsed_pkt.tunnel.tunneled_l4_src_port);
+	    printf("-> %s:%d] ", 
+		   intoa(h->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst.v4),
+		   h->extended_hdr.parsed_pkt.tunnel.tunneled_l4_dst_port);
 	  } else {
-	    printf("[IPv6][%s ", in6toa(h->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src.v6));
-	    printf("-> %s] ", in6toa(h->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst.v6));
+	    printf("[IPv6][%s:%d ", 
+		   in6toa(h->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src.v6),
+		   h->extended_hdr.parsed_pkt.tunnel.tunneled_l4_src_port);
+	    printf("-> %s:%d] ",
+		   in6toa(h->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst.v6),
+		   h->extended_hdr.parsed_pkt.tunnel.tunneled_l4_dst_port);
 	  }	  
 	}
 

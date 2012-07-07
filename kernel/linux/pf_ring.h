@@ -26,7 +26,10 @@
 
 #define RING_MAGIC
 #define RING_MAGIC_VALUE             0x88
-#define RING_FLOWSLOT_VERSION          13
+#define RING_FLOWSLOT_VERSION          14 /*
+					    Increment whenever we change slot or packet header
+					    layout (e.g. we add/move a field
+					  */
 
 #define DEFAULT_BUCKET_LEN            128
 #define MAX_NUM_DEVICES               256
@@ -221,8 +224,8 @@ struct gtp_v1_ext_hdr {
 typedef struct {
   u_int32_t tunnel_id; /* GTP/GRE tunnelId or NO_TUNNEL_ID for no filtering */
   u_int8_t tunneled_proto;
-  ip_addr tunneled_ip_src, tunneled_ip_dst;
-  /* u_int16_t tunneled_l4_src_port, tunneled_l4_dst_port; */ /* TO add if necessary at some point */
+  ip_addr tunneled_ip_src, tunneled_ip_dst;  
+  u_int16_t tunneled_l4_src_port, tunneled_l4_dst_port;
 } tunnel_info;
 
 typedef enum {
