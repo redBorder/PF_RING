@@ -768,6 +768,7 @@ typedef enum {
   cluster_per_flow_2_tuple, /* 2-tuple: <src ip,           dst ip                       >  */
   cluster_per_flow_4_tuple, /* 4-tuple: <src ip, src port, dst ip, dst port             >  */
   cluster_per_flow_5_tuple, /* 5-tuple: <src ip, src port, dst ip, dst port, proto      >  */
+  cluster_per_flow_tcp_5_tuple, /* 5-tuple only with TCP, 2 tuple with all other protos   */
 } cluster_type;
 
 struct add_to_cluster {
