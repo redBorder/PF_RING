@@ -102,7 +102,7 @@ static int dummy_plugin_handle_skb(struct pf_ring_socket *pfr,
     }
   }
 
-  return(0);
+  return(1);
 }
 
 /* ************************************ */

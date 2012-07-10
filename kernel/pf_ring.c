@@ -42,6 +42,7 @@
  * - Daniel Christopher <Chris.Daniel@visualnetworksystems.com>
  * - Martin Holste <mcholste@gmail.com>
  * - Eric Leblond <eric@regit.org>
+ * - Momina Khan <momina.azam@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -2344,7 +2345,7 @@ static int match_filtering_rule(struct pf_ring_socket *pfr,
 
   if(unlikely(enable_debug)) printk("[PF_RING] %s()\n", __FUNCTION__);
 
-  *behaviour = forward_packet_and_stop_rule_evaluation;	/* Default */
+  *behaviour = rule->rule.rule_action;
 
   if((rule->rule.core_fields.vlan_id > 0)
      && (hdr->extended_hdr.parsed_pkt.vlan_id != rule->rule.core_fields.vlan_id))
@@ -3642,6 +3643,8 @@ int check_wildcard_rules(struct sk_buff *skb,
     } else {
       if(unlikely(enable_debug))
 	printk("[PF_RING] Packet not matched\n");
+
+      break;
     }
   }  /* for */
 
