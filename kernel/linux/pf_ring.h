@@ -169,6 +169,11 @@ typedef union {
 #define host6_peer_a host_peer_a.v6
 #define host6_peer_b host_peer_b.v6
 
+struct eth_vlan_hdr {
+  u_int16_t h_vlan_id; /* Tag Control Information (QoS, VLAN ID) */
+  u_int16_t h_proto;   /* packet type ID field */
+};
+
 #define GRE_HEADER_CHECKSUM     0x8000
 #define GRE_HEADER_ROUTING      0x4000
 #define GRE_HEADER_KEY          0x2000

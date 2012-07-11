@@ -1785,7 +1785,7 @@ static int parse_raw_pkt(char *data, u_int data_len,
 			 struct pfring_pkthdr *hdr)
 {
   struct ethhdr *eh = (struct ethhdr *)data;
-  u_int16_t displ, ip_len, fragment_offset = 0, tunnel_offset = 0;
+  u_int16_t displ = 0, ip_len, fragment_offset = 0, tunnel_offset = 0;
 
   memset(&hdr->extended_hdr.parsed_pkt, 0, sizeof(hdr->extended_hdr.parsed_pkt));
 
@@ -1800,22 +1800,22 @@ static int parse_raw_pkt(char *data, u_int data_len,
 
   hdr->extended_hdr.parsed_pkt.eth_type = ntohs(eh->h_proto);
   hdr->extended_hdr.parsed_pkt.offset.eth_offset = 0;
+  hdr->extended_hdr.parsed_pkt.offset.vlan_offset = 0;
+  hdr->extended_hdr.parsed_pkt.vlan_id = 0; /* Any VLAN */
 
-  if(hdr->extended_hdr.parsed_pkt.eth_type == ETH_P_8021Q /* 802.1q (VLAN) */) {
-    hdr->extended_hdr.parsed_pkt.offset.vlan_offset =
-      hdr->extended_hdr.parsed_pkt.offset.eth_offset + sizeof(struct ethhdr);
-
-    hdr->extended_hdr.parsed_pkt.vlan_id =
-      (data[hdr->extended_hdr.parsed_pkt.offset.vlan_offset] & 15) * 256 +
-      data[hdr->extended_hdr.parsed_pkt.offset.vlan_offset + 1];
-    hdr->extended_hdr.parsed_pkt.eth_type =
-      (data[hdr->extended_hdr.parsed_pkt.offset.vlan_offset + 2]) * 256 +
-      data[hdr->extended_hdr.parsed_pkt.offset.vlan_offset + 3];
-    displ = 4;
-  } else {
-    displ = 0;
-    hdr->extended_hdr.parsed_pkt.vlan_id = 0; /* Any VLAN */
+  if (hdr->extended_hdr.parsed_pkt.eth_type == ETH_P_8021Q /* 802.1q (VLAN) */) {
+    struct eth_vlan_hdr *vh;
+    hdr->extended_hdr.parsed_pkt.offset.vlan_offset = sizeof(struct ethhdr) - sizeof(struct eth_vlan_hdr);
+    while (hdr->extended_hdr.parsed_pkt.eth_type == ETH_P_8021Q /* 802.1q (VLAN) */ ) {
+      hdr->extended_hdr.parsed_pkt.offset.vlan_offset += sizeof(struct eth_vlan_hdr);
+      vh = (struct eth_vlan_hdr *) &data[hdr->extended_hdr.parsed_pkt.offset.vlan_offset];
+      hdr->extended_hdr.parsed_pkt.vlan_id = ntohs(vh->h_vlan_id) & 0x0fff;
+      hdr->extended_hdr.parsed_pkt.eth_type = ntohs(vh->h_proto);
+      displ += sizeof(struct eth_vlan_hdr);
+    }
   }
+
+  hdr->extended_hdr.parsed_pkt.offset.l3_offset = hdr->extended_hdr.parsed_pkt.offset.eth_offset + displ + sizeof(struct ethhdr);
 
   if(unlikely(enable_debug))
     printk("[PF_RING] [eth_type=%04X]\n", hdr->extended_hdr.parsed_pkt.eth_type);
@@ -1823,7 +1823,7 @@ static int parse_raw_pkt(char *data, u_int data_len,
   if(hdr->extended_hdr.parsed_pkt.eth_type == ETH_P_IP /* IPv4 */ ) {
     struct iphdr *ip;
 
-    hdr->extended_hdr.parsed_pkt.offset.l3_offset = hdr->extended_hdr.parsed_pkt.offset.eth_offset + displ + sizeof(struct ethhdr);
+    hdr->extended_hdr.parsed_pkt.ip_version = 4;
 
     if(data_len < hdr->extended_hdr.parsed_pkt.offset.l3_offset + sizeof(struct iphdr)) return(0);
 
@@ -1833,20 +1833,17 @@ static int parse_raw_pkt(char *data, u_int data_len,
     hdr->extended_hdr.parsed_pkt.ipv4_dst = ntohl(ip->daddr);
     hdr->extended_hdr.parsed_pkt.l3_proto = ip->protocol;
     hdr->extended_hdr.parsed_pkt.ipv4_tos = ip->tos;
-    hdr->extended_hdr.parsed_pkt.ip_version = 4;
     fragment_offset = ip->frag_off & htons(IP_OFFSET); /* fragment, but not the first */
     ip_len  = ip->ihl*4;
   } else if(hdr->extended_hdr.parsed_pkt.eth_type == ETH_P_IPV6 /* IPv6 */) {
     struct ipv6hdr *ipv6;
 
     hdr->extended_hdr.parsed_pkt.ip_version = 6;
-    ip_len = sizeof(struct ipv6hdr);
-
-    hdr->extended_hdr.parsed_pkt.offset.l3_offset = hdr->extended_hdr.parsed_pkt.offset.eth_offset+displ+sizeof(struct ethhdr);
 
     if(data_len < hdr->extended_hdr.parsed_pkt.offset.l3_offset + sizeof(struct ipv6hdr)) return(0);
 
     ipv6 = (struct ipv6hdr*)(&data[hdr->extended_hdr.parsed_pkt.offset.l3_offset]);
+    ip_len = sizeof(struct ipv6hdr);
 
     /* Values of IPv6 addresses are stored as network byte order */
     memcpy(&hdr->extended_hdr.parsed_pkt.ip_src.v6, &ipv6->saddr, sizeof(ipv6->saddr));
@@ -1888,7 +1885,7 @@ static int parse_raw_pkt(char *data, u_int data_len,
       else if(hdr->extended_hdr.parsed_pkt.l3_proto != NEXTHDR_FRAGMENT)
 	ip_len += ipv6_opt->hdrlen;
 
-      hdr->extended_hdr.parsed_pkt.l3_proto = ipv6_opt->nexthdr, fragment_offset = 0;
+      hdr->extended_hdr.parsed_pkt.l3_proto = ipv6_opt->nexthdr;
     }
   } else {
     hdr->extended_hdr.parsed_pkt.l3_proto = 0;
@@ -1898,21 +1895,23 @@ static int parse_raw_pkt(char *data, u_int data_len,
   if(unlikely(enable_debug))
     printk("[PF_RING] [l3_proto=%d]\n", hdr->extended_hdr.parsed_pkt.l3_proto);
 
+  hdr->extended_hdr.parsed_pkt.offset.l4_offset = hdr->extended_hdr.parsed_pkt.offset.l3_offset+ip_len;
+
   if(((hdr->extended_hdr.parsed_pkt.l3_proto == IPPROTO_TCP)
       || (hdr->extended_hdr.parsed_pkt.l3_proto == IPPROTO_GRE)
       || (hdr->extended_hdr.parsed_pkt.l3_proto == IPPROTO_UDP))
      && (!fragment_offset)) {
-    hdr->extended_hdr.parsed_pkt.offset.l4_offset = hdr->extended_hdr.parsed_pkt.offset.l3_offset+ip_len;
-
     if(hdr->extended_hdr.parsed_pkt.l3_proto == IPPROTO_TCP) {
       struct tcphdr *tcp;
 
       if(data_len < hdr->extended_hdr.parsed_pkt.offset.l4_offset + sizeof(struct tcphdr)) return(1);
       tcp = (struct tcphdr *)(&data[hdr->extended_hdr.parsed_pkt.offset.l4_offset]);
 
-      hdr->extended_hdr.parsed_pkt.l4_src_port = ntohs(tcp->source), hdr->extended_hdr.parsed_pkt.l4_dst_port = ntohs(tcp->dest);
+      hdr->extended_hdr.parsed_pkt.l4_src_port = ntohs(tcp->source);
+      hdr->extended_hdr.parsed_pkt.l4_dst_port = ntohs(tcp->dest);
       hdr->extended_hdr.parsed_pkt.offset.payload_offset = hdr->extended_hdr.parsed_pkt.offset.l4_offset + (tcp->doff * 4);
-      hdr->extended_hdr.parsed_pkt.tcp.seq_num = ntohl(tcp->seq), hdr->extended_hdr.parsed_pkt.tcp.ack_num = ntohl(tcp->ack_seq);
+      hdr->extended_hdr.parsed_pkt.tcp.seq_num = ntohl(tcp->seq);
+      hdr->extended_hdr.parsed_pkt.tcp.ack_num = ntohl(tcp->ack_seq);
       hdr->extended_hdr.parsed_pkt.tcp.flags = (tcp->fin * TH_FIN_MULTIPLIER) + (tcp->syn * TH_SYN_MULTIPLIER) +
 	(tcp->rst * TH_RST_MULTIPLIER) + (tcp->psh * TH_PUSH_MULTIPLIER) +
 	(tcp->ack * TH_ACK_MULTIPLIER) + (tcp->urg * TH_URG_MULTIPLIER);
