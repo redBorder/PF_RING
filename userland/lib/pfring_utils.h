@@ -9,10 +9,12 @@ struct eth_hdr {
   u_int16_t       h_proto;                /* packet type ID field */
 };
 
+#if 0 /* defined in pf_ring.h */
 struct eth_vlan_hdr {
   u_int16_t       h_vlan_id;              /* Tag Control Information (QoS, VLAN ID) */
   u_int16_t       h_proto;                /* packet type ID field */
 };
+#endif
 
 #define __LITTLE_ENDIAN_BITFIELD /* FIX */
 struct iphdr {

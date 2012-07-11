@@ -354,7 +354,7 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h,
 
     if(h->ts.tv_sec == 0) {
       memset((void*)&h->extended_hdr.parsed_pkt, 0, sizeof(struct pkt_parsing_info));
-      pfring_parse_pkt((u_char*)p, (struct pfring_pkthdr*)h, 4, 1, 1);
+      pfring_parse_pkt((u_char*)p, (struct pfring_pkthdr*)h, 5, 1, 1);
     }
 
     s = (h->ts.tv_sec + thiszone) % 86400;
