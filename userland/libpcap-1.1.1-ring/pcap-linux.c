@@ -1167,6 +1167,7 @@ pcap_activate_linux(pcap_t *handle)
 	  int flags = 0;
 	  	  
 	  if(handle->opt.promisc) flags |= PF_RING_PROMISC;
+	  if(getenv("PCAP_PF_RING_DNA_RSS")) flags |= PF_RING_DNA_SYMMETRIC_RSS;
 	  
 	  handle->ring = pfring_open((char*)device, handle->snapshot, flags);
 
