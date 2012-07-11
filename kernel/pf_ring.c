@@ -2141,9 +2141,10 @@ static int parse_pkt(struct sk_buff *skb,
 {
   int rc;
   u_char buffer[128]; /* Enough for standard and tunneled headers */
+  u_int16_t data_len = min((u_int16_t)(skb->len + skb_displ), (u_int16_t)sizeof(buffer));
 
-  skb_copy_bits(skb, -skb_displ, buffer, min((u_int16_t)(skb->len + skb_displ), (u_int16_t)sizeof(buffer)));
-  rc = parse_raw_pkt(buffer, (skb->len + skb_displ), hdr);
+  skb_copy_bits(skb, -skb_displ, buffer, data_len);
+  rc = parse_raw_pkt(buffer, data_len, hdr);
   hdr->extended_hdr.parsed_pkt.offset.eth_offset = -skb_displ;
 
   return(rc);
