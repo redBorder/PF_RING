@@ -84,6 +84,25 @@ double delta_time (struct timeval * now,
 
 /* ******************************** */
 
+void daemonize() {
+  pid_t pid, sid;
+
+  pid = fork();
+  if (pid < 0) exit(EXIT_FAILURE);
+  if (pid > 0) exit(EXIT_SUCCESS);
+
+  sid = setsid();
+  if (sid < 0) exit(EXIT_FAILURE);
+
+  if ((chdir("/")) < 0) exit(EXIT_FAILURE);
+
+  close(STDIN_FILENO);
+  close(STDOUT_FILENO);
+  close(STDERR_FILENO);
+}
+
+/* ******************************** */
+
 void print_stats() {
   struct timeval endTime;
   double deltaMillisec;
@@ -208,6 +227,7 @@ void printHelp(void) {
 	 "                3 - Fan-Out\n");
   printf("-s              Enable TX\n");
   printf("-a              Active packet wait\n");
+  printf("-d              Daemon mode\n");
   exit(0);
 }
 
@@ -333,10 +353,11 @@ int main(int argc, char* argv[]) {
   int rx_bind_core = 0, tx_bind_core = 1;
   int cluster_id = -1;
   char *device = NULL, *dev, *dev_pos = NULL;
+  int daemon_mode = 0;
 
   startTime.tv_sec = 0;
 
-  while((c = getopt(argc,argv,"ac:r:st:hi:n:m:")) != -1) {
+  while((c = getopt(argc,argv,"ac:r:st:hi:n:m:d")) != -1) {
     switch(c) {
     case 'a':
       wait_for_packet = 0;
@@ -365,6 +386,9 @@ int main(int argc, char* argv[]) {
     case 'm':
       hashing_mode = atoi(optarg);
       break;
+    case 'd':
+      daemon_mode = 1;
+      break;
     }
   }
 
@@ -378,6 +402,9 @@ int main(int argc, char* argv[]) {
   }
 
   if (device == NULL) device = DEFAULT_DEVICE;
+
+  if (daemon_mode)
+    daemonize();
 
   printf("Capturing from %s\n", device);
 
@@ -473,8 +500,10 @@ int main(int argc, char* argv[]) {
   signal(SIGTERM, sigproc);
   signal(SIGINT, sigproc);
 
-  signal(SIGALRM, my_sigalarm);
-  alarm(ALARM_SLEEP);
+  if (!daemon_mode) {
+    signal(SIGALRM, my_sigalarm);
+    alarm(ALARM_SLEEP);
+  }
 
   while (!do_shutdown) sleep(1); /* do something in the main */
  
