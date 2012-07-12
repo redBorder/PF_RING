@@ -398,12 +398,12 @@ extern "C" {
     int   (*open)  (pfring *);
   } pfring_module_info;
 
-#ifdef  __cplusplus
-}
-#endif
-
 #ifdef HAVE_ZERO
 #include "pfring_zero.h"
+#endif
+
+#ifdef  __cplusplus
+}
 #endif
 
 #endif /* _PFRING_H_ */
