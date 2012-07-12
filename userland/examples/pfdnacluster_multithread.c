@@ -20,7 +20,9 @@
  *
  */
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <signal.h>
 #include <sched.h>
 #include <sys/types.h>
@@ -485,7 +487,7 @@ int main(int argc, char* argv[]) {
     num_threads = MAX_NUM_THREADS;
   }
 
-  if (device == NULL) device = DEFAULT_DEVICE;
+  if (device == NULL) device = strdup(DEFAULT_DEVICE);
 
   if(bind_mask != NULL) {
     char *id = strtok(bind_mask, ":");

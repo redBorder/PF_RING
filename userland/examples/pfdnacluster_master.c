@@ -20,7 +20,9 @@
  *
  */
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <signal.h>
 #include <sched.h>
 #include <sys/types.h>
@@ -401,7 +403,7 @@ int main(int argc, char* argv[]) {
     num_app = MAX_NUM_APP;
   }
 
-  if (device == NULL) device = DEFAULT_DEVICE;
+  if (device == NULL) device = strdup(DEFAULT_DEVICE);
 
   if (daemon_mode)
     daemonize();
