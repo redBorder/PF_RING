@@ -26,6 +26,12 @@ static int 				 vnplug_ctrl_major;
 static DEFINE_MUTEX(			 vnplug_ctrl_lock);
 static struct vnplug_ctrl_info 		*vnplug_ctrl_info = NULL;
 
+#if defined(RHEL_RELEASE_CODE)
+#if (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(6,0))
+#define REDHAT_PATCHED_KERNEL
+#endif
+#endif
+
 /* ************************************************************************************************** */
 /* ********************************************************************** VNPLUG CTRL VIRTIO HANDLERS */
 
@@ -78,17 +84,17 @@ static int32_t vnplug_ctrl_virtio_send_msg(struct vnplug_ctrl_info *vi, uint32_t
 #endif
 
 	BUG_ON(
-#if(LINUX_VERSION_CODE < KERNEL_VERSION(2,6,36))
-	vi->g2h_vq->vq_ops->add_buf(vi->g2h_vq, sg, out, in, vi)
-#else
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36) || REDHAT_PATCHED_KERNEL)
 	virtqueue_add_buf(vi->g2h_vq, sg, out, in, vi)
+#else
+	vi->g2h_vq->vq_ops->add_buf(vi->g2h_vq, sg, out, in, vi)
 #endif
 	< 0);
 
-#if(LINUX_VERSION_CODE < KERNEL_VERSION(2,6,36))
-	vi->g2h_vq->vq_ops->kick(vi->g2h_vq);
-#else
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36) || REDHAT_PATCHED_KERNEL)
 	virtqueue_kick(vi->g2h_vq);
+#else
+	vi->g2h_vq->vq_ops->kick(vi->g2h_vq);
 #endif
 
 	/* We sent a in-stack buffer, so we have to spin for a response.
@@ -96,10 +102,10 @@ static int32_t vnplug_ctrl_virtio_send_msg(struct vnplug_ctrl_info *vi, uint32_t
 	 * so the request should be handled immediately.
 	 */
 	while (!
-#if(LINUX_VERSION_CODE < KERNEL_VERSION(2,6,36))	
-	vi->g2h_vq->vq_ops->get_buf(vi->g2h_vq, &len)
-#else
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36) || REDHAT_PATCHED_KERNEL)
 	virtqueue_get_buf(vi->g2h_vq, &len)
+#else
+	vi->g2h_vq->vq_ops->get_buf(vi->g2h_vq, &len)
 #endif
 	) //TODO maybe we should check for the tag
 		cpu_relax();
