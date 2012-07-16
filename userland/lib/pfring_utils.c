@@ -195,7 +195,7 @@ static int __pfring_parse_tunneled_pkt(u_char *pkt, struct pfring_pkthdr *hdr, u
 
 int pfring_parse_pkt(u_char *pkt, struct pfring_pkthdr *hdr, u_int8_t level /* L2..L4, 5 (tunnel) */, 
 		     u_int8_t add_timestamp /* 0,1 */, u_int8_t add_hash /* 0,1 */) {
-  struct eth_hdr *eh = (struct eth_hdr*) pkt;
+  struct ethhdr *eh = (struct ethhdr*) pkt;
   u_int32_t displ = 0, ip_len;
   u_int16_t analyzed = 0, fragment_offset = 0;
 
@@ -229,7 +229,7 @@ int pfring_parse_pkt(u_char *pkt, struct pfring_pkthdr *hdr, u_int8_t level /* L
     }
   }
 
-  hdr->extended_hdr.parsed_pkt.offset.l3_offset = hdr->extended_hdr.parsed_pkt.offset.eth_offset + displ + sizeof(struct eth_hdr);
+  hdr->extended_hdr.parsed_pkt.offset.l3_offset = hdr->extended_hdr.parsed_pkt.offset.eth_offset + displ + sizeof(struct ethhdr);
 
  L3:
 

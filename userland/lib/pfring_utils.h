@@ -2,14 +2,14 @@
 #ifndef _PFRING_UTILS_H_
 #define _PFRING_UTILS_H_
 
-
+#if 0
 struct eth_hdr {
   unsigned char   h_dest[ETH_ALEN];       /* destination eth addr */
   unsigned char   h_source[ETH_ALEN];     /* source ether addr    */
   u_int16_t       h_proto;                /* packet type ID field */
 };
 
-#if 0 /* defined in pf_ring.h */
+/* defined in pf_ring.h */
 struct eth_vlan_hdr {
   u_int16_t       h_vlan_id;              /* Tag Control Information (QoS, VLAN ID) */
   u_int16_t       h_proto;                /* packet type ID field */
