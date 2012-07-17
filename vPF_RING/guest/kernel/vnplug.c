@@ -84,14 +84,14 @@ static int32_t vnplug_ctrl_virtio_send_msg(struct vnplug_ctrl_info *vi, uint32_t
 #endif
 
 	BUG_ON(
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36) || REDHAT_PATCHED_KERNEL)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36) || defined(REDHAT_PATCHED_KERNEL))
 	virtqueue_add_buf(vi->g2h_vq, sg, out, in, vi)
 #else
 	vi->g2h_vq->vq_ops->add_buf(vi->g2h_vq, sg, out, in, vi)
 #endif
 	< 0);
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36) || REDHAT_PATCHED_KERNEL)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36) || defined(REDHAT_PATCHED_KERNEL))
 	virtqueue_kick(vi->g2h_vq);
 #else
 	vi->g2h_vq->vq_ops->kick(vi->g2h_vq);
@@ -102,7 +102,7 @@ static int32_t vnplug_ctrl_virtio_send_msg(struct vnplug_ctrl_info *vi, uint32_t
 	 * so the request should be handled immediately.
 	 */
 	while (!
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36) || REDHAT_PATCHED_KERNEL)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36) || defined(REDHAT_PATCHED_KERNEL))
 	virtqueue_get_buf(vi->g2h_vq, &len)
 #else
 	vi->g2h_vq->vq_ops->get_buf(vi->g2h_vq, &len)
