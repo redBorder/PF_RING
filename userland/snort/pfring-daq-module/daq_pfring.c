@@ -163,19 +163,24 @@ static int update_hw_stats(Pfring_Context_t *context) {
   pfring_stat ps;
   int i;
 
+  for (i = 0; i < context->num_devices; i++)
+    if (context->ring_handles[i] == NULL)
+      /* daq stopped - using last available stats */
+      return DAQ_SUCCESS;
+
   context->stats.hw_packets_received = 0;
   context->stats.hw_packets_dropped = 0;
 
   for (i = 0; i < context->num_devices; i++) {
     memset(&ps, 0, sizeof(pfring_stat));
 
-    if(pfring_stats(context->ring_handles[i], &ps) == -1) {
+    if(pfring_stats(context->ring_handles[i], &ps) < 0) {
       DPE(context->errbuf, "%s: pfring_stats error [ring_idx = %d]", __FUNCTION__, i);
       return DAQ_ERROR;
     }
 
-    context->stats.hw_packets_received = ps.recv - context->base_recv[i];
-    context->stats.hw_packets_dropped = ps.drop - context->base_drop[i];
+    context->stats.hw_packets_received += (ps.recv - context->base_recv[i]);
+    context->stats.hw_packets_dropped  += (ps.drop - context->base_drop[i]);
   }
 
   return DAQ_SUCCESS;
@@ -518,6 +523,8 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
   Pfring_Context_t *context =(Pfring_Context_t *) handle;
   int ret = 0, i, current_ring_idx = context->num_devices - 1, rx_ring_idx;
   struct pollfd pfd[DAQ_PF_RING_MAX_NUM_DEVICES];
+  hash_filtering_rule hash_rule;
+  memset(&hash_rule, 0, sizeof(hash_rule));
 
   context->analysis_func = callback;
   context->breakloop = 0;
@@ -563,7 +570,6 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
 	return DAQ_ERROR;
       }
     } else {
-      hash_filtering_rule hash_rule;
 
       hdr.caplen = phdr.caplen;
       hdr.pktlen = phdr.len;
@@ -582,19 +588,12 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
 
       if (phdr.extended_hdr.parsed_pkt.eth_type == 0x0806 /* ARP */ )
         verdict = DAQ_VERDICT_PASS;
-
+      
       switch(verdict) {
       case DAQ_VERDICT_BLACKLIST: /* Block the packet and block all future packets in the same flow systemwide. */
-      case DAQ_VERDICT_WHITELIST: /* Pass the packet and fastpath all future packets in the same flow systemwide. */
-      case DAQ_VERDICT_IGNORE:    /* Pass the packet and fastpath all future packets in the same flow for this application. */
-
-	if (context->use_kernel_filters
-	    && !(context->mode == DAQ_MODE_PASSIVE && context->num_reflector_devices > rx_ring_idx && verdict != DAQ_VERDICT_BLACKLIST)
-	    /* when lowlevelbridge is ON we can't set "forward" (reflector won't work) or "reflect" (packets reflected twice) hash rules */ ) {
-
-	  memset(&hash_rule, 0, sizeof(hash_rule));
-
-          pfring_parse_pkt(context->pkt_buffer, &phdr, 4, 0, 0);
+	if (context->use_kernel_filters) {
+          
+	  pfring_parse_pkt(context->pkt_buffer, &phdr, 4, 0, 0);
 	  /* or use pfring_recv_parsed() to force parsing. */
 
 	  hash_rule.rule_id     = context->filter_count++;
@@ -606,14 +605,11 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
 	  hash_rule.port_peer_b = phdr.extended_hdr.parsed_pkt.l4_dst_port;
 	  hash_rule.plugin_action.plugin_id = NO_PLUGIN_ID;
 
-	  if (context->mode == DAQ_MODE_PASSIVE &&
-	      context->num_reflector_devices > rx_ring_idx
-	      /* && verdict == DAQ_VERDICT_BLACKLIST */) { /* lowlevelbridge ON */
+	  if (context->mode == DAQ_MODE_PASSIVE && context->num_reflector_devices > rx_ring_idx) { /* lowlevelbridge ON */
 	    hash_rule.rule_action = reflect_packet_and_stop_rule_evaluation;
 	    snprintf(hash_rule.reflector_device_name, REFLECTOR_NAME_LEN, "%s", context->reflector_devices[rx_ring_idx]);
 	  } else {
-	    hash_rule.rule_action = (verdict == DAQ_VERDICT_BLACKLIST) ?
-	      dont_forward_packet_and_stop_rule_evaluation : forward_packet_and_stop_rule_evaluation;
+	    hash_rule.rule_action = dont_forward_packet_and_stop_rule_evaluation;
 	  }
 
 	  pfring_handle_hash_filtering_rule(context->ring_handles[rx_ring_idx], &hash_rule, 1 /* add_rule */);
@@ -633,15 +629,14 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
 		 hash_rule.rule_action);
 #endif
 	}
+	break;
 
-	if(verdict == DAQ_VERDICT_BLACKLIST) {
-	  break;
-	} else {
-	  /* No break here ! as we need to forward the packet */
-	}
-
-      case DAQ_VERDICT_PASS:    /* Pass the packet */
-      case DAQ_VERDICT_REPLACE: /* Pass a packet that has been modified in-place.(No resizing allowed!) */
+      case DAQ_VERDICT_WHITELIST: /* Pass the packet and fastpath all future packets in the same flow systemwide. */
+      case DAQ_VERDICT_IGNORE:    /* Pass the packet and fastpath all future packets in the same flow for this application. */
+        /* Setting a rule for reflectiong packets when lowlevelbridge is ON could be an optimization here, 
+	 * but we can't set "forward" (reflector won't work) or "reflect" (packets reflected twice) hash rules */ 
+      case DAQ_VERDICT_PASS:      /* Pass the packet */
+      case DAQ_VERDICT_REPLACE:   /* Pass a packet that has been modified in-place.(No resizing allowed!) */
         if (context->mode == DAQ_MODE_INLINE) {
 	  pfring_daq_send_packet(context, context->ring_handles[rx_ring_idx ^ 0x1], hdr.caplen, context->ring_handles[rx_ring_idx], context->ifindexes[rx_ring_idx ^ 0x1]);
 	}
@@ -702,10 +697,11 @@ static int pfring_daq_stop(void *handle) {
   Pfring_Context_t *context =(Pfring_Context_t *) handle;
   int i;
 
+  update_hw_stats(context);
+
   for (i = 0; i < context->num_devices; i++) {
     if(context->ring_handles[i]) {
       /* Store the hardware stats for post-stop stat calls. */
-      update_hw_stats(context);
       pfring_close(context->ring_handles[i]);
       context->ring_handles[i] = NULL;
     }
@@ -745,8 +741,7 @@ static DAQ_State pfring_daq_check_status(void *handle) {
 static int pfring_daq_get_stats(void *handle, DAQ_Stats_t *stats) {
   Pfring_Context_t *context =(Pfring_Context_t *) handle;
 
-  if(update_hw_stats(context) != DAQ_SUCCESS)
-    return DAQ_ERROR;
+  update_hw_stats(context);
 
   memcpy(stats, &context->stats, sizeof(DAQ_Stats_t));
 
