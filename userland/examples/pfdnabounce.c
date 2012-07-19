@@ -332,14 +332,16 @@ int main(int argc, char* argv[]) {
       printf("pfring_open %s error [%s]\n", in_dev, strerror(errno));
       return(-1);
     }
-    pfring_set_socket_mode(pd1, recv_only_mode);
+    if (!bidirectional)
+      pfring_set_socket_mode(pd1, recv_only_mode);
 
     pd2 = pfring_open(out_dev, 1500 /* snaplen */, 0 /* PF_RING_PROMISC */);
     if(pd2 == NULL) {
       printf("pfring_open %s error [%s]\n", out_dev, strerror(errno));
       return(-1);
     } 
-    pfring_set_socket_mode(pd2, send_only_mode);
+    if (!bidirectional)
+      pfring_set_socket_mode(pd2, send_only_mode);
 
     pfring_set_application_name(pd2, "pfdnabounce");
   break;
@@ -348,7 +350,7 @@ int main(int argc, char* argv[]) {
     snprintf(buf, sizeof(buf), "dnacluster:%d", cluster_id);
     pd1 = pfring_open(buf, 1500 /* snaplen */, PF_RING_PROMISC);
     if(pd1 == NULL) {
-      printf("pfring_open %s error [%s]\n", buf, strerror(errno));
+      printf("pfring_open %s error [%s] (please run \"pfdnacluster_master -i %s,%s -c %d%s\")\n", buf, strerror(errno), in_dev, out_dev, cluster_id, bidirectional ? " -s" : "");
       return(-1);
     }
     pfring_set_socket_mode(pd1, send_and_recv_mode);
