@@ -407,7 +407,7 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  if(in_dev == NULL)  printHelp();
+  if(in_dev == NULL | num_balanced_pkts < 1)  printHelp();
 
   printf("Sending packets on %s\n", in_dev);
 
