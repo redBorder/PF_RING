@@ -1,6 +1,6 @@
 /*
  *
- * (C) 2005-11 - Luca Deri <deri@ntop.org>
+ * (C) 2005-12 - Luca Deri <deri@ntop.org>
  *
  *
  * This program is free software; you can redistribute it and/or modify
@@ -137,14 +137,14 @@ void print_stats() {
   avgThpt = (double)(num_pkt_good_sent * 1000)/deltaMillisec;
   avgThptBytes = (double)(num_bytes_good_sent * 1000)/deltaMillisec;
   avgThptBytes /= (1000*1000*1000)/8;
-  
-  fprintf(stdout, "TX rate: [current %s pps/%s Gbps][average %s pps/%s Gbps][total %s pkts]\n", 
+
+  fprintf(stdout, "TX rate: [current %s pps/%s Gbps][average %s pps/%s Gbps][total %s pkts]\n",
 	  pfring_format_numbers(currentThpt, buf1, sizeof(buf1), 1),
 	  pfring_format_numbers(currentThptBytes, buf2, sizeof(buf2), 1),
 	  pfring_format_numbers(avgThpt, buf3, sizeof(buf3), 1),
 	  pfring_format_numbers(avgThptBytes,  buf4, sizeof(buf4), 1),
 	  pfring_format_numbers(num_pkt_good_sent, buf5, sizeof(buf5), 1));
-  
+
   memcpy(&lastTime, &now, sizeof(now));
   last_num_pkt_good_sent = num_pkt_good_sent, last_num_bytes_good_sent = num_bytes_good_sent;
 }
@@ -301,7 +301,7 @@ static void forge_udp_packet(char *buffer, u_int idx) {
   ip_header->daddr = htonl(dst_ip);
   ip_header->saddr = htonl(src_ip);
   ip_header->check = wrapsum(in_cksum((unsigned char *)ip_header,
-			sizeof(struct ip_header), 0));
+				      sizeof(struct ip_header), 0));
 
   udp_header = (struct udp_header*)(buffer + sizeof(struct ether_header) + sizeof(struct ip_header));
   udp_header->source = htons(src_port);
@@ -318,9 +318,9 @@ static void forge_udp_packet(char *buffer, u_int idx) {
   i = sizeof(struct ether_header) + sizeof(struct ip_header) + sizeof(struct udp_header);
   udp_header->check = wrapsum(in_cksum((unsigned char *)udp_header, sizeof(struct udp_header),
                                        in_cksum((unsigned char *)&buffer[i], send_len-i,
-                                       in_cksum((unsigned char *)&ip_header->saddr,
-                                                2*sizeof(ip_header->saddr),
-                                                IPPROTO_UDP + ntohs(udp_header->len)))));
+						in_cksum((unsigned char *)&ip_header->saddr,
+							 2*sizeof(ip_header->saddr),
+							 IPPROTO_UDP + ntohs(udp_header->len)))));
 }
 
 /* *************************************** */
@@ -331,7 +331,7 @@ int main(int argc, char* argv[]) {
   int use_zero_copy_tx = 0;
   u_int mac_a, mac_b, mac_c, mac_d, mac_e, mac_f;
   char buffer[9000];
-  u_int32_t num = 0;
+  u_int32_t num_to_send = 0;
   int bind_core = -1;
   u_int16_t cpu_percentage = 0;
   double gbit_s = 0, td, pps;
@@ -360,7 +360,7 @@ int main(int argc, char* argv[]) {
       pcap_in = strdup(optarg);
       break;
     case 'n':
-      num = atoi(optarg);
+      num_to_send = atoi(optarg);
       break;
     case 'g':
       bind_core = atoi(optarg);
@@ -407,7 +407,8 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  if(in_dev == NULL | num_balanced_pkts < 1)  printHelp();
+  if((in_dev == NULL) || (num_balanced_pkts < 1))
+    printHelp();
 
   printf("Sending packets on %s\n", in_dev);
 
@@ -428,11 +429,11 @@ int main(int argc, char* argv[]) {
   if (!pd->send && pd->send_ifindex && if_index == -1) {
     printf("Please use -x <if index>\n");
     return -1;
-  } 
+  }
 
   if(watermark > 0) {
     int rc;
-    
+
     if((rc = pfring_set_tx_watermark(pd, watermark)) < 0)
       printf("pfring_set_tx_watermark() failed [rc=%d]\n", rc);
   }
@@ -449,7 +450,7 @@ int main(int argc, char* argv[]) {
     tick_start = getticks();
     usleep(1);
     tick_delta = getticks() - tick_start;
-    
+
     /* cumputing CPU freq */
     tick_start = getticks();
     usleep(1001);
@@ -505,22 +506,21 @@ int main(int argc, char* argv[]) {
 	  break;
 	}
 
-	if(verbose) 
-	  printf("Read %d bytes packet from pcap file %s [%lu.%lu Secs =  %lu ticks@%luhz from beginning]\n", 
+	if(verbose)
+	  printf("Read %d bytes packet from pcap file %s [%lu.%lu Secs =  %lu ticks@%luhz from beginning]\n",
 		 p->len, pcap_in, h->ts.tv_sec - beginning.tv_sec, h->ts.tv_usec - beginning.tv_usec,
-		 (long unsigned int)p->ticks_from_beginning, 
+		 (long unsigned int)p->ticks_from_beginning,
 		 (long unsigned int)hz);
-	
+
 	avg_send_len += p->len;
 	num_pcap_pkts++;
       } /* while */
       avg_send_len /= num_pcap_pkts;
 
       pcap_close(pt);
-      printf("Read %d packets from pcap file %s\n", 
+      printf("Read %d packets from pcap file %s\n",
 	     num_pcap_pkts, pcap_in);
       last->next = pkt_head; /* Loop */
-      num *= num_pcap_pkts;
       send_len = avg_send_len;
     } else {
       printf("Unable to open file %s\n", pcap_in);
@@ -562,7 +562,7 @@ int main(int argc, char* argv[]) {
 
     td = (double)(hz / pps);
     tick_delta = (ticks)td;
-    
+
     printf("Number of %d-byte Packet Per Second at %.2f Gbit/s: %.2f\n", (send_len + 4 /*CRC*/), gbit_s, pps);
   }
 
@@ -580,7 +580,7 @@ int main(int argc, char* argv[]) {
   }
 
   gettimeofday(&startTime, NULL);
-  memcpy(&lastTime, &startTime, sizeof(startTime)); 
+  memcpy(&lastTime, &startTime, sizeof(startTime));
 
   pfring_set_socket_mode(pd, send_only_mode);
 
@@ -592,7 +592,7 @@ int main(int argc, char* argv[]) {
 
   use_zero_copy_tx = 0;
 
-  if((!disable_zero_copy) 
+  if((!disable_zero_copy)
      && (pd->dna_copy_tx_packet_into_slot != NULL)) {
     tosend = pkt_head;
 
@@ -609,12 +609,12 @@ int main(int argc, char* argv[]) {
 	tosend = tosend->next;
       }
 
-      if(num == 0) {
+      if(num_to_send == 0) {
 	use_zero_copy_tx = 1;
       }
     }
   }
-  
+
   printf("%s zero-copy TX\n", use_zero_copy_tx ? "Using" : "NOT using");
 
   tosend = pkt_head;
@@ -623,7 +623,8 @@ int main(int argc, char* argv[]) {
   if(gbit_s != 0)
     tick_start = getticks();
 
-  while(!num || i < num) {
+  while((num_to_send == 0) 
+	|| (i < num_to_send)) {
     int rc;
 
   redo:
@@ -647,7 +648,7 @@ int main(int argc, char* argv[]) {
       /* Not enough space in buffer */
       if(!active_poll) {
 #if 1
-	usleep(1); 
+	usleep(1);
 #else
         if(bind_core >= 0)
 	  usleep(1);
@@ -657,13 +658,14 @@ int main(int argc, char* argv[]) {
       }
       goto redo;
     }
-    
+
     num_pkt_good_sent++;
     num_bytes_good_sent += tosend->len + 24 /* 8 Preamble + 4 CRC + 12 IFG */;
 
     tosend = tosend->next;
-    
-    if (use_zero_copy_tx && num_pkt_good_sent == num_tx_slots)
+
+    if (use_zero_copy_tx
+	&& (num_pkt_good_sent == num_tx_slots))
       tosend = pkt_head;
 
     if(gbit_s > 0) {
@@ -676,7 +678,7 @@ int main(int argc, char* argv[]) {
       while((getticks() - tick_start) < tosend->ticks_from_beginning) ;
     }
 
-    if(num > 0) i++;
+    if(num_to_send > 0) i++;
   } /* for */
 
   print_stats(0);
