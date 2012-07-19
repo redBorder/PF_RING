@@ -615,6 +615,11 @@ int main(int argc, char* argv[]) {
     }
   }
 
+  if(use_zero_copy_tx && (pcap_in != NULL)) {
+    printf("Disabling zero copy when reading from a pcap file\n");
+    use_zero_copy_tx = 0;
+  }
+
   printf("%s zero-copy TX\n", use_zero_copy_tx ? "Using" : "NOT using");
 
   tosend = pkt_head;
