@@ -340,6 +340,7 @@ int main(int argc, char* argv[]) {
   struct packet *tosend;
   u_int num_tx_slots = 0;
   int num_balanced_pkts = 1, watermark = 0;
+  u_int num_pcap_pkts = 0;
 
   while((c = getopt(argc,argv,"b:hi:n:g:l:af:r:vm:w:zx:"
 #if 0
@@ -463,7 +464,6 @@ int main(int argc, char* argv[]) {
     u_char *pkt;
     struct pcap_pkthdr *h;
     pcap_t *pt = pcap_open_offline(pcap_in, ebuf);
-    u_int num_pcap_pkts = 0;
     struct timeval beginning = { 0, 0 };
     int avg_send_len = 0;
 
@@ -593,12 +593,16 @@ int main(int argc, char* argv[]) {
   use_zero_copy_tx = 0;
 
   if((!disable_zero_copy)
+     && (pd->dna_get_num_tx_slots != NULL)
      && (pd->dna_copy_tx_packet_into_slot != NULL)) {
     tosend = pkt_head;
 
     num_tx_slots = pd->dna_get_num_tx_slots(pd);
 
-    if(num_tx_slots > 0) {
+    if(num_tx_slots > 0
+       && (((num_to_send > 0) && (num_to_send <= num_tx_slots))
+        || ( pcap_in && (num_pcap_pkts     <= num_tx_slots) && (num_tx_slots % num_pcap_pkts     == 0))
+        || (!pcap_in && (num_balanced_pkts <= num_tx_slots) && (num_tx_slots % num_balanced_pkts == 0)))) {
       int ret;
 
       for(i=0; i<num_tx_slots; i++) {
@@ -609,18 +613,15 @@ int main(int argc, char* argv[]) {
 	tosend = tosend->next;
       }
 
-      if(num_to_send == 0) {
-	use_zero_copy_tx = 1;
-      }
+      use_zero_copy_tx = 1;
+      printf("Using zero-copy TX\n");
+    } else {
+      printf("NOT using zero-copy: TX ring size (%u) is not a multiple of the number of unique packets to send (%u)\n", num_tx_slots, pcap_in ? num_pcap_pkts : num_balanced_pkts);
     }
+  } else {
+    if (!disable_zero_copy)
+      printf("NOT using zero-copy: not supported by the driver\n");
   }
-
-  if(use_zero_copy_tx && (pcap_in != NULL)) {
-    printf("Disabling zero copy when reading from a pcap file\n");
-    use_zero_copy_tx = 0;
-  }
-
-  printf("%s zero-copy TX\n", use_zero_copy_tx ? "Using" : "NOT using");
 
   tosend = pkt_head;
   i = 0;
