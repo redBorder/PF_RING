@@ -321,6 +321,7 @@ ip_defrag(struct sk_buff *skb, u32 user);
 
 /* Defaults */
 static unsigned int min_num_slots = 4096;
+static unsigned int perfect_rules_hash_size = DEFAULT_RING_HASH_SIZE;
 static unsigned int enable_tx_capture = 1;
 static unsigned int enable_ip_defrag = 0;
 static unsigned int quick_mode = 0;
@@ -336,6 +337,7 @@ static atomic_t ring_id_serial = ATOMIC_INIT(0);
 
 #if(LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,16)) || defined(REDHAT_PATCHED_KERNEL)
 module_param(min_num_slots, uint, 0644);
+module_param(perfect_rules_hash_size, uint, 0644);
 module_param(transparent_mode, uint, 0644);
 module_param(enable_debug, uint, 0644);
 module_param(enable_tx_capture, uint, 0644);
@@ -343,6 +345,7 @@ module_param(enable_ip_defrag, uint, 0644);
 module_param(quick_mode, uint, 0644);
 #else
 MODULE_PARM(min_num_slots, "i");
+MODULE_PARM(perfect_rules_hash_size, "i");
 MODULE_PARM(transparent_mode, "i");
 MODULE_PARM(enable_debug, "i");
 MODULE_PARM(enable_tx_capture, "i");
@@ -351,6 +354,7 @@ MODULE_PARM(quick_mode, "i");
 #endif
 
 MODULE_PARM_DESC(min_num_slots, "Min number of ring slots");
+MODULE_PARM_DESC(perfect_rules_hash_size, "Perfect rules hash size");
 MODULE_PARM_DESC(transparent_mode,
 		 "0=standard Linux, 1=direct2pfring+transparent, 2=direct2pfring+non transparent"
 		 "For 1 and 2 you need to use a PF_RING aware driver");
@@ -2975,7 +2979,7 @@ static int handle_sw_filtering_hash_bucket(struct pf_ring_socket *pfr,
   u_int32_t hash_value = hash_pkt(rule->rule.vlan_id, rule->rule.proto,
 				  rule->rule.host_peer_a, rule->rule.host_peer_b,
 				  rule->rule.port_peer_a, rule->rule.port_peer_b)
-    % DEFAULT_RING_HASH_SIZE;
+    % perfect_rules_hash_size;
 
   if(unlikely(enable_debug))
     printk("[PF_RING] %s(vlan=%u, proto=%u, "
@@ -3041,7 +3045,7 @@ static int handle_sw_filtering_hash_bucket(struct pf_ring_socket *pfr,
     /* initialiting hash table */
     if(pfr->sw_filtering_hash == NULL) {
       pfr->sw_filtering_hash = (sw_filtering_hash_bucket **)
-	kcalloc(DEFAULT_RING_HASH_SIZE, sizeof(sw_filtering_hash_bucket *), GFP_ATOMIC);
+	kcalloc(perfect_rules_hash_size, sizeof(sw_filtering_hash_bucket *), GFP_ATOMIC);
 
       if(pfr->sw_filtering_hash == NULL) {
         if(unlikely(enable_debug))
@@ -3361,7 +3365,7 @@ int check_perfect_rules(struct sk_buff *skb,
   sw_filtering_hash_bucket *hash_bucket;
   u_int8_t hash_found = 0;
 
-  hash_idx = hash_pkt_header(hdr, 0, 0, 0, 0, 0) % DEFAULT_RING_HASH_SIZE;
+  hash_idx = hash_pkt_header(hdr, 0, 0, 0, 0, 0) % perfect_rules_hash_size;
   hash_bucket = pfr->sw_filtering_hash[hash_idx];
 
   while(hash_bucket != NULL) {
@@ -5409,7 +5413,7 @@ static int ring_release(struct socket *sock)
     if(pfr->sw_filtering_hash) {
       int i;
 
-      for(i = 0; i < DEFAULT_RING_HASH_SIZE; i++) {
+      for(i = 0; i < perfect_rules_hash_size; i++) {
 	if(pfr->sw_filtering_hash[i] != NULL) {
 	  sw_filtering_hash_bucket *scan = pfr->sw_filtering_hash[i], *next;
 
@@ -6538,7 +6542,7 @@ static void purge_idle_hash_rules(struct pf_ring_socket *pfr,
 
   /* Free filtering hash rules inactive for more than rule_inactivity seconds */
   if(pfr->sw_filtering_hash != NULL) {
-    for(i = 0; i < DEFAULT_RING_HASH_SIZE; i++) {
+    for(i = 0; i < perfect_rules_hash_size; i++) {
       if(pfr->sw_filtering_hash[i] != NULL) {
 	sw_filtering_hash_bucket *scan = pfr->sw_filtering_hash[i], *next, *prev = NULL;
 
@@ -7591,7 +7595,7 @@ static int ring_getsockopt(struct socket *sock,
 
 	hash_idx = hash_pkt(rule.vlan_id, rule.proto,
 			    rule.host_peer_a, rule.host_peer_b,
-			    rule.port_peer_a, rule.port_peer_b) % DEFAULT_RING_HASH_SIZE;
+			    rule.port_peer_a, rule.port_peer_b) % perfect_rules_hash_size;
 
 	if(pfr->sw_filtering_hash[hash_idx] != NULL) {
 	  sw_filtering_hash_bucket *bucket;
