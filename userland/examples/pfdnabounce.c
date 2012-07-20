@@ -350,7 +350,7 @@ int main(int argc, char* argv[]) {
     snprintf(buf, sizeof(buf), "dnacluster:%d", cluster_id);
     pd1 = pfring_open(buf, 1500 /* snaplen */, PF_RING_PROMISC);
     if(pd1 == NULL) {
-      printf("pfring_open %s error [%s] (please run \"pfdnacluster_master -i %s,%s -c %d%s\")\n", buf, strerror(errno), in_dev, out_dev, cluster_id, bidirectional ? " -s" : "");
+      printf("pfring_open %s error [%s] (please run \"pfdnacluster_master -i %s,%s -c %d -s\")\n", buf, strerror(errno), in_dev, out_dev, cluster_id);
       return(-1);
     }
     pfring_set_socket_mode(pd1, send_and_recv_mode);
