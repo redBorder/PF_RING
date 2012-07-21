@@ -335,7 +335,7 @@ int main(int argc, char* argv[]) {
     if (!bidirectional)
       pfring_set_socket_mode(pd1, recv_only_mode);
 
-    pd2 = pfring_open(out_dev, 1500 /* snaplen */, PF_RING_PROMISC);
+    pd2 = pfring_open(out_dev, 1500 /* snaplen */, bidirectional ? PF_RING_PROMISC : 0);
     if(pd2 == NULL) {
       printf("pfring_open %s error [%s]\n", out_dev, strerror(errno));
       return(-1);
