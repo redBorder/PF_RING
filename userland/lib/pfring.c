@@ -761,14 +761,6 @@ int pfring_set_socket_mode(pfring *ring, socket_mode mode) {
     if(rc == 0)
       ring->mode = mode;
 
-    /* We move back from RX/TX to TX-only mode */
-    if(mode == send_only_mode) {
-      if(ring->promisc && ring->clear_promisc) {
-	if(pfring_set_if_promisc(ring->device_name, 0) == 0)
-	  ring->clear_promisc = 0;
-      }
-    }
-
     return(rc);
   }
 
