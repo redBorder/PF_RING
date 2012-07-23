@@ -442,7 +442,7 @@ static inline void skb_reset_transport_header(struct sk_buff *skb)
 #if defined(REDHAT_PATCHED_KERNEL)
 /* Always the same RH crap */
 
-#if ((RHEL_MAJOR == 5) && (RHEL_MINOR <= 5 /* 2 */))
+#if ((RHEL_MAJOR == 5) && (RHEL_MINOR <= 8 /* 5 */))
 void msleep(unsigned int msecs)
 {
   unsigned long timeout = msecs_to_jiffies(msecs) + 1;
