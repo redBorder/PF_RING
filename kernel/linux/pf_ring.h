@@ -235,7 +235,8 @@ typedef struct {
 } tunnel_info;
 
 #define MOBILE_IP_PORT           434
-struct mobile_ip_header {
+
+struct mobile_ip_hdr {
   u_int8_t message_type, next_header;
   u_int16_t reserved;
 };
