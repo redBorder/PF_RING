@@ -188,6 +188,7 @@ struct gre_header {
 
 #define GTP_SIGNALING_PORT      2123
 #define GTP_U_DATA_PORT         2152
+
 #define GTP_VERSION_1           0x1
 #define GTP_VERSION_2           0x2
 #define GTP_PROTOCOL_TYPE       0x1
@@ -232,6 +233,12 @@ typedef struct {
   ip_addr tunneled_ip_src, tunneled_ip_dst;  
   u_int16_t tunneled_l4_src_port, tunneled_l4_dst_port;
 } tunnel_info;
+
+#define MOBILE_IP_PORT           434
+struct mobile_ip_header {
+  u_int8_t message_type, next_header;
+  u_int16_t reserved;
+};
 
 typedef enum {
   long_pkt_header = 0, /* it includes PF_RING-extensions over the original pcap header */

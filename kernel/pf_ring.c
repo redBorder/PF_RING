@@ -1810,7 +1810,7 @@ static int parse_raw_pkt(char *data, u_int data_len,
   if (hdr->extended_hdr.parsed_pkt.eth_type == ETH_P_8021Q /* 802.1q (VLAN) */) {
     struct eth_vlan_hdr *vh;
     hdr->extended_hdr.parsed_pkt.offset.vlan_offset = sizeof(struct ethhdr) - sizeof(struct eth_vlan_hdr);
-    while (hdr->extended_hdr.parsed_pkt.eth_type == ETH_P_8021Q /* 802.1q (VLAN) */ ) {
+    while (hdr->extended_hdr.parsed_pkt.eth_type == ETH_P_8021Q /* 802.1q (VLAN) */) {
       hdr->extended_hdr.parsed_pkt.offset.vlan_offset += sizeof(struct eth_vlan_hdr);
       vh = (struct eth_vlan_hdr *) &data[hdr->extended_hdr.parsed_pkt.offset.vlan_offset];
       hdr->extended_hdr.parsed_pkt.vlan_id = ntohs(vh->h_vlan_id) & 0x0fff;
@@ -1824,7 +1824,7 @@ static int parse_raw_pkt(char *data, u_int data_len,
   if(unlikely(enable_debug))
     printk("[PF_RING] [eth_type=%04X]\n", hdr->extended_hdr.parsed_pkt.eth_type);
 
-  if(hdr->extended_hdr.parsed_pkt.eth_type == ETH_P_IP /* IPv4 */ ) {
+  if(hdr->extended_hdr.parsed_pkt.eth_type == ETH_P_IP /* IPv4 */) {
     struct iphdr *ip;
 
     hdr->extended_hdr.parsed_pkt.ip_version = 4;
@@ -1929,10 +1929,10 @@ static int parse_raw_pkt(char *data, u_int data_len,
       hdr->extended_hdr.parsed_pkt.offset.payload_offset = hdr->extended_hdr.parsed_pkt.offset.l4_offset + sizeof(struct udphdr);
 
       /* GTP */
-      if((hdr->extended_hdr.parsed_pkt.l4_src_port == GTP_SIGNALING_PORT) ||
-         (hdr->extended_hdr.parsed_pkt.l4_dst_port == GTP_SIGNALING_PORT) ||
-	 (hdr->extended_hdr.parsed_pkt.l4_src_port == GTP_U_DATA_PORT) ||
-	 (hdr->extended_hdr.parsed_pkt.l4_dst_port == GTP_U_DATA_PORT)) {
+      if((hdr->extended_hdr.parsed_pkt.l4_src_port == GTP_SIGNALING_PORT)
+         || (hdr->extended_hdr.parsed_pkt.l4_dst_port == GTP_SIGNALING_PORT)
+	 || (hdr->extended_hdr.parsed_pkt.l4_src_port == GTP_U_DATA_PORT)
+	 || (hdr->extended_hdr.parsed_pkt.l4_dst_port == GTP_U_DATA_PORT)) {
 	struct gtp_v1_hdr *gtp;
 	u_int16_t gtp_len;
 
@@ -1975,7 +1975,7 @@ static int parse_raw_pkt(char *data, u_int data_len,
 	    if(data_len < (hdr->extended_hdr.parsed_pkt.offset.payload_offset+gtp_len+sizeof(struct iphdr))) return(1);
 	    tunneled_ip = (struct iphdr *) (&data[hdr->extended_hdr.parsed_pkt.offset.payload_offset + gtp_len]);
 
-	    if(tunneled_ip->version == 4 /* IPv4 */ ) {
+	    if(tunneled_ip->version == 4 /* IPv4 */) {
 	      hdr->extended_hdr.parsed_pkt.tunnel.tunneled_proto = tunneled_ip->protocol;
 	      hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src.v4 = ntohl(tunneled_ip->saddr);
 	      hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst.v4 = ntohl(tunneled_ip->daddr);
@@ -1983,7 +1983,7 @@ static int parse_raw_pkt(char *data, u_int data_len,
 	      fragment_offset = tunneled_ip->frag_off & htons(IP_OFFSET); /* fragment, but not the first */
 	      ip_len = tunneled_ip->ihl*4;
 	      tunnel_offset = hdr->extended_hdr.parsed_pkt.offset.payload_offset+gtp_len+ip_len;
-	    } else if(tunneled_ip->version == 6 /* IPv6 */ ) {
+	    } else if(tunneled_ip->version == 6 /* IPv6 */) {
 	      struct ipv6hdr* tunneled_ipv6;
 
 	      if(data_len < (hdr->extended_hdr.parsed_pkt.offset.payload_offset+gtp_len+sizeof(struct ipv6hdr))) return(1);
@@ -2042,10 +2042,18 @@ static int parse_raw_pkt(char *data, u_int data_len,
 
 		hdr->extended_hdr.parsed_pkt.tunnel.tunneled_l4_src_port = ntohs(udp->source), 
 		  hdr->extended_hdr.parsed_pkt.tunnel.tunneled_l4_dst_port = ntohs(udp->dest);
+
+		if((hdr->extended_hdr.parsed_pkt.tunnel.tunneled_l4_src_port == MOBILE_IP_PORT)
+		   || (hdr->extended_hdr.parsed_pkt.tunnel.tunneled_l4_dst_port == MOBILE_IP_PORT)) {
+		  /* FIX: missing implementation (TODO) */
+		}
 	      }
 	    }
 	  }
 	}
+      } else if((hdr->extended_hdr.parsed_pkt.l4_src_port == MOBILE_IP_PORT)
+		|| (hdr->extended_hdr.parsed_pkt.l4_dst_port == MOBILE_IP_PORT)) {
+	/* FIX: missing implementation (TODO) */
       }
     } else if(hdr->extended_hdr.parsed_pkt.l3_proto == IPPROTO_GRE /* 0x47 */) {
       struct gre_header *gre = (struct gre_header*)(&data[hdr->extended_hdr.parsed_pkt.offset.l4_offset]);
@@ -3302,7 +3310,7 @@ static int reflect_packet(struct sk_buff *skb,
     printk("[PF_RING] reflect_packet(%s) called\n", reflector_dev->name);
 
   if((reflector_dev != NULL)
-     && (reflector_dev->flags & IFF_UP) /* Interface is up */ ) {
+     && (reflector_dev->flags & IFF_UP) /* Interface is up */) {
     int ret;
     struct sk_buff *cloned;
 
