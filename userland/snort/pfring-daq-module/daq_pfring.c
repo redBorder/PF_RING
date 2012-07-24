@@ -95,6 +95,7 @@ static int pfring_daq_open(Pfring_Context_t *context, int id) {
   char *device = context->devices[id];
   int pfring_rc;
   pfring *ring_handle;
+  char buf[32];
 
   if(!device) {
     DPE(context->errbuf, "%s", "PF_RING a device must be specified");
@@ -149,6 +150,12 @@ static int pfring_daq_open(Pfring_Context_t *context, int id) {
       pfring_close(ring_handle);
       return -1;
     }
+
+    snprintf(buf, sizeof(buf), "snort-cluster-%d-socket-%d", context->clusterids[id], id);
+    pfring_set_application_name(ring_handle, buf);
+  } else {
+    snprintf(buf, sizeof(buf), "snort-socket-%d", id);
+    pfring_set_application_name(ring_handle, buf);
   }
 
   pfring_set_poll_watermark(ring_handle, context->watermark);
