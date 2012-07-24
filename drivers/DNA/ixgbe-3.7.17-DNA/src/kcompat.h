@@ -2910,7 +2910,7 @@ static inline dma_addr_t _kc_skb_frag_dma_map(struct device *dev,
 #endif /* skb_frag_dma_map */
 #endif /* < 3.2.0 */
 
-#if (RHEL_RELEASE_CODE && RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,2))
+#if (RHEL_RELEASE_CODE && RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(6,2) && RHEL_RELEASE_CODE <= RHEL_RELEASE_VERSION(6,3))
 #undef ixgbe_get_netdev_tc_txq
 #define ixgbe_get_netdev_tc_txq(dev, tc) (&netdev_extended(dev)->qos_data.tc_to_txq[tc])
 #endif
