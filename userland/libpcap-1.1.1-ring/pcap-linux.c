@@ -1165,6 +1165,7 @@ pcap_activate_linux(pcap_t *handle)
 	  /* Code courtesy of Chris Wakelin <c.d.wakelin@reading.ac.uk> */
 	  char *clusterId;
 	  int flags = 0;
+	  char *appname;
 	  	  
 	  if(handle->opt.promisc) flags |= PF_RING_PROMISC;
 	  if(getenv("PCAP_PF_RING_DNA_RSS")) flags |= PF_RING_DNA_SYMMETRIC_RSS;
@@ -1179,6 +1180,10 @@ pcap_activate_linux(pcap_t *handle)
 		else
 		  pfring_set_cluster(handle->ring, atoi(clusterId), cluster_round_robin);
 	    
+            if(appname = getenv("PCAP_PF_RING_APPNAME"))
+	      if(strlen(appname) > 0 && strlen(appname) <= 32)
+	        pfring_set_application_name(handle->ring, appname);
+
 	    pfring_set_poll_watermark(handle->ring, 1 /* watermark */);
 	    handle->ring->dna.dna_rx_sync_watermark = 0; /* trick (otherwise tshark wouldn't work with DNA) */
 	  } else
