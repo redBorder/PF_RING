@@ -527,7 +527,10 @@ static int pfring_daq_send_packet(Pfring_Context_t *context, pfring *send_ring,
 }
 
 static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callback, 
-			      DAQ_Meta_Func_t metaback, void *user) {
+#if (DAQ_API_VERSION >= 0x00010002)
+                              DAQ_Meta_Func_t metaback,
+#endif
+			      void *user) {
   Pfring_Context_t *context =(Pfring_Context_t *) handle;
   int ret = 0, i, current_ring_idx = context->num_devices - 1, rx_ring_idx;
   struct pollfd pfd[DAQ_PF_RING_MAX_NUM_DEVICES];
@@ -581,10 +584,14 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
       hdr.caplen = phdr.caplen;
       hdr.pktlen = phdr.len;
       hdr.ts = phdr.ts;
+#if (DAQ_API_VERSION >= 0x00010002)
       hdr.ingress_index = phdr.extended_hdr.if_index;
       hdr.egress_index = -1;
       hdr.ingress_group = -1;
-      hdr.egress_group = -1;     
+      hdr.egress_group = -1;
+#else
+      hdr.device_index = phdr.extended_hdr.if_index;
+#endif
       hdr.flags = 0;
 
       rx_ring_idx = current_ring_idx;
@@ -677,7 +684,11 @@ static int pfring_daq_inject(void *handle, const DAQ_PktHdr_t *hdr,
 
   if (context->mode == DAQ_MODE_INLINE) { /* looking for the device idx */
     for (i = 0; i < context->num_devices; i++)
+#if (DAQ_API_VERSION >= 0x00010002)
       if (context->ifindexes[i] == hdr->ingress_index) {
+#else
+      if (context->ifindexes[i] == hdr->device_index) {
+#endif
         tx_ring_idx = i ^ 0x1;
         break;
       }
