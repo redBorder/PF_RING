@@ -2644,6 +2644,9 @@ do {								\
 		(bit) = find_next_bit((addr), (size), (bit) + 1))
 #endif /* for_each_set_bit */
 
+#if (RHEL_RELEASE_CODE && RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,3)
+/* DMA macros backported from 2.6.36 */
+#else
 #ifndef DEFINE_DMA_UNMAP_ADDR
 #define DEFINE_DMA_UNMAP_ADDR DECLARE_PCI_UNMAP_ADDR 
 #define DEFINE_DMA_UNMAP_LEN DECLARE_PCI_UNMAP_LEN
@@ -2652,6 +2655,7 @@ do {								\
 #define dma_unmap_len pci_unmap_len
 #define dma_unmap_len_set pci_unmap_len_set
 #endif /* DEFINE_DMA_UNMAP_ADDR */
+#endif /* RHEL_RELEASE_VERSION(6,3) */
 #else /* < 2.6.34 */
 #define HAVE_SYSTEM_SLEEP_PM_OPS
 #ifndef HAVE_SET_RX_MODE
@@ -3005,7 +3009,7 @@ static inline void __kc_skb_frag_unref(skb_frag_t *frag)
 #endif
 #endif /* < 3.2.0 */
 
-#if (RHEL_RELEASE_CODE && RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,2))
+#if (RHEL_RELEASE_CODE && RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(6,2) && RHEL_RELEASE_CODE <= RHEL_RELEASE_VERSION(6,3))
 #undef ixgbe_get_netdev_tc_txq
 #define ixgbe_get_netdev_tc_txq(dev, tc) (&netdev_extended(dev)->qos_data.tc_to_txq[tc])
 #endif
