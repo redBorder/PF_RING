@@ -526,7 +526,8 @@ static int pfring_daq_send_packet(Pfring_Context_t *context, pfring *send_ring,
   return(DAQ_SUCCESS);
 }
 
-static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callback, void *user) {
+static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callback, 
+			      DAQ_Meta_Func_t metaback, void *user) {
   Pfring_Context_t *context =(Pfring_Context_t *) handle;
   int ret = 0, i, current_ring_idx = context->num_devices - 1, rx_ring_idx;
   struct pollfd pfd[DAQ_PF_RING_MAX_NUM_DEVICES];
@@ -577,11 +578,13 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
 	return DAQ_ERROR;
       }
     } else {
-
       hdr.caplen = phdr.caplen;
       hdr.pktlen = phdr.len;
       hdr.ts = phdr.ts;
-      hdr.device_index = phdr.extended_hdr.if_index;
+      hdr.ingress_index = phdr.extended_hdr.if_index;
+      hdr.egress_index = -1;
+      hdr.ingress_group = -1;
+      hdr.egress_group = -1;     
       hdr.flags = 0;
 
       rx_ring_idx = current_ring_idx;
@@ -645,7 +648,8 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
       case DAQ_VERDICT_PASS:      /* Pass the packet */
       case DAQ_VERDICT_REPLACE:   /* Pass a packet that has been modified in-place.(No resizing allowed!) */
         if (context->mode == DAQ_MODE_INLINE) {
-	  pfring_daq_send_packet(context, context->ring_handles[rx_ring_idx ^ 0x1], hdr.caplen, context->ring_handles[rx_ring_idx], context->ifindexes[rx_ring_idx ^ 0x1]);
+	  pfring_daq_send_packet(context, context->ring_handles[rx_ring_idx ^ 0x1], hdr.caplen, 
+				 context->ring_handles[rx_ring_idx], context->ifindexes[rx_ring_idx ^ 0x1]);
 	}
 	break;
 
@@ -673,7 +677,7 @@ static int pfring_daq_inject(void *handle, const DAQ_PktHdr_t *hdr,
 
   if (context->mode == DAQ_MODE_INLINE) { /* looking for the device idx */
     for (i = 0; i < context->num_devices; i++)
-      if (context->ifindexes[i] == hdr->device_index) {
+      if (context->ifindexes[i] == hdr->ingress_index) {
         tx_ring_idx = i ^ 0x1;
         break;
       }
