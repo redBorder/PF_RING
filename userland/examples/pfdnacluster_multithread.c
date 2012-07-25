@@ -103,7 +103,7 @@ void print_stats() {
   double delta, deltaABS;
   u_int64_t diff;
   u_int64_t RXdiff, TXdiff, RXProcdiff;
-  u_int64_t master_rx_packets, master_rx_processed_packets, master_tx_packets;
+  pfring_dna_cluster_stat cluster_stats;
   char buf1[32], buf2[32], buf3[32];
   int i;
 
@@ -149,12 +149,12 @@ void print_stats() {
     }
   }
  
-  if(dna_cluster_stats(dna_cluster_handle, &master_rx_packets, &master_tx_packets, &master_rx_processed_packets) == 0) {
+  if(dna_cluster_stats(dna_cluster_handle, &cluster_stats) == 0) {
 
     if(lastTime.tv_sec > 0) {
-      RXdiff = master_rx_packets - lastRXPkts; 
-      RXProcdiff = master_rx_processed_packets - lastRXProcPkts;
-      TXdiff = master_tx_packets - lastTXPkts; 
+      RXdiff = cluster_stats.tot_rx_packets - lastRXPkts; 
+      RXProcdiff = cluster_stats.tot_rx_processed - lastRXProcPkts;
+      TXdiff = cluster_stats.tot_tx_packets - lastTXPkts; 
 
       fprintf(stderr, "=========================\n"
                       "Aggregate Actual stats: [Captured %s pkt/sec][Processed %s pkt/sec][Sent %s pkt/sec]\n",
@@ -163,9 +163,9 @@ void print_stats() {
               pfring_format_numbers(((double)TXdiff/(double)(delta/1000)), buf3, sizeof(buf3), 1));
     }
 
-    lastRXPkts = master_rx_packets;
-    lastRXProcPkts = master_rx_processed_packets;
-    lastTXPkts = master_tx_packets;
+    lastRXPkts = cluster_stats.tot_rx_packets;
+    lastRXProcPkts = cluster_stats.tot_rx_processed;
+    lastTXPkts = cluster_stats.tot_tx_packets;
   }
 
   fprintf(stderr, "=========================\n\n");
@@ -318,14 +318,14 @@ inline u_int32_t master_custom_hash_function(const u_char *buffer, const u_int16
 
 /* ******************************* */
 
-static int master_distribution_function(const u_char *buffer, const u_int16_t buffer_len, const u_int32_t num_slaves, u_int32_t *id_mask, u_int32_t *hash) {
+static int master_distribution_function(const u_char *buffer, const u_int16_t buffer_len, const pfring_dna_cluster_slaves_info *slaves_info, u_int32_t *id_mask, u_int32_t *hash) {
   u_int32_t slave_idx;
 
   /* computing a bidirectional software hash */
   *hash = master_custom_hash_function(buffer, buffer_len);
 
   /* balancing on hash */
-  slave_idx = (*hash) % num_slaves;
+  slave_idx = (*hash) % slaves_info->num_slaves;
   *id_mask = (1 << slave_idx);
 
   return DNA_CLUSTER_PASS;
@@ -333,8 +333,8 @@ static int master_distribution_function(const u_char *buffer, const u_int16_t bu
 
 /* ******************************** */
 
-static int fanout_distribution_function(const u_char *buffer, const u_int16_t buffer_len, const u_int32_t num_slaves, u_int32_t *id_mask, u_int32_t *hash) {
-  u_int32_t n_zero_bits = 32 - num_slaves;
+static int fanout_distribution_function(const u_char *buffer, const u_int16_t buffer_len, const pfring_dna_cluster_slaves_info *slaves_info, u_int32_t *id_mask, u_int32_t *hash) {
+  u_int32_t n_zero_bits = 32 - slaves_info->num_slaves;
 
   /* returning slave id bitmap */
   *id_mask = ((0xFFFFFFFF << n_zero_bits) >> n_zero_bits);

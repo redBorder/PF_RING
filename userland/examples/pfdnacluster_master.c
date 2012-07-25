@@ -114,7 +114,7 @@ void print_stats() {
   u_int64_t RXdiff, TXdiff, RXProcdiff;
   static u_int64_t lastRXPkts = 0, lastTXPkts = 0, lastRXProcPkts = 0;
   unsigned long long nRXPkts = 0, nTXPkts = 0, nRXProcPkts = 0;
-  u_int64_t rx_packets, tx_packets, rx_processed_packets;
+  pfring_dna_cluster_stat cluster_stats;
 
   if(startTime.tv_sec == 0) {
     gettimeofday(&startTime, NULL);
@@ -125,10 +125,10 @@ void print_stats() {
   gettimeofday(&endTime, NULL);
   deltaMillisec = delta_time(&endTime, &startTime);
 
-  if(dna_cluster_stats(dna_cluster_handle, &rx_packets, &tx_packets, &rx_processed_packets) == 0) {
-    nRXPkts  = rx_packets;
-    nTXPkts  = tx_packets;
-    nRXProcPkts  = rx_processed_packets;
+  if(dna_cluster_stats(dna_cluster_handle, &cluster_stats) == 0) {
+    nRXPkts  = cluster_stats.tot_rx_packets;
+    nTXPkts  = cluster_stats.tot_tx_packets;
+    nRXProcPkts  = cluster_stats.tot_rx_processed;
 
     fprintf(stderr, "---\nAbsolute Stats:");
  
@@ -322,14 +322,14 @@ inline u_int32_t master_custom_hash_function(const u_char *buffer, const u_int16
 
 /* ******************************* */
 
-static int master_distribution_function(const u_char *buffer, const u_int16_t buffer_len, const u_int32_t num_slaves, u_int32_t *id_mask, u_int32_t *hash) {
+static int master_distribution_function(const u_char *buffer, const u_int16_t buffer_len, const pfring_dna_cluster_slaves_info *slaves_info, u_int32_t *id_mask, u_int32_t *hash) {
   u_int32_t slave_idx;
-
+  
   /* computing a bidirectional software hash */
   *hash = master_custom_hash_function(buffer, buffer_len);
 
   /* balancing on hash */
-  slave_idx = (*hash) % num_slaves;
+  slave_idx = (*hash) % slaves_info->num_slaves;
   *id_mask = (1 << slave_idx);
 
   return DNA_CLUSTER_PASS;
@@ -337,8 +337,8 @@ static int master_distribution_function(const u_char *buffer, const u_int16_t bu
 
 /* ******************************** */
 
-static int fanout_distribution_function(const u_char *buffer, const u_int16_t buffer_len, const u_int32_t num_slaves, u_int32_t *id_mask, u_int32_t *hash) {
-  u_int32_t n_zero_bits = 32 - num_slaves;
+static int fanout_distribution_function(const u_char *buffer, const u_int16_t buffer_len, const pfring_dna_cluster_slaves_info *slaves_info, u_int32_t *id_mask, u_int32_t *hash) {
+  u_int32_t n_zero_bits = 32 - slaves_info->num_slaves;
 
   /* returning slave id bitmap */
   *id_mask = ((0xFFFFFFFF << n_zero_bits) >> n_zero_bits);
