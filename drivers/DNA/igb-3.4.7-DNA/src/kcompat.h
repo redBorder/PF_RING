@@ -2644,7 +2644,7 @@ do {								\
 		(bit) = find_next_bit((addr), (size), (bit) + 1))
 #endif /* for_each_set_bit */
 
-#if (RHEL_RELEASE_CODE && RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,3)
+#if (RHEL_RELEASE_CODE && RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,3))
 /* DMA macros backported from 2.6.36 */
 #else
 #ifndef DEFINE_DMA_UNMAP_ADDR
