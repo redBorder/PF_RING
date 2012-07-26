@@ -386,9 +386,9 @@ int pfring_parse_pkt(u_char *pkt, struct pfring_pkthdr *hdr, u_int8_t level /* L
 		if(hdr->caplen < (hdr->extended_hdr.parsed_pkt.offset.payload_offset+gtp_len +1/* 8bit len field */)) goto TIMESTAMP;
 		gtpext = (struct gtp_v1_ext_hdr *) (&pkt[hdr->extended_hdr.parsed_pkt.offset.payload_offset + gtp_len]);
 		gtp_len += (gtpext->len * GTP_EXT_HDR_LEN_UNIT_BYTES);
-		if(hdr->caplen < (hdr->extended_hdr.parsed_pkt.offset.payload_offset+gtp_len)) goto TIMESTAMP;
+		if(gtpext->len == 0 || hdr->caplen < (hdr->extended_hdr.parsed_pkt.offset.payload_offset+gtp_len)) goto TIMESTAMP;
 		next_ext_hdr = (u_int8_t *) (&pkt[hdr->extended_hdr.parsed_pkt.offset.payload_offset + gtp_len - 1/* 8bit next_ext_hdr field*/]);
-	      } while (next_ext_hdr);
+	      } while (*next_ext_hdr);
 	    }
 	  }
 
