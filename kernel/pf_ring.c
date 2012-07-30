@@ -43,6 +43,7 @@
  * - Martin Holste <mcholste@gmail.com>
  * - Eric Leblond <eric@regit.org>
  * - Momina Khan <momina.azam@gmail.com>
+ * - XTao <xutao881001@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -1965,10 +1966,11 @@ static int parse_raw_pkt(char *data, u_int data_len,
 		do {
 		  if(data_len < (hdr->extended_hdr.parsed_pkt.offset.payload_offset+gtp_len+1 /* 8 bit len field */)) return(1);
 		  gtpext = (struct gtp_v1_ext_hdr *) (&data[hdr->extended_hdr.parsed_pkt.offset.payload_offset+gtp_len]);
+		  if (gtpext->len == 0) break;
 		  gtp_len += (gtpext->len * GTP_EXT_HDR_LEN_UNIT_BYTES);
 		  if(gtpext->len == 0 || data_len < (hdr->extended_hdr.parsed_pkt.offset.payload_offset+gtp_len)) return(1);
 		  next_ext_hdr = (u_int8_t *) (&data[hdr->extended_hdr.parsed_pkt.offset.payload_offset+gtp_len-1/* 8 bit next_ext_hdr field*/]);
-		} while (*next_ext_hdr);
+		} while(*next_ext_hdr);
 	      }
 	    }
 
