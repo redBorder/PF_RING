@@ -3656,8 +3656,6 @@ int check_wildcard_rules(struct sk_buff *skb,
     } else {
       if(unlikely(enable_debug))
 	printk("[PF_RING] Packet not matched\n");
-
-      break;
     }
   }  /* for */
 
