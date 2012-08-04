@@ -26,3 +26,5 @@ build-rpm:
 cleanup-rpm:
 	rm -f $(PACKAGE_PATH)
 	rm -f $(HOME)/rpmbuild/BUILD/$(PACKAGE)
+
+clean-rpm: cleanup-rpm
