@@ -5124,7 +5124,7 @@ void e1000e_update_stats(struct e1000_adapter *adapter)
 	struct pci_dev *pdev = adapter->pdev;
 #endif
 #ifdef ENABLE_DNA
-	struct pfring_hooks *hook = (struct pfring_hooks*)netdev->pfring_ptr;
+	struct pfring_hooks *hook = (struct pfring_hooks*)adapter->netdev->pfring_ptr;
 #endif
 
 	/*
