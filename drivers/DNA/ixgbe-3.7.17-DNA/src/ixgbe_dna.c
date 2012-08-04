@@ -113,9 +113,11 @@ void unreserve_memory(unsigned long base, unsigned long len) {
 
 static unsigned long __get_free_pages_node(int nid, gfp_t gfp_mask, unsigned int order) {
   struct page *page;
-  
+
+#if 0  
   VM_BUG_ON((gfp_mask & __GFP_HIGHMEM) != 0);
-  
+#endif
+
   page = alloc_pages_node(nid, gfp_mask, order);
   
   if (!page)
