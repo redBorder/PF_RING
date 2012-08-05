@@ -6488,8 +6488,8 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 
 	if(!found) {
 	  if(unlikely(enable_debug))
-	    printk("[PF_RING] ring_map_dna_device(add_device_mapping, %s, %u, %s): "
-		   "something got wrong (too many DNA devices open)\n",
+	    printk("[PF_RING] %s(add_device_mapping, %s, %u, %s): "
+		   "something got wrong (too many DNA devices open)\n", __FUNCTION__,
 		   mapping->device_name, mapping->channel_id, direction2string(pfr->mode));
 
 	  return(-1); /* Something got wrong: too many mappings */
@@ -6497,13 +6497,14 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 
 	entry->num_bound_sockets++, pfr->dna_device_entry = entry;
 
-	pfr->dna_device = &entry->dev, pfr->ring_netdev->dev = entry->dev.netdev /* Default */;
+	pfr->dna_device = &entry->dev;
 
 	if(unlikely(enable_debug))
 	  printk("[PF_RING] ring_map_dna_device(%s, %u): added mapping\n",
 		 mapping->device_name, mapping->channel_id);
 
 	/* Now let's set the read ring_netdev device */
+	found = 0;
 	list_for_each_safe(ptr, tmp_ptr, &ring_aware_device_list) {
 	  ring_device_element *dev_ptr = list_entry(ptr, ring_device_element, device_list);
 
@@ -6511,8 +6512,16 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 	    if(unlikely(enable_debug))
 	      printk("[PF_RING] ==>> %s [%p]\n", dev_ptr->dev->name, dev_ptr);
 	    pfr->ring_netdev = dev_ptr;
+	    found = 1;
 	    break;
 	  }
+	}
+
+	if(!found) {
+	  printk("[PF_RING] %s(add_device_mapping, %s, %u, %s): "
+	  "something got wrong (device not found)\n", __FUNCTION__,
+	  mapping->device_name, mapping->channel_id, direction2string(pfr->mode));
+	  return(-1); /* Something got wrong */
 	}
 
 	/* Lock driver */
