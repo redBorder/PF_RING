@@ -4560,7 +4560,7 @@ static int ring_create(
   int err = -ENOMEM;
 
   if(unlikely(enable_debug))
-    printk("[PF_RING] ring_create()\n");
+    printk("[PF_RING] %s()\n", __FUNCTION__);
 
   /* Are you root, superuser or so ? */
   if(!capable(CAP_NET_ADMIN))
@@ -4631,7 +4631,7 @@ static int ring_create(
   ring_proc_add(pfr);
 
   if(unlikely(enable_debug))
-    printk("[PF_RING] ring_create(): created\n");
+    printk("[PF_RING] %s(): created\n", __FUNCTION__);
 
   return(0);
 
@@ -6165,10 +6165,12 @@ unsigned int ring_poll(struct file *file,
     pfr->ring_active = 1;
     // smp_rmb();
 
-    /* This is a work-around for the dnacluster. We need to fix this properly */
+    /* DNA cluster */
     if(pfr->dna_cluster != NULL && pfr->dna_cluster_type == dna_cluster_slave) {
       poll_wait(file, &pfr->ring_slots_waitqueue, wait);
-      return(POLLIN | POLLRDNORM);
+      // if(1) /* queued packets info not available */
+        mask |= POLLIN | POLLRDNORM; 
+      return(mask);
     }
 
     if(pfr->tx.enable_tx_with_bounce && pfr->header_len == long_pkt_header) {
