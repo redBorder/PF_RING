@@ -472,6 +472,7 @@ inline int bundlePoll() {
   int i;
 
   for(i=0; i<num_devs; i++) {
+    pfring_sync_indexes_with_kernel(pd[i]);
     pfd[i].events  = POLLIN;
     pfd[i].revents = 0;
   }
