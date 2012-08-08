@@ -36,7 +36,7 @@ cp $HOME/PF_RING/userland/lib/pfring.h      $RPM_BUILD_ROOT/usr/local/include
 cp $HOME/PF_RING/userland/libpcap/libpcap.a $RPM_BUILD_ROOT/usr/local/lib
 cp $HOME/PF_RING/userland/examples/pfcount  $RPM_BUILD_ROOT/usr/local/bin
 cp $HOME/PF_RING/userland/examples/pfsend   $RPM_BUILD_ROOT/usr/local/bin
-%if ! %{nodna}
+%if %nodna == 0
 cp $HOME/PF_RING/userland/examples/pfdnabounce $RPM_BUILD_ROOT/usr/local/bin
 cp $HOME/PF_RING/userland/examples/pfdnacluster_master $RPM_BUILD_ROOT/usr/local/bin
 # DNA Drivers
@@ -58,7 +58,7 @@ rm -fr $RPM_BUILD_ROOT
 /usr/local/lib/libpfring.so
 /usr/local/lib/libpcap.a
 /usr/local/include/pfring.h
-%if ! %{nodna}
+%if %nodna == 0
 /usr/local/pfring/drivers/DNA/README.DNA
 /usr/local/pfring/drivers/DNA/ixgbe.ko
 /usr/local/pfring/drivers/DNA/igb.ko

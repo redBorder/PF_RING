@@ -600,6 +600,8 @@ PACKAGE_BUGREPORT=''
 
 ac_subst_vars='LTLIBOBJS
 LIBOBJS
+REVISION
+PLATFORM
 KERNEL
 DATE
 EXTN
@@ -1711,6 +1713,9 @@ ac_compiler_gnu=$ac_cv_c_compiler_gnu
 
 
 VERS=`cat ../../kernel/linux/pf_ring.h | grep RING_VERSION | head -1 | cut -d '"' -f 2`
+PLATFORM=`uname -p`
+REVISION=`svn info .| grep "^Revision" | cut -d " " -f 2`
+
 MACHINE=`uname -m`
 
 if test $MACHINE = "x86_64"; then
@@ -1721,6 +1726,9 @@ fi
 
 DATE=`date -R`
 KERNEL=`uname -r`
+
+
+
 
 
 
