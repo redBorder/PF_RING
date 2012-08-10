@@ -594,6 +594,7 @@ int main(int argc, char* argv[]) {
 
   if((!disable_zero_copy)
      && (pd->dna_get_num_tx_slots != NULL)
+     && (pd->dna_get_next_free_tx_slot != NULL)
      && (pd->dna_copy_tx_packet_into_slot != NULL)) {
     tosend = pkt_head;
 
@@ -604,9 +605,10 @@ int main(int argc, char* argv[]) {
         || ( pcap_in && (num_pcap_pkts     <= num_tx_slots) && (num_tx_slots % num_pcap_pkts     == 0))
         || (!pcap_in && (num_balanced_pkts <= num_tx_slots) && (num_tx_slots % num_balanced_pkts == 0)))) {
       int ret;
+      u_int first_free_slot = pd->dna_get_next_free_tx_slot(pd);
 
       for(i=0; i<num_tx_slots; i++) {
-	ret = pfring_copy_tx_packet_into_slot(pd, i, tosend->pkt, tosend->len);
+	ret = pfring_copy_tx_packet_into_slot(pd, (first_free_slot+i)%num_tx_slots, tosend->pkt, tosend->len);
 	if(ret < 0)
 	  break;
 
