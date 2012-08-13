@@ -16,25 +16,25 @@ rmmod pf_ring
 insmod ../../../../kernel/pf_ring.ko
 
 # Default (as many queues as the number of processors)
-#insmod ./ixgbe.ko RSS=1,1,1,1
+#insmod ./ixgbe.ko RSS=0,0,0,0
 
 # Disable multiqueue
-insmod ./ixgbe.ko RSS=0,0,0,0 
+insmod ./ixgbe.ko RSS=1,1,1,1 
 
 # Configure the number of TX slots
-#insmod ./ixgbe.ko RSS=0,0,0,0 num_tx_slots=4096
+#insmod ./ixgbe.ko RSS=1,1,1,1 num_tx_slots=4096
 
 # Enable 8 queues
-#insmod ./ixgbe.ko MQ=1,1 RSS=8,8 FdirMode=0,0
+#insmod ./ixgbe.ko MQ=1,1,1,1 RSS=8,8,8,8 FdirMode=0,0,0,0
 
 # Enable hw filters
-#insmod ./ixgbe.ko RSS=0,0,0,0 FdirMode=2,2,2,2 FdirPballoc=3,3,3,3
+#insmod ./ixgbe.ko RSS=1,1,1,1 FdirMode=2,2,2,2 FdirPballoc=3,3,3,3
 
 # Set a large MTU (jumbo frame)
-#insmod ./ixgbe.ko RSS=0,0,0,0 mtu=9000
+#insmod ./ixgbe.ko RSS=1,1,1,1 mtu=9000
 
 # Select the CPU of the NUMA node where per-adapter memory will be allocated
-#insmod ./ixgbe.ko RSS=0,0,0,0 numa_cpu_affinity=0,0,0,0
+#insmod ./ixgbe.ko RSS=1,1,1,1 numa_cpu_affinity=0,0,0,0
 
 sleep 1
 
@@ -49,8 +49,8 @@ do
   ifconfig ${IF[index]} up
   sleep 1
   bash ../scripts/set_irq_affinity.sh ${IF[index]}
-#  ethtool -A ${IF[index]} autoneg off
-#  ethtool -A ${IF[index]} rx off
-#  ethtool -A ${IF[index]} tx off
-#  ethtool -s ${IF[index]} speed 10000
+  ethtool -A ${IF[index]} autoneg off
+  ethtool -A ${IF[index]} rx off
+  ethtool -A ${IF[index]} tx off
+  ethtool -s ${IF[index]} speed 10000
 done
