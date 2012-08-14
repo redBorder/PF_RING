@@ -208,6 +208,7 @@ int pfring_dna_open(pfring *ring) {
    * ring->get_device_clock
    */
 
+  ring->poll_duration = DEFAULT_POLL_DURATION;
   ring->dna.last_dna_operation = remove_device_mapping;
   ring->fd = socket(PF_RING, SOCK_RAW, htons(ETH_P_ALL));
 
