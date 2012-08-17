@@ -25,10 +25,10 @@ insmod ./ixgbe.ko RSS=1,1,1,1
 #insmod ./ixgbe.ko RSS=1,1,1,1 num_tx_slots=4096
 
 # Enable 8 queues
-#insmod ./ixgbe.ko MQ=1,1,1,1 RSS=8,8,8,8 FdirMode=0,0,0,0
+#insmod ./ixgbe.ko MQ=1,1,1,1 RSS=16,16,16,16
 
-# Enable hw filters
-#insmod ./ixgbe.ko RSS=1,1,1,1 FdirMode=2,2,2,2 FdirPballoc=3,3,3,3
+# Enable max number of hw filters
+#insmod ./ixgbe.ko RSS=1,1,1,1 FdirPballoc=3,3,3,3
 
 # Set a large MTU (jumbo frame)
 #insmod ./ixgbe.ko RSS=1,1,1,1 mtu=9000
@@ -53,4 +53,7 @@ do
   ethtool -A ${IF[index]} rx off
   ethtool -A ${IF[index]} tx off
   ethtool -s ${IF[index]} speed 10000
+
+  # Enable n-tuple hw filters
+  #ethtool -K ${IF[index]} ntuple on
 done

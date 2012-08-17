@@ -382,6 +382,10 @@ void dna_ixgbe_alloc_tx_buffers(struct ixgbe_ring *tx_ring, struct pfring_hooks 
 	     tx_ring->dna.packet_slot_len);
   }
 
+  if(unlikely(enable_debug))
+    printk("[DNA] %s(): %s@%d ptr=%p memory allocated on node %d\n", __FUNCTION__, 
+      tx_ring->netdev->name, tx_ring->queue_index, tx_ring, tx_ring->q_vector->numa_node);
+
   for(i=0; i < tx_ring->count; i++) {
     u_int offset, page_index;
     char *pkt;
@@ -458,7 +462,6 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
 
   rx_ring->dna.num_memory_pages = (rx_ring->dna.packet_num_slots + num_slots_per_page-1) / num_slots_per_page;
 
-
   /* Packet Split disabled in DNA mode */
   //if (ring_is_ps_enabled(rx_ring)) {
     /* data will be put in this buffer */
@@ -491,6 +494,10 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
 	     __FUNCTION__, rx_ring->dna.tot_packet_memory, i,
 	     rx_ring->dna.rx_tx.rx.packet_memory[i], rx_ring->dna.packet_slot_len);
   }
+
+  if(unlikely(enable_debug))
+    printk("[DNA] %s(): %s@%d ptr=%p memory allocated on node %d\n", __FUNCTION__, 
+      rx_ring->netdev->name, rx_ring->queue_index, rx_ring, rx_ring->q_vector->numa_node);
 
   for(i=0; i < rx_ring->count; i++) {
     u_int offset, page_index;
@@ -600,6 +607,8 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
 				wait_packet_function_ptr,
 				notify_function_ptr);
 
+  rx_ring->dna.memory_allocated = 1;
+
   if(unlikely(enable_debug))
     printk("[DNA] ixgbe: %s: Enabled DNA on queue %d [RX][size=%u][count=%d] [TX][size=%u][count=%d]\n",
 	   rx_ring->netdev->name, rx_ring->queue_index, rx_ring->size, rx_ring->count, tx_ring->size, tx_ring->count);
@@ -607,8 +616,6 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
   if(adapter->hw.mac.type != ixgbe_mac_82598EB)
     ixgbe_irq_disable_queues(rx_ring->q_vector->adapter, ((u64)1 << rx_ring->queue_index));
 #endif
-
-  rx_ring->dna.memory_allocated = 1;
 }
 
 #undef IXGBE_PCI_DEVICE_CACHE_LINE_SIZE

@@ -5891,7 +5891,9 @@ out:
 int ixgbe_setup_tx_resources(struct ixgbe_ring *tx_ring)
 {
 	struct device *dev = tx_ring->dev;
+#ifndef ENABLE_DNA
 	int orig_node = dev_to_node(dev);
+#endif
 	int numa_node = -1;
 	int size;
 #ifdef ENABLE_DNA
@@ -5948,9 +5950,9 @@ int ixgbe_setup_tx_resources(struct ixgbe_ring *tx_ring)
 					   tx_ring->size,
 					   &tx_ring->dma,
 					   GFP_KERNEL);
-//TODO #ifndef ENABLE_DNA
+#ifndef ENABLE_DNA
 	set_dev_node(dev, orig_node);
-//#endif
+#endif
 	if (!tx_ring->desc)
 		tx_ring->desc = dma_alloc_coherent(dev, 		
 #ifdef ENABLE_DNA
@@ -6010,7 +6012,9 @@ err_setup_tx:
 int ixgbe_setup_rx_resources(struct ixgbe_ring *rx_ring)
 {
 	struct device *dev = rx_ring->dev;
+#ifndef ENABLE_DNA
 	int orig_node = dev_to_node(dev);
+#endif
 	int numa_node = -1;
 	int size;
 #ifdef ENABLE_DNA
@@ -6067,9 +6071,9 @@ int ixgbe_setup_rx_resources(struct ixgbe_ring *rx_ring)
 					   rx_ring->size,
 					   &rx_ring->dma,
 					   GFP_KERNEL);
-//TODO #ifndef ENABLE_DNA
+#ifndef ENABLE_DNA
 	set_dev_node(dev, orig_node);
-//#endif
+#endif
 	if (!rx_ring->desc)
 		rx_ring->desc = dma_alloc_coherent(dev, 
 #ifdef ENABLE_DNA
@@ -8627,10 +8631,6 @@ static int __devinit ixgbe_probe(struct pci_dev *pdev,
 #endif /* HAVE_TX_MQ */
 #ifdef IXGBE_FCOE
 	u16 device_caps;
-#endif
-
-#ifdef ENABLE_DNA
-	//TODO indices = IXGBE_MAX_RSS_INDICES;
 #endif
 
 	err = pci_enable_device_mem(pdev);

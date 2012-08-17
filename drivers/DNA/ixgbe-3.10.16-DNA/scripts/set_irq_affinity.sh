@@ -78,7 +78,7 @@ do
        MAX=`egrep -i "$DEV:.*$DIR" /proc/interrupts | wc -l`
      fi
      if [ "$MAX" == "0" ] ; then
-       echo no $DIR vectors found on $DEV
+       #echo no $DIR vectors found on $DEV
        continue
      fi
      for VEC in `seq 0 1 $MAX`
