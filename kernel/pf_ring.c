@@ -4988,8 +4988,11 @@ static struct dma_memory_info *allocate_extra_dma_memory(struct device *hwdev,
     printk("[PF_RING] %s() Allocating %d chunks of %d bytes [slots per chunk=%d]\n",
            __FUNCTION__, dma_memory->num_chunks, dma_memory->chunk_len, num_slots_per_chunk);
 
-  if (numa_node == -1)
+  if (numa_node == -1) {
+    if(unlikely(enable_debug))
+      printk("[PF_RING] %s() device node not set, selecting current node\n", __FUNCTION__);
     numa_node = numa_node_id(); /* using current node if not set */
+  }
 
   if(unlikely(enable_debug))
     printk("[PF_RING] %s() allocating extra DMA memory on node %d\n", __FUNCTION__, numa_node);
