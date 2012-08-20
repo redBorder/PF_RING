@@ -21,7 +21,7 @@
 
 *******************************************************************************/
 
-#define MAX_NUM_ADAPTERS       8 /* Note: IXGBE_MAX_NIC is 32 */
+#define MAX_NUM_ADAPTERS       16 /* Note: IXGBE_MAX_NIC is 32 */
 
 char *adapters_to_enable[MAX_NUM_ADAPTERS] = { 0 };
 module_param_array(adapters_to_enable, charp, NULL, 0444);
