@@ -1320,6 +1320,12 @@ void pcap_set_appl_name_linux(pcap_t *handle, char *appl_name)
   if(handle->ring)
     pfring_set_application_name(handle->ring, appl_name);
 }
+
+void pcap_set_cluster(pcap_t *handle, u_int cluster_id)
+{
+  if(handle->ring)
+    pfring_set_cluster(handle->ring, cluster_id, cluster_per_flow);
+}
 #endif
 
 /*
