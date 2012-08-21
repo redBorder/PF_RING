@@ -4504,9 +4504,10 @@ static int packet_rcv(struct sk_buff *skb, struct net_device *dev,
 		      )
 {
   int rc;
-  u_int8_t skb_reference_in_use;
+  u_int8_t skb_reference_in_use = 0;
 
-  if(skb->pkt_type != PACKET_LOOPBACK) {
+  if(skb->pkt_type != PACKET_LOOPBACK
+     && (transparent_mode == standard_linux_path || skb->pkt_type == PACKET_OUTGOING)) {
     rc = skb_ring_handler(skb,
 			  (skb->pkt_type == PACKET_OUTGOING) ? 0 : 1,
 			  1 /* real_skb */, &skb_reference_in_use,
@@ -4529,7 +4530,9 @@ static int packet_rcv(struct sk_buff *skb, struct net_device *dev,
 /* ********************************** */
 
 void register_device_handler(void) {
-  if(transparent_mode != standard_linux_path) return;
+  if(transparent_mode == driver2pf_ring_non_transparent
+     || (transparent_mode == driver2pf_ring_transparent && !enable_tx_capture)) 
+    return;
 
   prot_hook.func = packet_rcv;
   prot_hook.type = htons(ETH_P_ALL);
@@ -4539,7 +4542,10 @@ void register_device_handler(void) {
 /* ********************************** */
 
 void unregister_device_handler(void) {
-  if(transparent_mode != standard_linux_path) return;
+   if(transparent_mode == driver2pf_ring_non_transparent
+     || (transparent_mode == driver2pf_ring_transparent && !enable_tx_capture)) 
+    return;
+
   dev_remove_pack(&prot_hook); /* Remove protocol hook */
 }
 
