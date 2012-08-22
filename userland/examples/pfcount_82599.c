@@ -56,6 +56,7 @@ pthread_rwlock_t statsLock;
 static struct timeval startTime;
 unsigned long long numPkts[MAX_NUM_THREADS] = { 0 }, numBytes[MAX_NUM_THREADS] = { 0 };
 u_int8_t wait_for_packet = 1, dna_mode = 0, do_shutdown = 0;
+u_int8_t use_extended_pkt_header = 0;
 
 /* *************************************** */
 /*
@@ -319,83 +320,105 @@ static int32_t thiszone;
 
 void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, long threadId) {
   if(verbose) {
-    struct ether_header ehdr;
-    u_short eth_type, vlan_id;
+    struct ether_header *ehdr;
     char buf1[32], buf2[32];
-    struct ip ip;
-    int s = (h->ts.tv_sec + thiszone) % 86400;
-    u_int nsec = h->extended_hdr.timestamp_ns % 1000;
+    int s;
+    uint usec;
+    uint nsec=0;
+
+    if(h->ts.tv_sec == 0) {
+      memset((void*)&h->extended_hdr.parsed_pkt, 0, sizeof(struct pkt_parsing_info));
+      pfring_parse_pkt((u_char*)p, (struct pfring_pkthdr*)h, 5, 1, 1);
+    }
+
+    s = (h->ts.tv_sec + thiszone) % 86400;
+
+    if(h->extended_hdr.timestamp_ns) {
+      /* be careful with drifts mixing sys time and hw timestamp */
+      usec = (h->extended_hdr.timestamp_ns / 1000) % 1000000;
+      nsec = h->extended_hdr.timestamp_ns % 1000;
+    } else {
+      usec = h->ts.tv_usec;
+    }
 
     printf("%02d:%02d:%02d.%06u%03u ",
 	   s / 3600, (s % 3600) / 60, s % 60,
-	   (unsigned)h->ts.tv_usec, nsec);
+	   usec, nsec);
 
-#if 0
-    for(i=0; i<32; i++)
-      printf("%02X ", p[i]);
+    ehdr = (struct ether_header *) p;
 
-    printf("\n");
-#endif
+    if(use_extended_pkt_header) {
 
-    if(h->extended_hdr.parsed_header_len > 0) {
-      printf("[eth_type=0x%04X]", h->extended_hdr.parsed_pkt.eth_type);
-      printf("[l3_proto=%u]", (unsigned int)h->extended_hdr.parsed_pkt.l3_proto);
-
-      printf("[%s:%d -> ", (h->extended_hdr.parsed_pkt.eth_type == 0x86DD) ?
-	     in6toa(h->extended_hdr.parsed_pkt.ipv6_src) : intoa(h->extended_hdr.parsed_pkt.ipv4_src),
-	     h->extended_hdr.parsed_pkt.l4_src_port);
-      printf("%s:%d] ", (h->extended_hdr.parsed_pkt.eth_type == 0x86DD) ?
-	     in6toa(h->extended_hdr.parsed_pkt.ipv6_dst) : intoa(h->extended_hdr.parsed_pkt.ipv4_dst),
-	     h->extended_hdr.parsed_pkt.l4_dst_port);
+      printf("%s[if_index=%d]",
+        h->extended_hdr.rx_direction ? "[RX]" : "[TX]",
+        h->extended_hdr.if_index);
 
       printf("[%s -> %s] ",
 	     etheraddr_string(h->extended_hdr.parsed_pkt.smac, buf1),
-	     etheraddr_string(h->extended_hdr.parsed_pkt.dmac, buf2));
-    }
+	     etheraddr_string(h->extended_hdr.parsed_pkt.dmac, buf2));    
 
-    memcpy(&ehdr, p+h->extended_hdr.parsed_header_len, sizeof(struct ether_header));
-    eth_type = ntohs(ehdr.ether_type);
+      if(h->extended_hdr.parsed_pkt.offset.vlan_offset)
+	printf("[vlan %u] ", h->extended_hdr.parsed_pkt.vlan_id);
 
-    printf("[%s -> %s][eth_type=0x%04X] ",
-	   etheraddr_string(ehdr.ether_shost, buf1),
-	   etheraddr_string(ehdr.ether_dhost, buf2), eth_type);
+      if (h->extended_hdr.parsed_pkt.eth_type == 0x0800 /* IPv4*/ || h->extended_hdr.parsed_pkt.eth_type == 0x86DD /* IPv6*/) {
 
+        if(h->extended_hdr.parsed_pkt.eth_type == 0x0800 /* IPv4*/ ) {
+	  printf("[IPv4][%s:%d ", intoa(h->extended_hdr.parsed_pkt.ipv4_src), h->extended_hdr.parsed_pkt.l4_src_port);
+	  printf("-> %s:%d] ", intoa(h->extended_hdr.parsed_pkt.ipv4_dst), h->extended_hdr.parsed_pkt.l4_dst_port);
+        } else {
+          printf("[IPv6][%s:%d ",    in6toa(h->extended_hdr.parsed_pkt.ipv6_src), h->extended_hdr.parsed_pkt.l4_src_port);
+          printf("-> %s:%d] ", in6toa(h->extended_hdr.parsed_pkt.ipv6_dst), h->extended_hdr.parsed_pkt.l4_dst_port);
+        }
 
-    if(eth_type == 0x8100) {
-      vlan_id = (p[14] & 15)*256 + p[15];
-      eth_type = (p[16])*256 + p[17];
-      printf("[vlan %u] ", vlan_id);
-      p+=4;
-    }
+	printf("[l3_proto=%s]", proto2str(h->extended_hdr.parsed_pkt.l3_proto));
 
-    if(eth_type == 0x0800) {
-      memcpy(&ip, p+h->extended_hdr.parsed_header_len+sizeof(ehdr), sizeof(struct ip));
-      printf("[%s]", proto2str(ip.ip_p));
-      printf("[%s:%d ", intoa(ntohl(ip.ip_src.s_addr)), h->extended_hdr.parsed_pkt.l4_src_port);
-      printf("-> %s:%d] ", intoa(ntohl(ip.ip_dst.s_addr)), h->extended_hdr.parsed_pkt.l4_dst_port);
+	if(h->extended_hdr.parsed_pkt.tunnel.tunnel_id != NO_TUNNEL_ID) {
+	  printf("[TEID=0x%08X][tunneled_proto=%s]", 
+		 h->extended_hdr.parsed_pkt.tunnel.tunnel_id,
+		 proto2str(h->extended_hdr.parsed_pkt.tunnel.tunneled_proto));
 
-      printf("[tos=%d][tcp_seq_num=%u][caplen=%d][len=%d][parsed_header_len=%d]"
-	     "[eth_offset=%d][l3_offset=%d][l4_offset=%d][payload_offset=%d]\n",
-	     h->extended_hdr.parsed_pkt.ipv4_tos, h->extended_hdr.parsed_pkt.tcp.seq_num,
-	     h->caplen, h->len, h->extended_hdr.parsed_header_len,
-	     h->extended_hdr.parsed_pkt.offset.eth_offset,
-	     h->extended_hdr.parsed_pkt.offset.l3_offset,
-	     h->extended_hdr.parsed_pkt.offset.l4_offset,
-	     h->extended_hdr.parsed_pkt.offset.payload_offset);
+	  if(h->extended_hdr.parsed_pkt.eth_type == 0x0800 /* IPv4*/ ) {
+	    printf("[IPv4][%s:%d ",
+		   intoa(h->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src.v4),
+		   h->extended_hdr.parsed_pkt.tunnel.tunneled_l4_src_port);
+	    printf("-> %s:%d] ", 
+		   intoa(h->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst.v4),
+		   h->extended_hdr.parsed_pkt.tunnel.tunneled_l4_dst_port);
+	  } else {
+	    printf("[IPv6][%s:%d ", 
+		   in6toa(h->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src.v6),
+		   h->extended_hdr.parsed_pkt.tunnel.tunneled_l4_src_port);
+	    printf("-> %s:%d] ",
+		   in6toa(h->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst.v6),
+		   h->extended_hdr.parsed_pkt.tunnel.tunneled_l4_dst_port);
+	  }	  
+	}
+
+	printf("[hash=%u][tos=%d][tcp_seq_num=%u]",
+	  h->extended_hdr.pkt_hash,
+          h->extended_hdr.parsed_pkt.ipv4_tos, 
+	  h->extended_hdr.parsed_pkt.tcp.seq_num);
+	
+      } else {
+	if(h->extended_hdr.parsed_pkt.eth_type == 0x0806 /* ARP */)
+	  printf("[ARP]");
+	else
+	  printf("[eth_type=0x%04X]", h->extended_hdr.parsed_pkt.eth_type);
+      }
+
+      printf(" [caplen=%d][len=%d][parsed_header_len=%d][eth_offset=%d][l3_offset=%d][l4_offset=%d][payload_offset=%d]\n",
+        h->caplen, h->len, h->extended_hdr.parsed_header_len,
+        h->extended_hdr.parsed_pkt.offset.eth_offset,
+        h->extended_hdr.parsed_pkt.offset.l3_offset,
+        h->extended_hdr.parsed_pkt.offset.l4_offset,
+        h->extended_hdr.parsed_pkt.offset.payload_offset);
 
     } else {
-      if(eth_type == 0x0806)
-	printf("[ARP]");
-      else
-	printf("[eth_type=0x%04X]", eth_type);
-
-      printf("[caplen=%d][len=%d][parsed_header_len=%d]"
-	     "[eth_offset=%d][l3_offset=%d][l4_offset=%d][payload_offset=%d]\n",
-	     h->caplen, h->len, h->extended_hdr.parsed_header_len,
-	     h->extended_hdr.parsed_pkt.offset.eth_offset,
-	     h->extended_hdr.parsed_pkt.offset.l3_offset,
-	     h->extended_hdr.parsed_pkt.offset.l4_offset,
-	     h->extended_hdr.parsed_pkt.offset.payload_offset);
+      printf("[%s -> %s][eth_type=0x%04X][caplen=%d][len=%d] (use -m for details)\n",
+	     etheraddr_string(ehdr->ether_shost, buf1),
+	     etheraddr_string(ehdr->ether_dhost, buf2), 
+	     ntohs(ehdr->ether_type),
+	     h->caplen, h->len);
     }
   }
 
@@ -516,7 +539,7 @@ int main(int argc, char* argv[]) {
   char *device = NULL, c;
   int flags = PF_RING_PROMISC, snaplen = DEFAULT_SNAPLEN, rc;
   u_int clusterId = 0;
-  packet_direction direction = rx_and_tx_direction;
+  packet_direction direction = rx_only_direction;
   u_int16_t watermark = 0;
 
 #if 0
@@ -557,7 +580,7 @@ int main(int argc, char* argv[]) {
   startTime.tv_sec = 0;
   thiszone = gmt2local(0);
 
-  while((c = getopt(argc,argv,"hi:c:l:vae:n:w:" /* "f:" */)) != '?') {
+  while((c = getopt(argc,argv,"hi:c:l:vae:n:w:m")) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -592,13 +615,11 @@ int main(int argc, char* argv[]) {
     case 'v':
       verbose = 1;
       break;
-      /*
-	case 'f':
-	bpfFilter = strdup(optarg);
-	break;
-      */
     case 'w':
       watermark = atoi(optarg);
+      break;
+    case 'm':
+      use_extended_pkt_header = 1;
       break;
     }
   }
@@ -612,6 +633,7 @@ int main(int argc, char* argv[]) {
     pthread_rwlock_init(&statsLock, NULL);
 
   if(num_threads > 1) flags |= PF_RING_REENTRANT;
+  if(use_extended_pkt_header) flags |= PF_RING_LONG_HEADER;
 
   pd = pfring_open(device, snaplen, flags);
 
@@ -639,7 +661,7 @@ int main(int argc, char* argv[]) {
   }
 
   if((rc = pfring_set_direction(pd, direction)) != 0)
-    printf("pfring_set_direction returned [rc=%d][direction=%d]\n", rc, direction);
+    printf("pfring_set_direction returned %d (perhaps you use a direction other than rx only with DNA ?)\n", rc);
 
   if(watermark > 0) {
     if((rc = pfring_set_poll_watermark(pd, watermark)) != 0)
@@ -722,10 +744,10 @@ int main(int argc, char* argv[]) {
     if(1) {
       memset(&rule, 0, sizeof(rule)), rule.rule_family_type = intel_82599_perfect_filter_rule;
       rule.rule_id = rule_id++, perfect_rule->queue_id = -1, perfect_rule->proto = 6,
-	perfect_rule->s_addr = ntohl(inet_addr("3.3.3.11"));
+	perfect_rule->s_addr = ntohl(inet_addr("192.168.30.207"));
       rc = pfring_add_hw_rule(pd, &rule);
       if(rc != 0)
-	printf("pfring_add_hw_rule(%d) failed [rc=%d]: did you enable the FlowDirector (insmod ixgbe.ko FdirMode=2)\n", rule.rule_id, rc);
+	printf("pfring_add_hw_rule(%d) failed [rc=%d]: did you enable the FlowDirector (ethtool -K ethX ntuple on)\n", rule.rule_id, rc);
       else
 	printf("pfring_add_hw_rule(%d) succeeded: dropping TCP traffic 192.168.30.207:* -> *\n", rule.rule_id);
     }
@@ -734,10 +756,10 @@ int main(int argc, char* argv[]) {
     if (1) {
       memset(&rule, 0, sizeof(rule)), rule.rule_family_type = intel_82599_perfect_filter_rule;
       rule.rule_id = rule_id++, perfect_rule->queue_id = -1, perfect_rule->proto = 17,
-	perfect_rule->s_addr = ntohl(inet_addr("3.3.3.11"));
+	perfect_rule->s_addr = ntohl(inet_addr("192.168.30.207"));
       rc = pfring_add_hw_rule(pd, &rule);
       if(rc != 0)
-	printf("pfring_add_hw_rule(%d) failed [rc=%d]: did you enable the FlowDirector (insmod ixgbe.ko FdirMode=2)\n", rule.rule_id, rc);
+	printf("pfring_add_hw_rule(%d) failed [rc=%d]: did you enable the FlowDirector (ethtool -K ethX ntuple on)\n", rule.rule_id, rc);
       else
 	printf("pfring_add_hw_rule(%d) succeeded: dropping UDP traffic 192.168.30.207:* -> *\n", rule.rule_id);
     }
