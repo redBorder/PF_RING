@@ -46,21 +46,11 @@ fi
 # Library checks
 AC_CHECK_HEADER([pfring.h], [], [AC_MSG_ERROR([Could not find pfring.h!])])
 
-LIBPCAP="${HOME}/PF_RING/userland/libpcap/libpcap.a"
-LIBPFRING="${HOME}/PF_RING/userland/lib/libpfring.a"
-
-AC_MSG_CHECKING([presence of PF_RING libraries])
-
-if test -f "${LIBPCAP}"; then
-	if test -f "${LIBPFRING}"; then
-		# All libs found
-		AC_MSG_RESULT([yes])
-	else
-		AC_MSG_ERROR([Missing ${LIBPFRING} library!])
-	fi
-else
-	AC_MSG_ERROR([Missing ${LIBPCAP} library!])
-fi
+AC_CHECK_LIB( [pcap],
+              [pfring_open],
+	      [LDFLAGS="${LDFLAGS} -lpcap"],
+	      [LDFLAGS="${LDFLAGS} -lpfring"],
+	      [] )
 
 # Checks for header files.
 AC_CHECK_HEADERS([netinet/in.h stdint.h stdlib.h string.h])
