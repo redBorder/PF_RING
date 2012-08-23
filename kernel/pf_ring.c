@@ -1955,21 +1955,23 @@ static int parse_raw_pkt(char *data, u_int data_len,
 	    if(gtp->flags & (GTP_FLAGS_EXTENSION | GTP_FLAGS_SEQ_NUM | GTP_FLAGS_NPDU_NUM)) {
 	      struct gtp_v1_opt_hdr *gtpopt;
 
-	      if(data_len < (hdr->extended_hdr.parsed_pkt.offset.payload_offset+gtp_len+sizeof(struct gtp_v1_opt_hdr))) return(1);
+	      if(data_len < (hdr->extended_hdr.parsed_pkt.offset.payload_offset+gtp_len+sizeof(struct gtp_v1_opt_hdr)))
+		return(1);
+
 	      gtpopt = (struct gtp_v1_opt_hdr *) (&data[hdr->extended_hdr.parsed_pkt.offset.payload_offset + gtp_len]);
 	      gtp_len += sizeof(struct gtp_v1_opt_hdr);
 
 	      if((gtp->flags & GTP_FLAGS_EXTENSION) && gtpopt->next_ext_hdr) {
 		struct gtp_v1_ext_hdr *gtpext;
-		u_int8_t *next_ext_hdr;
+		u_int8_t *next_ext_hdr = NULL;
 
 		do {
 		  if(data_len < (hdr->extended_hdr.parsed_pkt.offset.payload_offset+gtp_len+1 /* 8 bit len field */)) return(1);
 		  gtpext = (struct gtp_v1_ext_hdr *) (&data[hdr->extended_hdr.parsed_pkt.offset.payload_offset+gtp_len]);
 		  gtp_len += (gtpext->len * GTP_EXT_HDR_LEN_UNIT_BYTES);
-		  if(gtpext->len == 0 || data_len < (hdr->extended_hdr.parsed_pkt.offset.payload_offset+gtp_len)) return(1);
-		  next_ext_hdr = (u_int8_t *) (&data[hdr->extended_hdr.parsed_pkt.offset.payload_offset+gtp_len-1/* 8 bit next_ext_hdr field*/]);
-		} while(*next_ext_hdr);
+		  if((gtpext->len == 0) || (data_len < (hdr->extended_hdr.parsed_pkt.offset.payload_offset+gtp_len))) return(1);
+		  next_ext_hdr = (u_int8_t *) (&data[hdr->extended_hdr.parsed_pkt.offset.payload_offset+gtp_len-1 /* 8 bit next_ext_hdr field */]);		  
+		} while(*next_ext_hdr != 0);
 	      }
 	    }
 
