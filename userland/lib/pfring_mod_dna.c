@@ -360,7 +360,8 @@ int pfring_dna_open(pfring *ring) {
     return rc;
   }
 
-  pfring_enable_hw_timestamp(ring, ring->device_name, 1, 0 /* TX timestamp disabled by default */);
+  if (ring->enable_hw_timestamp)
+    pfring_enable_hw_timestamp(ring, ring->device_name, 1, 0 /* TX timestamp disabled by default */);
 
 #ifdef DEBUG
   pfring_dump_dna_stats(ring);
