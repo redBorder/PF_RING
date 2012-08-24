@@ -1982,7 +1982,6 @@ static int parse_raw_pkt(char *data, u_int data_len,
 	      hdr->extended_hdr.parsed_pkt.tunnel.tunneled_proto = tunneled_ip->protocol;
 	      hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src.v4 = ntohl(tunneled_ip->saddr);
 	      hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst.v4 = ntohl(tunneled_ip->daddr);
-
 	      fragment_offset = tunneled_ip->frag_off & htons(IP_OFFSET); /* fragment, but not the first */
 	      ip_len = tunneled_ip->ihl*4;
 	      tunnel_offset = hdr->extended_hdr.parsed_pkt.offset.payload_offset+gtp_len+ip_len;
@@ -4192,7 +4191,7 @@ static int skb_ring_handler(struct sk_buff *skb,
      could receive the packet: if none just stop here */
 
   if(ring_table_size == 0) {
-    /* if(unlikely(enable_debug)) printk("[PF_RING] (0) skb_ring_handler returned %d\n", rc); */
+    /* if(unlikely(enable_debug)) printk("[PF_RING] (0) %s(): returned %d\n", __FUNCTION__, rc); */
     return(rc);
   }
 
@@ -4210,7 +4209,7 @@ static int skb_ring_handler(struct sk_buff *skb,
 #if 0
   if(unlikely(enable_debug)) {
     if(skb->dev && (skb->dev->ifindex < MAX_NUM_IFIDX))
-      printk("[PF_RING] (1) skb_ring_handler(): [%d rings on %s (idx=%d), %d 'any' rings]\n",
+      printk("[PF_RING] (1) %s(): [%d rings on %s (idx=%d), %d 'any' rings]\n", __FUNCTION__
 	     num_rings_per_device[skb->dev->ifindex], skb->dev->name, skb->dev->ifindex, num_any_rings);
   }
 #endif
@@ -4219,7 +4218,7 @@ static int skb_ring_handler(struct sk_buff *skb,
      && (skb->dev
 	 && (skb->dev->ifindex < MAX_NUM_IFIDX)
 	 && (num_rings_per_device[skb->dev->ifindex] == 0))) {
-    /* if(unlikely(enable_debug)) printk("[PF_RING] (1) skb_ring_handler returned %d\n", rc); */
+    /* if(unlikely(enable_debug)) printk("[PF_RING] (1) %s(): returned %d\n", __FUNCTION__, rc); */
     return(rc);
   }
 
@@ -4242,7 +4241,7 @@ static int skb_ring_handler(struct sk_buff *skb,
     */
     rc = 0;
 
-    if(unlikely(enable_debug)) printk("[PF_RING] (2) skb_ring_handler returned %d\n", rc);
+    if(unlikely(enable_debug)) printk("[PF_RING] (2) %s(): returned %d\n", __FUNCTION__, rc);
     return(0);
   }
 
@@ -4250,7 +4249,7 @@ static int skb_ring_handler(struct sk_buff *skb,
     struct timeval tv;
 
     skb_get_timestamp(skb, &tv);
-    printk("[PF_RING] skb_ring_handler() [skb=%p][%u.%u][len=%d][dev=%s][csum=%u]\n",
+    printk("[PF_RING] %s(): [skb=%p][%u.%u][len=%d][dev=%s][csum=%u]\n", __FUNCTION__,
 	   skb, (unsigned int)tv.tv_sec, (unsigned int)tv.tv_usec,
 	   skb->len, skb->dev == NULL ? "<NULL>" : skb->dev->name,
 	   skb->csum);
@@ -4303,7 +4302,7 @@ static int skb_ring_handler(struct sk_buff *skb,
 
 	if(skb == NULL) {
 	  rc = 0;
-	  if(unlikely(enable_debug)) printk("[PF_RING] (3) skb_ring_handler returned %d\n", rc);
+	  if(unlikely(enable_debug)) printk("[PF_RING] (3) %s(): returned %d\n", __FUNCTION__, rc);
 	  return(0);
 	}
       }
@@ -4340,7 +4339,7 @@ static int skb_ring_handler(struct sk_buff *skb,
 	 ) {
 	/* We've found the ring where the packet can be stored */
 	int old_caplen = hdr.caplen;  /* Keep old lenght */
-
+	
 	hdr.caplen = min_val(hdr.caplen, pfr->bucket_len);
 	room_available |= add_skb_to_ring(skb, real_skb, pfr, &hdr, is_ip_pkt,
 					  displ, channel_id, num_rx_channels, &clone_id);
@@ -4462,7 +4461,7 @@ static int skb_ring_handler(struct sk_buff *skb,
   if((rc == 1) && (room_available == 0))
     rc = 2;
 
-  if(unlikely(enable_debug)) printk("[PF_RING] (4) skb_ring_handler returned %d\n", rc);
+  if(unlikely(enable_debug)) printk("[PF_RING] (4) %s(): returned %d\n", __FUNCTION__, rc);
 
   return(rc); /*  0 = packet not handled */
 }
