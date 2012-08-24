@@ -58,7 +58,7 @@ pthread_rwlock_t statsLock;
 static struct timeval startTime;
 unsigned long long numPkts[MAX_NUM_THREADS] = { 0 }, numBytes[MAX_NUM_THREADS] = { 0 };
 u_int8_t wait_for_packet = 1, do_shutdown = 0, add_drop_rule = 0;
-u_int8_t use_extended_pkt_header = 0, touch_payload = 0;
+u_int8_t use_extended_pkt_header = 0, touch_payload = 0, enable_hw_timestamp = 0;
 
 /* *************************************** */
 /*
@@ -656,7 +656,7 @@ int main(int argc, char* argv[]) {
   startTime.tv_sec = 0;
   thiszone = gmt2local(0);
 
-  while((c = getopt(argc,argv,"hi:c:d:l:vae:n:w:p:b:rg:u:f:mt")) != '?') {
+  while((c = getopt(argc,argv,"hi:c:d:l:vae:n:w:p:b:rg:u:f:mts")) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -715,6 +715,9 @@ int main(int argc, char* argv[]) {
     case 't':
       touch_payload = 1;
       break;
+    case 's':
+      enable_hw_timestamp = 1;
+      break;
     case 'g':
       bind_core = atoi(optarg);
       break;
@@ -752,6 +755,7 @@ int main(int argc, char* argv[]) {
   if(num_threads > 1)         flags |= PF_RING_REENTRANT;
   if(use_extended_pkt_header) flags |= PF_RING_LONG_HEADER;
   if(promisc)                 flags |= PF_RING_PROMISC;
+  if(enable_hw_timestamp)     flags |= PF_RING_HW_TIMESTAMP;
   flags |= PF_RING_DNA_SYMMETRIC_RSS;  /* Note that symmetric RSS is ignored by non-DNA drivers */
 
   pd = pfring_open(device, snaplen, flags);
