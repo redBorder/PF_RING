@@ -209,9 +209,6 @@ int pfring_mod_open(pfring *ring) {
       ring->clear_promisc = 1;
   }
 
-  if (ring->enable_hw_timestamp)
-    pfring_enable_hw_timestamp(ring, ring->device_name, 1, 0);
-
   ring->slot_header_len = pfring_get_slot_header_len(ring);
   if(ring->slot_header_len == (u_int16_t)-1) {
     printf("ring failure (pfring_get_slot_header_len)\n");
@@ -307,7 +304,9 @@ int pfring_mod_bind(pfring *ring, char *device_name) {
 	  printf("pfring_set_channel_id() failed: %d\n", rc);
       }
     }
-    
+
+    pfring_enable_hw_timestamp(ring, elem, ring->enable_hw_timestamp ? 1 : 0, 0 /* TX timestamp disabled by default */);
+
     elem = strtok(NULL, ";,");
   }
 

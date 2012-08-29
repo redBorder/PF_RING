@@ -42,7 +42,7 @@ int pfring_enable_hw_timestamp(pfring* ring, char *device_name, u_int8_t enable_
   hwconfig.tx_type   = (enable_tx ? HWTSTAMP_TX_ON      : HWTSTAMP_TX_OFF);
 
   memset(&ifr, 0, sizeof(ifr));
-  strcpy(ifr.ifr_name, device_name);
+  strncpy(ifr.ifr_name, device_name, sizeof(ifr.ifr_name)-1);
   ifr.ifr_data = (void *)&hwconfig;
 
   rc = ioctl(sock_fd, SIOCSHWTSTAMP, &ifr);

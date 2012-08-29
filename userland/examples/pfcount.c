@@ -521,6 +521,7 @@ void printHelp(void) {
   printf("-a              Active packet wait\n");
   printf("-m              Long packet header (with PF_RING extensions)\n");
   printf("-r              Rehash RSS packets\n");
+  printf("-s              Enable hw timestamping\n");
   printf("-t              Touch payload (for force packet load on cache)\n");
   printf("-u <1|2>        For each incoming packet add a drop rule (1=hash, 2=wildcard rule)\n");
   printf("-v              Verbose\n");
