@@ -40,7 +40,7 @@
 #define DEFAULT_MIN_PKT_QUEUED        128
 
 /* Dirty hack I know, but what else shall I do man? */
-#define pfring_ptr ec_ptr
+#define pfring_ptr ax25_ptr
 
 /* Versioning */
 #define RING_VERSION                "5.4.6"
