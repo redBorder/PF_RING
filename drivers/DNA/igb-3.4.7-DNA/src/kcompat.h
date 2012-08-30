@@ -2645,7 +2645,11 @@ do {								\
 #endif /* for_each_set_bit */
 
 #if (RHEL_RELEASE_CODE && RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,3))
-/* DMA macros backported from 2.6.36 */
+/* DMA macros backported from 2.6.36 */ /* <- not working, redefining macros (ENABLE_DNA patch) */
+#undef DEFINE_DMA_UNMAP_ADDR
+#undef DEFINE_DMA_UNMAP_LEN
+#define DEFINE_DMA_UNMAP_ADDR DECLARE_PCI_UNMAP_ADDR
+#define DEFINE_DMA_UNMAP_LEN DECLARE_PCI_UNMAP_LEN
 #else
 #ifndef DEFINE_DMA_UNMAP_ADDR
 #define DEFINE_DMA_UNMAP_ADDR DECLARE_PCI_UNMAP_ADDR 
