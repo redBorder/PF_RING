@@ -22,6 +22,15 @@ Compilation
 # ./configure
 # make
 
+Configure Options
+-----------------
+If you do not have PF_RING installed, nor in the "$HOME/PF_RING" path,
+a few configure options are available:
+
+   --with-libpfring-includes=<libpfring include directory>
+   --with-pfring-kernel-includes=<pfring kernel include directory>
+   --with-libpfring-libraries=<libpfring library directory>
+
 Installation
 ------------
 You can do:
