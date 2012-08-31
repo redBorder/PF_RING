@@ -23,15 +23,15 @@ AC_CHECK_SFBPF
 
 # Checks for PF_RING
 AC_ARG_WITH( libpfring_includes,
-	     [--with-libpfring-includes=DIR	libpfring include directory],
+	     [  --with-libpfring-includes=DIR      libpfring include directory],
 	     [with_pfring_includes="$withval"], [with_pfring_includes="no"])
 
 AC_ARG_WITH( pfring_kernel_includes,
-	     [--with-pfring-kernel-includes=DIR	pfring kernel include directory],
+	     [  --with-pfring-kernel-includes=DIR  pfring kernel include directory],
 	     [with_pfring_kernel_includes="$withval"], [with_pfring_kernel_includes="no"])
 
 AC_ARG_WITH( libpfring_libraries,
-	     [--with-libpfring-libraries=DIR	libpfring library directory],
+	     [  --with-libpfring-libraries=DIR     libpfring library directory],
 	     [with_pfring_libraries="$withval"], [with_pfring_libraries="no"])
 
 if test -d "${HOME}/PF_RING/"; then
