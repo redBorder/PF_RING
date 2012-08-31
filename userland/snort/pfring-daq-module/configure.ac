@@ -22,13 +22,17 @@ AC_CHECK_DAQ_API
 AC_CHECK_SFBPF
 
 # Checks for PF_RING
-AC_ARG_WITH(libpfring_includes,
-			[  --with-libpfring-includes=DIR	libpfring include directory],
-			[with_pfring_includes="$withval"], [with_pfring_includes="no"])
+AC_ARG_WITH( libpfring_includes,
+	     [--with-libpfring-includes=DIR	libpfring include directory],
+	     [with_pfring_includes="$withval"], [with_pfring_includes="no"])
 
-AC_ARG_WITH(libpfring_libraries,
-			[  --with-libpfring-libraries=DIR	libpfring library directory],
-			[with_pfring_libraries="$withval"], [with_pfring_libraries="no"])
+AC_ARG_WITH( pfring_kernel_includes,
+	     [--with-pfring-kernel-includes=DIR	pfring kernel include directory],
+	     [with_pfring_kernel_includes="$withval"], [with_pfring_kernel_includes="no"])
+
+AC_ARG_WITH( libpfring_libraries,
+	     [--with-libpfring-libraries=DIR	libpfring library directory],
+	     [with_pfring_libraries="$withval"], [with_pfring_libraries="no"])
 
 if test -d "${HOME}/PF_RING/"; then
 	CPPFLAGS="${CPPFLAGS} -I ${HOME}/PF_RING/userland/lib -I ${HOME}/PF_RING/kernel"
@@ -39,12 +43,16 @@ if test "x$with_pfring_includes" != "xno"; then
 	CPPFLAGS="${CPPFLAGS} -I${with_pfring_includes}"
 fi
 
+if test "x$with_pfring_kernel_includes" != "xno"; then
+	CPPFLAGS="${CPPFLAGS} -I${with_pfring_kernel_includes}"
+fi
+
 if test "x$with_pfring_libraries" != "xno"; then
 	LDFLAGS="${LDFLAGS} -L${with_pfring_libraries}"
 fi
 
-# Library checks
-AC_CHECK_HEADER([pfring.h], [], [AC_MSG_ERROR([Could not find pfring.h!])])
+# PF_RING headers/library checks
+AC_CHECK_HEADER([pfring.h],  [], [AC_MSG_ERROR([Could not find pfring.h! ])])
 
 AC_CHECK_LIB( [pcap],
               [pfring_open],
