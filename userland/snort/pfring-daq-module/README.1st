@@ -100,7 +100,7 @@ PF_RING DAQ Specific Options
 6. Packet capture tuning
    It is possible to tune the packet capture activity specifying the poll() timeout:
 
-   --daq-var timeout=<seconds>
+   --daq-var timeout=<milliseconds>
 
    and the watermark (min number of incoming packets for the poll() to return):
 
