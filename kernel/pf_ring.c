@@ -1407,7 +1407,7 @@ static int ring_proc_get_info(char *buf, char **start, off_t offset,
 	}
       } else if (fsi != NULL) {
         /* Standard PF_RING */
-	rlen += sprintf(buf + rlen, "Channel Id Mask    : %08X\n", pfr->channel_id_mask);
+	rlen += sprintf(buf + rlen, "Channel Id Mask    : 0x%08X\n", pfr->channel_id_mask);
 	rlen += sprintf(buf + rlen, "Cluster Id         : %d\n", pfr->cluster_id);
 	rlen += sprintf(buf + rlen, "Slot Version       : %d [%s]\n", fsi->version, RING_VERSION);
 	rlen += sprintf(buf + rlen, "Min Num Slots      : %d\n", fsi->min_num_slots);
@@ -3714,8 +3714,8 @@ int bpf_filter_skb(struct sk_buff *skb,
     if(res == 0) {
       /* Filter failed */
       if(unlikely(enable_debug))
-	printk("[PF_RING] add_skb_to_ring(skb): Filter failed [len=%d][tot=%llu]"
-	       "[insert_off=%d][pkt_type=%d][cloned=%d]\n",
+	printk("[PF_RING] %s(skb): Filter failed [len=%d][tot=%llu]"
+	       "[insert_off=%d][pkt_type=%d][cloned=%d]\n", __FUNCTION__,
 	       (int)skb->len, pfr->slots_info->tot_pkts,
 	       pfr->slots_info->insert_off, skb->pkt_type,
 	       skb->cloned);
@@ -3729,9 +3729,13 @@ int bpf_filter_skb(struct sk_buff *skb,
 
 /* ********************************** */
 
+u_int32_t default_rehash_rss_func(struct sk_buff *skb, struct pfring_pkthdr *hdr) {
+  return hash_pkt_header(hdr, 0, 0, 0, 0, 0);
+}
+
+/* ********************************** */
+
 /*
- * add_skb_to_ring()
- *
  * Add the specified skb to the ring so that userland apps/plugins
  * can use the packet.
  *
@@ -3757,15 +3761,16 @@ static int add_skb_to_ring(struct sk_buff *skb,
   u_int last_matched_plugin = 0;
   u_int8_t hash_found = 0;
 
-  if(pfr && pfr->rehash_rss && skb->dev)
-    channel_id = hash_pkt_header(hdr, 0, 0, 0, 0, 0) % get_num_rx_queues(skb->dev);
+  if(pfr && pfr->rehash_rss != NULL && skb->dev)
+    channel_id = pfr->rehash_rss(skb, hdr) % get_num_rx_queues(skb->dev);
 
   /* This is a memory holder for storing parsed packet information
      that will then be freed when the packet has been handled
   */
 
   if(unlikely(enable_debug))
-    printk("[PF_RING] --> add_skb_to_ring(len=%d) [channel_id=%d/%d][active=%d][%s]\n",
+    printk("[PF_RING] --> %s(len=%d) [channel_id=%d/%d][active=%d][%s]\n",
+           __FUNCTION__,
 	   hdr->len, channel_id, num_rx_channels,
 	   pfr->ring_active, pfr->ring_netdev->dev->name);
 
@@ -3786,8 +3791,8 @@ static int add_skb_to_ring(struct sk_buff *skb,
   }
 
   if(unlikely(enable_debug)) {
-    printk("[PF_RING] add_skb_to_ring: [%s][displ=%d][len=%d][caplen=%d]"
-	   "[is_ip_pkt=%d][%d -> %d][%p/%p]\n",
+    printk("[PF_RING] %s: [%s][displ=%d][len=%d][caplen=%d]"
+	   "[is_ip_pkt=%d][%d -> %d][%p/%p]\n", __FUNCTION__,
 	   (skb->dev->name != NULL) ? skb->dev->name : "<NULL>",
 	   displ, hdr->len, hdr->caplen,
 	   is_ip_pkt, hdr->extended_hdr.parsed_pkt.l4_src_port,
@@ -3823,7 +3828,7 @@ static int add_skb_to_ring(struct sk_buff *skb,
   }
 
   if(unlikely(enable_debug))
-    printk("[PF_RING] add_skb_to_ring() verdict: fwd_pkt=%d [default=%u]\n",
+    printk("[PF_RING] %s() verdict: fwd_pkt=%d [default=%u]\n", __FUNCTION__,
 	   fwd_pkt, pfr->sw_filtering_rules_default_accept_policy);
 
   if(fwd_pkt) {
@@ -3842,8 +3847,9 @@ static int add_skb_to_ring(struct sk_buff *skb,
 	pfr->pktToSample--;
 
 	if(unlikely(enable_debug))
-	  printk("[PF_RING] add_skb_to_ring(skb): sampled packet [len=%d]"
-		 "[tot=%llu][insert_off=%d][pkt_type=%d][cloned=%d]\n",
+	  printk("[PF_RING] %s(skb): sampled packet [len=%d]"
+		 "[tot=%llu][insert_off=%d][pkt_type=%d][cloned=%d]\n", 
+		 __FUNCTION__,
 		 (int)skb->len, pfr->slots_info->tot_pkts,
 		 pfr->slots_info->insert_off, skb->pkt_type,
 		 skb->cloned);
@@ -3894,7 +3900,7 @@ static int add_skb_to_ring(struct sk_buff *skb,
     free_parse_memory(parse_memory_buffer);
 
   if(unlikely(enable_debug))
-    printk("[PF_RING] add_skb_to_ring() returned %d\n", rc);
+    printk("[PF_RING] %s() returned %d\n", __FUNCTION__, rc);
 
   atomic_set(&pfr->num_ring_users, 0);
   return(rc);
@@ -4281,10 +4287,10 @@ static int skb_ring_handler(struct sk_buff *skb,
 
     hdr.extended_hdr.parsed_header_len = 0;
 
-    if(pfr && pfr->rehash_rss && skb->dev) {
+    if(pfr && pfr->rehash_rss != NULL && skb->dev) {
       parse_pkt(skb, real_skb, displ, &hdr);
-
-      channel_id = hash_pkt_header(&hdr, 0, 0, 0, 0, 0) % get_num_rx_queues(skb->dev);
+      channel_id = pfr->rehash_rss(skb, &hdr) % get_num_rx_queues(skb->dev);
+      pfr = device_rings[skb->dev->ifindex][channel_id];
     }
 
     if(unlikely(enable_debug)) printk("[PF_RING] Expecting channel %d [%p]\n", channel_id, pfr);
@@ -7355,7 +7361,8 @@ static int ring_setsockopt(struct socket *sock,
     if(unlikely(enable_debug))
       printk("[PF_RING] * SO_REHASH_RSS_PACKET *\n");
 
-    found = 1, pfr->rehash_rss = 1;
+    pfr->rehash_rss = default_rehash_rss_func;
+    found = 1; 
     break;
 
 #ifdef VPFRING_SUPPORT

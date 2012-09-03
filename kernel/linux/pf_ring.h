@@ -1010,6 +1010,8 @@ typedef int (*do_add_raw_packet_to_ring)(struct pf_ring_socket *pfr,
 					 char *data, u_int data_len,
 					 u_int8_t parse_pkt_first);
 
+typedef u_int32_t (*do_rehash_rss)(struct sk_buff *skb, struct pfring_pkthdr *hdr);
+
 /* ************************************************* */
 
 #define MAX_NUM_DEVICES_ID    MAX_NUM_IFIDX
@@ -1017,7 +1019,7 @@ typedef int (*do_add_raw_packet_to_ring)(struct pf_ring_socket *pfr,
  * Ring options
  */
 struct pf_ring_socket {
-  u_int8_t ring_active, ring_shutdown, num_rx_channels, rehash_rss, num_bound_devices;
+  u_int8_t ring_active, ring_shutdown, num_rx_channels, num_bound_devices;
   ring_device_element *ring_netdev;
 
   DECLARE_BITMAP(netdev_mask, MAX_NUM_DEVICES_ID /* bits */);
@@ -1061,6 +1063,9 @@ struct pf_ring_socket {
   /* Channel */
   int32_t channel_id_mask;  /* -1 = any channel */
   u_int16_t num_channels_per_ring;
+
+  /* rehash rss function pointer */
+  do_rehash_rss rehash_rss;
 
   /* Ring Slots */
   char *ring_memory;
