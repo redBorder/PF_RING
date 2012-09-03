@@ -771,7 +771,7 @@ typedef struct {
 
 #define RING_ANY_CHANNEL          ((u_int32_t)-1)
 #define UNKNOWN_RX_CHANNEL        RING_ANY_CHANNEL
-#define MAX_NUM_RX_CHANNELS       32 /* channel_id is a 32 bit value */
+#define MAX_NUM_RX_CHANNELS       32 /* channel_id_mask is a 32 bit mask */
 #define UNKNOWN_NUM_RX_CHANNELS   1
 
 /* ************************************************* */
@@ -1059,7 +1059,7 @@ struct pf_ring_socket {
   u_short cluster_id; /* 0 = no cluster */
 
   /* Channel */
-  int32_t channel_id;  /* -1 = any channel */
+  int32_t channel_id_mask;  /* -1 = any channel */
   u_int16_t num_channels_per_ring;
 
   /* Ring Slots */
@@ -1341,6 +1341,7 @@ struct pfring_hooks {
 /* *************************************************************** */
 
 extern void pf_ring_add_module_dependency(void);
+extern int pf_ring_inject_packet_to_ring(int if_index, int channel_id, char *data, int data_len, struct pfring_pkthdr *hdr);
 
 #ifdef PF_RING_PLUGIN
 static struct pfring_plugin_registration plugin_reg;
