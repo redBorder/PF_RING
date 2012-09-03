@@ -836,7 +836,7 @@ struct send_msg_to_plugin_info {
   u_int16_t __padding;
   u_int16_t plugin_id;
   u_int32_t data_len;
-  u_int64_t data[];
+  u_char    data[];
 };
 
 /* ************************************************* */
