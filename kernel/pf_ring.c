@@ -7535,6 +7535,46 @@ static int ring_setsockopt(struct socket *sock,
     found = 1, pfr->tx.enable_tx_with_bounce = 1;
     break;
 
+  case SO_SEND_MSG_TO_PLUGIN:
+    {
+      struct send_msg_to_plugin_info smtpi;
+      u_char *msg_data;
+
+      if(optlen < sizeof(smtpi))
+        return -EINVAL;
+
+      if(copy_from_user(&smtpi, optval, sizeof(smtpi)))
+	return -EFAULT;
+
+      if(optlen < (sizeof(smtpi) + smtpi.data_len))
+        return -EINVAL;
+
+      msg_data = kmalloc(smtpi.data_len, GFP_KERNEL);
+
+      if(msg_data == NULL)
+	return -ENOMEM;
+
+      if(copy_from_user(msg_data, &optval[sizeof(smtpi)], smtpi.data_len)) {
+	kfree(msg_data);
+        return -EFAULT;
+      }
+
+      if (smtpi.plugin_id < MAX_PLUGIN_ID
+          && (plugin_registration[smtpi.plugin_id] != NULL)
+          && (plugin_registration[smtpi.plugin_id]->pfring_plugin_handle_msg != NULL)) {
+        ret = plugin_registration[smtpi.plugin_id]->pfring_plugin_handle_msg(pfr, msg_data, smtpi.data_len);
+        /* copying back msg (it can be used as return value) */
+	if(copy_to_user(&optval[sizeof(smtpi)], msg_data, smtpi.data_len))
+	  ret = -EFAULT;
+      } else {
+        printk("[PF_RING] Error: no plugin with id=%u or handle_msg method not implemented\n", smtpi.plugin_id);
+        ret = -EFAULT;
+      }
+      kfree(msg_data);
+    }
+    found = 1;
+    break;
+
   default:
     found = 0;
     break;

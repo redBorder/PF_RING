@@ -80,6 +80,7 @@
 #define SO_ATTACH_DNA_CLUSTER            129
 #define SO_WAKE_UP_DNA_CLUSTER_SLAVE     130
 #define SO_ENABLE_RX_PACKET_BOUNCE       131
+#define SO_SEND_MSG_TO_PLUGIN            132 /* send user msg to plugin */
 
 /* Get */
 #define SO_GET_RING_VERSION              170
@@ -829,6 +830,17 @@ struct dna_cluster_global_stats {
   u_int64_t tot_tx_packets;
 };
 
+/* ************************************************* */
+
+struct send_msg_to_plugin_info {
+  u_int16_t __padding;
+  u_int16_t plugin_id;
+  u_int32_t data_len;
+  u_int64_t data[];
+};
+
+/* ************************************************* */
+
 #ifdef __KERNEL__
 
 #define CLUSTER_LEN       32
@@ -1192,6 +1204,10 @@ typedef int (*plugin_del_rule)(sw_filtering_rule_element *rule,
 			       sw_filtering_hash_bucket *zombie_hash_bucket,
 			       u_int16_t filter_plugin_id,
 			       struct parse_buffer **filter_rule_memory_storage);
+/* called when there is a message for the plugin */
+typedef int (*plugin_handle_msg)(struct pf_ring_socket *pfr,
+				 u_char *msg_data,
+				 u_int msg_len);
 
 typedef void (*plugin_register)(u_int8_t register_plugin);
 
@@ -1224,6 +1240,7 @@ struct pfring_plugin_registration {
   plugin_free_ring_mem pfring_plugin_free_ring_mem;
   plugin_add_rule      pfring_plugin_add_rule;
   plugin_del_rule      pfring_plugin_del_rule;
+  plugin_handle_msg    pfring_plugin_handle_msg;
   plugin_register      pfring_plugin_register;
 
   /* ************** */
