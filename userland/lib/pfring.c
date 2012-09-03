@@ -577,6 +577,15 @@ int pfring_set_channel_id(pfring *ring, u_int32_t channel_id) {
 
 /* **************************************************** */
 
+int pfring_set_channel_mask(pfring *ring, u_int32_t channel_mask) {
+  if(ring && ring->set_channel_mask)
+    return ring->set_channel_mask(ring, channel_mask);
+
+  return(PF_RING_ERROR_NOT_SUPPORTED);
+}
+
+/* **************************************************** */
+
 int pfring_set_application_name(pfring *ring, char *name) {
   if(ring && ring->set_application_name)
     return ring->set_application_name(ring, name);

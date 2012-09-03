@@ -168,6 +168,7 @@ extern "C" {
     int       (*set_poll_duration)            (pfring *, u_int);
     int       (*set_tx_watermark)             (pfring *, u_int16_t);
     int       (*set_channel_id)               (pfring *, u_int32_t);
+    int       (*set_channel_mask)             (pfring *, u_int32_t);
     int       (*set_application_name)         (pfring *, char *);
     int       (*bind)                         (pfring *, char *);
     int       (*send)                         (pfring *, char *, u_int, u_int8_t);
@@ -304,6 +305,7 @@ extern "C" {
   int pfring_add_hw_rule(pfring *ring, hw_filtering_rule *rule);
   int pfring_remove_hw_rule(pfring *ring, u_int16_t rule_id);
   int pfring_set_channel_id(pfring *ring, u_int32_t channel_id);
+  int pfring_set_channel_mask(pfring *ring, u_int32_t channel_mask);
   int pfring_set_application_name(pfring *ring, char *name);
   int pfring_bind(pfring *ring, char *device_name);
   int pfring_send(pfring *ring, char *pkt, u_int pkt_len, u_int8_t flush_packet);

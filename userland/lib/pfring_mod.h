@@ -27,6 +27,7 @@ int pfring_mod_set_poll_duration(pfring *ring, u_int duration);
 int pfring_mod_add_hw_rule(pfring *ring, hw_filtering_rule *rule);
 int pfring_mod_remove_hw_rule(pfring *ring, u_int16_t rule_id);
 int pfring_mod_set_channel_id(pfring *ring, u_int32_t channel_id);
+int pfring_mod_set_channel_mask(pfring *ring, u_int32_t channel_mask);
 int pfring_mod_set_application_name(pfring *ring, char *name);
 int pfring_mod_bind(pfring *ring, char *device_name);
 int pfring_mod_send(pfring *ring, char *pkt, u_int pkt_len, u_int8_t flush_packet);

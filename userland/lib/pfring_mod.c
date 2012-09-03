@@ -76,6 +76,7 @@ int pfring_mod_open(pfring *ring) {
   ring->set_poll_watermark = pfring_mod_set_poll_watermark;
   ring->set_poll_duration = pfring_mod_set_poll_duration;
   ring->set_channel_id = pfring_mod_set_channel_id;
+  ring->set_channel_mask = pfring_mod_set_channel_mask;
   ring->set_application_name = pfring_mod_set_application_name;
   ring->bind = pfring_mod_bind;
   ring->send = pfring_mod_send;
@@ -222,8 +223,14 @@ int pfring_mod_open(pfring *ring) {
 
 /* ******************************* */
 
+int pfring_mod_set_channel_mask(pfring *ring, u_int32_t channel_mask) {
+  return(setsockopt(ring->fd, 0, SO_SET_CHANNEL_ID, &channel_mask, sizeof(channel_mask)));
+}
+
+/* ******************************* */
+
 int pfring_mod_set_channel_id(pfring *ring, u_int32_t channel_id) {
-  return(setsockopt(ring->fd, 0, SO_SET_CHANNEL_ID, &channel_id, sizeof(channel_id)));
+  return pfring_set_channel_mask(ring, 1 << channel_id);
 }
 
 /* ******************************* */
@@ -241,7 +248,7 @@ int pfring_mod_set_application_name(pfring *ring, char *name) {
 int pfring_mod_bind(pfring *ring, char *device_name) {
   struct sockaddr sa;
   char *at, *elem, name_copy[256];
-  u_int32_t channel_id = RING_ANY_CHANNEL;
+  u_int32_t channel_mask = RING_ANY_CHANNEL;
   int rc = 0;
 
   if((device_name == NULL) || (strcmp(device_name, "none") == 0))
@@ -261,7 +268,7 @@ int pfring_mod_bind(pfring *ring, char *device_name) {
     */
 
     tok = strtok_r(&at[1], ",", &pos);
-    channel_id = 0;
+    channel_mask = 0;
 
     while(tok != NULL) {
       char *dash = strchr(tok, '-');
@@ -276,7 +283,7 @@ int pfring_mod_bind(pfring *ring, char *device_name) {
 	min_val = max_val = atoi(tok);
 
       for(i = min_val; i <= max_val; i++)
-	channel_id |= 1 << i;
+	channel_mask |= 1 << i;
 
       tok = strtok_r(NULL, ",", &pos);
     }
@@ -297,8 +304,8 @@ int pfring_mod_bind(pfring *ring, char *device_name) {
     rc = bind(ring->fd, (struct sockaddr *)&sa, sizeof(sa));
     
     if(rc == 0) {
-      /* if(channel_id != RING_ANY_CHANNEL) */ {
-	rc = pfring_set_channel_id(ring, channel_id);
+      /* if(channel_mask != RING_ANY_CHANNEL) */ {
+	rc = pfring_set_channel_mask(ring, channel_mask);
 	
 	if(rc != 0)
 	  printf("pfring_set_channel_id() failed: %d\n", rc);
