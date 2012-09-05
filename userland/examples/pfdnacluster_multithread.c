@@ -235,6 +235,7 @@ void printHelp(void) {
   printf("-x <if index>   Forward all packets to the selected interface (Enable TX)\n");
   printf("-b              Bridge the interfaces listed in -i in pairs (Enable TX)\n");
   printf("-a              Active packet wait\n");
+  printf("-p              Print per-interface absolute stats\n");
   exit(0);
 }
 
