@@ -50,6 +50,8 @@
 #define DEFAULT_SNAPLEN       128
 #define MAX_NUM_THREADS        64
 #define DEFAULT_DEVICE     "eth0"
+#define NO_ZC_BUFFER_LEN     9000
+
 pfring  *pd;
 int verbose = 0, num_threads = 1;
 pfring_stat pfringStats;
@@ -210,12 +212,10 @@ void sigproc(int sig) {
   fprintf(stderr, "Leaving...\n");
   if(called) return; else called = 1;
   do_shutdown = 1;
+
   print_stats();
-
-  if(num_threads == 1)
-    pfring_close(pd);
-
-  exit(0);
+  
+  pfring_breakloop(pd);
 }
 
 /* ******************************** */
@@ -550,7 +550,8 @@ int bind2core(u_int core_id) {
 void* packet_consumer_thread(void* _id) {
   long thread_id = (long)_id;
   u_int numCPU = sysconf( _SC_NPROCESSORS_ONLN );
-  u_char *buffer;
+  u_char buffer[NO_ZC_BUFFER_LEN];
+  u_char *buffer_p = buffer;
 
   u_long core_id = thread_id % numCPU;
   struct pfring_pkthdr hdr;
@@ -570,10 +571,9 @@ void* packet_consumer_thread(void* _id) {
 
     if(do_shutdown) break;
       
-    if(pfring_recv(pd, &buffer, 0, &hdr, wait_for_packet) > 0) {
+    if((rc = pfring_recv(pd, &buffer_p, NO_ZC_BUFFER_LEN, &hdr, wait_for_packet)) > 0) {
       if(do_shutdown) break;
       dummyProcesssPacket(&hdr, buffer, (u_char*)thread_id);
-
 #ifdef TEST_SEND
       buffer[0] = 0x99;
       buffer[1] = 0x98;
@@ -582,7 +582,7 @@ void* packet_consumer_thread(void* _id) {
 #endif
     } else {
       if(wait_for_packet == 0) sched_yield();
-    }
+    } 
 
     if(0) {
       struct simple_stats {
@@ -962,25 +962,23 @@ int main(int argc, char* argv[]) {
     return(-1);
   }
 
-  if(num_threads > 1) {
+  if (num_threads <= 1) {
+    pfring_loop(pd, dummyProcesssPacket, (u_char*)NULL, wait_for_packet);
+    //packet_consumer_thread(0);
+    
+    if(bind_core >= 0)
+      bind2core(bind_core);
+  } else {
     pthread_t my_thread;
     long i;
 
-    for(i=1; i<num_threads; i++)
+    for(i=0; i<num_threads; i++)
       pthread_create(&my_thread, NULL, packet_consumer_thread, (void*)i);
 
-    bind_core = -1;
-  }
+    for(i=0; i<num_threads; i++)
+      pthread_join(my_thread, NULL);
+  } 
 
-  if(bind_core >= 0)
-    bind2core(bind_core);
-
-  if(1) {
-    pfring_loop(pd, dummyProcesssPacket, (u_char*)NULL, wait_for_packet);
-  } else
-    packet_consumer_thread(0);
-
-  alarm(0);
   sleep(1);
   pfring_close(pd);
 
