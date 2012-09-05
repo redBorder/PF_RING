@@ -54,7 +54,7 @@ u_int numCPU;
 int num_threads = 1, num_dev = 0;
 pfring_stat pfringStats;
 static struct timeval startTime;
-u_int8_t wait_for_packet = 1, do_shutdown = 0;
+u_int8_t wait_for_packet = 1, print_interface_stats = 0, do_shutdown = 0;
 int rx_bind_core = 1, tx_bind_core = 2; /* core 0 free if possible */
 int hashing_mode = 0;
 int forward_packets = 0, bridge_interfaces = 0, enable_tx = 0;
@@ -161,6 +161,15 @@ void print_stats() {
               pfring_format_numbers(((double)RXdiff/(double)(delta/1000)), buf1, sizeof(buf1), 1),
               pfring_format_numbers(((double)RXProcdiff/(double)(delta/1000)), buf2, sizeof(buf2), 1),
               pfring_format_numbers(((double)TXdiff/(double)(delta/1000)), buf3, sizeof(buf3), 1));
+      
+      if (print_interface_stats) {
+        pfring_stat if_stats;
+        for (i = 0; i < num_dev; i++)
+          if (pfring_stats(pd[i], &if_stats) >= 0)
+            fprintf(stderr, "Absolute socket %d stats: [%" PRIu64 " pkts rcvd][%" PRIu64 " pkts dropped]\n", 
+	            i, if_stats.recv, if_stats.drop);
+      }
+
     }
 
     lastRXPkts = cluster_stats.tot_rx_packets;
@@ -438,7 +447,7 @@ int main(int argc, char* argv[]) {
   memset(thread_core_affinity, -1, sizeof(thread_core_affinity));
   startTime.tv_sec = 0;
 
-  while ((c = getopt(argc,argv,"ahi:bc:n:m:r:t:g:x:")) != -1) {
+  while ((c = getopt(argc,argv,"ahi:bc:n:m:r:t:g:x:p")) != -1) {
     switch (c) {
     case 'a':
       wait_for_packet = 0;
@@ -473,6 +482,9 @@ int main(int argc, char* argv[]) {
       break;
     case 'b':
       bridge_interfaces = 1;
+      break;
+    case 'p':
+      print_interface_stats = 1;
       break;
     }
   }
