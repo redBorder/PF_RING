@@ -977,8 +977,8 @@ struct dna_cluster {
   u_int32_t num_slaves;
   socket_mode mode;
 
-  atomic_t master;
-  atomic_t active_slaves[DNA_CLUSTER_MAX_NUM_SLAVES];
+  u_int8_t master;
+  u_int8_t active_slaves[DNA_CLUSTER_MAX_NUM_SLAVES];
 
   struct dma_memory_info *extra_dma_memory;
 
@@ -1007,7 +1007,7 @@ typedef int (*do_add_packet_to_ring)(struct pf_ring_socket *pfr,
 
 typedef int (*do_add_raw_packet_to_ring)(struct pf_ring_socket *pfr,
 					 struct pfring_pkthdr *hdr,
-					 char *data, u_int data_len,
+					 u_char *data, u_int data_len,
 					 u_int8_t parse_pkt_first);
 
 typedef u_int32_t (*do_rehash_rss)(struct sk_buff *skb, struct pfring_pkthdr *hdr);

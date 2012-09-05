@@ -458,26 +458,6 @@ void msleep(unsigned int msecs)
 
 /* ************************************************** */
 
-#if(LINUX_VERSION_CODE < KERNEL_VERSION(2,6,35))
-static inline int atomic_dec_if_positive(atomic_t *v)
-{
-  int c, old, dec;
-  c = atomic_read(v);
-  for (;;) {
-    dec = c - 1;
-    if (unlikely(dec < 0))
-      break;
-    old = atomic_cmpxchg((v), c, dec);
-    if (likely(old == c))
-      break;
-    c = old;
-  }
-  return dec;
-}
-#endif
-
-/* ************************************************** */
-
 void init_lockless_list(lockless_list *l) {
   memset(l, 0, sizeof(lockless_list));
 
@@ -1788,7 +1768,7 @@ inline u_int32_t hash_pkt_header(struct pfring_pkthdr * hdr, u_char mask_src, u_
 
 /* ******************************************************* */
 
-static int parse_raw_pkt(char *data, u_int data_len,
+static int parse_raw_pkt(u_char *data, u_int data_len,
 			 struct pfring_pkthdr *hdr)
 {
   struct ethhdr *eh = (struct ethhdr *)data;
@@ -2867,7 +2847,7 @@ static int add_packet_to_ring(struct pf_ring_socket *pfr,
 /* ********************************** */
 
 static int add_raw_packet_to_ring(struct pf_ring_socket *pfr, struct pfring_pkthdr *hdr,
-				  char *data, u_int data_len,
+				  u_char *data, u_int data_len,
 				  u_int8_t parse_pkt_first)
 {
   int rc;
@@ -3683,11 +3663,9 @@ int bpf_filter_skb(struct sk_buff *skb,
 		   struct pf_ring_socket *pfr,
 		   int displ) {
   if(pfr->bpfFilter != NULL) {
-    unsigned res = 1, len;
+    unsigned res = 1;
     u8 *skb_head = skb->data;
     int skb_len = skb->len;
-
-    len = skb->len - skb->data_len;
 
     if(displ > 0) {
       /*
@@ -5120,11 +5098,11 @@ static struct dna_cluster* dna_cluster_create(u_int32_t dna_cluster_id, u_int32_
 
       if(unlikely(enable_debug))
         printk("[PF_RING] %s(%u) cluster already exists [master: %u]\n",
-               __FUNCTION__, dna_cluster_id, atomic_read(&entry->master));
+               __FUNCTION__, dna_cluster_id, entry->master);
 
       /* Note: a dna cluster can be created by a master only,
        * however one/more slaves can keep it if the master dies */
-      if(atomic_read(&entry->master) > 0)
+      if(entry->master > 0)
         goto unlock;
 
       dnac = entry;
@@ -5149,9 +5127,9 @@ static struct dna_cluster* dna_cluster_create(u_int32_t dna_cluster_id, u_int32_
     dnac->num_slaves = num_slaves;
     dnac->mode = mode;
 
-    atomic_set(&dnac->master, 0);
+    dnac->master = 0;
     for (i = 0; i < dnac->num_slaves; i++)
-      atomic_set(&dnac->active_slaves[i], 0);
+      dnac->active_slaves[i] = 0;
 
     if((dnac->extra_dma_memory = allocate_extra_dma_memory(hwdev, num_slots, slot_len, chunk_len)) == NULL) {
       kfree(dnac);
@@ -5215,7 +5193,7 @@ static struct dna_cluster* dna_cluster_create(u_int32_t dna_cluster_id, u_int32_
     *recovered = 1;
   }
 
-  atomic_inc(&dnac->master);
+  dnac->master = 1;
 
 unlock:
   write_unlock(&dna_cluster_lock);
@@ -5223,7 +5201,7 @@ unlock:
   if(dnac != NULL) {
     if(unlikely(enable_debug))
       printk("[PF_RING] %s(%u) DNA cluster found or created [master: %u]\n",
-           __FUNCTION__, dna_cluster_id, atomic_read(&dnac->master));
+           __FUNCTION__, dna_cluster_id, dnac->master);
   } else
     printk("[PF_RING] %s() error\n", __FUNCTION__);
 
@@ -5244,16 +5222,16 @@ static void dna_cluster_remove(struct dna_cluster *dnac, dna_cluster_client_type
     if(entry == dnac) {
 
       if (type == dna_cluster_master)
-        atomic_dec(&dnac->master);
+        dnac->master = 0;
       else if (type == dna_cluster_slave) {
         dnac->slave_waitqueue[slave_id] = NULL;
-        atomic_dec_if_positive(&dnac->active_slaves[slave_id]);
+	dnac->active_slaves[slave_id] = 0;
       }
 
-      if (atomic_read(&dnac->master) > 0)
+      if (dnac->master)
         active_users++;
       for (i = 0; i < dnac->num_slaves; i++)
-        if (atomic_read(&dnac->active_slaves[i]) > 0)
+        if (dnac->active_slaves[i])
 	  active_users++;
 
       if(active_users == 0) {
@@ -5298,9 +5276,8 @@ static struct dna_cluster* dna_cluster_attach(u_int32_t dna_cluster_id, u_int32_
 
       if (auto_slave_id) {
         for (i = 0; i < dnac->num_slaves; i++) {
-          if (atomic_add_return(1, &dnac->active_slaves[i]) > 1)
-            atomic_dec(&dnac->active_slaves[i]);
-          else {
+          if (!dnac->active_slaves[i]) {
+	    dnac->active_slaves[i] = 1;
 	    *slave_id = i;
 	    free_id_found = 1;
 	    break;
@@ -5319,12 +5296,13 @@ static struct dna_cluster* dna_cluster_attach(u_int32_t dna_cluster_id, u_int32_
           goto unlock;
         }
 
-        if (atomic_add_return(1, &dnac->active_slaves[*slave_id]) > 1) {
+        if (dnac->active_slaves[*slave_id]) {
           printk("[PF_RING] %s() slave %u@%u already running\n", __FUNCTION__, *slave_id, dna_cluster_id);
-          atomic_dec(&dnac->active_slaves[*slave_id]);
           dnac = NULL;
           goto unlock;
-        }
+        } else {
+	  dnac->active_slaves[*slave_id] = 1;
+	}
       }
 
       dnac->slave_waitqueue[*slave_id] = slave_waitqueue;
@@ -7689,7 +7667,7 @@ static int ring_getsockopt(struct socket *sock,
 
 	  while(bucket != NULL) {
 	    if(hash_bucket_match_rule(bucket, &rule)) {
-	      char *buffer = kmalloc(len, GFP_ATOMIC);
+	      u_char *buffer = kmalloc(len, GFP_ATOMIC);
 
 	      if(buffer == NULL) {
 		printk("[PF_RING] so_get_hash_filtering_rule_stats() no memory failure\n");
