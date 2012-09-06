@@ -357,6 +357,10 @@ static struct sock_fprog	total_fcode
 	= { 1, &total_insn };
 #endif
 
+#ifdef HAVE_PF_RING
+u_int8_t pf_ring_active_poll = 0;
+#endif
+
 pcap_t *
 pcap_create(const char *device, char *ebuf)
 {
@@ -1165,11 +1169,12 @@ pcap_activate_linux(pcap_t *handle)
 	  /* Code courtesy of Chris Wakelin <c.d.wakelin@reading.ac.uk> */
 	  char *clusterId;
 	  int flags = 0;
-	  char *appname;
-	  	  
+	  char *appname, *active = getenv("PF_RING_ACTIVE_POLL");
+
 	  if(handle->opt.promisc) flags |= PF_RING_PROMISC;
 	  if(getenv("PCAP_PF_RING_DNA_RSS")) flags |= PF_RING_DNA_SYMMETRIC_RSS;
 	  
+	  if(active) pf_ring_active_poll = atoi(active);
 	  handle->ring = pfring_open((char*)device, handle->snapshot, flags);
 
 	  if(handle->ring) {
@@ -1179,7 +1184,7 @@ pcap_activate_linux(pcap_t *handle)
 		  pfring_set_cluster(handle->ring, atoi(clusterId), cluster_per_flow);
 		else
 		  pfring_set_cluster(handle->ring, atoi(clusterId), cluster_round_robin);
-	    
+
             if(appname = getenv("PCAP_PF_RING_APPNAME"))
 	      if(strlen(appname) > 0 && strlen(appname) <= 32)
 	        pfring_set_application_name(handle->ring, appname);
@@ -1380,10 +1385,11 @@ pcap_read_packet(pcap_t *handle, pcap_handler callback, u_char *userdata)
 #ifdef HAVE_PF_RING
 	if(handle->ring) {
 	  char *packet;
-	  int wait_for_incoming_packet = handle->md.timeout < 0 ? 0 : 1;
+	  int wait_for_incoming_packet = (pf_ring_active_poll || (handle->md.timeout < 0)) ? 0 : 1;
 	  int ret = 0;
-	  
-	  if(!handle->ring->enabled) pfring_enable_ring(handle->ring);
+
+	  if(!handle->ring->enabled)
+	    pfring_enable_ring(handle->ring);
 
 	  do {
 	    if (handle->break_loop) {
@@ -1404,11 +1410,11 @@ pcap_read_packet(pcap_t *handle, pcap_handler callback, u_char *userdata)
 			      0, &pcap_header,
 			      wait_for_incoming_packet);
 
-	    if(ret == 0) { 
+	    if(ret == 0) {
 	      if (errno == EINTR)
 	        continue;
 
-	      if (wait_for_incoming_packet) 
+	      if (wait_for_incoming_packet)
 	        continue;
 	      else
 	        return 0; /* non-blocking */
@@ -1428,7 +1434,7 @@ pcap_read_packet(pcap_t *handle, pcap_handler callback, u_char *userdata)
 	    }
 	  } while (1);
 
-	  goto pfring_pcap_read_packet;	  
+	  goto pfring_pcap_read_packet;
 	}
 #endif
 
@@ -2477,7 +2483,7 @@ pcap_setdirection_linux(pcap_t *handle, pcap_direction_t d)
 {
 #ifdef HAVE_PF_RING
 	if(handle->ring != NULL) {
-	  packet_direction direction; 
+	  packet_direction direction;
 
 	  switch(d) {
 	  case PCAP_D_INOUT: direction = rx_and_tx_direction; break;
@@ -3752,7 +3758,7 @@ pcap_read_linux_mmap(pcap_t *handle, int max_packets, pcap_handler callback,
 
 		  myhdr.ts.tv_sec = pcaphdr.ts.tv_sec;
 		  myhdr.ts.tv_usec = pcaphdr.ts.tv_usec;
-		  
+
 		  myhdr.caplen = pcaphdr.caplen, myhdr.len = pcaphdr.len;
 
 		  if(handle->ring != NULL) {

@@ -103,10 +103,16 @@ static int pfring_daq_open(Pfring_Context_t *context, int id) {
   }
 
   if(device) {
+    if(strncmp(device, "dna", 3) == 0) {
+      DPE(context->errbuf, "DNA is not supported by daq_pfring. Please get daq_pfring_dna from http://shop.ntop.org");
+      return(-1);
+    }
+
     context->pkt_buffer = NULL;
 
     ring_handle = pfring_open(device, context->snaplen,
-                              /* PF_RING_REENTRANT |*/ PF_RING_LONG_HEADER | (context->promisc_flag ? PF_RING_PROMISC : 0));
+			      PF_RING_LONG_HEADER 
+			      | (context->promisc_flag ? PF_RING_PROMISC : 0));
 
     if(!ring_handle) {
       DPE(context->errbuf, "pfring_open(): unable to open device '%s'. Please use -i <device>", device);
