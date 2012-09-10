@@ -105,7 +105,8 @@ int main(int argc, char* argv[]) {
     return(-1);
   } else {
     pfring_set_application_name(a_ring, "pfbridge-a");
-    pfring_set_direction(a_ring, rx_and_tx_direction);
+    pfring_set_direction(a_ring, rx_only_direction);
+    pfring_set_socket_mode(a_ring, recv_only_mode);
     pfring_get_bound_device_ifindex(a_ring, &a_ifindex);
   }
 
@@ -115,7 +116,7 @@ int main(int argc, char* argv[]) {
     return(-1);
   } else {
     pfring_set_application_name(b_ring, "pfbridge-b");
-    pfring_set_direction(b_ring, rx_and_tx_direction);
+    pfring_set_socket_mode(b_ring, send_only_mode);
     pfring_get_bound_device_ifindex(b_ring, &b_ifindex);
   }
   
