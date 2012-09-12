@@ -67,6 +67,10 @@ extern "C" {
 #define PCAP_VERSION_MAJOR 2
 #define PCAP_VERSION_MINOR 4
 
+#ifdef HAVE_PF_RING
+#define PF_RING_PCAP
+#endif
+
 #define PCAP_ERRBUF_SIZE 256
 
 /*
