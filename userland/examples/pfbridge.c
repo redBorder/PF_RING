@@ -121,12 +121,23 @@ int main(int argc, char* argv[]) {
   }
   
   /* Enable rings */
-  pfring_enable_ring(a_ring);
-
-  if(use_pfring_send)
-    pfring_enable_ring(b_ring);
-  else
+  if (pfring_enable_ring(a_ring) != 0) {
+    printf("Unable enabling ring 'a' :-(\n");
+    pfring_close(a_ring);
     pfring_close(b_ring);
+    return(-1);
+  }
+
+  if(use_pfring_send) {
+    if (pfring_enable_ring(b_ring)) {
+      printf("Unable enabling ring 'b' :-(\n");
+      pfring_close(a_ring);
+      pfring_close(b_ring);
+      return(-1);
+    }
+  } else {
+    pfring_close(b_ring);
+  }
 
   signal(SIGALRM, my_sigalarm);
   alarm(1);
@@ -142,7 +153,7 @@ int main(int argc, char* argv[]) {
 	rc = pfring_send(b_ring, (char*)buffer, hdr.caplen, 1);
 
 	if(rc < 0)
-	  printf("pfring_send_last_rx_packet() error %d\n", rc);
+	  printf("pfring_send() error %d\n", rc);
 	else if(verbose)
 	  printf("Forwarded %d bytes packet\n", hdr.len);	
       } else {
@@ -158,7 +169,7 @@ int main(int argc, char* argv[]) {
 	
     }
   }
-  
+
   pfring_close(a_ring);
   if(use_pfring_send) pfring_close(b_ring);
   
