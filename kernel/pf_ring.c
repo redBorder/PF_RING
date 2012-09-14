@@ -3886,7 +3886,7 @@ static int add_skb_to_ring(struct sk_buff *skb,
 
 /* ********************************** */
 
-static u_int hash_pkt_cluster(ring_cluster_element * cluster_ptr,
+static u_int hash_pkt_cluster(ring_cluster_element *cluster_ptr,
 			      struct pfring_pkthdr *hdr)
 {
   u_int idx;
@@ -3897,26 +3897,29 @@ static u_int hash_pkt_cluster(ring_cluster_element * cluster_ptr,
       break;
 
     case cluster_per_flow_2_tuple:
-      idx = hash_pkt_header(hdr, 0, 0, 1, 1, 0);
+      idx = hash_pkt_header(hdr, 0, 0, 1, 1, 1);
       break;
 
     case cluster_per_flow_4_tuple:
-      idx = hash_pkt_header(hdr, 0, 0, 0, 1, 0);
+      idx = hash_pkt_header(hdr, 0, 0, 0, 1, 1);
       break;
 
     case cluster_per_flow_tcp_5_tuple:      
       if(((hdr->extended_hdr.parsed_pkt.tunnel.tunnel_id == NO_TUNNEL_ID) ?
 	  hdr->extended_hdr.parsed_pkt.l3_proto : hdr->extended_hdr.parsed_pkt.tunnel.tunneled_proto) == IPPROTO_TCP)
-	idx = hash_pkt_header(hdr, 0, 0, 0, 0, 0); /* 5 tuple */
+	idx = hash_pkt_header(hdr, 0, 0, 0, 0, 1); /* 5 tuple */
       else
-	idx = hash_pkt_header(hdr, 0, 0, 1, 1, 0);   /* 2 tuple */
+	idx = hash_pkt_header(hdr, 0, 0, 1, 1, 1);   /* 2 tuple */
       break;
       
-  case cluster_per_flow:
-  case cluster_per_flow_5_tuple:
-  default:
-    idx = hash_pkt_header(hdr, 0, 0, 0, 0, 0);
-    break;
+    case cluster_per_flow_5_tuple:
+      idx = hash_pkt_header(hdr, 0, 0, 0, 0, 1);
+      break;
+
+    case cluster_per_flow:
+    default:
+      idx = hash_pkt_header(hdr, 0, 0, 0, 0, 0);
+      break;
   }
 
   return(idx % cluster_ptr->cluster.num_cluster_elements);
