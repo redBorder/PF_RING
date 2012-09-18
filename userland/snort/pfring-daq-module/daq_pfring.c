@@ -432,6 +432,13 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
   if ((default_sig_reload_handler = signal(SIGHUP, pfring_daq_sig_reload)) == SIG_ERR)
     default_sig_reload_handler = NULL;
 
+  for (i = 0; i < context->num_devices; i++) {
+    if(context->ring_handles[i] == NULL) {
+      if (pfring_daq_open(context, i) == -1)
+        return DAQ_ERROR;
+    }
+  }
+
   context->state = DAQ_STATE_INITIALIZED;
 
   *ctxt_ptr = context;
@@ -488,14 +495,6 @@ static int pfring_daq_set_filter(void *handle, const char *filter) {
 
 static int pfring_daq_start(void *handle) {
   Pfring_Context_t *context =(Pfring_Context_t *) handle;
-  int i;
-
-  for (i = 0; i < context->num_devices; i++) {
-    if(context->ring_handles[i] == NULL) {
-      if (pfring_daq_open(context, i) == -1)
-        return DAQ_ERROR;
-    }
-  }
 
   if(context->filter_string) {
     if(pfring_daq_set_filter(context, context->filter_string))
