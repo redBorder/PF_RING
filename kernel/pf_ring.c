@@ -251,7 +251,7 @@ static int reflect_packet(struct sk_buff *skb,
 
 static rwlock_t ring_mgmt_lock;
 
-inline void init_ring_readers(void)      {
+static inline void init_ring_readers(void)      {
   ring_mgmt_lock =
 #if(LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39))
     RW_LOCK_UNLOCKED
@@ -260,14 +260,14 @@ inline void init_ring_readers(void)      {
 #endif
     ;
 }
-inline void ring_write_lock(void)        { write_lock_bh(&ring_mgmt_lock);    }
-inline void ring_write_unlock(void)      { write_unlock_bh(&ring_mgmt_lock);  }
+static inline void ring_write_lock(void)        { write_lock_bh(&ring_mgmt_lock);    }
+static inline void ring_write_unlock(void)      { write_unlock_bh(&ring_mgmt_lock);  }
 /* use ring_read_lock/ring_read_unlock in process context (a bottom half may use write_lock) */
-inline void ring_read_lock(void)         { read_lock_bh(&ring_mgmt_lock);     }
-inline void ring_read_unlock(void)       { read_unlock_bh(&ring_mgmt_lock);   }
+static inline void ring_read_lock(void)         { read_lock_bh(&ring_mgmt_lock);     }
+static inline void ring_read_unlock(void)       { read_unlock_bh(&ring_mgmt_lock);   }
 /* use ring_read_lock_inbh/ring_read_unlock_inbh in bottom half contex */
-inline void ring_read_lock_inbh(void)    { read_lock(&ring_mgmt_lock);        }
-inline void ring_read_unlock_inbh(void)  { read_unlock(&ring_mgmt_lock);      }
+static inline void ring_read_lock_inbh(void)    { read_lock(&ring_mgmt_lock);        }
+static inline void ring_read_unlock_inbh(void)  { read_unlock(&ring_mgmt_lock);      }
 
 /* ********************************** */
 
@@ -674,7 +674,7 @@ static inline u_int32_t num_queued_pkts(struct pf_ring_socket *pfr)
 
 /* ************************************* */
 
-inline u_int get_num_ring_free_slots(struct pf_ring_socket * pfr)
+static inline u_int get_num_ring_free_slots(struct pf_ring_socket * pfr)
 {
   u_int32_t nqpkts = num_queued_pkts(pfr);
 
@@ -1722,11 +1722,11 @@ static inline void ring_remove(struct sock *sk_to_delete)
 
 /* ********************************** */
 
-inline u_int32_t hash_pkt(u_int16_t vlan_id, u_int8_t proto,
-			  ip_addr host_peer_a, ip_addr host_peer_b,
-			  u_int16_t port_peer_a, u_int16_t port_peer_b)
+static inline u_int32_t hash_pkt(u_int16_t vlan_id, u_int8_t proto,
+			         ip_addr host_peer_a, ip_addr host_peer_b,
+			         u_int16_t port_peer_a, u_int16_t port_peer_b)
 {
-  if(unlikely(enable_debug))
+  //if(unlikely(enable_debug))
     printk("[PF_RING] hash_pkt(vlan_id=%u, proto=%u, port_peer_a=%u, port_peer_b=%u)\n",
 	   vlan_id,proto, port_peer_a, port_peer_b);
 
@@ -1740,27 +1740,34 @@ inline u_int32_t hash_pkt(u_int16_t vlan_id, u_int8_t proto,
 
 /* ********************************** */
 
-inline u_int32_t hash_pkt_header(struct pfring_pkthdr * hdr, u_char mask_src, u_char mask_dst,
-				 u_int8_t mask_port, u_int8_t mask_proto, u_int8_t mask_vlan)
-{
-  if(hdr->extended_hdr.pkt_hash == 0) {
-    u_int8_t use_tunneled_peers = hdr->extended_hdr.parsed_pkt.tunnel.tunnel_id == NO_TUNNEL_ID ? 0 : 1;
+#define HASH_PKT_HDR_RECOMPUTE  1<<0
+#define HASH_PKT_HDR_MASK_SRC   1<<1
+#define HASH_PKT_HDR_MASK_DST   1<<2
+#define HASH_PKT_HDR_MASK_PORT  1<<3
+#define HASH_PKT_HDR_MASK_PROTO 1<<4
+#define HASH_PKT_HDR_MASK_VLAN  1<<5
 
+static inline u_int32_t hash_pkt_header(struct pfring_pkthdr * hdr, u_int32_t flags)
+{
+  if(hdr->extended_hdr.pkt_hash == 0 || flags & HASH_PKT_HDR_RECOMPUTE) {
+    u_int8_t use_tunneled_peers = hdr->extended_hdr.parsed_pkt.tunnel.tunnel_id == NO_TUNNEL_ID ? 0 : 1;
     hdr->extended_hdr.pkt_hash = hash_pkt(
-      mask_vlan  ? 0 : hdr->extended_hdr.parsed_pkt.vlan_id,
-      mask_proto ? 0 : (use_tunneled_peers ? 
-			hdr->extended_hdr.parsed_pkt.tunnel.tunneled_proto
-			: hdr->extended_hdr.parsed_pkt.l3_proto),
-      mask_src ? ip_zero : (use_tunneled_peers ? hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src
-                                               : hdr->extended_hdr.parsed_pkt.ip_src),
-      mask_dst ? ip_zero : (use_tunneled_peers ? hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst
-                                               : hdr->extended_hdr.parsed_pkt.ip_dst),
-      (mask_src || mask_port) ? 0 : (use_tunneled_peers ? 
-				     hdr->extended_hdr.parsed_pkt.tunnel.tunneled_l4_src_port
-				     : hdr->extended_hdr.parsed_pkt.l4_src_port),
-      (mask_dst || mask_port) ? 0 : (use_tunneled_peers ? 
-				     hdr->extended_hdr.parsed_pkt.tunnel.tunneled_l4_dst_port
-				     : hdr->extended_hdr.parsed_pkt.l4_dst_port));
+      (flags & HASH_PKT_HDR_MASK_VLAN)  ? 0 : hdr->extended_hdr.parsed_pkt.vlan_id,
+      (flags & HASH_PKT_HDR_MASK_PROTO) ? 0 : 
+        (use_tunneled_peers ? hdr->extended_hdr.parsed_pkt.tunnel.tunneled_proto
+			    : hdr->extended_hdr.parsed_pkt.l3_proto),
+      (flags & HASH_PKT_HDR_MASK_SRC) ? ip_zero : 
+        (use_tunneled_peers ? hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src
+			    : hdr->extended_hdr.parsed_pkt.ip_src),
+      (flags & HASH_PKT_HDR_MASK_DST) ? ip_zero : 
+        (use_tunneled_peers ? hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst
+			    : hdr->extended_hdr.parsed_pkt.ip_dst),
+      (flags & (HASH_PKT_HDR_MASK_SRC | HASH_PKT_HDR_MASK_PORT)) ? 0 : 
+        (use_tunneled_peers ? hdr->extended_hdr.parsed_pkt.tunnel.tunneled_l4_src_port
+			    : hdr->extended_hdr.parsed_pkt.l4_src_port),
+      (flags & (HASH_PKT_HDR_MASK_DST | HASH_PKT_HDR_MASK_PORT)) ? 0 : 
+        (use_tunneled_peers ? hdr->extended_hdr.parsed_pkt.tunnel.tunneled_l4_dst_port
+			    : hdr->extended_hdr.parsed_pkt.l4_dst_port));
   }
 
   return(hdr->extended_hdr.pkt_hash);
@@ -2122,7 +2129,7 @@ static int parse_raw_pkt(u_char *data, u_int data_len,
   } else
     hdr->extended_hdr.parsed_pkt.l4_src_port = hdr->extended_hdr.parsed_pkt.l4_dst_port = 0;
 
-  hash_pkt_header(hdr, 0, 0, 0, 0, 0);
+  hash_pkt_header(hdr, 0);
 
   return(1); /* IP */
 }
@@ -2224,7 +2231,7 @@ static int hash_bucket_match(sw_filtering_hash_bucket * hash_bucket,
 
 /* ********************************** */
 
-inline int hash_bucket_match_rule(sw_filtering_hash_bucket * hash_bucket,
+static inline int hash_bucket_match_rule(sw_filtering_hash_bucket * hash_bucket,
 				  hash_filtering_rule * rule)
 {
   if(unlikely(enable_debug))
@@ -2270,7 +2277,7 @@ inline int hash_bucket_match_rule(sw_filtering_hash_bucket * hash_bucket,
 
 /* ********************************** */
 
-inline int hash_filtering_rule_match(hash_filtering_rule * a,
+static inline int hash_filtering_rule_match(hash_filtering_rule * a,
 				     hash_filtering_rule * b)
 {
   if(unlikely(enable_debug))
@@ -2315,7 +2322,7 @@ inline int hash_filtering_rule_match(hash_filtering_rule * a,
 
 /* ********************************** */
 
-inline int match_ipv6(ip_addr *addr, ip_addr *rule_addr, ip_addr *rule_mask) {
+static inline int match_ipv6(ip_addr *addr, ip_addr *rule_addr, ip_addr *rule_mask) {
   int i;
   if(rule_mask->v6.s6_addr32[0] != 0)
     for(i=0; i<4; i++)
@@ -2437,7 +2444,7 @@ swap_direction:
 success:
 
   if(rule->rule.balance_pool > 0) {
-    u_int32_t balance_hash = hash_pkt_header(hdr, 0, 0, 0, 0, 0) % rule->rule.balance_pool;
+    u_int32_t balance_hash = hash_pkt_header(hdr, 0) % rule->rule.balance_pool;
 
     if(balance_hash != rule->rule.balance_id)
       return(0);
@@ -2638,7 +2645,7 @@ static inline void set_skb_time(struct sk_buff *skb, struct pfring_pkthdr *hdr) 
   - 0 = packet was not copied (e.g. slot was full)
   - 1 = the packet was copied (i.e. there was room for it)
 */
-inline int copy_data_to_ring(struct sk_buff *skb,
+static inline int copy_data_to_ring(struct sk_buff *skb,
 			     struct pf_ring_socket *pfr,
 			     struct pfring_pkthdr *hdr,
 			     int displ, int offset, void *plugin_mem,
@@ -2779,7 +2786,7 @@ inline int copy_data_to_ring(struct sk_buff *skb,
 
 /* ********************************** */
 
-inline int copy_raw_data_to_ring(struct pf_ring_socket *pfr,
+static inline int copy_raw_data_to_ring(struct pf_ring_socket *pfr,
 				 struct pfring_pkthdr *dummy_hdr,
 				 void *raw_data, uint raw_data_len) {
   return(copy_data_to_ring(NULL, pfr, dummy_hdr, 0, 0, NULL, raw_data, raw_data_len, NULL));
@@ -2787,7 +2794,7 @@ inline int copy_raw_data_to_ring(struct pf_ring_socket *pfr,
 
 /* ********************************** */
 
-inline int add_pkt_to_ring(struct sk_buff *skb,
+static inline int add_pkt_to_ring(struct sk_buff *skb,
 			   u_int8_t real_skb,
 			   struct pf_ring_socket *_pfr,
 			   struct pfring_pkthdr *hdr,
@@ -3360,7 +3367,7 @@ int check_perfect_rules(struct sk_buff *skb,
   sw_filtering_hash_bucket *hash_bucket;
   u_int8_t hash_found = 0;
 
-  hash_idx = hash_pkt_header(hdr, 0, 0, 0, 0, 0) % perfect_rules_hash_size;
+  hash_idx = hash_pkt_header(hdr, 0) % perfect_rules_hash_size;
   hash_bucket = pfr->sw_filtering_hash[hash_idx];
 
   while(hash_bucket != NULL) {
@@ -3708,7 +3715,7 @@ int bpf_filter_skb(struct sk_buff *skb,
 /* ********************************** */
 
 u_int32_t default_rehash_rss_func(struct sk_buff *skb, struct pfring_pkthdr *hdr) {
-  return hash_pkt_header(hdr, 0, 0, 0, 0, 0);
+  return hash_pkt_header(hdr, 0);
 }
 
 /* ********************************** */
@@ -3890,35 +3897,34 @@ static u_int hash_pkt_cluster(ring_cluster_element *cluster_ptr,
 			      struct pfring_pkthdr *hdr)
 {
   u_int idx;
-
   switch(cluster_ptr->cluster.hashing_mode) {
     case cluster_round_robin:
       idx = cluster_ptr->cluster.hashing_id++;
       break;
 
     case cluster_per_flow_2_tuple:
-      idx = hash_pkt_header(hdr, 0, 0, 1, 1, 1);
+      idx = hash_pkt_header(hdr, HASH_PKT_HDR_RECOMPUTE|HASH_PKT_HDR_MASK_PORT|HASH_PKT_HDR_MASK_PROTO|HASH_PKT_HDR_MASK_VLAN);
       break;
 
     case cluster_per_flow_4_tuple:
-      idx = hash_pkt_header(hdr, 0, 0, 0, 1, 1);
+      idx = hash_pkt_header(hdr, HASH_PKT_HDR_RECOMPUTE|HASH_PKT_HDR_MASK_PROTO|HASH_PKT_HDR_MASK_VLAN);
       break;
 
     case cluster_per_flow_tcp_5_tuple:      
       if(((hdr->extended_hdr.parsed_pkt.tunnel.tunnel_id == NO_TUNNEL_ID) ?
 	  hdr->extended_hdr.parsed_pkt.l3_proto : hdr->extended_hdr.parsed_pkt.tunnel.tunneled_proto) == IPPROTO_TCP)
-	idx = hash_pkt_header(hdr, 0, 0, 0, 0, 1); /* 5 tuple */
+	idx = hash_pkt_header(hdr, HASH_PKT_HDR_RECOMPUTE|HASH_PKT_HDR_MASK_VLAN); /* 5 tuple */
       else
-	idx = hash_pkt_header(hdr, 0, 0, 1, 1, 1);   /* 2 tuple */
+	idx = hash_pkt_header(hdr, HASH_PKT_HDR_RECOMPUTE|HASH_PKT_HDR_MASK_VLAN);   /* 2 tuple */
       break;
       
     case cluster_per_flow_5_tuple:
-      idx = hash_pkt_header(hdr, 0, 0, 0, 0, 1);
+      idx = hash_pkt_header(hdr, HASH_PKT_HDR_RECOMPUTE|HASH_PKT_HDR_MASK_VLAN);
       break;
 
     case cluster_per_flow:
     default:
-      idx = hash_pkt_header(hdr, 0, 0, 0, 0, 0);
+      idx = hash_pkt_header(hdr, 0);
       break;
   }
 
@@ -4027,7 +4033,7 @@ int unregister_plugin(u_int16_t pfring_plugin_id)
 
 /* ********************************** */
 
-inline int is_valid_skb_direction(packet_direction direction, u_char recv_packet) {
+static inline int is_valid_skb_direction(packet_direction direction, u_char recv_packet) {
   switch(direction) {
   case rx_and_tx_direction:
     return(1);
