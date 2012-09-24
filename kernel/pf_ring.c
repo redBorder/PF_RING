@@ -1726,7 +1726,7 @@ static inline u_int32_t hash_pkt(u_int16_t vlan_id, u_int8_t proto,
 			         ip_addr host_peer_a, ip_addr host_peer_b,
 			         u_int16_t port_peer_a, u_int16_t port_peer_b)
 {
-  //if(unlikely(enable_debug))
+  if(unlikely(enable_debug))
     printk("[PF_RING] hash_pkt(vlan_id=%u, proto=%u, port_peer_a=%u, port_peer_b=%u)\n",
 	   vlan_id,proto, port_peer_a, port_peer_b);
 
