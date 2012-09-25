@@ -1178,12 +1178,22 @@ pcap_activate_linux(pcap_t *handle)
 	  handle->ring = pfring_open((char*)device, handle->snapshot, flags);
 
 	  if(handle->ring) {
-	    if(clusterId = getenv("PCAP_PF_RING_CLUSTER_ID"))
-	      if(atoi(clusterId) > 0 && atoi(clusterId) < 255)
+	    if(clusterId = getenv("PCAP_PF_RING_CLUSTER_ID")) {
+	      if(atoi(clusterId) > 0 && atoi(clusterId) < 255) {
 		if(getenv("PCAP_PF_RING_USE_CLUSTER_PER_FLOW"))
 		  pfring_set_cluster(handle->ring, atoi(clusterId), cluster_per_flow);
+                else if( getenv("PCAP_PF_RING_USE_CLUSTER_PER_FLOW_2_TUPLE"))
+                  pfring_set_cluster(handle->ring, atoi(clusterId), cluster_per_flow_2_tuple);
+                else if( getenv("PCAP_PF_RING_USE_CLUSTER_PER_FLOW_4_TUPLE"))
+                  pfring_set_cluster(handle->ring, atoi(clusterId), cluster_per_flow_4_tuple);
+                else if( getenv("PCAP_PF_RING_USE_CLUSTER_PER_FLOW_TCP_5_TUPLE"))
+                  pfring_set_cluster(handle->ring, atoi(clusterId), cluster_per_flow_tcp_5_tuple);
+                else if( getenv("PCAP_PF_RING_USE_CLUSTER_PER_FLOW_5_TUPLE"))
+                  pfring_set_cluster(handle->ring, atoi(clusterId), cluster_per_flow_5_tuple);
 		else
 		  pfring_set_cluster(handle->ring, atoi(clusterId), cluster_round_robin);
+              }
+	    }
 
             if(appname = getenv("PCAP_PF_RING_APPNAME"))
 	      if(strlen(appname) > 0 && strlen(appname) <= 32)
