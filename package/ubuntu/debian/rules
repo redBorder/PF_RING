@@ -3,8 +3,15 @@
 # Uncomment this to turn on verbose mode.
 export DH_VERBOSE=1
 
-# This is the debhelper compatability version to use.
-export DH_COMPAT=1
+#
+# debian/compat
+# We should use at least comparibily version 5
+# but this requires the whole building process
+# to be remade and this is something we leave
+# to when we will have more time
+# http://www.tin.org/bin/man.cgi?section=7&topic=debhelper
+#
+
 
 package=pfring
 
