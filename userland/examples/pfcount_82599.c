@@ -635,7 +635,7 @@ int main(int argc, char* argv[]) {
   if(num_threads > 1) flags |= PF_RING_REENTRANT;
   if(use_extended_pkt_header) flags |= PF_RING_LONG_HEADER;
 
-  pd = pfring_open(device, snaplen, flags);
+  pd = pfring_open(device, snaplen, flags | PF_RING_PROMISC | PF_RING_DNA_SYMMETRIC_RSS);
 
   if(pd == NULL) {
     printf("pfring_open error [%s]\n", strerror(errno));
