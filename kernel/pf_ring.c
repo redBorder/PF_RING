@@ -651,21 +651,21 @@ static inline int get_next_slot_offset(struct pf_ring_socket *pfr, u_int32_t off
 
 /* ********************************** */
 
-static inline u_int32_t num_queued_pkts(struct pf_ring_socket *pfr)
+static inline u_int64_t num_queued_pkts(struct pf_ring_socket *pfr)
 {
   // smp_rmb();
 
   if(pfr->ring_slots != NULL) {
-    u_int32_t tot_insert = pfr->slots_info->tot_insert, tot_read = pfr->slots_info->tot_read;
+    u_int64_t tot_insert = pfr->slots_info->tot_insert, tot_read = pfr->slots_info->tot_read;
 
     if(tot_insert >= tot_read) {
       return(tot_insert - tot_read);
     } else {
-      return(((u_int32_t) - 1) + tot_insert - tot_read);
+      return(((u_int64_t) - 1) + tot_insert - tot_read);
     }
 
     if(unlikely(enable_debug)) {
-      printk("[PF_RING] -> [tot_insert=%d][tot_read=%d]\n",
+      printk("[PF_RING] -> [tot_insert=%llu][tot_read=%llu]\n",
 	     tot_insert, tot_read);
     }
   } else
@@ -676,7 +676,7 @@ static inline u_int32_t num_queued_pkts(struct pf_ring_socket *pfr)
 
 static inline u_int get_num_ring_free_slots(struct pf_ring_socket * pfr)
 {
-  u_int32_t nqpkts = num_queued_pkts(pfr);
+  u_int64_t nqpkts = num_queued_pkts(pfr);
 
   if(nqpkts < (pfr->slots_info->min_num_slots))
     return(pfr->slots_info->min_num_slots - nqpkts);
@@ -2684,7 +2684,7 @@ static inline int copy_data_to_ring(struct sk_buff *skb,
     pfr->slots_info->tot_lost++;
 
     if(unlikely(enable_debug))
-      printk("[PF_RING] ==> slot(off=%d) is full [insert_off=%u][remove_off=%u][slot_len=%u][num_queued_pkts=%u]\n",
+      printk("[PF_RING] ==> slot(off=%d) is full [insert_off=%u][remove_off=%u][slot_len=%u][num_queued_pkts=%llu]\n",
 	     off, pfr->slots_info->insert_off, pfr->slots_info->remove_off, pfr->slots_info->slot_len, num_queued_pkts(pfr));
 
    if(do_lock) write_unlock(&pfr->ring_index_lock);
