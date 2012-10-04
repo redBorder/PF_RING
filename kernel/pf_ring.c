@@ -772,7 +772,7 @@ static inline int check_and_init_free_slot(struct pf_ring_socket *pfr, int off)
       We need to find out whether the memory is full or empty
     */
 
-    if(num_queued_pkts(pfr) >= min_num_slots)
+    if(num_queued_pkts(pfr) >= pfr->slots_info->min_num_slots)
       return(0); /* Memory is full */
   } else {
     /* There are packets in the ring. We have to check whether we have
