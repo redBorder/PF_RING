@@ -60,7 +60,11 @@ unsigned long long rdtsc() {
 /* **************************************************** */
 
 inline int pfring_there_is_pkt_available(pfring *ring) {
-  return(ring->slots_info->tot_insert != ring->slots_info->tot_read);
+  /* For some reason the mb() in kernel space is failing keeping coherency, using a dirty trick.
+   * return(ring->slots_info->tot_insert != ring->slots_info->tot_read); */
+  return ((ring->slots_info->remove_off != ring->slots_info->insert_off) || 
+         ((ring->slots_info->remove_off == ring->slots_info->insert_off) && 
+	 ((ring->slots_info->tot_insert - ring->slots_info->tot_read) >= ring->slots_info->min_num_slots)));
 }
 
 /* **************************************************** */
@@ -440,10 +444,14 @@ int pfring_mod_recv(pfring *ring, u_char** buffer, u_int buffer_len,
 
       memcpy(hdr, bucket, ring->slot_header_len);
 
-      if(ring->slot_header_len != sizeof(struct pfring_pkthdr))
+      //if((hdr->caplen > 1518) || (hdr->len > 1518)) 
+      //  printf("%s:%d-----> Invalid packet length [caplen: %u][len: %u][hdr len: %u][slot len: %u][real slot len: %u][insert_off: %u][remove_off: %u][tot_insert: %lu][tot_read: %lu]\n", 
+      //         __FUNCTION__, __LINE__, hdr->caplen, hdr->len, ring->slot_header_len, ring->slots_info->slot_len, ring->slot_header_len+hdr->caplen, ring->slots_info->insert_off, ring->slots_info->remove_off, ring->slots_info->tot_insert, ring->slots_info->tot_read);
+
+      if(ring->slot_header_len != sizeof(struct pfring_pkthdr)) /* using short_pkt_header, parsed_header_len is not available */
 	bktLen = hdr->caplen;
       else
-	bktLen = hdr->caplen+hdr->extended_hdr.parsed_header_len;
+	bktLen = hdr->caplen + hdr->extended_hdr.parsed_header_len;
 
       real_slot_len = ring->slot_header_len + bktLen;
       if(bktLen > buffer_len) bktLen = buffer_len;
@@ -454,9 +462,8 @@ int pfring_mod_recv(pfring *ring, u_char** buffer, u_int buffer_len,
 	memcpy(*buffer, &bucket[ring->slot_header_len], bktLen);
 
       next_off = ring->slots_info->remove_off + real_slot_len;
-      if((next_off + ring->slots_info->slot_len) > (ring->slots_info->tot_mem - sizeof(FlowSlotInfo))) {
+      if((next_off + ring->slots_info->slot_len) > (ring->slots_info->tot_mem - sizeof(FlowSlotInfo)))
         next_off = 0;
-      }
       
 #ifdef USE_MB
       /* This prevents the compiler from reordering instructions.
@@ -464,17 +471,12 @@ int pfring_mod_recv(pfring *ring, u_char** buffer, u_int buffer_len,
       gcc_mb();
 #endif
 
-      /*
-	We need to stay one packet back otherwise the kernel will assume that
-	the slot has been processed
-      */
       ring->slots_info->tot_read++, ring->slots_info->remove_off = next_off;
 
       /* Ugly safety check */
-      if((ring->slots_info->tot_insert == ring->slots_info->tot_read)
-	 && (ring->slots_info->remove_off > ring->slots_info->insert_off)) {
+      if(unlikely((ring->slots_info->tot_insert == ring->slots_info->tot_read)
+	 && (ring->slots_info->remove_off > ring->slots_info->insert_off)))
 	ring->slots_info->remove_off = ring->slots_info->insert_off;
-      }
 
       if(unlikely(ring->reentrant)) pthread_rwlock_unlock(&ring->rx_lock);
       return(1);
