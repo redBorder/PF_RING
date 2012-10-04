@@ -674,7 +674,7 @@ static inline u_int64_t num_queued_pkts(struct pf_ring_socket *pfr)
 
 /* ************************************* */
 
-static inline u_int get_num_ring_free_slots(struct pf_ring_socket * pfr)
+static inline u_int64_t get_num_ring_free_slots(struct pf_ring_socket * pfr)
 {
   u_int64_t nqpkts = num_queued_pkts(pfr);
 
