@@ -630,7 +630,7 @@ typedef struct flowSlotInfo {
   /* <-- 64 bytes here, should be enough to avoid some L1 VIVT coherence issues (32 ~ 64bytes lines) */
   char padding[128-84];
   /* <-- 128 bytes here, should be enough to avoid false sharing in most L2 (64 ~ 128bytes lines) */
-  char k_padding[PAGE_SIZE-128];
+  char k_padding[4096-128];
   /* <-- 4096 bytes here, to get a page aligned block writable by kernel side only */
 
   /* second page, managed by userland */
@@ -638,7 +638,7 @@ typedef struct flowSlotInfo {
   u_int32_t remove_off /* managed by userland */;
   u_int32_t vpfring_guest_flags; /* used by vPFRing */
   u_int32_t userspace_ring_flags;
-  char u_padding[PAGE_SIZE-20];
+  char u_padding[4096-20];
   /* <-- 8192 bytes here, to get a page aligned block writable by userland only */
 } FlowSlotInfo;
 
