@@ -16,6 +16,7 @@ int pfring_virtual_open (pfring *ring);
 void pfring_virtual_close(pfring *ring);
 int pfring_virtual_set_poll_watermark(pfring *ring, u_int16_t watermark);
 int pfring_virtual_set_channel_id(pfring *ring, u_int32_t channel_id);
+int pfring_virtual_set_channel_mask(pfring *ring, u_int32_t channel_mask);
 int pfring_virtual_set_application_name(pfring *ring, char *name);
 int pfring_virtual_bind(pfring *ring, char *device_name);
 u_int8_t pfring_virtual_get_num_rx_channels(pfring *ring);

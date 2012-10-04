@@ -62,7 +62,8 @@ unsigned long long rdtsc() {
 inline int pfring_there_is_pkt_available(pfring *ring) {
   /* For some reason the mb() in kernel space is failing keeping coherency, using a dirty trick.
    * return(ring->slots_info->tot_insert != ring->slots_info->tot_read); */
-  return ((ring->slots_info->remove_off != ring->slots_info->insert_off) || 
+  return ((ring->slots_info->remove_off != ring->slots_info->insert_off && 
+          (ring->slots_info->tot_insert != ring->slots_info->tot_read)) || 
          ((ring->slots_info->remove_off == ring->slots_info->insert_off) && 
 	 ((ring->slots_info->tot_insert - ring->slots_info->tot_read) >= ring->slots_info->min_num_slots)));
 }
@@ -445,8 +446,13 @@ int pfring_mod_recv(pfring *ring, u_char** buffer, u_int buffer_len,
       memcpy(hdr, bucket, ring->slot_header_len);
 
       //if((hdr->caplen > 1518) || (hdr->len > 1518)) 
-      //  printf("%s:%d-----> Invalid packet length [caplen: %u][len: %u][hdr len: %u][slot len: %u][real slot len: %u][insert_off: %u][remove_off: %u][tot_insert: %lu][tot_read: %lu]\n", 
-      //         __FUNCTION__, __LINE__, hdr->caplen, hdr->len, ring->slot_header_len, ring->slots_info->slot_len, ring->slot_header_len+hdr->caplen, ring->slots_info->insert_off, ring->slots_info->remove_off, ring->slots_info->tot_insert, ring->slots_info->tot_read);
+      //  fprintf(stderr, "%s:%d-----> Invalid packet length [caplen: %u][len: %u]"
+      //                  "[hdr len: %u][slot len: %u][real slot len: %u]"
+      //                  "[insert_off: %u][remove_off: %u][tot_insert: %lu][tot_read: %lu]\n", 
+      //          __FUNCTION__, __LINE__, hdr->caplen, hdr->len, ring->slot_header_len, 
+      //          ring->slots_info->slot_len, ring->slot_header_len+hdr->caplen, 
+      //          ring->slots_info->insert_off, ring->slots_info->remove_off, 
+      //          ring->slots_info->tot_insert, ring->slots_info->tot_read);
 
       if(ring->slot_header_len != sizeof(struct pfring_pkthdr)) /* using short_pkt_header, parsed_header_len is not available */
 	bktLen = hdr->caplen;
@@ -475,8 +481,10 @@ int pfring_mod_recv(pfring *ring, u_char** buffer, u_int buffer_len,
 
       /* Ugly safety check */
       if(unlikely((ring->slots_info->tot_insert == ring->slots_info->tot_read)
-	 && (ring->slots_info->remove_off > ring->slots_info->insert_off)))
+	 && (ring->slots_info->remove_off > ring->slots_info->insert_off))) {
 	ring->slots_info->remove_off = ring->slots_info->insert_off;
+        fprintf(stderr, " *** corrupted ring buffer indexes (recovered) ***\n");
+      }
 
       if(unlikely(ring->reentrant)) pthread_rwlock_unlock(&ring->rx_lock);
       return(1);
