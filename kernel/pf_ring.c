@@ -1404,7 +1404,7 @@ static int ring_proc_get_info(char *buf, char **start, off_t offset,
 	rlen += sprintf(buf + rlen, "TX: Send Errors    : %lu\n", (unsigned long)fsi->pkt_send_error);
 	rlen += sprintf(buf + rlen, "Reflect: Fwd Ok    : %lu\n", (unsigned long)fsi->tot_fwd_ok);
 	rlen += sprintf(buf + rlen, "Reflect: Fwd Errors: %lu\n", (unsigned long)fsi->tot_fwd_notok);
-	rlen += sprintf(buf + rlen, "Num Free Slots     : %u\n",  get_num_ring_free_slots(pfr));
+	rlen += sprintf(buf + rlen, "Num Free Slots     : %lu\n",  (unsigned long)get_num_ring_free_slots(pfr));
       }
     } else
       rlen = sprintf(buf, "WARNING data == NULL\n");
