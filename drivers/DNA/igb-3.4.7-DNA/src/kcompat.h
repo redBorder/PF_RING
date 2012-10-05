@@ -2644,13 +2644,6 @@ do {								\
 		(bit) = find_next_bit((addr), (size), (bit) + 1))
 #endif /* for_each_set_bit */
 
-#if (RHEL_RELEASE_CODE && RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,3))
-/* DMA macros backported from 2.6.36 */ /* <- not working, redefining macros (ENABLE_DNA patch) */
-#undef DEFINE_DMA_UNMAP_ADDR
-#undef DEFINE_DMA_UNMAP_LEN
-#define DEFINE_DMA_UNMAP_ADDR DECLARE_PCI_UNMAP_ADDR
-#define DEFINE_DMA_UNMAP_LEN DECLARE_PCI_UNMAP_LEN
-#else
 #ifndef DEFINE_DMA_UNMAP_ADDR
 #define DEFINE_DMA_UNMAP_ADDR DECLARE_PCI_UNMAP_ADDR 
 #define DEFINE_DMA_UNMAP_LEN DECLARE_PCI_UNMAP_LEN
@@ -2658,8 +2651,14 @@ do {								\
 #define dma_unmap_addr_set pci_unmap_addr_set
 #define dma_unmap_len pci_unmap_len
 #define dma_unmap_len_set pci_unmap_len_set
+#else
+#if (RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,3)) /* ENABLE_DNA patch */
+#undef DEFINE_DMA_UNMAP_ADDR
+#undef DEFINE_DMA_UNMAP_LEN
+#define DEFINE_DMA_UNMAP_ADDR DECLARE_PCI_UNMAP_ADDR
+#define DEFINE_DMA_UNMAP_LEN DECLARE_PCI_UNMAP_LEN
+#endif
 #endif /* DEFINE_DMA_UNMAP_ADDR */
-#endif /* RHEL_RELEASE_VERSION(6,3) */
 #else /* < 2.6.34 */
 #define HAVE_SYSTEM_SLEEP_PM_OPS
 #ifndef HAVE_SET_RX_MODE
