@@ -50,7 +50,7 @@
 #define ALARM_SLEEP             1
 #define DEFAULT_SNAPLEN       128
 #define DEFAULT_DEVICE     "eth0"
-#define MAX_NUM_DEVS            8
+#define MAX_NUM_DEVS           16
 //#define VERBOSE_SUPPORT
 
 pfring  *pd[MAX_NUM_DEVS];
@@ -614,15 +614,16 @@ int main(int argc, char* argv[]) {
   
     pfring_set_application_name(pd[i], "pfaggregator");
 
-    if(pfring_get_bound_device_address(pd[i], mac_address) != 0)
-      fprintf(stderr, "Impossible to know the device address\n");
+    printf("Capturing from %s", dev);
+    if(pfring_get_bound_device_address(pd[i], mac_address) == 0)
+      printf(" [%s]\n", etheraddr_string(mac_address, buf));
     else
-      printf("Capturing from %s [%s]\n", dev, etheraddr_string(mac_address, buf));
+      printf("\n");
 
     printf("# Device RX channels: %d\n", pfring_get_num_rx_channels(pd[i]));
 
     if((rc = pfring_set_direction(pd[i], direction)) != 0)
-      fprintf(stderr, "pfring_set_direction returned [rc=%d][direction=%d]\n", rc, direction);
+      ; //fprintf(stderr, "pfring_set_direction returned [rc=%d][direction=%d]\n", rc, direction);
 
     if((rc = pfring_set_socket_mode(pd[i], recv_only_mode)) != 0)
       fprintf(stderr, "pfring_set_socket_mode returned [rc=%d]\n", rc);
