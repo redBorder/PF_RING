@@ -47,7 +47,7 @@
 #include <librdi.h>
 #endif
 
-#define MAX_CAPLEN             16384
+#define MAX_CAPLEN             65535
 #define PAGE_SIZE               4096
 
 #define DEFAULT_POLL_DURATION   500
