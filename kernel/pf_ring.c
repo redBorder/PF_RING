@@ -98,6 +98,7 @@
 #include <linux/etherdevice.h>
 #include <linux/proc_fs.h>
 #include <linux/if_arp.h>
+#include <linux/if_vlan.h>
 #include <net/xfrm.h>
 #include <net/sock.h>
 #include <asm/io.h>		/* needed for virt_to_phys() */
@@ -1753,19 +1754,19 @@ static inline u_int32_t hash_pkt_header(struct pfring_pkthdr * hdr, u_int32_t fl
     u_int8_t use_tunneled_peers = hdr->extended_hdr.parsed_pkt.tunnel.tunnel_id == NO_TUNNEL_ID ? 0 : 1;
     hdr->extended_hdr.pkt_hash = hash_pkt(
       (flags & HASH_PKT_HDR_MASK_VLAN)  ? 0 : hdr->extended_hdr.parsed_pkt.vlan_id,
-      (flags & HASH_PKT_HDR_MASK_PROTO) ? 0 : 
+      (flags & HASH_PKT_HDR_MASK_PROTO) ? 0 :
         (use_tunneled_peers ? hdr->extended_hdr.parsed_pkt.tunnel.tunneled_proto
 			    : hdr->extended_hdr.parsed_pkt.l3_proto),
-      (flags & HASH_PKT_HDR_MASK_SRC) ? ip_zero : 
+      (flags & HASH_PKT_HDR_MASK_SRC) ? ip_zero :
         (use_tunneled_peers ? hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src
 			    : hdr->extended_hdr.parsed_pkt.ip_src),
-      (flags & HASH_PKT_HDR_MASK_DST) ? ip_zero : 
+      (flags & HASH_PKT_HDR_MASK_DST) ? ip_zero :
         (use_tunneled_peers ? hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst
 			    : hdr->extended_hdr.parsed_pkt.ip_dst),
-      (flags & (HASH_PKT_HDR_MASK_SRC | HASH_PKT_HDR_MASK_PORT)) ? 0 : 
+      (flags & (HASH_PKT_HDR_MASK_SRC | HASH_PKT_HDR_MASK_PORT)) ? 0 :
         (use_tunneled_peers ? hdr->extended_hdr.parsed_pkt.tunnel.tunneled_l4_src_port
 			    : hdr->extended_hdr.parsed_pkt.l4_src_port),
-      (flags & (HASH_PKT_HDR_MASK_DST | HASH_PKT_HDR_MASK_PORT)) ? 0 : 
+      (flags & (HASH_PKT_HDR_MASK_DST | HASH_PKT_HDR_MASK_PORT)) ? 0 :
         (use_tunneled_peers ? hdr->extended_hdr.parsed_pkt.tunnel.tunneled_l4_dst_port
 			    : hdr->extended_hdr.parsed_pkt.l4_dst_port));
   }
@@ -1799,6 +1800,7 @@ static int parse_raw_pkt(u_char *data, u_int data_len,
 
   if (hdr->extended_hdr.parsed_pkt.eth_type == ETH_P_8021Q /* 802.1q (VLAN) */) {
     struct eth_vlan_hdr *vh;
+
     hdr->extended_hdr.parsed_pkt.offset.vlan_offset = sizeof(struct ethhdr) - sizeof(struct eth_vlan_hdr);
     while (hdr->extended_hdr.parsed_pkt.eth_type == ETH_P_8021Q /* 802.1q (VLAN) */) {
       hdr->extended_hdr.parsed_pkt.offset.vlan_offset += sizeof(struct eth_vlan_hdr);
@@ -1959,7 +1961,7 @@ static int parse_raw_pkt(u_char *data, u_int data_len,
 		  gtpext = (struct gtp_v1_ext_hdr *) (&data[hdr->extended_hdr.parsed_pkt.offset.payload_offset+gtp_len]);
 		  gtp_len += (gtpext->len * GTP_EXT_HDR_LEN_UNIT_BYTES);
 		  if((gtpext->len == 0) || (data_len < (hdr->extended_hdr.parsed_pkt.offset.payload_offset+gtp_len))) return(1);
-		  next_ext_hdr = (u_int8_t *) (&data[hdr->extended_hdr.parsed_pkt.offset.payload_offset+gtp_len-1 /* 8 bit next_ext_hdr field */]);		  
+		  next_ext_hdr = (u_int8_t *) (&data[hdr->extended_hdr.parsed_pkt.offset.payload_offset+gtp_len-1 /* 8 bit next_ext_hdr field */]);
 		} while(*next_ext_hdr != 0);
 	      }
 	    }
@@ -2023,7 +2025,7 @@ static int parse_raw_pkt(u_char *data, u_int data_len,
 		if(data_len < tunnel_offset + sizeof(struct tcphdr)) return(1);
 		tcp = (struct tcphdr *)(&data[tunnel_offset]);
 
-		hdr->extended_hdr.parsed_pkt.tunnel.tunneled_l4_src_port = ntohs(tcp->source), 
+		hdr->extended_hdr.parsed_pkt.tunnel.tunneled_l4_src_port = ntohs(tcp->source),
 		  hdr->extended_hdr.parsed_pkt.tunnel.tunneled_l4_dst_port = ntohs(tcp->dest);
 	      } else if(hdr->extended_hdr.parsed_pkt.tunnel.tunneled_proto == IPPROTO_UDP) {
 		struct udphdr *udp;
@@ -2031,7 +2033,7 @@ static int parse_raw_pkt(u_char *data, u_int data_len,
 		if(data_len < tunnel_offset + sizeof(struct udphdr)) return(1);
 		udp = (struct udphdr *)(&data[tunnel_offset]);
 
-		hdr->extended_hdr.parsed_pkt.tunnel.tunneled_l4_src_port = ntohs(udp->source), 
+		hdr->extended_hdr.parsed_pkt.tunnel.tunneled_l4_src_port = ntohs(udp->source),
 		  hdr->extended_hdr.parsed_pkt.tunnel.tunneled_l4_dst_port = ntohs(udp->dest);
 
 		if((hdr->extended_hdr.parsed_pkt.tunnel.tunneled_l4_src_port == MOBILE_IP_PORT)
@@ -2076,7 +2078,7 @@ static int parse_raw_pkt(u_char *data, u_int data_len,
 
 	  fragment_offset = tunneled_ip->frag_off & htons(IP_OFFSET); /* fragment, but not the first */
 	  ip_len = tunneled_ip->ihl*4;
-	  tunnel_offset = hdr->extended_hdr.parsed_pkt.offset.payload_offset + ip_len;	  
+	  tunnel_offset = hdr->extended_hdr.parsed_pkt.offset.payload_offset + ip_len;
         } else if(gre->proto == ETH_P_IPV6 /* IPv6 */) {
 	  struct ipv6hdr* tunneled_ipv6;
 
@@ -2110,7 +2112,7 @@ static int parse_raw_pkt(u_char *data, u_int data_len,
 	    hdr->extended_hdr.parsed_pkt.tunnel.tunneled_proto = ipv6_opt->nexthdr;
 	  } /* while */
 
-	  tunnel_offset += ip_len;	    
+	  tunnel_offset += ip_len;
         } else
 	  return(1);
 
@@ -2146,6 +2148,7 @@ static int parse_pkt(struct sk_buff *skb,
   u_int16_t data_len = min((u_int16_t)(skb->len + skb_displ), (u_int16_t)sizeof(buffer));
 
   skb_copy_bits(skb, -skb_displ, buffer, data_len);
+
   rc = parse_raw_pkt(buffer, data_len, hdr);
   hdr->extended_hdr.parsed_pkt.offset.eth_offset = -skb_displ;
 
@@ -2705,12 +2708,33 @@ static inline int copy_data_to_ring(struct sk_buff *skb,
     }
 
     if(hdr->caplen > 0) {
+      u16 vlan_tci = 0;
+
       if(unlikely(enable_debug))
 	printk("[PF_RING] --> [caplen=%d][len=%d][displ=%d][extended_hdr.parsed_header_len=%d][bucket_len=%d][sizeof=%d]\n",
 	       hdr->caplen, hdr->len, displ, hdr->extended_hdr.parsed_header_len, pfr->bucket_len,
 	       pfr->slot_header_len);
+       
+      if((vlan_get_tag(skb, &vlan_tci) == 0) /* The packet is tagged... */
+	 && (hdr->extended_hdr.parsed_pkt.offset.vlan_offset == 0) /* but we have seen no tag -> it has been stripped */) {
+	/* VLAN-tagged packet with stripped VLAN tag */
+	u_int16_t *b;
+	struct vlan_ethhdr *v = vlan_eth_hdr(skb);
 
-      skb_copy_bits(skb, -displ, &ring_bucket[pfr->slot_header_len + offset], hdr->caplen);
+	hdr->extended_hdr.parsed_pkt.vlan_id = vlan_tci, hdr->extended_hdr.parsed_pkt.offset.vlan_offset += sizeof(struct ethhdr),
+	  hdr->extended_hdr.parsed_pkt.offset.l3_offset += sizeof(struct eth_vlan_hdr);
+	
+	if(hdr->extended_hdr.parsed_pkt.offset.l4_offset) hdr->extended_hdr.parsed_pkt.offset.l4_offset += sizeof(struct eth_vlan_hdr);
+	if(hdr->extended_hdr.parsed_pkt.offset.payload_offset) hdr->extended_hdr.parsed_pkt.offset.payload_offset += sizeof(struct eth_vlan_hdr);
+		
+	skb_copy_bits(skb, -displ, &ring_bucket[pfr->slot_header_len + offset], displ);
+	b = (u_int16_t*)&ring_bucket[pfr->slot_header_len + offset+12];
+	b[0] = ntohs(ETH_P_8021Q), b[1] = ntohs(vlan_tci), b[2] = v->h_vlan_proto;
+	if(skb_copy_bits(skb, 4, &ring_bucket[pfr->slot_header_len + offset + 18], hdr->caplen-18) < 0)
+	  printk("[PF_RING] --> FAULT [skb->len=%u][len=%u]\n", skb->len, hdr->caplen-16);
+      } else {
+	skb_copy_bits(skb, -displ, &ring_bucket[pfr->slot_header_len + offset], hdr->caplen);
+      }    
     } else {
       if(hdr->extended_hdr.parsed_header_len >= pfr->bucket_len) {
 	static u_char print_once = 0;
@@ -3833,7 +3857,7 @@ static int add_skb_to_ring(struct sk_buff *skb,
 
 	if(unlikely(enable_debug))
 	  printk("[PF_RING] %s(skb): sampled packet [len=%d]"
-		 "[tot=%llu][insert_off=%d][pkt_type=%d][cloned=%d]\n", 
+		 "[tot=%llu][insert_off=%d][pkt_type=%d][cloned=%d]\n",
 		 __FUNCTION__,
 		 (int)skb->len, pfr->slots_info->tot_pkts,
 		 pfr->slots_info->insert_off, skb->pkt_type,
@@ -3910,14 +3934,14 @@ static u_int hash_pkt_cluster(ring_cluster_element *cluster_ptr,
       idx = hash_pkt_header(hdr, HASH_PKT_HDR_RECOMPUTE|HASH_PKT_HDR_MASK_PROTO|HASH_PKT_HDR_MASK_VLAN);
       break;
 
-    case cluster_per_flow_tcp_5_tuple:      
+    case cluster_per_flow_tcp_5_tuple:
       if(((hdr->extended_hdr.parsed_pkt.tunnel.tunnel_id == NO_TUNNEL_ID) ?
 	  hdr->extended_hdr.parsed_pkt.l3_proto : hdr->extended_hdr.parsed_pkt.tunnel.tunneled_proto) == IPPROTO_TCP)
 	idx = hash_pkt_header(hdr, HASH_PKT_HDR_RECOMPUTE|HASH_PKT_HDR_MASK_VLAN); /* 5 tuple */
       else
 	idx = hash_pkt_header(hdr, HASH_PKT_HDR_RECOMPUTE|HASH_PKT_HDR_MASK_VLAN);   /* 2 tuple */
       break;
-      
+
     case cluster_per_flow_5_tuple:
       idx = hash_pkt_header(hdr, HASH_PKT_HDR_RECOMPUTE|HASH_PKT_HDR_MASK_VLAN);
       break;
@@ -4337,7 +4361,7 @@ static int skb_ring_handler(struct sk_buff *skb,
 	 ) {
 	/* We've found the ring where the packet can be stored */
 	int old_caplen = hdr.caplen;  /* Keep old lenght */
-	
+
 	hdr.caplen = min_val(hdr.caplen, pfr->bucket_len);
 	room_available |= add_skb_to_ring(skb, real_skb, pfr, &hdr, is_ip_pkt,
 					  displ, channel_id, num_rx_channels, &clone_id);
@@ -4530,7 +4554,7 @@ static int packet_rcv(struct sk_buff *skb, struct net_device *dev,
 
 void register_device_handler(void) {
   if(transparent_mode == driver2pf_ring_non_transparent
-     || (transparent_mode == driver2pf_ring_transparent && !enable_tx_capture)) 
+     || (transparent_mode == driver2pf_ring_transparent && !enable_tx_capture))
     return;
 
   prot_hook.func = packet_rcv;
@@ -4542,7 +4566,7 @@ void register_device_handler(void) {
 
 void unregister_device_handler(void) {
    if(transparent_mode == driver2pf_ring_non_transparent
-     || (transparent_mode == driver2pf_ring_transparent && !enable_tx_capture)) 
+     || (transparent_mode == driver2pf_ring_transparent && !enable_tx_capture))
     return;
 
   dev_remove_pack(&prot_hook); /* Remove protocol hook */
@@ -6177,7 +6201,7 @@ unsigned int ring_poll(struct file *file,
     if(pfr->dna_cluster != NULL && pfr->dna_cluster_type == dna_cluster_slave) {
       poll_wait(file, &pfr->ring_slots_waitqueue, wait);
       // if(1) /* queued packets info not available */
-        mask |= POLLIN | POLLRDNORM; 
+        mask |= POLLIN | POLLRDNORM;
       return(mask);
     }
 
@@ -7349,7 +7373,7 @@ static int ring_setsockopt(struct socket *sock,
       printk("[PF_RING] * SO_REHASH_RSS_PACKET *\n");
 
     pfr->rehash_rss = default_rehash_rss_func;
-    found = 1; 
+    found = 1;
     break;
 
 #ifdef VPFRING_SUPPORT
@@ -8360,7 +8384,7 @@ EXPORT_SYMBOL(pf_ring_add_module_dependency);
 /* ************************************ */
 
 int pf_ring_inject_packet_to_ring(int if_index, int channel_id, char *data, int data_len, struct pfring_pkthdr *hdr) {
-  struct sock* sk = NULL; 
+  struct sock* sk = NULL;
   u_int32_t last_list_idx;
   struct pf_ring_socket *pfr;
   u_int32_t the_bit = 1 << channel_id;
@@ -8379,7 +8403,7 @@ int pf_ring_inject_packet_to_ring(int if_index, int channel_id, char *data, int 
           && (test_bit(if_index, pfr->netdev_mask) /* || pfr->ring_netdev == &any_device_element */ )
           && ((pfr->channel_id_mask & the_bit) || channel_id == RING_ANY_CHANNEL)) {
         /* 0  == success, -1 == no room available */
-        rc = add_raw_packet_to_ring(pfr, hdr, data, data_len, 0); 
+        rc = add_raw_packet_to_ring(pfr, hdr, data, data_len, 0);
       }
 
       sk = (struct sock*)lockless_list_get_next(&ring_table, &last_list_idx);
@@ -8387,9 +8411,9 @@ int pf_ring_inject_packet_to_ring(int if_index, int channel_id, char *data, int 
   }
 
   if (unlikely(enable_debug) && rc == -2)
-    printk("[PF_RING] %s() Error: no ring found for if_index=%d, channel_id=%d\n", 
+    printk("[PF_RING] %s() Error: no ring found for if_index=%d, channel_id=%d\n",
            __FUNCTION__, if_index, channel_id);
-  
+
   return rc;
 }
 EXPORT_SYMBOL(pf_ring_inject_packet_to_ring);

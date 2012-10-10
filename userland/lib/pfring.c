@@ -217,6 +217,9 @@ u_int8_t pfring_open_multichannel(char *device_name, u_int32_t caplen,
 
   pfring_close(ring[0]);
 
+  if(num_channels > MAX_NUM_RX_CHANNELS)
+    num_channels = MAX_NUM_RX_CHANNELS;
+
   /* Now do the real job */
   for(i=0; i<num_channels; i++) {
     char dev[32];

@@ -451,7 +451,7 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h,
 #if 0
     {
       int i;
-      for(i = 0; i < h->caplen; i++)
+      for(i = 0; i < 30 /* h->caplen */; i++)
         printf("%02X ", p[i]);
       printf("\n");
     }

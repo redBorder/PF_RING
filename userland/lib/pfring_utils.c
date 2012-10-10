@@ -552,6 +552,6 @@ int pfring_get_mtu_size(pfring* ring) {
   if(ioctl(ring->fd, SIOCGIFMTU, &ifr) == -1) {
     return(0); /* Unknown for this device */
   }
-  
+
   return(ifr.ifr_mtu);
 }

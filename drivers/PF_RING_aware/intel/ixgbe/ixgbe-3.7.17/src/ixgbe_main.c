@@ -1132,7 +1132,7 @@ static void ixgbe_receive_skb(struct ixgbe_q_vector *q_vector,
 #ifdef CONFIG_IXGBE_NAPI
 		else if (adapter->flags & IXGBE_FLAG_IN_NETPOLL)
 			vlan_hwaccel_rx(skb, *vlgrp, vlan_tag);
-		else
+		else 
 			vlan_gro_receive(&q_vector->napi,
 					 *vlgrp, vlan_tag, skb);
 #else
@@ -1967,8 +1967,18 @@ static bool ixgbe_clean_rx_irq_bb(struct ixgbe_q_vector *q_vector,
 #else
 #ifdef CONFIG_IXGBE_NAPI
 			napi_gro_receive(&q_vector->napi, skb);
+
+#if 0
+			{
+			  struct vlan_group **vlgrp = netdev_priv(skb->dev);
+
+			  if(*vlgrp)
+			    vlan_hwaccel_rx(skb, *vlgrp, IXGBE_CB(skb)->vid);
+			}
+#endif
+
 #else
-			if (netif_rx(skb) == NET_RX_DROP)
+			if (netif_rx(skb) == NET_RX_DROP) 
 				q_vector->adapter->rx_dropped_backlog++;
 #endif
 #endif
@@ -4175,6 +4185,8 @@ static void ixgbe_vlan_rx_add_vid(struct net_device *netdev, u16 vid)
 	struct ixgbe_hw *hw = &adapter->hw;
 	int pool_ndx = adapter->num_vfs;
 
+	printk("[PF_RING] %s(vlanId: %u)\n", __FUNCTION__, vid);
+
 	/* add VID to filter table */
 	if (hw->mac.ops.set_vfta) {
 #ifndef HAVE_VLAN_RX_REGISTER
@@ -4305,7 +4317,7 @@ void ixgbe_vlan_stripping_enable(struct ixgbe_adapter *adapter)
 	int i;
 
 #ifdef HAVE_PF_RING
-	return; /* We like VLAN tags */
+	//return; /* We like VLAN tags */
 #endif
 
 	switch (hw->mac.type) {
