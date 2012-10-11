@@ -190,8 +190,7 @@ void printHelp(void) {
   printf("-h              Print this help\n");
   printf("-i <device>     Device name. Use device\n");
   printf("-l <length>     Packet length to send. Ignored with -f\n");
-  printf("-n <num>        Num pkts to send (use 0 for infinite). With -f it\n"
-	 "                specifies the number of times the file will be sent\n");
+  printf("-n <num>        Num pkts to send (use 0 for infinite)\n");
   printf("-r <rate>       Rate to send (example -r 2.5 sends 2.5 Gbit/sec, -r -1 pcap capture rate)\n");
   printf("-m <dst MAC>    Reforge destination MAC (format AA:BB:CC:DD:EE:FF)\n");
   printf("-b <num>        Number of different IPs (balanced traffic)\n");
