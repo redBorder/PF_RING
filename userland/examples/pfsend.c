@@ -551,7 +551,11 @@ int main(int argc, char* argv[]) {
 
 	if (last != NULL) last->next = p;
 	last = p;
-      }
+      } else { 
+	/* oops, couldn't allocate memory */
+	fprintf(stderr, "Unable to allocate memory requested (%s)\n", strerror(errno));
+	return (-1);
+      }      
     }
   }
 

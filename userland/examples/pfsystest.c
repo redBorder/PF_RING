@@ -98,6 +98,13 @@ int main(int argc, char* argv[]) {
     test_id = 64;
     buffer_len = test_id*1024;
     buffer = malloc(buffer_len);
+
+    if(buffer == NULL) {
+      /* oops, couldn't allocate memory */
+      fprintf(stderr, "Unable to allocate memory requested (%s)\n", strerror(errno));
+      return (-1);
+    }
+
     num_runs = 10000;
 
     for(j=0; j<=test_id; j++) {
@@ -117,7 +124,7 @@ int main(int argc, char* argv[]) {
       printf("%02d [Test len=%d KB][%.2f calls/sec][%.1f usec/call][Thpt: %.2f Gbps][%s]\n",
 	     j, test_len/1024, call_per_sec, call_duration_usec, thpt,
 	     (thpt > (double)10) ? "10 Gbit Wire rate" : "No Wire rate");
-    } 
+    }
 
     free(buffer);
 
@@ -126,6 +133,12 @@ int main(int argc, char* argv[]) {
     test_id = 4;
     buffer_len = test_id*1024*1024;
     buffer = malloc(buffer_len);
+    if(buffer == NULL) {
+      /* oops, couldn't allocate memory */
+      fprintf(stderr, "Unable to allocate memory requested (%s)\n", strerror(errno));
+      return (-1);
+    }
+
     num_runs = 1000;
 
     for(j=1; j<=test_id; j++) {
@@ -155,21 +168,27 @@ int main(int argc, char* argv[]) {
   test_id = 8;
   buffer_len = test_id*1024*1024;
   buffer = malloc(buffer_len);
+  if(buffer == NULL) {
+    /* oops, couldn't allocate memory */
+    fprintf(stderr, "Unable to allocate memory requested (%s)\n", strerror(errno));
+    return (-1);
+  }
+
   num_runs = 1000;
 
   for(j=0; j<=test_id; j++) {
     test_len = j*1024*1024;
-    
+
     gettimeofday(&startTime, NULL);
-    
+
     for(i=0; i<num_runs; i++)
       pfring_loopback_test(pd, buffer, buffer_len, test_len);
-    
+
     gettimeofday(&endTime, NULL);
     deltaUsec = delta_time(&endTime, &startTime);
     printf("%02d Test len=%d, %.2f calls/sec [%.1f usec/call]\n", j,
 	   test_len, ((double)num_runs*1000)/deltaUsec,
-	   deltaUsec/num_runs);   
+	   deltaUsec/num_runs);
   }
 
   free(buffer);
