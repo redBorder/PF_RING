@@ -279,11 +279,11 @@ extern "C" {
 
   /* ********************************* */
 
-  pfring* pfring_open(char *device_name, u_int32_t caplen, u_int32_t flags);
-  pfring* pfring_open_consumer(char *device_name, u_int32_t caplen, u_int32_t flags,
+  pfring* pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags);
+  pfring* pfring_open_consumer(const char *device_name, u_int32_t caplen, u_int32_t flags,
 			       u_int8_t consumer_plugin_id,
 			       char* consumer_data, u_int consumer_data_len);
-  u_int8_t pfring_open_multichannel(char *device_name, u_int32_t caplen, 
+  u_int8_t pfring_open_multichannel(const char *device_name, u_int32_t caplen, 
 				    u_int32_t flags, pfring* ring[MAX_NUM_RX_CHANNELS]);
 
   void pfring_shutdown(pfring *ring);

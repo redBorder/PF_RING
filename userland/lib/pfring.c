@@ -79,7 +79,7 @@ static pfring_module_info pfring_module_list[] = {
 
 /* **************************************************** */
 
-pfring* pfring_open(char *device_name, u_int32_t caplen, u_int32_t flags) {
+pfring* pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags) {
   int i = -1;
   int mod_found = 0;
   int ret;
@@ -171,7 +171,7 @@ pfring* pfring_open(char *device_name, u_int32_t caplen, u_int32_t flags) {
 
 /* **************************************************** */
 
-pfring* pfring_open_consumer(char *device_name, u_int32_t caplen, u_int32_t flags,
+pfring* pfring_open_consumer(const char *device_name, u_int32_t caplen, u_int32_t flags,
 			     u_int8_t consumer_plugin_id,
 			     char* consumer_data, u_int consumer_data_len) {
   pfring *ring = pfring_open(device_name, caplen, flags);
@@ -195,7 +195,7 @@ pfring* pfring_open_consumer(char *device_name, u_int32_t caplen, u_int32_t flag
 
 /* **************************************************** */
 
-u_int8_t pfring_open_multichannel(char *device_name, u_int32_t caplen,
+u_int8_t pfring_open_multichannel(const char *device_name, u_int32_t caplen,
 				  u_int32_t flags,
 				  pfring* ring[MAX_NUM_RX_CHANNELS]) {
   u_int8_t num_channels, i, num = 0;
