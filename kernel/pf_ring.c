@@ -7811,17 +7811,23 @@ static int ring_getsockopt(struct socket *sock,
 
   case SO_GET_EXTRA_DMA_MEMORY:
     {
-      u_int64_t num_slots;
+      u_int64_t num_slots, slot_len, chunk_len;
 
       if(pfr->dna_device == NULL || pfr->dna_device->hwdev == NULL)
         return -EINVAL;
 
-      if(len < sizeof(u_int64_t))
+      if(len < (3 * sizeof(u_int64_t)))
         return -EINVAL;
 
       if(copy_from_user(&num_slots, optval, sizeof(num_slots)))
         return -EFAULT;
 
+      if(copy_from_user(&slot_len, optval+sizeof(num_slots), sizeof(slot_len)))
+        return -EFAULT;
+
+      if(copy_from_user(&chunk_len, optval+sizeof(num_slots)+sizeof(slot_len), sizeof(chunk_len)))
+        return -EFAULT;
+      
       //if(num_slots > MAX_EXTRA_DMA_SLOTS)
       //  num_slots = MAX_EXTRA_DMA_SLOTS;
 
@@ -7832,8 +7838,7 @@ static int ring_getsockopt(struct socket *sock,
         return -EINVAL;
 
       if((pfr->extra_dma_memory = allocate_extra_dma_memory(pfr->dna_device->hwdev,
-                                    num_slots, pfr->dna_device->mem_info.rx.packet_memory_slot_len,
-                                    pfr->dna_device->mem_info.rx.packet_memory_chunk_len)) == NULL)
+                                    num_slots, slot_len, chunk_len)) == NULL)
         return -EFAULT;
 
       if(copy_to_user(optval, pfr->extra_dma_memory->dma_addr, (sizeof(u_int64_t) * num_slots))) {
