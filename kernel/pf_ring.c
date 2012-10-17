@@ -5013,10 +5013,6 @@ static struct dma_memory_info *allocate_extra_dma_memory(struct device *hwdev,
     return NULL;
   }
 
-  if(unlikely(enable_debug))
-    printk("[PF_RING] %s() Allocating %d chunks of %d bytes [slots per chunk=%d]\n",
-           __FUNCTION__, dma_memory->num_chunks, dma_memory->chunk_len, num_slots_per_chunk);
-
   if (numa_node == -1) {
     if(unlikely(enable_debug))
       printk("[PF_RING] %s() device node not set, selecting current node\n", __FUNCTION__);
@@ -5024,7 +5020,8 @@ static struct dma_memory_info *allocate_extra_dma_memory(struct device *hwdev,
   }
 
   if(unlikely(enable_debug))
-    printk("[PF_RING] %s() allocating extra DMA memory on node %d\n", __FUNCTION__, numa_node);
+    printk("[PF_RING] Allocating %d DMA chunks of %d bytes on node %d [slots per chunk=%d]\n",
+           dma_memory->num_chunks, dma_memory->chunk_len, numa_node, num_slots_per_chunk);
 
   /* Allocating memory chunks */
   for(i=0; i < dma_memory->num_chunks; i++) {

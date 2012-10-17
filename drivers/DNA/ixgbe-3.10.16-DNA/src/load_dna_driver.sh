@@ -21,8 +21,8 @@ insmod ../../../../kernel/pf_ring.ko
 # Disable multiqueue
 insmod ./ixgbe.ko RSS=1,1,1,1 
 
-# Configure the number of TX slots
-#insmod ./ixgbe.ko RSS=1,1,1,1 num_tx_slots=4096
+# Configure the number of TX and RX slots
+#insmod ./ixgbe.ko RSS=1,1,1,1 num_rx_slots=32768 num_tx_slots=4096
 
 # Enable 8 queues
 #insmod ./ixgbe.ko MQ=1,1,1,1 RSS=16,16,16,16
