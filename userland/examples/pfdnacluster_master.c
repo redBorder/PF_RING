@@ -422,7 +422,7 @@ int main(int argc, char* argv[]) {
     return(-1);
   }
 
-  /* Changing the default settings:
+  /* Changing the default settings (experts only)
   dna_cluster_low_level_settings(dna_cluster_handle, 
                                  8192, // slave rx queue slots
                                  8192, // slave tx queue slots

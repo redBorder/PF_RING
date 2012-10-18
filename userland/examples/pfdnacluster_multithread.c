@@ -513,32 +513,30 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  printf("Capturing from %s\n", device);
-
-  /* Create the DNA cluster */
-  if ((dna_cluster_handle = dna_cluster_create(cluster_id, 
-  					       num_threads, 
-					       0
-					       /* | DNA_CLUSTER_DIRECT_FORWARDING */
-  					       /* | DNA_CLUSTER_NO_ADDITIONAL_BUFFERS */
-     )) == NULL) {
-    fprintf(stderr, "Error creating DNA Cluster\n");
-    return(-1);
-  }
- 
-  /* Changing the default settings:
-  dna_cluster_low_level_settings(dna_cluster_handle, 
-                                 8192, // slave rx queue slots
-                                 8192, // slave tx queue slots
-				 4096  // slave additional buffers (available withavailable with  alloc/release)
-				 );
-  */
-
   /* Setting the cluster mode */
   if (forward_packets || bridge_interfaces)  {
     enable_tx = 1;
     mode = send_and_recv_mode;
   }
+
+  printf("Capturing from %s\n", device);
+
+  /* Create the DNA cluster */
+  if ((dna_cluster_handle = dna_cluster_create(cluster_id, 
+  					       num_threads, 
+  					       !enable_tx ? DNA_CLUSTER_NO_ADDITIONAL_BUFFERS : 0
+					       /* | DNA_CLUSTER_DIRECT_FORWARDING */
+     )) == NULL) {
+    fprintf(stderr, "Error creating DNA Cluster\n");
+    return(-1);
+  }
+ 
+  /* Changing the default settings (experts only) */
+  dna_cluster_low_level_settings(dna_cluster_handle, 
+                                 8192, // slave rx queue slots
+                                 8192, // slave tx queue slots
+				 enable_tx ? 1 : 0  // slave additional buffers (available withavailable with  alloc/release)
+				 );
 
   if (dna_cluster_set_mode(dna_cluster_handle, mode) < 0) {
     printf("dna_cluster_set_mode error\n");
