@@ -85,7 +85,7 @@ int main(int argc, char* argv[]) {
   } else {
     u_int32_t version;
 
-    pfring_set_application_name(pd, "pfcount");
+    pfring_set_application_name(pd, "pfsystest");
     pfring_version(pd, &version);
 
     printf("Using PF_RING v.%d.%d.%d\n",
@@ -99,8 +99,7 @@ int main(int argc, char* argv[]) {
     buffer_len = test_id*1024;
     buffer = malloc(buffer_len);
 
-    if(buffer == NULL) {
-      /* oops, couldn't allocate memory */
+    if(buffer == NULL) { /* oops, couldn't allocate memory */
       fprintf(stderr, "Unable to allocate memory requested (%s)\n", strerror(errno));
       return (-1);
     }
@@ -133,8 +132,8 @@ int main(int argc, char* argv[]) {
     test_id = 4;
     buffer_len = test_id*1024*1024;
     buffer = malloc(buffer_len);
-    if(buffer == NULL) {
-      /* oops, couldn't allocate memory */
+
+    if(buffer == NULL) { /* oops, couldn't allocate memory */
       fprintf(stderr, "Unable to allocate memory requested (%s)\n", strerror(errno));
       return (-1);
     }
@@ -168,8 +167,8 @@ int main(int argc, char* argv[]) {
   test_id = 8;
   buffer_len = test_id*1024*1024;
   buffer = malloc(buffer_len);
-  if(buffer == NULL) {
-    /* oops, couldn't allocate memory */
+
+  if(buffer == NULL) { /* oops, couldn't allocate memory */
     fprintf(stderr, "Unable to allocate memory requested (%s)\n", strerror(errno));
     return (-1);
   }

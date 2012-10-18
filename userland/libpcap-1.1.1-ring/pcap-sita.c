@@ -214,6 +214,8 @@ static void empty_unit(int chassis, int geoslot) {
 	empty_unit_iface(u);
 	if (u->imsg) {											/* then if an inbound message buffer exists */
 		u->imsg = (char *)realloc(u->imsg, 1);				/* and re-allocate the old large buffer into a new small one */
+		if (u->imsg == NULL) /* oops, realloc() call failed */
+			snprintf(errbuf, PCAP_ERRBUF_SIZE, "malloc: u->serv_addr %s", pcap_strerror(errno));
 	}
 }
 
@@ -311,9 +313,14 @@ static int open_with_IOP(unit_t  *u, int flag) {
 
 	if (u->serv_addr == NULL) {
 		u->serv_addr = malloc(sizeof(struct sockaddr_in));
+		/* since we called malloc(), lets check to see if we actually got the memory    */
+		if (u->serv_addr == NULL) {
+			snprintf(errbuf, PCAP_ERRBUF_SIZE, "malloc: u->serv_addr %s", pcap_strerror(errno));
+			return 0;
+		}
 	}
 	ip = u->ip;
-	bzero((char *)u->serv_addr, sizeof(struct sockaddr_in));
+	memset((char *)u->serv_addr, 0, sizeof(struct sockaddr_in));
 	u->serv_addr->sin_family		= AF_INET;
 	u->serv_addr->sin_addr.s_addr	= inet_addr(ip);
 	u->serv_addr->sin_port			= htons(IOP_SNIFFER_PORT);
@@ -417,11 +424,23 @@ static char *translate_IOP_to_pcap_name(unit_t *u, char *IOPname, bpf_u_int32 if
 	int			IOPportnum = 0;
 
 	iface = malloc(sizeof(iface_t));		/* get memory for a structure */
-	bzero((char *)iface, sizeof(iface_t));
+
+	if (iface == NULL) {
+		snprintf(errbuf, PCAP_ERRBUF_SIZE, "malloc: iface %s", pcap_strerror(errno));
+		return NULL;
+	}
+
+	memset((char *)iface, 0, sizeof(iface_t));
 
 	iface->iftype = iftype;					/* remember the interface type of this interface */
 
 	name = malloc(strlen(IOPname) + 1);		/* get memory for the IOP's name */
+
+	if (name == NULL) {
+		snprintf(errbuf, PCAP_ERRBUF_SIZE, "malloc: name %s", pcap_strerror(errno));
+		return NULL;
+	}
+
 	strcpy(name, IOPname);					/* and copy it in */
 	iface->IOPname = name;					/* and stick it into the structure */
 
@@ -447,6 +466,12 @@ static char *translate_IOP_to_pcap_name(unit_t *u, char *IOPname, bpf_u_int32 if
 
 	sprintf(buf, "%s_%s", proto, port);		/* compose the user's name for that IOP port name */
 	name = malloc(strlen(buf) + 1);			/* get memory for that name */
+
+	if (name == NULL) {
+		snprintf(errbuf, PCAP_ERRBUF_SIZE, "malloc: IOPname %s", pcap_strerror(errno));
+		return NULL;
+	}
+
 	strcpy(name, buf);						/* and copy it in */
 	iface->name = name;						/* and stick it into the structure */
 
@@ -548,7 +573,7 @@ static int process_client_data (char *errbuf) {								/* returns: -1 = error, 0
 					snprintf(errbuf, PCAP_ERRBUF_SIZE, "malloc: %s", pcap_strerror(errno));
 					return -1;
 				}
-				bzero((char *)iff, sizeof(pcap_if_t));
+				memset((char *)iff, 0, sizeof(pcap_if_t));
 				if (acn_if_list == 0)	acn_if_list = iff;					/* remember the head of the list */
 				if (prev_iff)			prev_iff->next = iff;				/* insert a forward link */
 
@@ -588,7 +613,7 @@ static int process_client_data (char *errbuf) {								/* returns: -1 = error, 0
 						snprintf(errbuf, PCAP_ERRBUF_SIZE, "malloc: %s", pcap_strerror(errno));
 						return -1;
 					}
-					bzero((char *)addr, sizeof(pcap_addr_t));
+					memset((char *)addr, 0, sizeof(pcap_addr_t));
 					if (iff->addresses == 0) iff->addresses = addr;
 					if (prev_addr) prev_addr->next = addr;							/* insert a forward link */
 					if (*ptr) {														/* if there is a count for the address */
@@ -596,7 +621,7 @@ static int process_client_data (char *errbuf) {								/* returns: -1 = error, 0
 							snprintf(errbuf, PCAP_ERRBUF_SIZE, "malloc: %s", pcap_strerror(errno));
 							return -1;
 						}
-						bzero((char *)s, sizeof(struct sockaddr_in));
+						memset((char *)s, 0, sizeof(struct sockaddr_in));
 						addr->addr = (struct sockaddr *)s;
 						s->sin_family		= AF_INET;
 						s->sin_addr.s_addr	= *(bpf_u_int32 *)(ptr + 1);			/* copy the address in */
@@ -608,7 +633,7 @@ static int process_client_data (char *errbuf) {								/* returns: -1 = error, 0
 							snprintf(errbuf, PCAP_ERRBUF_SIZE, "malloc: %s", pcap_strerror(errno));
 							return -1;
 						}
-						bzero((char *)s, sizeof(struct sockaddr_in));
+						memset((char *)s, 0, sizeof(struct sockaddr_in));
 						addr->netmask = (struct sockaddr *)s;
 						s->sin_family		= AF_INET;
 						s->sin_addr.s_addr	= *(bpf_u_int32*)(ptr + 1);
@@ -620,7 +645,7 @@ static int process_client_data (char *errbuf) {								/* returns: -1 = error, 0
 							snprintf(errbuf, PCAP_ERRBUF_SIZE, "malloc: %s", pcap_strerror(errno));
 							return -1;
 						}
-						bzero((char *)s, sizeof(struct sockaddr_in));
+						memset((char *)s, 0, sizeof(struct sockaddr_in));
 						addr->broadaddr = (struct sockaddr *)s;
 						s->sin_family		= AF_INET;
 						s->sin_addr.s_addr	= *(bpf_u_int32*)(ptr + 1);
@@ -632,7 +657,7 @@ static int process_client_data (char *errbuf) {								/* returns: -1 = error, 0
 							snprintf(errbuf, PCAP_ERRBUF_SIZE, "malloc: %s", pcap_strerror(errno));
 							return -1;
 						}
-						bzero((char *)s, sizeof(struct sockaddr_in));
+						memset((char *)s, 0, sizeof(struct sockaddr_in));
 						addr->dstaddr = (struct sockaddr *)s;
 						s->sin_family		= AF_INET;
 						s->sin_addr.s_addr	= *(bpf_u_int32*)(ptr + 1);

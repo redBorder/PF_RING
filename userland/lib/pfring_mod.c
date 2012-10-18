@@ -185,7 +185,11 @@ int pfring_mod_open(pfring *ring) {
     return -1;
   }
   memSlotsLen = ring->slots_info->tot_mem;
-  munmap(ring->buffer, PAGE_SIZE);
+  
+  if(munmap(ring->buffer, PAGE_SIZE) == -1) {
+    fprintf(stderr, "Warning: unable to unmap ring buffer memory [address=%p][size=%u]\n",
+            ring->buffer, PAGE_SIZE);
+  }
 
   ring->buffer = (char *)mmap(NULL, memSlotsLen,
 			      PROT_READ|PROT_WRITE,
@@ -328,8 +332,12 @@ int pfring_mod_bind(pfring *ring, char *device_name) {
 /* **************************************************** */
 
 void pfring_mod_close(pfring *ring) {
-  if(ring->buffer != NULL)
-    munmap(ring->buffer, ring->slots_info->tot_mem);
+  if(ring->buffer != NULL) {
+    if(munmap(ring->buffer, ring->slots_info->tot_mem) == -1) {
+      fprintf(stderr, "Warning: unable to unmap ring buffer memory [address=%p][size=%u]\n",
+     	      ring->buffer, ring->slots_info->tot_mem);
+    }
+  }
 
   if(ring->clear_promisc)
     pfring_set_if_promisc(ring->device_name, 0);

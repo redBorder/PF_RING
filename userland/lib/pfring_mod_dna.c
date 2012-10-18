@@ -55,32 +55,70 @@ static int pfring_map_dna_device(pfring *ring,
 /* **************************************************** */
 
 void pfring_dna_close(pfring *ring) {
-  int i;
+  int i, rc = 0;
 
   if(ring->dna_term)
     ring->dna_term(ring);
 
-  for(i=0; i<ring->dna.dna_dev.mem_info.rx.packet_memory_num_chunks; i++)
-    if(ring->dna.dna_dev.rx_packet_memory[i] != 0)
-      munmap((void*)ring->dna.dna_dev.rx_packet_memory[i],
-	     ring->dna.dna_dev.mem_info.rx.packet_memory_chunk_len); 
-
-  if(ring->dna.dna_dev.rx_descr_packet_memory != NULL)
-    munmap(ring->dna.dna_dev.rx_descr_packet_memory, 
-	   ring->dna.dna_dev.mem_info.rx.descr_packet_memory_tot_len);
+  for(i=0; i<ring->dna.dna_dev.mem_info.rx.packet_memory_num_chunks; i++) {
+    if(ring->dna.dna_dev.rx_packet_memory[i] != 0) {
+      if(munmap((void *) ring->dna.dna_dev.rx_packet_memory[i],
+	         ring->dna.dna_dev.mem_info.rx.packet_memory_chunk_len) == -1)
+        rc = -1;      
+    }
+  }
   
-  for(i=0; i<ring->dna.dna_dev.mem_info.tx.packet_memory_num_chunks; i++)
-    if(ring->dna.dna_dev.tx_packet_memory[i] != 0)
-      munmap((void*)ring->dna.dna_dev.tx_packet_memory[i],
-	     ring->dna.dna_dev.mem_info.tx.packet_memory_chunk_len);
+  if(rc == -1) {
+    fprintf(stderr, "Warning: unable to unmap rx packet memory [address=%p][size=%u]\n",
+  	    (void *) ring->dna.dna_dev.rx_packet_memory, 
+	    ring->dna.dna_dev.mem_info.rx.packet_memory_chunk_len *
+	    ring->dna.dna_dev.mem_info.rx.packet_memory_num_chunks);
+  }
 
-  if(ring->dna.dna_dev.tx_descr_packet_memory != NULL)
-    munmap(ring->dna.dna_dev.tx_descr_packet_memory, 
-	   ring->dna.dna_dev.mem_info.tx.descr_packet_memory_tot_len);
+  if(ring->dna.dna_dev.rx_descr_packet_memory != NULL) {
+    rc = munmap(ring->dna.dna_dev.rx_descr_packet_memory, 
+	        ring->dna.dna_dev.mem_info.rx.descr_packet_memory_tot_len);
+    if(rc == -1) {
+      fprintf(stderr, "Warning: unable to unmap rx description memory [address=%p][size=%u]\n",
+	      ring->dna.dna_dev.rx_descr_packet_memory,
+	      ring->dna.dna_dev.mem_info.rx.descr_packet_memory_tot_len);
+    }
+  }
+  
+  rc = 0;
+  for(i=0; i<ring->dna.dna_dev.mem_info.tx.packet_memory_num_chunks; i++) {
+    if(ring->dna.dna_dev.tx_packet_memory[i] != 0) {
+      if(munmap((void *) ring->dna.dna_dev.tx_packet_memory[i],
+	        ring->dna.dna_dev.mem_info.tx.packet_memory_chunk_len) == -1)
+        rc = -1;
+    }
+  }
 
-  if(ring->dna.dna_dev.phys_card_memory != NULL)
-    munmap(ring->dna.dna_dev.phys_card_memory,
-           ring->dna.dna_dev.mem_info.phys_card_memory_len);
+  if(rc == -1) {
+    fprintf(stderr, "Warning: unable to unmap tx packet memory [address=%p][size=%u]\n",
+            (void*)ring->dna.dna_dev.tx_packet_memory,
+            ring->dna.dna_dev.mem_info.tx.packet_memory_chunk_len *
+            ring->dna.dna_dev.mem_info.tx.packet_memory_num_chunks);
+  }
+
+  if(ring->dna.dna_dev.tx_descr_packet_memory != NULL) {
+    rc = munmap(ring->dna.dna_dev.tx_descr_packet_memory, 
+	        ring->dna.dna_dev.mem_info.tx.descr_packet_memory_tot_len);
+    if(rc == -1) {
+      fprintf(stderr, "Warning: unable to unmap xmit description memory [address=%p][size=%u]\n",
+              ring->dna.dna_dev.tx_descr_packet_memory,
+              ring->dna.dna_dev.mem_info.tx.descr_packet_memory_tot_len);
+    }
+  }
+
+  if(ring->dna.dna_dev.phys_card_memory != NULL) {
+    rc = munmap(ring->dna.dna_dev.phys_card_memory,
+                ring->dna.dna_dev.mem_info.phys_card_memory_len);
+    if(rc == -1) {
+      fprintf(stderr, "Warning: unable to unmap physical card memory [address=%p][size=%u]\n",
+  	      ring->dna.dna_dev.phys_card_memory, ring->dna.dna_dev.mem_info.phys_card_memory_len);
+    }
+  }
 
   pfring_map_dna_device(ring, remove_device_mapping, "");
 
