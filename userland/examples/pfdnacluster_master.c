@@ -426,7 +426,7 @@ int main(int argc, char* argv[]) {
   dna_cluster_low_level_settings(dna_cluster_handle, 
                                  8192, // slave rx queue slots
                                  8192, // slave tx queue slots
-				 4096  // slave additional buffers (available withavailable with  alloc/release)
+				 4096  // slave additional buffers (available with  alloc/release)
 				 );
   */
 

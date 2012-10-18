@@ -535,7 +535,7 @@ int main(int argc, char* argv[]) {
   dna_cluster_low_level_settings(dna_cluster_handle, 
                                  8192, // slave rx queue slots
                                  8192, // slave tx queue slots
-				 enable_tx ? 1 : 0  // slave additional buffers (available withavailable with  alloc/release)
+				 enable_tx ? 1 : 0  // slave additional buffers (available with  alloc/release)
 				 );
 
   if (dna_cluster_set_mode(dna_cluster_handle, mode) < 0) {
