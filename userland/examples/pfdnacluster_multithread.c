@@ -57,7 +57,7 @@ static struct timeval startTime;
 u_int8_t wait_for_packet = 1, print_interface_stats = 0, do_shutdown = 0;
 int rx_bind_core = 1, tx_bind_core = 2; /* core 0 free if possible */
 int hashing_mode = 0;
-int forward_packets = 0, bridge_interfaces = 0, enable_tx = 0;
+int forward_packets = 0, bridge_interfaces = 0, enable_tx = 0, use_hugepages = 0;
 int tx_if_index;
 pfring_dna_cluster *dna_cluster_handle;
 pfring *pd[MAX_NUM_DEV];
@@ -67,7 +67,6 @@ u_int64_t numPkts[MAX_NUM_THREADS] = { 0 };
 u_int64_t numBytes[MAX_NUM_THREADS] = { 0 };
 pthread_t pd_thread[MAX_NUM_THREADS];
 int thread_core_affinity[MAX_NUM_THREADS];
-
 
 /* *************************************** */
 /*
@@ -235,6 +234,7 @@ void printHelp(void) {
   printf("-x <if index>   Forward all packets to the selected interface (Enable TX)\n");
   printf("-b              Bridge the interfaces listed in -i in pairs (Enable TX)\n");
   printf("-a              Active packet wait\n");
+  printf("-u              Use hugepages for packet memory allocation\n");
   printf("-p              Print per-interface absolute stats\n");
   exit(0);
 }
@@ -448,7 +448,7 @@ int main(int argc, char* argv[]) {
   memset(thread_core_affinity, -1, sizeof(thread_core_affinity));
   startTime.tv_sec = 0;
 
-  while ((c = getopt(argc,argv,"ahi:bc:n:m:r:t:g:x:p")) != -1) {
+  while ((c = getopt(argc,argv,"ahi:bc:n:m:r:t:g:x:pu")) != -1) {
     switch (c) {
     case 'a':
       wait_for_packet = 0;
@@ -487,6 +487,9 @@ int main(int argc, char* argv[]) {
     case 'p':
       print_interface_stats = 1;
       break;
+    case 'u':
+      use_hugepages = 1;
+      break;
     }
   }
 
@@ -524,8 +527,10 @@ int main(int argc, char* argv[]) {
   /* Create the DNA cluster */
   if ((dna_cluster_handle = dna_cluster_create(cluster_id, 
   					       num_threads, 
-  					       !enable_tx ? DNA_CLUSTER_NO_ADDITIONAL_BUFFERS : 0
+					       0
+  					       | (!enable_tx ? DNA_CLUSTER_NO_ADDITIONAL_BUFFERS : 0)
 					       /* | DNA_CLUSTER_DIRECT_FORWARDING */
+					       | (use_hugepages ? DNA_CLUSTER_HUGEPAGES : 0)
      )) == NULL) {
     fprintf(stderr, "Error creating DNA Cluster\n");
     return(-1);

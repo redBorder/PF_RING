@@ -53,7 +53,7 @@ int num_app = 1, num_dev = 0;
 pfring *pd[MAX_NUM_DEV];
 pfring_dna_cluster *dna_cluster_handle;
 
-u_int8_t wait_for_packet = 1, do_shutdown = 0, hashing_mode = 0;
+u_int8_t wait_for_packet = 1, do_shutdown = 0, hashing_mode = 0, use_hugepages = 0;
 socket_mode mode = recv_only_mode;
 
 static struct timeval startTime;
@@ -229,6 +229,7 @@ void printHelp(void) {
 	 "                3 - Fan-Out\n");
   printf("-s              Enable TX\n");
   printf("-a              Active packet wait\n");
+  printf("-u              Use hugepages for packet memory allocation\n");
   printf("-d              Daemon mode\n");
   exit(0);
 }
@@ -360,7 +361,7 @@ int main(int argc, char* argv[]) {
 
   startTime.tv_sec = 0;
 
-  while((c = getopt(argc,argv,"ac:r:st:hi:n:m:d")) != -1) {
+  while((c = getopt(argc,argv,"ac:r:st:hi:n:m:du")) != -1) {
     switch(c) {
     case 'a':
       wait_for_packet = 0;
@@ -392,6 +393,9 @@ int main(int argc, char* argv[]) {
     case 'd':
       daemon_mode = 1;
       break;
+    case 'u':
+      use_hugepages = 1;
+      break;
     }
   }
 
@@ -417,6 +421,7 @@ int main(int argc, char* argv[]) {
 					       0 
 					       /* | DNA_CLUSTER_DIRECT_FORWARDING */
                                                /* | DNA_CLUSTER_NO_ADDITIONAL_BUFFERS */
+					       | (use_hugepages ? DNA_CLUSTER_HUGEPAGES : 0)
      )) == NULL) {
     fprintf(stderr, "Error creating DNA Cluster\n");
     return(-1);
