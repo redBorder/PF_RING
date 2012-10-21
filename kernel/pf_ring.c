@@ -5161,18 +5161,20 @@ static struct dna_cluster* dna_cluster_create(u_int32_t dna_cluster_id, u_int32_
     for (i = 0; i < dnac->num_slaves; i++)
       dnac->active_slaves[i] = 0;
 
-    if((dnac->extra_dma_memory = allocate_extra_dma_memory(hwdev, num_slots, slot_len, chunk_len)) == NULL) {
-      kfree(dnac);
-      dnac = NULL;
-      goto unlock;
-    }
+    if (num_slots > 0) {
+      if((dnac->extra_dma_memory = allocate_extra_dma_memory(hwdev, num_slots, slot_len, chunk_len)) == NULL) {
+        kfree(dnac);
+        dnac = NULL;
+        goto unlock;
+      }
 
-    if(dnac->extra_dma_memory->num_slots < num_slots) {
-      /* DNA cluster requires exactly num_slots, they are not used as a auxiliary "tank" */
-      free_extra_dma_memory(dnac->extra_dma_memory);
-      kfree(dnac);
-      dnac = NULL;
-      goto unlock;
+      if(dnac->extra_dma_memory->num_slots < num_slots) {
+        /* DNA cluster requires exactly num_slots, they are not used as a auxiliary "tank" */
+        free_extra_dma_memory(dnac->extra_dma_memory);
+        kfree(dnac);
+        dnac = NULL;
+        goto unlock;
+      }
     }
 
     if (num_slaves > 0) {
@@ -5180,7 +5182,8 @@ static struct dna_cluster* dna_cluster_create(u_int32_t dna_cluster_id, u_int32_
       shared_mem_size = dnac->slave_shared_memory_len * num_slaves;
       if((dnac->shared_memory = allocate_shared_memory(&shared_mem_size)) == NULL) {
         printk("[PF_RING] %s() ERROR: not enough memory for DNA Cluster shared memory\n", __FUNCTION__);
-        free_extra_dma_memory(dnac->extra_dma_memory);
+	if (num_slots > 0)
+          free_extra_dma_memory(dnac->extra_dma_memory);
         kfree(dnac);
         dnac = NULL;
         goto unlock;
@@ -5192,7 +5195,8 @@ static struct dna_cluster* dna_cluster_create(u_int32_t dna_cluster_id, u_int32_
     if((dnac->master_persistent_memory = allocate_shared_memory(&shared_mem_size)) == NULL) {
       printk("[PF_RING] %s() ERROR: not enough memory for DNA Cluster persistent memory\n", __FUNCTION__);
       vfree(dnac->shared_memory);
-      free_extra_dma_memory(dnac->extra_dma_memory);
+      if (num_slots > 0)
+        free_extra_dma_memory(dnac->extra_dma_memory);
       kfree(dnac);
       dnac = NULL;
       goto unlock;
@@ -5215,7 +5219,8 @@ static struct dna_cluster* dna_cluster_create(u_int32_t dna_cluster_id, u_int32_
 	|| (num_slaves > 0 && dnac->slave_shared_memory_len != PAGE_ALIGN(slave_mem_len))
 	|| dnac->master_persistent_memory_len != PAGE_ALIGN(master_persistent_mem_len)
 	|| dnac->mode != mode
-        || dnac->extra_dma_memory->num_slots != num_slots) {
+        || (num_slots  > 0 && (!dnac->extra_dma_memory || dnac->extra_dma_memory->num_slots != num_slots))
+	|| (num_slots == 0 && dnac->extra_dma_memory && dnac->extra_dma_memory->num_slots > 0)) {
       dnac = NULL;
       goto unlock;
     }
@@ -5266,7 +5271,8 @@ static void dna_cluster_remove(struct dna_cluster *dnac, dna_cluster_client_type
 
       if(active_users == 0) {
         list_del(ptr);
-        free_extra_dma_memory(entry->extra_dma_memory);
+	if (entry->extra_dma_memory)
+          free_extra_dma_memory(entry->extra_dma_memory);
 	vfree(entry->master_persistent_memory);
 	if (entry->shared_memory != NULL)
           vfree(entry->shared_memory);
@@ -7446,7 +7452,7 @@ static int ring_setsockopt(struct socket *sock,
       if(copy_from_user(&cdnaci, optval, sizeof(cdnaci)))
 	return -EFAULT;
 
-      if(cdnaci.num_slots == 0 || cdnaci.slave_mem_len == 0 || cdnaci.num_slaves > DNA_CLUSTER_MAX_NUM_SLAVES)
+      if(cdnaci.slave_mem_len == 0 || cdnaci.num_slaves > DNA_CLUSTER_MAX_NUM_SLAVES)
         return -EINVAL;
 
       if(pfr->dna_device == NULL || pfr->dna_device->hwdev == NULL)
@@ -7483,11 +7489,13 @@ static int ring_setsockopt(struct socket *sock,
       }
 
       /* copying dma addresses to userspace at the end of the structure */
-      if(copy_to_user(optval + sizeof(cdnaci), pfr->dna_cluster->extra_dma_memory->dma_addr,
-                      sizeof(u_int64_t) * cdnaci.num_slots)) {
-        dna_cluster_remove(pfr->dna_cluster, pfr->dna_cluster_type, 0);
-	pfr->dna_cluster = NULL;
-        return -EFAULT;
+      if(cdnaci.num_slots > 0) {
+        if(copy_to_user(optval + sizeof(cdnaci), pfr->dna_cluster->extra_dma_memory->dma_addr,
+                        sizeof(u_int64_t) * cdnaci.num_slots)) {
+          dna_cluster_remove(pfr->dna_cluster, pfr->dna_cluster_type, 0);
+	  pfr->dna_cluster = NULL;
+          return -EFAULT;
+       }
       }
 
       if(unlikely(enable_debug))
