@@ -60,12 +60,15 @@ unsigned long long rdtsc() {
 /* **************************************************** */
 
 inline int pfring_there_is_pkt_available(pfring *ring) {
-  /* For some reason the mb() in kernel space is failing keeping coherency, using a dirty trick.
-   * return(ring->slots_info->tot_insert != ring->slots_info->tot_read); */
+#if 1
+  return(ring->slots_info->tot_insert != ring->slots_info->tot_read);
+#else
+  /* stronger check: */
   return ((ring->slots_info->remove_off != ring->slots_info->insert_off && 
           (ring->slots_info->tot_insert != ring->slots_info->tot_read)) || 
          ((ring->slots_info->remove_off == ring->slots_info->insert_off) && 
 	 ((ring->slots_info->tot_insert - ring->slots_info->tot_read) >= ring->slots_info->min_num_slots)));
+#endif
 }
 
 /* **************************************************** */

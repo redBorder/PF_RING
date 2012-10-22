@@ -2656,9 +2656,12 @@ static inline int copy_data_to_ring(struct sk_buff *skb,
 			     int *clone_id) {
   char *ring_bucket;
   u_int32_t off;
-  u_short do_lock = ((pfr->num_bound_devices > 1) || (pfr->num_channels_per_ring > 1) || (pfr->cluster_id != 0)) ? 1 : 0;
-
-  // do_lock = 0;
+  u_short do_lock = (
+    (enable_tx_capture && pfr->direction == rx_and_tx_direction) ||
+    (pfr->num_bound_devices > 1) || 
+    (pfr->num_channels_per_ring > 1) || 
+    (pfr->cluster_id != 0)
+    ) ? 1 : 0;
 
   if(pfr->ring_slots == NULL) return(0);
 
