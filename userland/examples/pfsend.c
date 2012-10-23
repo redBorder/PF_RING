@@ -186,7 +186,7 @@ void printHelp(void) {
   printf("-b <cpu %%>      CPU pergentage priority (0-99)\n");
 #endif
   printf("-f <.pcap file> Send packets as read from a pcap file\n");
-  printf("-g <core_id>    Bind this app to a code (only with -n 0)\n");
+  printf("-g <core_id>    Bind this app to a core (only with -n 0)\n");
   printf("-h              Print this help\n");
   printf("-i <device>     Device name. Use device\n");
   printf("-l <length>     Packet length to send. Ignored with -f\n");

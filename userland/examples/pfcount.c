@@ -513,7 +513,7 @@ void printHelp(void) {
   printf("-c <cluster id> cluster id\n");
   printf("-e <direction>  0=RX+TX, 1=RX only, 2=TX only\n");
   printf("-l <len>        Capture length\n");
-  printf("-g <core_id>    Bind this app to a code (only with -n 0)\n");
+  printf("-g <core_id>    Bind this app to a core\n");
   printf("-d <device>     Device on which incoming packets are copied (e.g. userspace:usr0 or dna1)\n");
   printf("-w <watermark>  Watermark\n");
   printf("-p <poll wait>  Poll wait (msec)\n");
@@ -963,11 +963,11 @@ int main(int argc, char* argv[]) {
   }
 
   if (num_threads <= 1) {
-    pfring_loop(pd, dummyProcesssPacket, (u_char*)NULL, wait_for_packet);
-    //packet_consumer_thread(0);
-    
     if(bind_core >= 0)
       bind2core(bind_core);
+
+    pfring_loop(pd, dummyProcesssPacket, (u_char*)NULL, wait_for_packet);
+    //packet_consumer_thread(0);
   } else {
     pthread_t my_thread;
     long i;

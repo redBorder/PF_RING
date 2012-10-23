@@ -19,6 +19,7 @@
  *
  */
 
+#define _GNU_SOURCE
 #include <signal.h>
 #include <sched.h>
 #include <sys/types.h>
@@ -46,6 +47,25 @@ void printHelp(void) {
   printf("-p              [Use pfring_send() instead of bridge]\n");
   printf("-a <device>     [First device name]\n");
   printf("-b <device>     [Second device name]\n");
+  printf("-g <core_id>    Bind this app to a core\n");
+}
+
+/* *************************************** */
+
+/* Bind this thread to a specific core */
+
+int bind2core(u_int core_id) {
+  cpu_set_t cpuset;
+  int s;
+
+  CPU_ZERO(&cpuset);
+  CPU_SET(core_id, &cpuset);
+  if((s = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset)) != 0) {
+    fprintf(stderr, "Error while binding to core %u: errno=%i\n", core_id, s);
+    return(-1);
+  } else {
+    return(0);
+  }
 }
 
 /* ******************************** */
@@ -67,8 +87,9 @@ int main(int argc, char* argv[]) {
   char *a_dev = NULL, *b_dev = NULL, c;
   u_int8_t verbose = 0, use_pfring_send = 0;
   int a_ifindex, b_ifindex;
+  int bind_core = -1;
 
-  while((c = getopt(argc,argv, "ha:b:c:fvp")) != -1) {
+  while((c = getopt(argc,argv, "ha:b:c:fvpg:")) != -1) {
     switch(c) {
       case 'h':
 	printHelp();
@@ -86,6 +107,9 @@ int main(int argc, char* argv[]) {
       case 'v':
 	verbose = 1;
 	break;
+      case 'g':
+        bind_core = atoi(optarg);
+        break;
     }
   }  
 
@@ -141,6 +165,9 @@ int main(int argc, char* argv[]) {
 
   signal(SIGALRM, my_sigalarm);
   alarm(1);
+
+  if(bind_core >= 0)
+    bind2core(bind_core);
 
   while(1) {
     u_char *buffer;
