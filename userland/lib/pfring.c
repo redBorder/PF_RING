@@ -296,7 +296,7 @@ int pfring_set_reflector_device(pfring *ring, char *device_name) {
   ring->reflector_socket = pfring_open(device_name, ring->caplen, PF_RING_PROMISC);
 
   if(ring->reflector_socket != NULL) {
-    pfring_set_socket_mode(ring->reflector_socket, tx_only_direction);
+    pfring_set_socket_mode(ring->reflector_socket, send_only_mode);
     pfring_enable_ring(ring->reflector_socket);
     return(0);
   } else
@@ -503,7 +503,7 @@ int pfring_recv(pfring *ring, u_char** buffer, u_int buffer_len,
     rc = ring->recv(ring, buffer, buffer_len, hdr, wait_for_incoming_packet);
 
     if(unlikely(ring->reflector_socket != NULL))
-      pfring_send(ring->reflector_socket, (char*)buffer, hdr->caplen, 0 /* flush */);
+      pfring_send(ring->reflector_socket, (char *) *buffer, hdr->caplen, 0 /* flush */);
 
     return rc;
   }
