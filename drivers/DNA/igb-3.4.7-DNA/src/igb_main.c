@@ -5434,9 +5434,14 @@ void igb_update_stats(struct igb_adapter *adapter)
 	bytes = 0;
 	packets = 0;
 	for (i = 0; i < adapter->num_rx_queues; i++) {
-		u32 rqdpc_tmp = E1000_READ_REG(hw, E1000_RQDPC(i)) & 0x0FFF;
+		u32 rqdpc_tmp = 
+#ifdef ENABLE_DNA
+		  adapter->dna.dna_enabled ? 0 : 
+#endif
+		  E1000_READ_REG(hw, E1000_RQDPC(i)) & 0x0FFF;
 		struct igb_ring *ring = adapter->rx_ring[i];
-		ring->rx_stats.drops += rqdpc_tmp;
+
+		ring->rx_stats.drops += rqdpc_tmp;	
 		net_stats->rx_fifo_errors += rqdpc_tmp;
 #ifdef CONFIG_IGB_VMDQ_NETDEV
 		if (!ring->vmdq_netdev) {
