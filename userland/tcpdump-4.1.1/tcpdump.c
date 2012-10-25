@@ -1759,7 +1759,7 @@ static void verbose_stats_dump(int sig _U_)
 	struct pcap_stat stat;
 
 	if (infodelay == 0 && pcap_stats(pd, &stat) >= 0)
-		fprintf(stderr, "Got %u\r", packets_captured);
+		fprintf(stderr, "Got %u Dropped %u\r", packets_captured, stat.ps_drop + stat.ps_ifdrop);
 	alarm(1);
 }
 #endif
