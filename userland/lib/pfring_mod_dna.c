@@ -131,7 +131,8 @@ void pfring_dna_close(pfring *ring) {
 /* **************************************************** */
 
 int pfring_dna_stats(pfring *ring, pfring_stat *stats) {
-  stats->recv = ring->dna.tot_dna_read_pkts, stats->drop = 0;
+  stats->recv = ring->dna.tot_dna_read_pkts;
+  stats->drop = ring->dna.tot_dna_lost_pkts;
   return(0);
 }
 
