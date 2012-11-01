@@ -1,7 +1,7 @@
 E1000=e1000/e1000-8.0.35
 E1000E=e1000e/e1000e-2.0.0.1
 IGB=igb/igb-3.4.7
-IXGBE=ixgbe/ixgbe-3.7.17
+IXGBE=ixgbe/ixgbe-3.11.33
 
 all:
 #	cd $(E1000)/src; make
