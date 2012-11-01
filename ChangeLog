@@ -1,0 +1,56 @@
+2012-11-01 PF_RING 5.5.0
+
+* New libzero features:
+  - DNA Cluster: number of per-consumer rx/tx queue slots and number of additional buffers can be configured via dna_cluster_low_level_settings()
+  - hugepages support (pfdnacluster_master/pfdnacluster_multithread -u option)
+
+* New PF_RING-aware libpcap features:
+  - added PF_RING_ACTIVE_POLL environmental variable to enable active polling when defined to 1
+  - enable rehash rss setting env var PF_RING_RSS_REHASH=1
+  - cluster type selectable via env vars: 
+    - PCAP_PF_RING_USE_CLUSTER_PER_FLOW
+    - PCAP_PF_RING_USE_CLUSTER_PER_FLOW_2_TUPLE
+    - PCAP_PF_RING_USE_CLUSTER_PER_FLOW_4_TUPLE
+    - PCAP_PF_RING_USE_CLUSTER_PER_FLOW_TCP_5_TUPLE
+    - PCAP_PF_RING_USE_CLUSTER_PER_FLOW_5_TUPLE
+
+* New PF_RING-aware drivers
+  - Updated Intel drivers to make them compatible with newer kernels
+
+* New PF_RING library features:
+  - new pfring_open() flag PF_RING_HW_TIMESTAMP for enabling hw timestamp
+
+* New PF_RING kernel module features: 
+  - handle_user_msg hook for sending msg to plugins
+  - SO_SEND_MSG_TO_PLUGIN setsockopt for sending msgs from userspace
+  - pf_ring_inject_packet_to_ring for inserting packets in a ring identified by <if_index, channel_id>)
+  - possibility to redefine the rehash_rss function
+
+* Snort PF_RING-DAQ module:
+  - new configure --with-pfring-kernel-includes option
+  - fix for -u <uid> -g <gid>
+
+* DNA drivers fixes:
+  - Compilation with RHEL 6.3
+  - igb drop stats fix
+
+* Sample app new features:
+  - new pfcount.c -s option for enabling hw timestamp
+  - new pfdnacluster_multithread option for absolute per-interface stats
+
+* Sample apps fixes:
+  - vlan parsing
+  - compilation fix for HAVE_ZERO not set
+  - pfcount fix for reentrant mode
+  - core binding fixes
+
+* PF_RING kernel module fixes:
+  - channel_id handling
+  - fix for hash with cluster type in cluster_per_flow_*
+  - important fix for standard pf_ring (BUG #252: extra packets with wrong size)
+  - max caplen 16384 increased to 65535 (max 16 bit)
+  - fix for handling packets with stripped VLAN IDs
+
+* Misc changes
+  - Initial work on changelog maintenance
+	
