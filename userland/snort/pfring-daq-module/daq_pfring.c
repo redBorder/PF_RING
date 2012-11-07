@@ -605,6 +605,17 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
 
       verdict = context->analysis_func(user, &hdr,(u_char*)context->pkt_buffer);
 
+#if 0
+      printf("[DEBUG] %d.%d.%d.%d:%d -> %d.%d.%d.%d:%d Verdict=%d\n",
+         phdr.extended_hdr.parsed_pkt.ipv4_src >> 24 & 0xFF, phdr.extended_hdr.parsed_pkt.ipv4_src >> 16 & 0xFF,
+         phdr.extended_hdr.parsed_pkt.ipv4_src >>  8 & 0xFF, phdr.extended_hdr.parsed_pkt.ipv4_src >>  0 & 0xFF,
+         phdr.extended_hdr.parsed_pkt.l4_src_port & 0xFFFF,
+         phdr.extended_hdr.parsed_pkt.ipv4_dst >> 24 & 0xFF, phdr.extended_hdr.parsed_pkt.ipv4_dst >> 16 & 0xFF,
+         phdr.extended_hdr.parsed_pkt.ipv4_dst >>  8 & 0xFF, phdr.extended_hdr.parsed_pkt.ipv4_dst >>  0 & 0xFF,
+         phdr.extended_hdr.parsed_pkt.l4_src_port & 0xFFFF,
+         verdict);
+#endif
+
       if(verdict >= MAX_DAQ_VERDICT)
 	verdict = DAQ_VERDICT_PASS;
 
