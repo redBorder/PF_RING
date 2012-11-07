@@ -763,7 +763,7 @@ static void consume_pending_pkts(struct pf_ring_socket *pfr, u_int8_t synchroniz
 
 /* ********************************** */
 
-static inline int check_and_init_free_slot(struct pf_ring_socket *pfr, int off)
+static inline int check_and_init_free_slot(struct pf_ring_socket *pfr)
 {
   // smp_rmb();
 
@@ -2685,7 +2685,7 @@ static inline int copy_data_to_ring(struct sk_buff *skb,
   off = pfr->slots_info->insert_off;
   pfr->slots_info->tot_pkts++;
 
-  if(!check_and_init_free_slot(pfr, off)) /* Full */ {
+  if(!check_and_init_free_slot(pfr)) /* Full */ {
     /* No room left */
     pfr->slots_info->tot_lost++;
 
@@ -4413,7 +4413,7 @@ static int skb_ring_handler(struct sk_buff *skb,
 		       && (pfr->ring_netdev->dev == skb->dev->master)))
 	       && is_valid_skb_direction(pfr->direction, recv_packet)
 	       ) {
-	      if(check_and_init_free_slot(pfr, pfr->slots_info->insert_off) /* Not full */) {
+	      if(check_and_init_free_slot(pfr) /* Not full */) {
 		/* We've found the ring where the packet can be stored */
 		room_available |= add_skb_to_ring(skb, real_skb, pfr, &hdr, is_ip_pkt,
 						  displ, channel_id, num_rx_channels, &clone_id);
