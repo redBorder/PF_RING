@@ -2,13 +2,12 @@ Using HUGEPAGES in libzero
 --------------------------
 
 Hugepages are used by libzero to improve how memory is used for packet handling.
-This document describe hot to enable them into your system. 
+This document describes how to enable them into your system. 
 
 For the impatient
 -----------------
 $ echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
 $ mount -t hugetlbfs nodev /mnt/huge
-
 
 The whole story
 ---------------
@@ -38,8 +37,7 @@ Hugepages can be dinamically reserved with:
   $ echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
 
 The above pages are allocated by the system without node affinity. If
-you wnat to force allocagtion onto a specific NUMA node you can do that
-prepending the node id. Exmaple
+you want to force allocation on a specific NUMA node you have to do:
 
   $ echo 1024 > /sys/devices/system/node/node0/hugepages/hugepages-2048kB/nr_hugepages
   $ echo 1024 > /sys/devices/system/node/node1/hugepages/hugepages-2048kB/nr_hugepages
