@@ -1,0 +1,46 @@
+HUGEPAGES
+---------
+
+Linux typically use memory pages of 4 KBytes, but provides an explicit 
+interface to allocate pages with bigger size called hugepages. It is up 
+to developers/administrators to decide when they have to be used. 
+
+Hugepages advantages:
+
+- large amounts of physical memory can be reserved for memory allocation, 
+  that otherwise would fail especially when physically contiguous memory 
+  is required.
+
+- reduced overhead: as the TLB (Translation Lookaside Buffer) contains 
+  per-page virtual to physical address mappings, using a large amount of
+  memory with the default page size leads to processing overhead for 
+  managing the TLB entries.
+
+The default hugepage size is usually 2 MBytes. The hugepage size can be 
+found in /proc/meminfo:
+
+  $ cat /proc/meminfo | grep Hugepagesize
+  Hugepagesize: 2048 kB 
+
+Hugepages can be dinamically reserved with:
+
+  $ echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
+
+It is possible to change the default hugepages size and reserve large 
+amounts of memory at boot time using the following kernel options:
+
+  default_hugepagesz=1G hugepagesz=1G hugepages=4
+
+In order to make the hugepages available for use, Linux provides a 
+RAM-based filesystem called "hugetlbfs" that have to be mount'ed with:
+
+  $ mount -t hugetlbfs none /mnt/hugepages
+
+With no options the default hugepage size is used. To use a different
+size it is possible to specify the "pagesize=" option.
+In order to control the maximum amount of memory bound to a mount point
+it is possible to specify the "size=" option (size is rounded down to 
+the nearest hugepage size). 
+Example:
+
+  $ mount -t hugetlbfs -o pagesize=1G,size=2G none /mnt/hugepages
