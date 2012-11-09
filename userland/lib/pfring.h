@@ -276,6 +276,7 @@ extern "C" {
   #define PF_RING_PROMISC           1 << 3
   #define PF_RING_TIMESTAMP         1 << 4
   #define PF_RING_HW_TIMESTAMP      1 << 5
+  #define PF_RING_RX_PACKET_BOUNCE  1 << 6
 
   /* ********************************* */
 

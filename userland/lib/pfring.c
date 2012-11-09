@@ -105,6 +105,7 @@ pfring* pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags) 
   ring->symmetric_rss       = (flags & PF_RING_DNA_SYMMETRIC_RSS) ? 1 : 0;
   ring->force_timestamp     = (flags & PF_RING_TIMESTAMP) ? 1 : 0;
   ring->enable_hw_timestamp = (flags & PF_RING_HW_TIMESTAMP) ? 1 : 0;
+  ring->tx.enabled_rx_packet_send = (flags & PF_RING_RX_PACKET_BOUNCE) ? 1 : 0;
 
 #ifdef RING_DEBUG
   printf("pfring_open: device_name=%s\n", device_name);

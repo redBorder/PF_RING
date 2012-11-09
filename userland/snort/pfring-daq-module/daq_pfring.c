@@ -112,7 +112,9 @@ static int pfring_daq_open(Pfring_Context_t *context, int id) {
 
     ring_handle = pfring_open(device, context->snaplen,
 			      PF_RING_LONG_HEADER 
-			      | (context->promisc_flag ? PF_RING_PROMISC : 0));
+			      | (context->promisc_flag ? PF_RING_PROMISC : 0)
+			      | (context->use_fast_tx ? PF_RING_RX_PACKET_BOUNCE : 0)
+			      );
 
     if(!ring_handle) {
       DPE(context->errbuf, "pfring_open(): unable to open device '%s'. Please use -i <device>", device);

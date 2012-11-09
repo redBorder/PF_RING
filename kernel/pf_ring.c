@@ -657,6 +657,7 @@ static inline u_int64_t num_queued_pkts(struct pf_ring_socket *pfr)
   // smp_rmb();
 
   if(pfr->ring_slots != NULL) {
+    /* 64-bit counters, no need to ahndle wrap
     u_int64_t tot_insert = pfr->slots_info->tot_insert, tot_read = pfr->slots_info->tot_read;
 
     if(tot_insert >= tot_read) {
@@ -669,6 +670,19 @@ static inline u_int64_t num_queued_pkts(struct pf_ring_socket *pfr)
       printk("[PF_RING] -> [tot_insert=%llu][tot_read=%llu]\n",
 	     tot_insert, tot_read);
     }
+    */
+    
+    return pfr->slots_info->tot_insert - pfr->slots_info->tot_read;
+  } else
+    return(0);
+}
+
+/* ************************************* */
+
+static inline u_int64_t num_kernel_queued_pkts(struct pf_ring_socket *pfr)
+{
+  if(pfr->ring_slots != NULL) {
+    return pfr->slots_info->tot_insert - pfr->slots_info->kernel_tot_read;
   } else
     return(0);
 }
@@ -693,7 +707,7 @@ static inline u_int64_t get_num_ring_free_slots(struct pf_ring_socket * pfr)
 */
 static void consume_pending_pkts(struct pf_ring_socket *pfr, u_int8_t synchronized)
 {
-  while(pfr->slots_info->remove_off != pfr->slots_info->kernel_remove_off &&
+  while(pfr->slots_info->kernel_remove_off != pfr->slots_info->remove_off &&
         /* one slot back (pfring_mod_send_last_rx_packet is called after pfring_recv has updated remove_off) */
         (synchronized || pfr->slots_info->remove_off != get_next_slot_offset(pfr, pfr->slots_info->kernel_remove_off))) {
     struct pfring_pkthdr *hdr = (struct pfring_pkthdr*) &pfr->ring_slots[pfr->slots_info->kernel_remove_off];
@@ -751,8 +765,11 @@ static void consume_pending_pkts(struct pf_ring_socket *pfr, u_int8_t synchroniz
 	kfree_skb(hdr->extended_hdr.tx.reserved); /* Free memory */
       }
     }
+    hdr->extended_hdr.tx.reserved = NULL;
+    hdr->extended_hdr.tx.bounce_interface = UNKNOWN_INTERFACE;
 
     pfr->slots_info->kernel_remove_off = get_next_slot_offset(pfr, pfr->slots_info->kernel_remove_off);
+    pfr->slots_info->kernel_tot_read++;
 
     if(unlikely(enable_debug))
       printk("[PF_RING] New offset [kernel_remove_off=%u][remove_off=%u]\n",
@@ -763,25 +780,39 @@ static void consume_pending_pkts(struct pf_ring_socket *pfr, u_int8_t synchroniz
 
 /* ********************************** */
 
-static inline int check_and_init_free_slot(struct pf_ring_socket *pfr)
+static inline int check_free_ring_slot(struct pf_ring_socket *pfr)
 {
-  // smp_rmb();
+  u_int32_t remove_off;
 
-  if(pfr->slots_info->insert_off == pfr->slots_info->remove_off) {
+  // smp_rmb();
+  
+  if(pfr->tx.enable_tx_with_bounce && pfr->header_len == long_pkt_header) /* fast-tx enabled */
+    remove_off = pfr->slots_info->kernel_remove_off;
+  else
+    remove_off = pfr->slots_info->remove_off;
+
+  if(pfr->slots_info->insert_off == remove_off) {
+    u_int64_t queued_pkts;
+
     /*
       Both insert and remove offset are set on the same slot.
       We need to find out whether the memory is full or empty
     */
 
-    if(num_queued_pkts(pfr) >= pfr->slots_info->min_num_slots)
+    if(pfr->tx.enable_tx_with_bounce && pfr->header_len == long_pkt_header)
+      queued_pkts = num_kernel_queued_pkts(pfr);
+    else
+      queued_pkts = num_queued_pkts(pfr);
+
+    if(queued_pkts >= pfr->slots_info->min_num_slots)
       return(0); /* Memory is full */
   } else {
     /* There are packets in the ring. We have to check whether we have
        enough space to accommodate a new packet */
 
-    if(pfr->slots_info->insert_off < pfr->slots_info->remove_off) {
+    if(pfr->slots_info->insert_off < remove_off) {
       /* Zero-copy recv: this prevents from overwriting packets while apps are processing them */
-      if((pfr->slots_info->remove_off - pfr->slots_info->insert_off) < (2 * pfr->slots_info->slot_len))
+      if((remove_off - pfr->slots_info->insert_off) < (2 * pfr->slots_info->slot_len))
 	return(0);
     } else {
       /* We have enough room for the incoming packet as after we insert a packet, the insert_off
@@ -791,7 +822,7 @@ static inline int check_and_init_free_slot(struct pf_ring_socket *pfr)
 
       /* Zero-copy recv: this prevents from overwriting packets while apps are processing them */
       if((pfr->slots_info->tot_mem - sizeof(FlowSlotInfo) - pfr->slots_info->insert_off) < (2 * pfr->slots_info->slot_len) &&
-	 pfr->slots_info->remove_off == 0)
+	 remove_off == 0)
 	return(0);
     }
   }
@@ -2675,7 +2706,7 @@ static inline int copy_data_to_ring(struct sk_buff *skb,
   // smp_rmb();
 
   if(pfr->tx.enable_tx_with_bounce && pfr->header_len == long_pkt_header
-     && pfr->slots_info->remove_off != pfr->slots_info->kernel_remove_off /* optimization to avoid too many locks */
+     && pfr->slots_info->kernel_remove_off != pfr->slots_info->remove_off /* optimization to avoid too many locks */
      && pfr->slots_info->remove_off != get_next_slot_offset(pfr, pfr->slots_info->kernel_remove_off)) {
     write_lock(&pfr->tx.consume_tx_packets_lock);
     consume_pending_pkts(pfr, 0);
@@ -2685,7 +2716,7 @@ static inline int copy_data_to_ring(struct sk_buff *skb,
   off = pfr->slots_info->insert_off;
   pfr->slots_info->tot_pkts++;
 
-  if(!check_and_init_free_slot(pfr)) /* Full */ {
+  if(!check_free_ring_slot(pfr)) /* Full */ {
     /* No room left */
     pfr->slots_info->tot_lost++;
 
@@ -4413,7 +4444,7 @@ static int skb_ring_handler(struct sk_buff *skb,
 		       && (pfr->ring_netdev->dev == skb->dev->master)))
 	       && is_valid_skb_direction(pfr->direction, recv_packet)
 	       ) {
-	      if(check_and_init_free_slot(pfr) /* Not full */) {
+	      if(check_free_ring_slot(pfr) /* Not full */) {
 		/* We've found the ring where the packet can be stored */
 		room_available |= add_skb_to_ring(skb, real_skb, pfr, &hdr, is_ip_pkt,
 						  displ, channel_id, num_rx_channels, &clone_id);
@@ -4452,15 +4483,7 @@ static int skb_ring_handler(struct sk_buff *skb,
     *skb_reference_in_use = 1;
 
   if(rc == 1 /* Ring found */) {
-    if(transparent_mode != driver2pf_ring_non_transparent /* 2 */) {
-      /* transparent mode = 0 or 1 */
-      /* CHECK: I commented the line below as I have no idea why it has been put there */
-      /* rc = 0; */
-#if 0
-      printk("[PF_RING] %s() [clone_id=%d][recv_packet=%d][real_skb=%d]\n",
-	     __FUNCTION__, clone_id, recv_packet, real_skb);
-#endif
-    } else {
+    if(transparent_mode == driver2pf_ring_non_transparent /* 2 */) {
       /* transparent mode = 2 */
       if(recv_packet && real_skb) {
 	if(unlikely(enable_debug))
@@ -4470,6 +4493,14 @@ static int skb_ring_handler(struct sk_buff *skb,
 	  kfree_skb(orig_skb); /* Free memory */
       }
     }
+    // else { /* transparent mode = 0 or 1 */
+    // CHECK: I commented the line below as I have no idea why it has been put there 
+    // rc = 0;
+    //}
+#if 0
+    printk("[PF_RING] %s() [clone_id=%d][recv_packet=%d][real_skb=%d]\n",
+	   __FUNCTION__, clone_id, recv_packet, real_skb);
+#endif
   }
 
 #ifdef PROFILING

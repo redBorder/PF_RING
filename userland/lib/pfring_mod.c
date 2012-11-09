@@ -225,10 +225,20 @@ int pfring_mod_open(pfring *ring) {
   ring->slot_header_len = pfring_get_slot_header_len(ring);
   if(ring->slot_header_len == (u_int16_t)-1) {
     printf("ring failure (pfring_get_slot_header_len)\n");
+    close(ring->fd);
     return -1;
   }
 
   pfring_hw_ft_init(ring);
+
+  if(ring->tx.enabled_rx_packet_send) {
+    int dummy = 0, rc;
+    if(setsockopt(ring->fd, 0, SO_ENABLE_RX_PACKET_BOUNCE, &dummy, sizeof(dummy)) < 0) {
+      printf("failure enabling rx packet bounce support\n");
+      close(ring->fd);
+      return -1;
+    }
+  }
 
   return 0;
 }
@@ -949,16 +959,8 @@ int pfring_mod_remove_bpf_filter(pfring *ring){
 /* **************************************************** */
 
 int pfring_mod_send_last_rx_packet(pfring *ring, int tx_interface_id) {
-  if(!ring->tx.enabled_rx_packet_send) {
-    int dummy = 0, rc;
-
-    rc = setsockopt(ring->fd, 0, SO_ENABLE_RX_PACKET_BOUNCE, &dummy, sizeof(dummy));
-    
-    if(rc < 0)
-      return(rc);
-      
-    ring->tx.enabled_rx_packet_send = 1;
-  }
+  if(!ring->tx.enabled_rx_packet_send)
+    return(PF_RING_ERROR_WRONG_CONFIGURATION);
 
   if(ring->tx.last_received_hdr == NULL)
     return(PF_RING_ERROR_NO_PKT_AVAILABLE); /* We have not yet read a single packet */
