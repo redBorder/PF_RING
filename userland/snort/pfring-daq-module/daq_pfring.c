@@ -214,9 +214,11 @@ static void pfring_daq_reload(Pfring_Context_t *context) {
 
   pfring_daq_reload_requested = 0;
 
-  for (i = 0; i < context->num_devices; i++) {
-    if(context->ring_handles[i] != NULL) {
-      pfring_purge_idle_hash_rules(context->ring_handles[i], 0 /* all */);
+  if (context->use_kernel_filters) {
+    for (i = 0; i < context->num_devices; i++) {
+      if(context->ring_handles[i] != NULL) {
+        pfring_purge_idle_hash_rules(context->ring_handles[i], 0 /* all */);
+      }
     }
   }
 }
