@@ -757,6 +757,8 @@ static void consume_pending_pkts(struct pf_ring_socket *pfr, u_int8_t synchroniz
 			 pfr->tx.last_tx_dev, 0 /* displ */,
 			 forward_packet_and_stop_rule_evaluation,
 			 0 /* don't clone skb */);
+	} else {
+	  kfree_skb(hdr->extended_hdr.tx.reserved); /* Free memory */
 	}
       } else {
 	if(unlikely(enable_debug))
