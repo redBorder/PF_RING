@@ -124,7 +124,9 @@ int main(int argc, char* argv[]) {
   }
 
   /* open devices */
-  if((a_ring = pfring_open(a_dev, 1500, PF_RING_PROMISC|PF_RING_LONG_HEADER)) == NULL) {
+  if((a_ring = pfring_open(a_dev, 1500, PF_RING_PROMISC | PF_RING_LONG_HEADER |
+                           (use_pfring_send ? 0 : PF_RING_RX_PACKET_BOUNCE))
+    ) == NULL) {
     printf("pfring_open error for %s [%s]\n", a_dev, strerror(errno));
     return(-1);
   } else {
