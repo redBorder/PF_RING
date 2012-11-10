@@ -41,6 +41,7 @@
 #include <time.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <inttypes.h>
 
 #include "pfring.h"
 
@@ -53,7 +54,7 @@ int num_app = 1, num_dev = 0;
 pfring *pd[MAX_NUM_DEV];
 pfring_dna_cluster *dna_cluster_handle;
 
-u_int8_t wait_for_packet = 1, do_shutdown = 0, hashing_mode = 0, use_hugepages = 0;
+u_int8_t wait_for_packet = 1, print_interface_stats = 0, do_shutdown = 0, hashing_mode = 0, use_hugepages = 0;
 socket_mode mode = recv_only_mode;
 
 static struct timeval startTime;
@@ -137,7 +138,7 @@ void print_stats() {
       if(print_all) fprintf(stderr, " [%s pkt/sec]", pfring_format_numbers((double)(nRXPkts*1000)/deltaMillisec, buf1, sizeof(buf1), 1));
       
       fprintf(stderr, " RX Processed %s pkts", pfring_format_numbers((double)nRXProcPkts, buf1, sizeof(buf1), 0));
-        if(print_all) fprintf(stderr, " [%s pkt/sec]", pfring_format_numbers((double)(nRXProcPkts*1000)/deltaMillisec, buf1, sizeof(buf1), 1));
+      if(print_all) fprintf(stderr, " [%s pkt/sec]", pfring_format_numbers((double)(nRXProcPkts*1000)/deltaMillisec, buf1, sizeof(buf1), 1));
     }
 	   
     if (mode != recv_only_mode) {
@@ -146,6 +147,16 @@ void print_stats() {
     }
 	        
     fprintf(stderr, "\n");
+
+    if (mode != send_only_mode && print_interface_stats) {
+      int i;
+      pfring_stat if_stats;
+      for (i = 0; i < num_dev; i++) {
+        if (pfring_stats(pd[i], &if_stats) >= 0)
+          fprintf(stderr, "                Socket %d RX %" PRIu64 " pkts Dropped %" PRIu64 " pkts\n", 
+                  i, if_stats.recv, if_stats.drop);
+      }
+    }
 
     if(print_all && (lastTime.tv_sec > 0)) {
       deltaMillisec = delta_time(&endTime, &lastTime);
@@ -230,6 +241,7 @@ void printHelp(void) {
   printf("-s              Enable TX\n");
   printf("-a              Active packet wait\n");
   printf("-u              Use hugepages for packet memory allocation\n");
+  printf("-p              Print per-interface absolute stats\n");
   printf("-d              Daemon mode\n");
   exit(0);
 }
@@ -361,7 +373,7 @@ int main(int argc, char* argv[]) {
 
   startTime.tv_sec = 0;
 
-  while((c = getopt(argc,argv,"ac:r:st:hi:n:m:du")) != -1) {
+  while((c = getopt(argc,argv,"ac:r:st:hi:n:m:dup")) != -1) {
     switch(c) {
     case 'a':
       wait_for_packet = 0;
@@ -392,6 +404,9 @@ int main(int argc, char* argv[]) {
       break;
     case 'd':
       daemon_mode = 1;
+      break;
+    case 'p':
+      print_interface_stats = 1;
       break;
     case 'u':
       use_hugepages = 1;

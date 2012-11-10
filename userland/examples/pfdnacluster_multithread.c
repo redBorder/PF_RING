@@ -51,8 +51,6 @@
 #define DEFAULT_DEVICE          "dna0"
 
 u_int numCPU;
-int num_threads = 1, num_dev = 0;
-pfring_stat pfringStats;
 static struct timeval startTime;
 u_int8_t wait_for_packet = 1, print_interface_stats = 0, do_shutdown = 0;
 int rx_bind_core = 1, tx_bind_core = 2; /* core 0 free if possible */
@@ -60,13 +58,20 @@ int hashing_mode = 0;
 int forward_packets = 0, bridge_interfaces = 0, enable_tx = 0, use_hugepages = 0;
 int tx_if_index;
 pfring_dna_cluster *dna_cluster_handle;
+
+int num_dev = 0;
 pfring *pd[MAX_NUM_DEV];
 int if_indexes[MAX_NUM_DEV];
-pfring *ring[MAX_NUM_THREADS] = { NULL };
-u_int64_t numPkts[MAX_NUM_THREADS] = { 0 };
-u_int64_t numBytes[MAX_NUM_THREADS] = { 0 };
-pthread_t pd_thread[MAX_NUM_THREADS];
-int thread_core_affinity[MAX_NUM_THREADS];
+
+int num_threads = 1;
+struct thread_info {
+  pfring *ring;
+  int thread_core_affinity;
+  pthread_t pd_thread __attribute__((__aligned__(64)));
+  u_int64_t numPkts;
+  u_int64_t numBytes __attribute__((__aligned__(64)));
+};
+struct thread_info thread_stats[MAX_NUM_THREADS];
 
 /* *************************************** */
 /*
@@ -117,26 +122,26 @@ void print_stats() {
   delta = delta_time(&endTime, &lastTime);
 
   for(i=0; i < num_threads; i++) {
-    if(pfring_stats(ring[i], &pfringStat) >= 0) {
-      double thpt = ((double)8*numBytes[i])/(deltaABS*1000);
+    if(pfring_stats(thread_stats[i].ring, &pfringStat) >= 0) {
+      double thpt = ((double)8*thread_stats[i].numBytes)/(deltaABS*1000);
 
       fprintf(stderr, "=========================\n"
               "Thread %d\n"
 	      "Absolute Stats: [%u pkts rcvd][%lu bytes rcvd]\n"
 	      "                [%u total pkts][%u pkts dropped (%.1f %%)]\n"
               "                [%s pkt/sec][%.2f Mbit/sec]\n", i,
-	      (unsigned int) numPkts[i],
-	      (long unsigned int)numBytes[i],
-	      (unsigned int) (numPkts[i]+pfringStat.drop),
+	      (unsigned int) thread_stats[i].numPkts,
+	      (long unsigned int)thread_stats[i].numBytes,
+	      (unsigned int) (thread_stats[i].numPkts+pfringStat.drop),
 	      (unsigned int) pfringStat.drop,
-	      numPkts[i] == 0 ? 0 : (double)(pfringStat.drop*100)/(double)(numPkts[i]+pfringStat.drop),
-              pfring_format_numbers(((double)(numPkts[i]*1000)/deltaABS), buf1, sizeof(buf1), 1),
+	      thread_stats[i].numPkts == 0 ? 0 : (double)(pfringStat.drop*100)/(double)(thread_stats[i].numPkts+pfringStat.drop),
+              pfring_format_numbers(((double)(thread_stats[i].numPkts*1000)/deltaABS), buf1, sizeof(buf1), 1),
 	      thpt);
 
       if(lastTime.tv_sec > 0) {
 	// double pps;
 	
-	diff = numPkts[i]-lastPkts[i];
+	diff = thread_stats[i].numPkts-lastPkts[i];
 	// pps = ((double)diff/(double)(delta/1000));
 	fprintf(stderr, "Actual   Stats: [%llu pkts][%.1f ms][%s pkt/sec]\n",
 		(long long unsigned int) diff, 
@@ -144,12 +149,11 @@ void print_stats() {
 		pfring_format_numbers(((double)diff/(double)(delta/1000)), buf1, sizeof(buf1), 1));
       }
 
-      lastPkts[i] = numPkts[i];
+      lastPkts[i] = thread_stats[i].numPkts;
     }
   }
  
   if(dna_cluster_stats(dna_cluster_handle, &cluster_stats) == 0) {
-
     if(lastTime.tv_sec > 0) {
       RXdiff = cluster_stats.tot_rx_packets - lastRXPkts; 
       RXProcdiff = cluster_stats.tot_rx_processed - lastRXProcPkts;
@@ -160,21 +164,22 @@ void print_stats() {
               pfring_format_numbers(((double)RXdiff/(double)(delta/1000)), buf1, sizeof(buf1), 1),
               pfring_format_numbers(((double)RXProcdiff/(double)(delta/1000)), buf2, sizeof(buf2), 1),
               pfring_format_numbers(((double)TXdiff/(double)(delta/1000)), buf3, sizeof(buf3), 1));
-      
-      if (print_interface_stats) {
-        pfring_stat if_stats;
-        for (i = 0; i < num_dev; i++)
-          if (pfring_stats(pd[i], &if_stats) >= 0)
-            fprintf(stderr, "Absolute socket %d stats: [%" PRIu64 " pkts rcvd][%" PRIu64 " pkts dropped]\n", 
-	            i, if_stats.recv, if_stats.drop);
-      }
-
     }
 
     lastRXPkts = cluster_stats.tot_rx_packets;
     lastRXProcPkts = cluster_stats.tot_rx_processed;
     lastTXPkts = cluster_stats.tot_tx_packets;
   }
+
+  if (print_interface_stats) {
+    pfring_stat if_stats;
+    fprintf(stderr, "=========================\nSockets Absolute Stats\n");
+    for (i = 0; i < num_dev; i++)
+      if (pfring_stats(pd[i], &if_stats) >= 0)
+        fprintf(stderr, "Socket 0 RX %d stats: [%" PRIu64 " pkts rcvd][%" PRIu64 " pkts dropped]\n",
+	        i, if_stats.recv, if_stats.drop);
+  }
+
 
   fprintf(stderr, "=========================\n\n");
   
@@ -197,7 +202,7 @@ void sigproc(int sig) {
   print_stats();
 
   for(i=0; i<num_threads; i++)
-    pfring_shutdown(ring[i]);
+    pfring_shutdown(thread_stats[i].ring);
 
   do_shutdown = 1;
 }
@@ -366,8 +371,8 @@ void* packet_consumer_thread(void *_id) {
     cpu_set_t cpuset;
     u_long core_id;
     
-    if (thread_core_affinity[thread_id] != -1)
-       core_id = thread_core_affinity[thread_id] % numCPU;
+    if (thread_stats[thread_id].thread_core_affinity != -1)
+       core_id = thread_stats[thread_id].thread_core_affinity % numCPU;
     else
       core_id = ((!enable_tx ? rx_bind_core : tx_bind_core) + 1 + thread_id) % numCPU; 
 
@@ -384,7 +389,7 @@ void* packet_consumer_thread(void *_id) {
   memset(&hdr, 0, sizeof(hdr));
 
   if (enable_tx) {
-    if ((pkt_handle = pfring_alloc_pkt_buff(ring[thread_id])) == NULL) {
+    if ((pkt_handle = pfring_alloc_pkt_buff(thread_stats[thread_id].ring)) == NULL) {
       printf("Error allocating pkt buff\n");
       return NULL;
     }
@@ -392,36 +397,36 @@ void* packet_consumer_thread(void *_id) {
 
   while (!do_shutdown) {
     if (!enable_tx) {
-      rc = pfring_recv(ring[thread_id], &buffer, 0, &hdr, wait_for_packet);
+      rc = pfring_recv(thread_stats[thread_id].ring, &buffer, 0, &hdr, wait_for_packet);
     } else {
-      rc = pfring_recv_pkt_buff(ring[thread_id], pkt_handle, &hdr, wait_for_packet);
+      rc = pfring_recv_pkt_buff(thread_stats[thread_id].ring, pkt_handle, &hdr, wait_for_packet);
 
       if (rc > 0) {
-        buffer = pfring_get_pkt_buff_data(ring[thread_id], pkt_handle);
-        /* len already set pfring_set_pkt_buff_len(ring[thread_id], pkt_handle, len); */
+        buffer = pfring_get_pkt_buff_data(thread_stats[thread_id].ring, pkt_handle);
+        /* len already set pfring_set_pkt_buff_len(thread_stats[thread_id].ring, pkt_handle, len); */
        
         if (bridge_interfaces) {
 	  for (i = 0; i < num_dev; i++) {
 	    if (if_indexes[i] == hdr.extended_hdr.if_index) {
-	      pfring_set_pkt_buff_ifindex(ring[thread_id], pkt_handle, if_indexes[i ^ 0x1]);
+	      pfring_set_pkt_buff_ifindex(thread_stats[thread_id].ring, pkt_handle, if_indexes[i ^ 0x1]);
 	      break;
 	    }
 	  }
 	} else if (forward_packets) {
-	  if (pfring_set_pkt_buff_ifindex(ring[thread_id], pkt_handle, tx_if_index) == PF_RING_ERROR_INVALID_ARGUMENT) {
+	  if (pfring_set_pkt_buff_ifindex(thread_stats[thread_id].ring, pkt_handle, tx_if_index) == PF_RING_ERROR_INVALID_ARGUMENT) {
 	    printf("Wrong interface id, packet will not be forwarded\n");
 	    goto next_pkt;
           }
 	} /* else use incoming interface (already set) */
 
-        pfring_send_pkt_buff(ring[thread_id], pkt_handle, bridge_interfaces ? 1 : 0 /* flush flag */);
+        pfring_send_pkt_buff(thread_stats[thread_id].ring, pkt_handle, bridge_interfaces ? 1 : 0 /* flush flag */);
       }
     }
 next_pkt:
 
     if (rc > 0) {
-      numPkts[thread_id]++;
-      numBytes[thread_id] += hdr.len + 24 /* 8 Preamble + 4 CRC + 12 IFG */;
+      thread_stats[thread_id].numPkts++;
+      thread_stats[thread_id].numBytes += hdr.len + 24 /* 8 Preamble + 4 CRC + 12 IFG */;
     } else {
       if (!wait_for_packet) 
         sched_yield(); //usleep(1);
@@ -443,9 +448,12 @@ int main(int argc, char* argv[]) {
   socket_mode mode = recv_only_mode;
   int rc;
   long i;
-  
+ 
+  memset(thread_stats, 0, sizeof(thread_stats));
+  for (i = 0; i < MAX_NUM_THREADS; i++)
+    thread_stats[i].thread_core_affinity = -1;
+
   numCPU = sysconf( _SC_NPROCESSORS_ONLN );
-  memset(thread_core_affinity, -1, sizeof(thread_core_affinity));
   startTime.tv_sec = 0;
 
   while ((c = getopt(argc,argv,"ahi:bc:n:m:r:t:g:x:pu")) != -1) {
@@ -510,7 +518,7 @@ int main(int argc, char* argv[]) {
     int idx = 0;
 
     while(id != NULL) {
-      thread_core_affinity[idx++] = atoi(id) % numCPU;
+      thread_stats[idx++].thread_core_affinity = atoi(id) % numCPU;
       if(idx >= num_threads) break;
       id = strtok(NULL, ":");
     }
@@ -641,21 +649,21 @@ int main(int argc, char* argv[]) {
 
   for (i = 0; i < num_threads; i++) {
     snprintf(buf, sizeof(buf), "dnacluster:%d@%ld", cluster_id, i);
-    ring[i] = pfring_open(buf, 1500 /* snaplen */, PF_RING_PROMISC);
-    if (ring[i] == NULL) {
+    thread_stats[i].ring = pfring_open(buf, 1500 /* snaplen */, PF_RING_PROMISC);
+    if (thread_stats[i].ring == NULL) {
       printf("pfring_open %s error [%s]\n", device, strerror(errno));
       return(-1);
     }
 
     snprintf(buf, sizeof(buf), "pfdnacluster_multithread-cluster-%d-thread-%ld", cluster_id, i);
-    pfring_set_application_name(ring[i], buf);
+    pfring_set_application_name(thread_stats[i].ring, buf);
 
-    if((rc = pfring_set_socket_mode(ring[i], mode)) != 0)
+    if((rc = pfring_set_socket_mode(thread_stats[i].ring, mode)) != 0)
       fprintf(stderr, "pfring_set_socket_mode returned [rc=%d]\n", rc);
 
-    pfring_enable_ring(ring[i]);
+    pfring_enable_ring(thread_stats[i].ring);
 
-    pthread_create(&pd_thread[i], NULL, packet_consumer_thread, (void *) i);
+    pthread_create(&thread_stats[i].pd_thread, NULL, packet_consumer_thread, (void *) i);
 
     printf("Consumer thread #%ld is running...\n", i);
   }
@@ -668,8 +676,8 @@ int main(int argc, char* argv[]) {
   alarm(ALARM_SLEEP);
 
   for(i = 0; i < num_threads; i++) {
-    pthread_join(pd_thread[i], NULL);
-    pfring_close(ring[i]);
+    pthread_join(thread_stats[i].pd_thread, NULL);
+    pfring_close(thread_stats[i].ring);
   }
 
   dna_cluster_destroy(dna_cluster_handle);

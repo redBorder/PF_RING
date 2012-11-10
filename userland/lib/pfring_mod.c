@@ -232,7 +232,7 @@ int pfring_mod_open(pfring *ring) {
   pfring_hw_ft_init(ring);
 
   if(ring->tx.enabled_rx_packet_send) {
-    int dummy = 0, rc;
+    int dummy = 0;
     if(setsockopt(ring->fd, 0, SO_ENABLE_RX_PACKET_BOUNCE, &dummy, sizeof(dummy)) < 0) {
       printf("failure enabling rx packet bounce support\n");
       close(ring->fd);
