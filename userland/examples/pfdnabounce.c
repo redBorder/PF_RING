@@ -214,7 +214,7 @@ void printHelp(void) {
 
 /* *************************************** */
 
-int dummyProcessPacketZero(u_int16_t pkt_len, u_char *pkt, const u_char *user_bytes) {
+int dummyProcessPacketZero(u_int16_t pkt_len, u_char *pkt, const u_char *user_bytes, u_int8_t direction) {
   numPkts++;
   numBytes += pkt_len + 24 /* 8 Preamble + 4 CRC + 12 IFG */;
 
