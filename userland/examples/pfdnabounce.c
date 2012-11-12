@@ -46,18 +46,25 @@
 
 #define ALARM_SLEEP             1
 
-pfring  *pd1, *pd2;
 pfring_stat pfringStats;
 char *in_dev = NULL, *out_dev = NULL;
 int in_ifindex, out_ifindex;
 u_int8_t wait_for_packet = 1, do_shutdown = 0;
 static struct timeval startTime;
-unsigned long long numPkts = 0, numBytes = 0;
-pfring_dna_bouncer *bouncer_handle = NULL;
 int mode = 0;
 int bidirectional = 0;
 int cluster_id = -1;
 int flush = 0;
+pfring *pd1, *pd2, *pdb1, *pdb2;
+pfring_dna_bouncer *bouncer_handle = NULL, *bouncer_handle2;
+u_int numCPU;
+int bind_core[2];
+struct dir_info {
+  u_int64_t __padding __attribute__((__aligned__(64)));
+  u_int64_t numPkts;
+  u_int64_t numBytes __attribute__((__aligned__(64)));
+};
+struct dir_info dir_stats[2];
 
 /* *************************************** */
 /*
@@ -84,16 +91,21 @@ double delta_time (struct timeval * now,
 
 /* ******************************** */
 
-int bind2core(u_int core_id) {
+int bind2core(u_int thread_id, u_int core_id) {
   cpu_set_t cpuset;
   int s;
 
+  if (numCPU <= 1)
+    return(0);
+
   CPU_ZERO(&cpuset);
   CPU_SET(core_id, &cpuset);
+
   if((s = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset)) != 0) {
-    fprintf(stderr, "Error while binding to core %u: errno=%i\n", core_id, s);
+    fprintf(stderr, "Error while binding thread %u to core %u: errno=%i\n", thread_id, core_id, s);
     return(-1);
   } else {
+    printf("Set thread %u on core %u/%u\n", thread_id, core_id, numCPU);
     return(0);
   }
 }
@@ -121,8 +133,8 @@ void print_stats() {
   gettimeofday(&endTime, NULL);
   deltaMillisec = delta_time(&endTime, &startTime);
 
-  nBytes = numBytes;
-  nPkts  = numPkts;
+  nBytes = dir_stats[0].numBytes + dir_stats[1].numBytes;
+  nPkts  = dir_stats[0].numPkts + dir_stats[1].numPkts;
 
   {
     thpt = ((double)8*nBytes)/(deltaMillisec*1000);
@@ -181,7 +193,9 @@ void sigproc(int sig) {
 
   switch (mode) {
   case 0: 
-    pfring_dna_bouncer_breakloop(bouncer_handle); 
+    pfring_dna_bouncer_breakloop(bouncer_handle);
+    if (bidirectional == 2)
+      pfring_dna_bouncer_breakloop(bouncer_handle2);
   break;
   case 1:
   case 2: 
@@ -205,9 +219,12 @@ void printHelp(void) {
 	 "                1 - DNA Cluster (use -c <id>)\n"
 	 "                2 - Standard DNA\n");
   printf("-c <id>         DNA Cluster id\n");
-  printf("-b              Bridge mode: forward in both directions (DNA Cluster and Bouncer only)\n");
+  printf("-b              Bridge mode (forward in both directions):\n"
+         "                0 - disabled (default)\n"
+         "                1 - single thread (DNA Cluster and Bouncer only)\n"
+         "                2 - two threads, one per direction (DNA Bouncer only)\n");
   printf("-f              Flush packets immediately (do not use watermarks)\n");
-  printf("-g <core id>    Bind this app to a core\n");
+  printf("-g <core id>    Bind this app to a core (with -b 2 use <core id>:<core id>)\n");
   printf("-a              Active packet wait\n");
   exit(0);
 }
@@ -215,8 +232,15 @@ void printHelp(void) {
 /* *************************************** */
 
 int dummyProcessPacketZero(u_int16_t pkt_len, u_char *pkt, const u_char *user_bytes, u_int8_t direction) {
-  numPkts++;
-  numBytes += pkt_len + 24 /* 8 Preamble + 4 CRC + 12 IFG */;
+  struct dir_info *di;
+
+  if (bidirectional == 2)
+    di = (struct dir_info *) user_bytes;
+  else
+    di = &dir_stats[direction];
+
+  di->numPkts++;
+  di->numBytes += pkt_len + 24 /* 8 Preamble + 4 CRC + 12 IFG */;
 
   return DNA_BOUNCER_PASS;
 }
@@ -258,8 +282,8 @@ void packetConsumerLoopZeroCluster() {
       pfring_send_pkt_buff(pd1, pkt_handle, flush);
     }
 
-    numPkts++;
-    numBytes += h.len + 24 /* 8 Preamble + 4 CRC + 12 IFG */; 
+    dir_stats[(h.extended_hdr.if_index == out_ifindex)].numPkts++;
+    dir_stats[(h.extended_hdr.if_index == out_ifindex)].numBytes += h.len + 24 /* 8 Preamble + 4 CRC + 12 IFG */; 
   }
 }
 
@@ -269,21 +293,41 @@ void dummyProcessPacket(const struct pfring_pkthdr *h, const u_char *p, const u_
   
   pfring_send(pd2, (char*)p, h->caplen, flush);
 
-  numPkts++;
-  numBytes += h->len + 24 /* 8 Preamble + 4 CRC + 12 IFG */; 
+  dir_stats[0].numPkts++;
+  dir_stats[0].numBytes += h->len + 24 /* 8 Preamble + 4 CRC + 12 IFG */; 
+}
+
+/* *************************************** */
+
+void* bouncer_dir2_thread(void *data) {
+  if (bind_core[1] >= 0)
+    bind2core(1, bind_core[1]);
+
+  if(pfring_dna_bouncer_loop(bouncer_handle2, dummyProcessPacketZero, (u_char *) &dir_stats[1], wait_for_packet) == -1) {
+    printf("Problems while starting bouncer. See dmesg for details.\n");
+    exit(-1);
+  }
+  return NULL;
 }
 
 /* *************************************** */
 
 int main(int argc, char* argv[]) {
   char c;
-  int bind_core = -1;
   char buf[32];
+  char *bind_mask = NULL;
   u_int32_t version;
+  pthread_t pthread2;
 
+  bind_core[0] = bind_core[1] = -1;
+
+  dir_stats[0].numPkts  = dir_stats[1].numPkts = 0;
+  dir_stats[0].numBytes = dir_stats[1].numBytes = 0;
+
+  numCPU = sysconf( _SC_NPROCESSORS_ONLN );
   startTime.tv_sec = 0;
 
-  while((c = getopt(argc,argv,"hai:o:m:bc:g:f")) != -1) {
+  while((c = getopt(argc,argv,"hai:o:m:b:c:g:f")) != -1) {
     switch(c) {
     case 'h':
       printHelp();      
@@ -304,13 +348,13 @@ int main(int argc, char* argv[]) {
       cluster_id = atoi(optarg);
       break;
     case 'b':
-      bidirectional = 1;
+      bidirectional = atoi(optarg);
       break;
     case 'f':
       flush = 1;
       break;
     case 'g':
-      bind_core = atoi(optarg);
+      bind_mask = strdup(optarg);
       break;
     }
   }
@@ -318,21 +362,49 @@ int main(int argc, char* argv[]) {
   if (in_dev == NULL)  printHelp();
   if (out_dev == NULL) out_dev = strdup(in_dev);
   if (mode < 0 || mode > 2) printHelp();
-  if (bidirectional && mode != 0 && mode != 1) printHelp();
+  if (bidirectional < 0 || bidirectional > 2) printHelp();
+  if (bidirectional == 1 && mode != 0 && mode != 1) printHelp();
+  if (bidirectional == 2 && mode != 0) printHelp();
   if (bidirectional && strcmp(in_dev, out_dev) == 0) printHelp();
   if (mode == 1 && cluster_id < 0) printHelp();
 
   printf("Bouncing packets from %s to %s (%s)\n", in_dev, out_dev, bidirectional ? "two-way" : "one-way");
 
+  if(bind_mask != NULL) {
+    char *id;
+    if ((id = strtok(bind_mask, ":")) != NULL)
+      bind_core[0] = atoi(id) % numCPU;
+    if ((id = strtok(NULL, ":")) != NULL)
+      bind_core[1] = atoi(id) % numCPU;
+  }
+
   switch (mode) {
   case 0:
+    if (bidirectional == 2 /* bidirectional with one thread per direction: opening two bouncer, two sockets per bouncer */) {
+      pdb1 = pfring_open(out_dev, 1500 /* snaplen */, PF_RING_PROMISC);
+      if(pdb1 == NULL) {
+        printf("pfring_open %s error [%s]\n", in_dev, strerror(errno));
+        return(-1);
+      }
+      pfring_set_socket_mode(pdb1, recv_only_mode);
+      pfring_set_application_name(pdb1, "pfdnabounce");
+
+      pdb2 = pfring_open(in_dev, 1500 /* snaplen */, PF_RING_PROMISC);
+      if(pdb2 == NULL) {
+        printf("pfring_open %s error [%s]\n", out_dev, strerror(errno));
+        return(-1);
+      } 
+      pfring_set_socket_mode(pdb2, send_only_mode);
+      pfring_set_application_name(pdb2, "pfdnabounce");
+    }
+  /* no break here! */
   case 2:
     pd1 = pfring_open(in_dev, 1500 /* snaplen */, PF_RING_PROMISC);
     if(pd1 == NULL) {
       printf("pfring_open %s error [%s]\n", in_dev, strerror(errno));
       return(-1);
     }
-    if (!bidirectional)
+    if (bidirectional != 1)
       pfring_set_socket_mode(pd1, recv_only_mode);
 
     pd2 = pfring_open(out_dev, 1500 /* snaplen */, bidirectional ? PF_RING_PROMISC : 0);
@@ -340,9 +412,8 @@ int main(int argc, char* argv[]) {
       printf("pfring_open %s error [%s]\n", out_dev, strerror(errno));
       return(-1);
     } 
-    if (!bidirectional)
+    if (bidirectional != 1)
       pfring_set_socket_mode(pd2, send_only_mode);
-
     pfring_set_application_name(pd2, "pfdnabounce");
   break;
 
@@ -370,8 +441,8 @@ int main(int argc, char* argv[]) {
   signal(SIGALRM, my_sigalarm);
   alarm(ALARM_SLEEP);
 
-  if(bind_core >= 0)
-    bind2core(bind_core);
+  if(bind_core[0] >= 0)
+    bind2core(0, bind_core[0]);
 
   switch (mode) {
   case 0: 
@@ -381,21 +452,37 @@ int main(int argc, char* argv[]) {
       printf("WARNING: Unable to initialize the DNA Bouncer (ports already in use ?)\n");
       pfring_close(pd1);
       pfring_close(pd2);
+
       return(-1);
     }
-      
-    if (bidirectional) {
+
+    if (bidirectional == 2) {
+      if ((bouncer_handle2 = pfring_dna_bouncer_create(pdb1, pdb2)) == NULL) {
+        printf("WARNING: Unable to initialize the second DNA Bouncer (ports already in use ?)\n");
+	pfring_dna_bouncer_destroy(bouncer_handle);
+        pfring_close(pdb1);
+        pfring_close(pdb2);
+        return(-1);
+      }
+      printf("Starting direction 0 thread..\n"); 
+      pthread_create(&pthread2, NULL, bouncer_dir2_thread, NULL);
+      printf("Starting direction 1 thread..\n"); 
+    } else if (bidirectional == 1) {
       if (pfring_dna_bouncer_set_mode(bouncer_handle, two_way_mode) < 0) {
         printf("Error setting the DNA Bouncer to bidirectional\n");
 	pfring_dna_bouncer_destroy(bouncer_handle);
 	return(-1);
       }
-    }
+    } 
 
-    if(pfring_dna_bouncer_loop(bouncer_handle, dummyProcessPacketZero, (u_char *) NULL, wait_for_packet) == -1) {
+    if(pfring_dna_bouncer_loop(bouncer_handle, dummyProcessPacketZero, (u_char *) &dir_stats[0], wait_for_packet) == -1) {
       printf("Problems while starting bouncer. See dmesg for details.\n");
     }
 
+    if (bidirectional == 2) {
+      pthread_join(pthread2, NULL);
+      pfring_dna_bouncer_destroy(bouncer_handle2);
+    }
     pfring_dna_bouncer_destroy(bouncer_handle);
   break;
   case 1: 
