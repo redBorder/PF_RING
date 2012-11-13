@@ -360,7 +360,10 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h,
     s = (h->ts.tv_sec + thiszone) % 86400;
 
     if(h->extended_hdr.timestamp_ns) {
-      /* be careful with drifts mixing sys time and hw timestamp */
+      if (pd->dna.dna_dev.mem_info.device_model != intel_igb_82580 /* other than intel_igb_82580 */)
+        s = ((h->extended_hdr.timestamp_ns / 1000000000) + thiszone) % 86400;
+      /* "else" intel_igb_82580 has 40 bit ts, using gettimeofday seconds:
+       * be careful with drifts mixing sys time and hw timestamp */
       usec = (h->extended_hdr.timestamp_ns / 1000) % 1000000;
       nsec = h->extended_hdr.timestamp_ns % 1000;
     } else {
