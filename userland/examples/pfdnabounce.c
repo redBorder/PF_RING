@@ -41,6 +41,7 @@
 #include <time.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <inttypes.h>
 
 #include "pfring.h"
 
@@ -55,6 +56,7 @@ int mode = 0;
 int bidirectional = 0;
 int cluster_id = -1;
 int flush = 0;
+int print_interface_stats = 0;
 pfring *pd1, *pd2, *pdb1, *pdb2;
 pfring_dna_bouncer *bouncer_handle = NULL, *bouncer_handle2;
 u_int numCPU;
@@ -149,6 +151,21 @@ void print_stats() {
 	      pfring_format_numbers(thpt, buf2, sizeof(buf2), 1));
     else
       fprintf(stderr, "\n");
+
+    if (print_interface_stats) {
+      int i;
+      pfring_stat if_stats;
+
+      if (pfring_stats(pd1, &if_stats) >= 0)
+        fprintf(stderr, "                Socket 0 RX %" PRIu64 " pkts Dropped %" PRIu64 " pkts\n", 
+                if_stats.recv, if_stats.drop);
+
+      if (mode == 0 && bidirectional) {
+        if (pfring_stats(bidirectional == 2 ? pdb1 : pd2, &if_stats) >= 0)
+          fprintf(stderr, "                Socket 1 RX %" PRIu64 " pkts Dropped %" PRIu64 " pkts\n", 
+                  if_stats.recv, if_stats.drop);
+      }
+    }
 
     if(print_all && (lastTime.tv_sec > 0)) {
       deltaMillisec = delta_time(&endTime, &lastTime);
@@ -327,7 +344,7 @@ int main(int argc, char* argv[]) {
   numCPU = sysconf( _SC_NPROCESSORS_ONLN );
   startTime.tv_sec = 0;
 
-  while((c = getopt(argc,argv,"hai:o:m:b:c:g:f")) != -1) {
+  while((c = getopt(argc,argv,"hai:o:m:b:c:g:fp")) != -1) {
     switch(c) {
     case 'h':
       printHelp();      
@@ -355,6 +372,9 @@ int main(int argc, char* argv[]) {
       break;
     case 'g':
       bind_mask = strdup(optarg);
+      break;
+    case 'p':
+      print_interface_stats = 1;
       break;
     }
   }
