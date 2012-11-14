@@ -240,7 +240,7 @@ void printHelp(void) {
 	 "                3 - Fan-Out\n");
   printf("-s              Enable TX\n");
   printf("-a              Active packet wait\n");
-  printf("-u              Use hugepages for packet memory allocation\n");
+  printf("-u <mountpoint> Use hugepages for packet memory allocation\n");
   printf("-p              Print per-interface absolute stats\n");
   printf("-d              Daemon mode\n");
   exit(0);
@@ -368,12 +368,12 @@ int main(int argc, char* argv[]) {
   u_int32_t version;
   int rx_bind_core = 0, tx_bind_core = 1;
   int cluster_id = -1;
-  char *device = NULL, *dev, *dev_pos = NULL;
+  char *device = NULL, *dev, *dev_pos = NULL, *hugepages_mountpoint = NULL;
   int daemon_mode = 0;
 
   startTime.tv_sec = 0;
 
-  while((c = getopt(argc,argv,"ac:r:st:hi:n:m:dup")) != -1) {
+  while((c = getopt(argc,argv,"ac:r:st:hi:n:m:du:p")) != -1) {
     switch(c) {
     case 'a':
       wait_for_packet = 0;
@@ -410,6 +410,7 @@ int main(int argc, char* argv[]) {
       break;
     case 'u':
       use_hugepages = 1;
+      hugepages_mountpoint = strdup(optarg);
       break;
     }
   }
@@ -449,6 +450,13 @@ int main(int argc, char* argv[]) {
 				 4096  // slave additional buffers (available with  alloc/release)
 				 );
   */
+
+  if (use_hugepages) {
+    if (dna_cluster_set_hugepages_mountpoint(dna_cluster_handle, hugepages_mountpoint) < 0) {
+      fprintf(stderr, "Error setting the hugepages mountpoint: did you mount it?\n");
+      return(-1);
+    }
+  }
 
   /* Setting the cluster mode */
   dna_cluster_set_mode(dna_cluster_handle, mode);

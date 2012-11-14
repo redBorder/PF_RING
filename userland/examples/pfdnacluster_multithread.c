@@ -239,7 +239,7 @@ void printHelp(void) {
   printf("-x <if index>   Forward all packets to the selected interface (Enable TX)\n");
   printf("-b              Bridge the interfaces listed in -i in pairs (Enable TX)\n");
   printf("-a              Active packet wait\n");
-  printf("-u              Use hugepages for packet memory allocation\n");
+  printf("-u <mountpoint> Use hugepages for packet memory allocation\n");
   printf("-p              Print per-interface absolute stats\n");
   exit(0);
 }
@@ -442,7 +442,7 @@ int main(int argc, char* argv[]) {
   char c;
   char buf[32];
   char *bind_mask = NULL;
-  char *device = NULL, *dev, *dev_pos = NULL;
+  char *device = NULL, *dev, *dev_pos = NULL, *hugepages_mountpoint = NULL;
   u_int32_t version;
   int cluster_id = -1;
   socket_mode mode = recv_only_mode;
@@ -456,7 +456,7 @@ int main(int argc, char* argv[]) {
   numCPU = sysconf( _SC_NPROCESSORS_ONLN );
   startTime.tv_sec = 0;
 
-  while ((c = getopt(argc,argv,"ahi:bc:n:m:r:t:g:x:pu")) != -1) {
+  while ((c = getopt(argc,argv,"ahi:bc:n:m:r:t:g:x:pu:")) != -1) {
     switch (c) {
     case 'a':
       wait_for_packet = 0;
@@ -497,6 +497,7 @@ int main(int argc, char* argv[]) {
       break;
     case 'u':
       use_hugepages = 1;
+      hugepages_mountpoint = strdup(optarg);
       break;
     }
   }
@@ -550,6 +551,14 @@ int main(int argc, char* argv[]) {
                                  8192, // slave tx queue slots
 				 enable_tx ? 1 : 0  // slave additional buffers (available with  alloc/release)
 				 );
+
+  if (use_hugepages) {
+    if (dna_cluster_set_hugepages_mountpoint(dna_cluster_handle, hugepages_mountpoint) < 0) {
+      fprintf(stderr, "Error setting the hugepages mountpoint: did you mount it?\n");
+      return(-1);
+    }
+  }
+
 
   if (dna_cluster_set_mode(dna_cluster_handle, mode) < 0) {
     printf("dna_cluster_set_mode error\n");
