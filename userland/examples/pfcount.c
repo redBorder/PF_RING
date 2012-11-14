@@ -799,6 +799,14 @@ int main(int argc, char* argv[]) {
   printf("# Device RX channels: %d\n", pfring_get_num_rx_channels(pd));
   printf("# Polling threads:    %d\n", num_threads);
 
+  if (enable_hw_timestamp) {
+    struct timespec ltime;
+    /* Setting current clock */
+    if (clock_gettime(CLOCK_REALTIME, &ltime) != 0 ||
+        pfring_set_device_clock(pd, &ltime) < 0)
+      fprintf(stderr, "Error setting device clock\n");
+  }
+
   if(bpfFilter != NULL) {
     rc = pfring_set_bpf_filter(pd, bpfFilter);
     if(rc != 0)
