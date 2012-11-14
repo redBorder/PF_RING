@@ -153,7 +153,6 @@ void print_stats() {
       fprintf(stderr, "\n");
 
     if (print_interface_stats) {
-      int i;
       pfring_stat if_stats;
 
       if (pfring_stats(pd1, &if_stats) >= 0)
