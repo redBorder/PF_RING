@@ -64,7 +64,8 @@ Example:
 It is possible to see what pages are currently in use using the
 following command:
 
-$ cat /sys/devices/system/node/node*/meminfo | fgrep HugeNode 0 HugePages_Total:  1024
+$ cat /sys/devices/system/node/node*/meminfo | grep Huge
+Node 0 HugePages_Total:  1024
 Node 0 HugePages_Free:   1024
 Node 0 HugePages_Surp:      0
 
