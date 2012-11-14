@@ -47,6 +47,14 @@ amounts of memory at boot time using the following kernel options:
 
   default_hugepagesz=1G hugepagesz=1G hugepages=4
 
+If this commands returns a non-empty string, 2MB pages are supported:
+
+$ cat /proc/cpuinfo | grep pse
+
+If this commands returns a non-empty string, 1GB pages are supported:
+
+$ cat /proc/cpuinfo | grep pdpe1gb
+
 In order to make the hugepages available for use, Linux provides a 
 RAM-based filesystem called "hugetlbfs" that have to be mount'ed with:
 
