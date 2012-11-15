@@ -339,7 +339,7 @@ inline u_int32_t master_custom_hash_function(const u_char *buffer, const u_int16
 
 static int master_distribution_function(const u_char *buffer, const u_int16_t buffer_len, const pfring_dna_cluster_slaves_info *slaves_info, u_int32_t *id_mask, u_int32_t *hash) {
   u_int32_t slave_idx;
-  
+
   /* computing a bidirectional software hash */
   *hash = master_custom_hash_function(buffer, buffer_len);
 
@@ -438,6 +438,7 @@ int main(int argc, char* argv[]) {
 					       0 
 					       /* | DNA_CLUSTER_DIRECT_FORWARDING */
                                                /* | DNA_CLUSTER_NO_ADDITIONAL_BUFFERS */
+					       /* | DNA_CLUSTER_DCA */
 					       | (use_hugepages ? DNA_CLUSTER_HUGEPAGES : 0)
      )) == NULL) {
     fprintf(stderr, "Error creating DNA Cluster\n");

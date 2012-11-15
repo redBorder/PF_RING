@@ -538,8 +538,9 @@ int main(int argc, char* argv[]) {
   if ((dna_cluster_handle = dna_cluster_create(cluster_id, 
   					       num_threads, 
 					       0
-  					       | (!enable_tx ? DNA_CLUSTER_NO_ADDITIONAL_BUFFERS : 0)
 					       /* | DNA_CLUSTER_DIRECT_FORWARDING */
+  					       | (!enable_tx ? DNA_CLUSTER_NO_ADDITIONAL_BUFFERS : 0)
+					       /* | DNA_CLUSTER_DCA */
 					       | (use_hugepages ? DNA_CLUSTER_HUGEPAGES : 0)
      )) == NULL) {
     fprintf(stderr, "Error creating DNA Cluster\n");
