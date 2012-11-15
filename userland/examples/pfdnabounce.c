@@ -156,13 +156,15 @@ void print_stats() {
       pfring_stat if_stats;
 
       if (pfring_stats(pd1, &if_stats) >= 0)
-        fprintf(stderr, "                Socket 0 RX %" PRIu64 " pkts Dropped %" PRIu64 " pkts\n", 
-                if_stats.recv, if_stats.drop);
+        fprintf(stderr, "                %s RX %" PRIu64 " pkts Dropped %" PRIu64 " pkts (%.1f %%)\n", 
+                mode == 1 ? "Consumer Queue" : pd1->device_name, if_stats.recv, if_stats.drop,
+		if_stats.recv == 0 ? 0 : ((double)(if_stats.drop*100)/(double)(if_stats.recv + if_stats.drop)));
 
       if (mode == 0 && bidirectional) {
         if (pfring_stats(bidirectional == 2 ? pdb1 : pd2, &if_stats) >= 0)
-          fprintf(stderr, "                Socket 1 RX %" PRIu64 " pkts Dropped %" PRIu64 " pkts\n", 
-                  if_stats.recv, if_stats.drop);
+          fprintf(stderr, "                %s RX %" PRIu64 " pkts Dropped %" PRIu64 " pkts (%.1f %%)\n", 
+                  (bidirectional == 2 ? pdb1 : pd2)->device_name, if_stats.recv, if_stats.drop,
+		  if_stats.recv == 0 ? 0 : ((double)(if_stats.drop*100)/(double)(if_stats.recv + if_stats.drop)));
       }
     }
 
@@ -235,7 +237,7 @@ void printHelp(void) {
 	 "                1 - DNA Cluster (use -c <id>)\n"
 	 "                2 - Standard DNA\n");
   printf("-c <id>         DNA Cluster id\n");
-  printf("-b              Bridge mode (forward in both directions):\n"
+  printf("-b <mode>       Bridge mode (forward in both directions):\n"
          "                0 - disabled (default)\n"
          "                1 - single thread (DNA Cluster and Bouncer only)\n"
          "                2 - two threads, one per direction (DNA Bouncer only)\n");

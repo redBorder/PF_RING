@@ -137,7 +137,7 @@ void print_stats() {
       fprintf(stderr, " RX %s pkts", pfring_format_numbers((double)nRXPkts, buf1, sizeof(buf1), 0));
       if(print_all) fprintf(stderr, " [%s pkt/sec]", pfring_format_numbers((double)(nRXPkts*1000)/deltaMillisec, buf1, sizeof(buf1), 1));
       
-      fprintf(stderr, " RX Processed %s pkts", pfring_format_numbers((double)nRXProcPkts, buf1, sizeof(buf1), 0));
+      fprintf(stderr, " Processed %s pkts", pfring_format_numbers((double)nRXProcPkts, buf1, sizeof(buf1), 0));
       if(print_all) fprintf(stderr, " [%s pkt/sec]", pfring_format_numbers((double)(nRXProcPkts*1000)/deltaMillisec, buf1, sizeof(buf1), 1));
     }
 	   
@@ -153,8 +153,9 @@ void print_stats() {
       pfring_stat if_stats;
       for (i = 0; i < num_dev; i++) {
         if (pfring_stats(pd[i], &if_stats) >= 0)
-          fprintf(stderr, "                Socket %d RX %" PRIu64 " pkts Dropped %" PRIu64 " pkts\n", 
-                  i, if_stats.recv, if_stats.drop);
+          fprintf(stderr, "                %s RX %" PRIu64 " pkts Dropped %" PRIu64 " pkts (%.1f %%)\n", 
+                  pd[i]->device_name, if_stats.recv, if_stats.drop, 
+		  if_stats.recv == 0 ? 0 : ((double)(if_stats.drop*100)/(double)(if_stats.recv + if_stats.drop)));
       }
     }
 
@@ -172,7 +173,7 @@ void print_stats() {
 	        pfring_format_numbers(deltaMillisec, buf1, sizeof(buf1), 1),
 	        pfring_format_numbers(((double)RXdiff/(double)(deltaMillisec/1000)),  buf2, sizeof(buf2), 1));
 			   
-        fprintf(stderr, " RX Processed %s pkts [%s ms][%s pps]",
+        fprintf(stderr, " Processed %s pkts [%s ms][%s pps]",
 	        pfring_format_numbers((double)RXProcdiff, buf0, sizeof(buf0), 0),
                 pfring_format_numbers(deltaMillisec, buf1, sizeof(buf1), 1),
                 pfring_format_numbers(((double)RXProcdiff/(double)(deltaMillisec/1000)),  buf2, sizeof(buf2), 1));
