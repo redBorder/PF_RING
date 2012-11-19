@@ -590,7 +590,7 @@ int main(int argc, char* argv[]) {
       return -1;
     }
 
-    if (num_dev & 0x1)
+    if (bridge_interfaces && (num_dev & 0x1))
       printf("Bridging interfaces %d <-> %d\n", if_indexes[num_dev & ~0x1], if_indexes[num_dev]);
 
     /* Add the ring we created to the cluster */
