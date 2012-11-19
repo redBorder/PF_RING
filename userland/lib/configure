@@ -600,6 +600,7 @@ ac_includes_default="\
 
 ac_subst_vars='LTLIBOBJS
 LIBOBJS
+HAVE_HW_TIMESTAMP
 HAVE_REDIRECTOR
 SILICOM_LIBS
 INSTALL_PREFIX
@@ -3228,9 +3229,30 @@ done
 CFLAGS=""
 SYS_LIBS=""
 
+GCC_VERSION=`$CC --version |grep ^gcc |sed 's/^.* //g'`
+if test -n "$GCC_VERSION"; then
+  ARCH=`uname -m`
+  if test "$ARCH" = "x86_64"; then
+    GCCMAJOR=`echo $GCC_VERSION |cut -d'.' -f1`
+    GCCMINOR=`echo $GCC_VERSION |cut -d'.' -f2`
+    if test "$GCCMAJOR" -eq 4 && test "$GCCMINOR" -ge 6; then
+      CPUSSE42=`grep -m 1 flags /proc/cpuinfo | grep -o sse4_2`
+      if test "$CPUSSE42" = "sse4_2"; then
+        CFLAGS="-march=corei7 -mtune=corei7 $CFLAGS"
+        LIBARCH="_corei7"
+        CPUAVX=`grep -m 1 flags /proc/cpuinfo | grep -o avx`
+        if test "$CPUAVX" = "avx"; then
+          CFLAGS="-march=corei7-avx -mtune=corei7-avx $CFLAGS"
+          LIBARCH="_corei7-avx"
+        fi
+      fi
+    fi
+  fi
+fi
+
 MACHINE=`uname -m`
-ZERO_LIB="libs/libpfring_zero_$MACHINE.a"
-DNA_LIB="libs/libpfring_dna_$MACHINE.a"
+ZERO_LIB="libs/libpfring_zero_$MACHINE$LIBARCH.a"
+DNA_LIB="libs/libpfring_dna_$MACHINE$LIBARCH.a"
 VIRTUAL_LIB="libs/libpfring_mod_virtual_$MACHINE.a"
 VIRTUAL_HDR="pfring_mod_virtual.h"
 
@@ -3445,7 +3467,7 @@ fi
 
 
 if test "x$ac_cv_header_linux_net_tstamp_h" = x""yes; then :
-CFLAGS="-D ENABLE_HW_TIMESTAMP $CFLAGS"
+  HAVE_HW_TIMESTAMP="-D ENABLE_HW_TIMESTAMP"
 fi
 
 if test ".${prefix}" = ".NONE"; then
@@ -3453,6 +3475,7 @@ if test ".${prefix}" = ".NONE"; then
 else
    INSTALL_PREFIX=${prefix};
 fi
+
 
 
 
