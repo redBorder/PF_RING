@@ -247,7 +247,9 @@ void notify_function_ptr(void *data, u_int8_t device_in_use) {
     rx_ring->dna.queue_in_use = 0;
 
     if(adapter->hw.mac.type != ixgbe_mac_82598EB)
-      ixgbe_irq_enable_queues(adapter, ((u64)1 << rx_ring->q_vector->v_idx));
+      /* TODO Check this*/
+      //ixgbe_irq_enable_queues(adapter, ((u64)1 << rx_ring->q_vector->v_idx));
+      ixgbe_irq_disable_queues(adapter, ((u64)1 << rx_ring->q_vector->v_idx));
 
     if(unlikely(enable_debug))
       printk("[DNA] %s(): %s@%d is NOT IN use\n", __FUNCTION__,

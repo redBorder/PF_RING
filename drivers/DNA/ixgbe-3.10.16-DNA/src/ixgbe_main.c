@@ -2865,6 +2865,9 @@ int ixgbe_poll(struct napi_struct *napi, int budget)
 	napi_complete(napi);
 	if (adapter->rx_itr_setting == 1)
 		ixgbe_set_itr(q_vector);
+#ifdef ENABLE_DNA
+	if(!adapter->dna.dna_enabled)
+#endif
 	if (!test_bit(__IXGBE_DOWN, &adapter->state))
 		ixgbe_irq_enable_queues(adapter, ((u64)1 << q_vector->v_idx));
 
