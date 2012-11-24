@@ -19,8 +19,6 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <net/if.h>
-
-#define HAVE_PF_RING
 #include <pcap/pcap.h>
 
 #define PCAP_MAGIC          0xa1b2c3d4

@@ -5167,4 +5167,10 @@ int pcap_set_master(pcap_t *handle, pcap_t *master) {
 int pcap_set_application_name(pcap_t *handle, char *name) {
     return(pfring_set_application_name(handle->ring, name));
 }
+
+int pcap_set_watermark(pcap_t *handle, u_int watermark) {
+  int ret = pfring_set_poll_watermark(handle->ring, watermark);
+  handle->ring->dna.dna_rx_sync_watermark = 1;
+  return(ret);
+}
 #endif

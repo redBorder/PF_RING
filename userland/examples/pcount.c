@@ -6,7 +6,7 @@
  *
 */
 
-#include <pcap.h>
+#include <pcap/pcap.h>
 #include <signal.h>
 #include <sched.h>
 #include <stdlib.h>
@@ -100,14 +100,14 @@ void print_stats() {
       diff = numPkts-lastPkts;
       fprintf(stderr, "=========================\n"
 	      "Actual Stats: %s pkts [%.1f ms][%s pkt/sec]\n",
-	      pfring_format_numbers(diff, buf1, sizeof(buf1), 0), deltaSec*1000, 
+	      pfring_format_numbers(diff, buf1, sizeof(buf1), 0), deltaSec*1000,
 	      pfring_format_numbers(((double)diff/(double)(deltaSec)), buf2, sizeof(buf2), 1));
       lastPkts = numPkts;
     }
 
     fprintf(stderr, "=========================\n");
   }
-  
+
   lastTime.tv_sec = endTime.tv_sec, lastTime.tv_usec = endTime.tv_usec;
 }
 
@@ -208,12 +208,12 @@ char* intoa(unsigned int addr) {
 inline char* in6toa(struct in6_addr addr6) {
   static char buf[sizeof "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"];
 
-  snprintf(buf, sizeof(buf), 
+  snprintf(buf, sizeof(buf),
 	   "%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x",
-	   addr6.s6_addr[0], addr6.s6_addr[1], addr6.s6_addr[2], 
-	   addr6.s6_addr[3], addr6.s6_addr[4], addr6.s6_addr[5], addr6.s6_addr[6], 
-	   addr6.s6_addr[7], addr6.s6_addr[8], addr6.s6_addr[9], addr6.s6_addr[10], 
-	   addr6.s6_addr[11], addr6.s6_addr[12], addr6.s6_addr[13], addr6.s6_addr[14], 
+	   addr6.s6_addr[0], addr6.s6_addr[1], addr6.s6_addr[2],
+	   addr6.s6_addr[3], addr6.s6_addr[4], addr6.s6_addr[5], addr6.s6_addr[6],
+	   addr6.s6_addr[7], addr6.s6_addr[8], addr6.s6_addr[9], addr6.s6_addr[10],
+	   addr6.s6_addr[11], addr6.s6_addr[12], addr6.s6_addr[13], addr6.s6_addr[14],
 	   addr6.s6_addr[15]);
 
   return(buf);
@@ -262,7 +262,7 @@ void dummyProcesssPacket(u_char *_deviceId,
     printf("[%s -> %s] ",
 	   etheraddr_string(ehdr.ether_shost, buf1),
 	   etheraddr_string(ehdr.ether_dhost, buf2));
-     
+
     if(eth_type == 0x8100) {
       vlan_id = (p[14] & 15)*256 + p[15];
       eth_type = (p[16])*256 + p[17];
@@ -282,7 +282,7 @@ void dummyProcesssPacket(u_char *_deviceId,
       printf("[ARP]");
     else
       printf("[eth_type=0x%04X]", eth_type);
-    
+
     printf("[caplen=%u][len=%u]\n", h->caplen, h->len);
   }
 
@@ -333,7 +333,7 @@ void printHelp(void) {
 
   if(pcap_findalldevs(&devpointer, errbuf) == 0) {
     int i = 0;
-    
+
     printf("\nAvailable devices (-i):\n");
     while(devpointer) {
       printf(" %d. %s\n", i++, devpointer->name);
@@ -357,7 +357,7 @@ int main(int argc, char* argv[]) {
   if(sched_setscheduler(0, SCHED_FIFO, &schedparam) == -1) {
     printf("error while setting the scheduler, errno=%i\n",errno);
     exit(1);
-  }      
+  }
 
   mlockall(MCL_CURRENT|MCL_FUTURE);
 
@@ -369,16 +369,16 @@ int main(int argc, char* argv[]) {
    unsigned long cur_mask;
    pid_t p = 0; /* current process */
    int ret;
-   
+
    ret = sched_getaffinity(p, len, NULL);
    printf(" sched_getaffinity = %d, len = %u\n", ret, len);
-   
+
    ret = sched_getaffinity(p, len, &cur_mask);
    printf(" sched_getaffinity = %d, cur_mask = %08lx\n", ret, cur_mask);
-   
+
    ret = sched_setaffinity(p, len, &new_mask);
    printf(" sched_setaffinity = %d, new_mask = %08lx\n", ret, new_mask);
-   
+
    ret = sched_getaffinity(p, len, &cur_mask);
    printf(" sched_getaffinity = %d, cur_mask = %08lx\n", ret, cur_mask);
  }
@@ -421,7 +421,7 @@ int main(int argc, char* argv[]) {
 
   /* hardcode: promisc=1, to_ms=500 */
   promisc = 1;
-  if((pd = pcap_open_live(device, snaplen, 
+  if((pd = pcap_open_live(device, snaplen,
 			  promisc, 500, errbuf)) == NULL) {
     printf("pcap_open_live: %s\n", errbuf);
     return(-1);
@@ -445,6 +445,8 @@ int main(int argc, char* argv[]) {
     signal(SIGALRM, my_sigalarm);
     alarm(ALARM_SLEEP);
   }
+
+  pcap_set_watermark(pd, 128);
 
   pcap_loop(pd, -1, dummyProcesssPacket, NULL);
   pcap_close(pd);
