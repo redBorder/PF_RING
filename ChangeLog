@@ -1,3 +1,19 @@
+2012-11-24 PF_RING 5.5.1
+
+- updated ixgbe driver to release 3.11.33
+- Fixed bug that was causing ixgbe driver not to disable interrupts. This was causing
+  a high load on the core handling the interrupts for ixgbe-based card
+- libzero: various hugepages improvements and bug fixes
+- Added ability to specify PF_RING_RX_PACKET_BOUNCE in pfring_open
+- Fixed minor memory leak
+- Various improvements to support of hardware timestamp on Silicom Intel-based 10 Gbit adapters
+- DNA Bouncer: added direction to pfring_dna_bouncer_decision_func callback (useful in bidirectional mode)
+- DNA Cluster: added dna_cluster_set_hugepages_mountpoint() to manually select the hugepages mount point when several are available
+- Created architecture specific versions of libzero/DNA for exploiting latest generation of CPUs and thus improve performance
+- Update PF_RING-aware igb update (4.0.17)
+- Added pf_ring calls to pcap apps
+
+---------------------------------------
 2012-11-01 PF_RING 5.5.0
 
 * New libzero features:
