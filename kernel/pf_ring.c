@@ -2766,7 +2766,7 @@ static inline int copy_data_to_ring(struct sk_buff *skb,
 	skb_copy_bits(skb, -displ, &ring_bucket[pfr->slot_header_len + offset], displ);
 	b = (u_int16_t*)&ring_bucket[pfr->slot_header_len + offset+12];
 	b[0] = ntohs(ETH_P_8021Q), b[1] = ntohs(vlan_tci), b[2] = v->h_vlan_proto;
-	if(skb_copy_bits(skb, 4, &ring_bucket[pfr->slot_header_len + offset + 18], hdr->caplen-18) < 0)
+	if(skb_copy_bits(skb, 0, &ring_bucket[pfr->slot_header_len + offset + 18], hdr->caplen-16) < 0)
 	  printk("[PF_RING] --> FAULT [skb->len=%u][len=%u]\n", skb->len, hdr->caplen-16);
       } else {
 	skb_copy_bits(skb, -displ, &ring_bucket[pfr->slot_header_len + offset], hdr->caplen);
