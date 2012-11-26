@@ -332,6 +332,9 @@ static unsigned int quick_mode = 0;
 static unsigned int enable_debug = 0;
 static unsigned int transparent_mode = standard_linux_path;
 static atomic_t ring_id_serial = ATOMIC_INIT(0);
+#ifdef REDBORDER_PATCH
+char *bypass_interfaces[MAX_NUM_DEVICES] = { 0 };
+#endif
 
 #if defined(RHEL_RELEASE_CODE)
 #if(RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(4,8))
@@ -347,6 +350,9 @@ module_param(enable_debug, uint, 0644);
 module_param(enable_tx_capture, uint, 0644);
 module_param(enable_ip_defrag, uint, 0644);
 module_param(quick_mode, uint, 0644);
+#ifdef REDBORDER_PATCH
+module_param_array(bypass_interfaces, charp, NULL, 0444);
+#endif
 #else
 MODULE_PARM(min_num_slots, "i");
 MODULE_PARM(perfect_rules_hash_size, "i");
@@ -370,6 +376,11 @@ MODULE_PARM_DESC(enable_ip_defrag,
 MODULE_PARM_DESC(quick_mode,
 		 "Set to 1 to run at full speed but with up"
 		 "to one socket per interface");
+#ifdef REDBORDER_PATCH
+MODULE_PARM_DESC(bypass_interfaces,
+                 "Comma separated list of interfaces where bypass"
+		 "will be enabled on link down");
+#endif
 
 /* ********************************** */
 
@@ -8223,27 +8234,44 @@ void dna_device_handler(dna_device_operation operation,
 /* ************************************* */
 
 #ifdef REDBORDER_PATCH
-static void bpctl_notifier(int if_index, int up) {
+static void bpctl_notifier(char *if_name, int up) {
   struct bpctl_cmd bpctl_cmd;
-  int rc;
+  int i = 0, rc;
 
-  printk("[PF_RING][%s] interface index %d is %s\n", __FUNCTION__,
-         if_index, up ? "UP" : "DOWN");
-
-  memset(&bpctl_cmd, 0, sizeof(bpctl_cmd));
-  bpctl_cmd.in_param[1] = if_index;
-  bpctl_cmd.in_param[2] = up; /* 1 - on, 0 - off*/
-
-  if ((rc = bpctl_kernel_ioctl(BPCTL_IOCTL_TX_MSG(SET_BYPASS), &bpctl_cmd)) < 0) {
-    printk("[PF_RING][%s] interface is not Bypass-SD/TAP-SD device.\n", __FUNCTION__);
+  if (up) {
+    printk("[PF_RING][%s] interface %s is UP, no action.\n", __FUNCTION__, if_name);
     return;
+  } else {
+    printk("[PF_RING][%s] interface %s is DOWN, enabling bypass!\n", __FUNCTION__, if_name);
   }
 
-  if ((rc == 0) && (bpctl_cmd.status == 0))
-    printk("[PF_RING][%s] set_bypass() completed successfully.\n", __FUNCTION__);
-  else
-    printk("[PF_RING][%s] interface is a slave interface or doesn't support bypass.\n", 
-           __FUNCTION__);
+  while (bypass_interfaces[i] != NULL) {
+    if (strcmp(if_name, bypass_interfaces[i]) == 0) {
+      struct list_head *ptr, *tmp_ptr;
+      list_for_each_safe(ptr, tmp_ptr, &ring_aware_device_list) {
+        ring_device_element *dev_ptr = list_entry(ptr, ring_device_element, device_list);
+        if(strcmp(dev_ptr->dev->name, bypass_interfaces[i & ~0x1]) == 0) { /* master found */
+
+          memset(&bpctl_cmd, 0, sizeof(bpctl_cmd));
+          bpctl_cmd.in_param[1] = dev_ptr->dev->ifindex;
+          bpctl_cmd.in_param[2] = 1; /* on */
+
+          if ((rc = bpctl_kernel_ioctl(BPCTL_IOCTL_TX_MSG(SET_BYPASS), &bpctl_cmd)) < 0) {
+            printk("[PF_RING][%s] interface is not Bypass-SD/TAP-SD device.\n", __FUNCTION__);
+            return;
+          }
+
+          if ((rc == 0) && (bpctl_cmd.status == 0))
+            printk("[PF_RING][%s] set_bypass() completed successfully.\n", __FUNCTION__);
+          else
+            printk("[PF_RING][%s] interface is a slave interface or doesn't support bypass.\n", 
+                   __FUNCTION__);
+        }
+      }
+      break;
+    }
+    i++;
+  }
 }
 #endif
 
@@ -8558,7 +8586,7 @@ static int ring_notifier(struct notifier_block *this, unsigned long msg, void *d
 
     case NETDEV_CHANGE:     /* Interface state change */
 #ifdef REDBORDER_PATCH
-      bpctl_notifier(dev->ifindex, !!(dev->flags & IFF_UP));
+      bpctl_notifier(dev->name, !!(dev->flags & IFF_UP));
 #endif
     case NETDEV_CHANGEADDR: /* Interface address changed (e.g. during device probing) */
       break;

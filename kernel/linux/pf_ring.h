@@ -1346,9 +1346,7 @@ struct pfring_hooks {
 
 /* *************************************************************** */
 
-//#define REDBORDER_PATCH
 #ifdef REDBORDER_PATCH
-
 typedef enum {
   IF_SCAN,
   GET_DEV_NUM,
@@ -1372,7 +1370,6 @@ struct bpctl_cmd {
 #define BPCTL_IOCTL_TX_MSG(cmd) _IOWR(BPCTL_MAGIC_NUM, cmd, struct bpctl_cmd)
 
 extern int bpctl_kernel_ioctl(unsigned int ioctl_num, void *ioctl_param);
-
 #endif
 
 /* *************************************************************** */
