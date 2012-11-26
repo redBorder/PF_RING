@@ -6789,7 +6789,7 @@ static int ring_setsockopt(struct socket *sock,
     return(-EINVAL);
 
   if(get_user(val, (int *)optval))
-    return -EFAULT;
+    return -EFAULT; 
 
   found = 1;
 
@@ -8222,6 +8222,33 @@ void dna_device_handler(dna_device_operation operation,
 
 /* ************************************* */
 
+#ifdef REDBORDER_PATCH
+static void bpctl_notifier(int if_index, int up) {
+  struct bpctl_cmd bpctl_cmd;
+  int rc;
+
+  printk("[PF_RING][%s] interface index %d is %s\n", __FUNCTION__,
+         if_index, up ? "UP" : "DOWN");
+
+  memset(&bpctl_cmd, 0, sizeof(bpctl_cmd));
+  bpctl_cmd.in_param[1] = if_index;
+  bpctl_cmd.in_param[2] = up; /* 1 - on, 0 - off*/
+
+  if ((rc = bpctl_kernel_ioctl(BPCTL_IOCTL_TX_MSG(SET_BYPASS), &bpctl_cmd)) < 0) {
+    printk("[PF_RING][%s] interface is not Bypass-SD/TAP-SD device.\n", __FUNCTION__);
+    return;
+  }
+
+  if ((rc == 0) && (bpctl_cmd.status == 0))
+    printk("[PF_RING][%s] set_bypass() completed successfully.\n", __FUNCTION__);
+  else
+    printk("[PF_RING][%s] interface is a slave interface or doesn't support bypass.\n", 
+           __FUNCTION__);
+}
+#endif
+
+/* ************************************* */
+
 static int ring_ioctl(struct socket *sock, unsigned int cmd, unsigned long arg)
 {
   switch (cmd) {
@@ -8496,8 +8523,18 @@ static int ring_notifier(struct notifier_block *this, unsigned long msg, void *d
 
     switch(msg) {
     case NETDEV_PRE_UP:
+#ifdef REDBORDER_PATCH
+      break;
+#endif
     case NETDEV_UP:
+#ifdef REDBORDER_PATCH
+      bpctl_notifier(dev->ifindex, 1);
+      break;
+#endif
     case NETDEV_DOWN:
+#ifdef REDBORDER_PATCH
+      bpctl_notifier(dev->ifindex, 0);
+#endif
       break;
     case NETDEV_REGISTER:
       if(unlikely(enable_debug))
