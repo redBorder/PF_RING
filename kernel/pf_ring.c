@@ -8523,18 +8523,8 @@ static int ring_notifier(struct notifier_block *this, unsigned long msg, void *d
 
     switch(msg) {
     case NETDEV_PRE_UP:
-#ifdef REDBORDER_PATCH
-      break;
-#endif
     case NETDEV_UP:
-#ifdef REDBORDER_PATCH
-      bpctl_notifier(dev->ifindex, 1);
-      break;
-#endif
     case NETDEV_DOWN:
-#ifdef REDBORDER_PATCH
-      bpctl_notifier(dev->ifindex, 0);
-#endif
       break;
     case NETDEV_REGISTER:
       if(unlikely(enable_debug))
@@ -8567,6 +8557,9 @@ static int ring_notifier(struct notifier_block *this, unsigned long msg, void *d
       break;
 
     case NETDEV_CHANGE:     /* Interface state change */
+#ifdef REDBORDER_PATCH
+      bpctl_notifier(dev->ifindex, !!(dev->flags & IFF_UP));
+#endif
     case NETDEV_CHANGEADDR: /* Interface address changed (e.g. during device probing) */
       break;
     case NETDEV_CHANGENAME: /* Rename interface ethX -> ethY */
