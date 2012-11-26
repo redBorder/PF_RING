@@ -8234,18 +8234,11 @@ void dna_device_handler(dna_device_operation operation,
 /* ************************************* */
 
 #ifdef REDBORDER_PATCH
-static void bpctl_notifier(char *if_name, int up) {
+static void bpctl_notifier(char *if_name) {
   struct bpctl_cmd bpctl_cmd;
   int i = 0, rc;
 
-  if (up) {
-    printk("[PF_RING][%s] interface %s is UP, no action.\n", __FUNCTION__, if_name);
-    return;
-  } else {
-    printk("[PF_RING][%s] interface %s is DOWN, enabling bypass!\n", __FUNCTION__, if_name);
-  }
-
-  while (bypass_interfaces[i] != NULL) {
+  while (i < MAX_NUM_DEVICES && bypass_interfaces[i] != NULL) {
     if (strcmp(if_name, bypass_interfaces[i]) == 0) {
       struct list_head *ptr, *tmp_ptr;
       list_for_each_safe(ptr, tmp_ptr, &ring_aware_device_list) {
@@ -8257,15 +8250,16 @@ static void bpctl_notifier(char *if_name, int up) {
           bpctl_cmd.in_param[2] = 1; /* on */
 
           if ((rc = bpctl_kernel_ioctl(BPCTL_IOCTL_TX_MSG(SET_BYPASS), &bpctl_cmd)) < 0) {
-            printk("[PF_RING][%s] interface is not Bypass-SD/TAP-SD device.\n", __FUNCTION__);
+            printk("[PF_RING][%s] %s interface is not Bypass-SD/TAP-SD device.\n", 
+	           __FUNCTION__, if_name);
             return;
           }
 
           if ((rc == 0) && (bpctl_cmd.status == 0))
-            printk("[PF_RING][%s] set_bypass() completed successfully.\n", __FUNCTION__);
+            printk("[PF_RING][%s] Bypass enabled on %s.\n", __FUNCTION__, if_name);
           else
-            printk("[PF_RING][%s] interface is a slave interface or doesn't support bypass.\n", 
-                   __FUNCTION__);
+            printk("[PF_RING][%s] %s is a slave interface or doesn't support bypass.\n",
+                   __FUNCTION__, if_name);
         }
       }
       break;
@@ -8586,7 +8580,8 @@ static int ring_notifier(struct notifier_block *this, unsigned long msg, void *d
 
     case NETDEV_CHANGE:     /* Interface state change */
 #ifdef REDBORDER_PATCH
-      bpctl_notifier(dev->name, !!(dev->flags & IFF_UP));
+      if (test_bit(__LINK_STATE_NOCARRIER, &dev->state))
+        bpctl_notifier(dev->name);
 #endif
     case NETDEV_CHANGEADDR: /* Interface address changed (e.g. during device probing) */
       break;
