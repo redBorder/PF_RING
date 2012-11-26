@@ -8250,16 +8250,16 @@ static void bpctl_notifier(char *if_name) {
           bpctl_cmd.in_param[2] = 1; /* on */
 
           if ((rc = bpctl_kernel_ioctl(BPCTL_IOCTL_TX_MSG(SET_BYPASS), &bpctl_cmd)) < 0) {
-            printk("[PF_RING][%s] %s interface is not Bypass-SD/TAP-SD device.\n", 
-	           __FUNCTION__, if_name);
+            printk("[PF_RING][%s] %s interface is not a bypass device.\n", 
+	           __FUNCTION__, dev_ptr->dev->name);
             return;
           }
 
           if ((rc == 0) && (bpctl_cmd.status == 0))
-            printk("[PF_RING][%s] Bypass enabled on %s.\n", __FUNCTION__, if_name);
+            printk("[PF_RING][%s] bypass enabled on %s.\n", __FUNCTION__, if_name);
           else
             printk("[PF_RING][%s] %s is a slave interface or doesn't support bypass.\n",
-                   __FUNCTION__, if_name);
+                   __FUNCTION__, dev_ptr->dev->name);
         }
       }
       break;
