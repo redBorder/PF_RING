@@ -377,8 +377,6 @@ int parse_bpf_filter(char *filter_buffer, u_int caplen) {
 
   return 0;
 }
-
-extern u_int bpf_filter(const struct bpf_insn *pc, const u_char *p, u_int len, u_int caplen);
 #endif
 
 /* ****************************************************** */
