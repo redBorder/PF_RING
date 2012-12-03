@@ -932,7 +932,7 @@ void ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring, u16 cleaned_count)
 	struct ixgbe_adapter *adapter = netdev_priv(rx_ring->netdev);
 
 	if(adapter->dna.dna_enabled) {
-		if(rx_ring->netdev) 
+		if(rx_ring->netdev)
 			dna_ixgbe_alloc_rx_buffers(rx_ring);
 		return;
 	}
@@ -5853,8 +5853,13 @@ static int __devinit ixgbe_sw_init(struct ixgbe_adapter *adapter)
 		hw->mbx.ops.init_params(hw);
 
 	/* default flow control settings */
+#ifdef ENABLE_DNA
+	hw->fc.requested_mode = ixgbe_fc_none;
+	hw->fc.current_mode = ixgbe_fc_none;	/* init for ethtool output */
+#else
 	hw->fc.requested_mode = ixgbe_fc_full;
 	hw->fc.current_mode = ixgbe_fc_full;	/* init for ethtool output */
+#endif
 
 	adapter->last_lfc_mode = hw->fc.current_mode;
 	ixgbe_pbthresh_setup(adapter);
