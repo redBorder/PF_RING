@@ -186,7 +186,7 @@ void printHelp(void) {
   printf("-b <cpu %%>      CPU pergentage priority (0-99)\n");
 #endif
   printf("-f <.pcap file> Send packets as read from a pcap file\n");
-  printf("-g <core_id>    Bind this app to a core (only with -n 0)\n");
+  printf("-g <core_id>    Bind this app to a core\n");
   printf("-h              Print this help\n");
   printf("-i <device>     Device name. Use device\n");
   printf("-l <length>     Packet length to send. Ignored with -f\n");
@@ -340,6 +340,7 @@ int main(int argc, char* argv[]) {
   u_int num_tx_slots = 0;
   int num_balanced_pkts = 1, watermark = 0;
   u_int num_pcap_pkts = 0;
+  int send_full_pcap_once = 1;
 
   while((c = getopt(argc,argv,"b:hi:n:g:l:af:r:vm:w:zx:"
 #if 0
@@ -361,6 +362,7 @@ int main(int argc, char* argv[]) {
       break;
     case 'n':
       num_to_send = atoi(optarg);
+      send_full_pcap_once = 0;
       break;
     case 'g':
       bind_core = atoi(optarg);
@@ -521,6 +523,9 @@ int main(int argc, char* argv[]) {
 	     num_pcap_pkts, pcap_in);
       last->next = pkt_head; /* Loop */
       send_len = avg_send_len;
+
+      if (send_full_pcap_once)
+        num_to_send = num_pcap_pkts;
     } else {
       printf("Unable to open file %s\n", pcap_in);
       pfring_close(pd);
