@@ -13,7 +13,7 @@ package: all cleanup-rpm build-rpm
 pkg-nodna: all cleanup-rpm build-rpm-nodna
 
 all:
-	cd ../..;make all
+	cd ../..;make all; make snort
 
 build-rpm: 
 # Do NOT build package as root (http://wiki.centos.org/HowTos/SetupRpmBuildEnvironment)

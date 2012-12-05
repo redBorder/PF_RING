@@ -29,13 +29,19 @@ mkdir -p $RPM_BUILD_ROOT/usr/local/bin
 cp $HOME/PF_RING/kernel/pf_ring.ko $RPM_BUILD_ROOT/usr/local/pfring/kernel
 cp $HOME/PF_RING/kernel/linux/pf_ring.h $RPM_BUILD_ROOT/usr/local/include/linux/
 # Userland
-cp $HOME/PF_RING/README.FIRST                  $RPM_BUILD_ROOT/usr/local/pfring/
+cp $HOME/PF_RING/README.FIRST               $RPM_BUILD_ROOT/usr/local/pfring/
+cp $HOME/PF_RING/userland/snort/pfring-daq-module/README.1st $RPM_BUILD_ROOT/usr/local/pfring/README-DAQ.1st
 cp $HOME/PF_RING/userland/lib/libpfring.a   $RPM_BUILD_ROOT/usr/local/lib
 cp $HOME/PF_RING/userland/lib/libpfring.so  $RPM_BUILD_ROOT/usr/local/lib
 cp $HOME/PF_RING/userland/lib/pfring.h      $RPM_BUILD_ROOT/usr/local/include
 cp $HOME/PF_RING/userland/libpcap/libpcap.a $RPM_BUILD_ROOT/usr/local/lib
 cp $HOME/PF_RING/userland/examples/pfcount  $RPM_BUILD_ROOT/usr/local/bin
 cp $HOME/PF_RING/userland/examples/pfsend   $RPM_BUILD_ROOT/usr/local/bin
+# DNA
+mkdir -p $RPM_BUILD_ROOT/usr/local/lib/daq
+cp $HOME/PF_RING/userland/snort/pfring-daq-module/.libs/daq_pfring.la $RPM_BUILD_ROOT/usr/local/lib/daq
+cp $HOME/PF_RING/userland/snort/pfring-daq-module/.libs/daq_pfring.so $RPM_BUILD_ROOT/usr/local/lib/daq
+
 %if %nodna == 0
 cp $HOME/PF_RING/userland/examples/pfdnabounce $RPM_BUILD_ROOT/usr/local/bin
 cp $HOME/PF_RING/userland/examples/pfdnacluster_master $RPM_BUILD_ROOT/usr/local/bin
@@ -58,6 +64,8 @@ rm -fr $RPM_BUILD_ROOT
 /usr/local/lib/libpfring.so
 /usr/local/lib/libpcap.a
 /usr/local/include/pfring.h
+/usr/local/lib/daq/daq_pfring.la
+/usr/local/lib/daq/daq_pfring.so
 %if %nodna == 0
 /usr/local/pfring/drivers/DNA/README.DNA
 /usr/local/pfring/drivers/DNA/ixgbe.ko
@@ -69,6 +77,7 @@ rm -fr $RPM_BUILD_ROOT
 /usr/local/bin/pfcount
 /usr/local/bin/pfsend
 /usr/local/pfring/README.FIRST
+/usr/local/pfring/README-DAQ.1st
 
 # Set the default attributes of all of the files specified to have an
 # owner and group of root and to inherit the permissions of the file
@@ -76,6 +85,9 @@ rm -fr $RPM_BUILD_ROOT
 %defattr(-, root, root)
 
 %changelog
+* Wed Dec  5 2012  <deri@centos.ntop.org> - @VERS@-%{buildrev}
+- 
+
 * Sat Mar 10 2012 Luca Deri <deri@ntop.org>
 - Original upstream version
 
