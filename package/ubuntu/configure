@@ -563,6 +563,7 @@ PACKAGE_URL=''
 
 ac_subst_vars='LTLIBOBJS
 LIBOBJS
+SVN_RELEASE
 KERNEL
 DATE
 EXTN
@@ -1650,6 +1651,7 @@ ac_compiler_gnu=$ac_cv_c_compiler_gnu
 
 VERS=`cat ../../kernel/linux/pf_ring.h | grep RING_VERSION | head -1 | cut -d '"' -f 2`
 MACHINE=`uname -m`
+SVN_RELEASE=`svn info . | grep "^Revision"|cut -d " " -f 2`
 
 if test $MACHINE = "x86_64"; then
    EXTN="amd64"
@@ -1659,6 +1661,7 @@ fi
 
 DATE=`date -R`
 KERNEL=`uname -r`
+
 
 
 

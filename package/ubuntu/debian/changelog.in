@@ -1,4 +1,4 @@
-pfring (@VERS@-1) unstable; urgency=high
+pfring (@VERS@-@SVN_RELEASE@) unstable; urgency=high
 
   * fixed last packages
 
