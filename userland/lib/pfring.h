@@ -130,7 +130,7 @@ extern "C" {
   /* ********************************* */
   
   struct __pfring {
-    u_int8_t initialized, enabled, long_header, symmetric_rss, force_timestamp, enable_hw_timestamp;
+    u_int8_t initialized, enabled, long_header, rss_mode, force_timestamp, enable_hw_timestamp;
     packet_direction direction; /* Specify the capture direction for packets */
     socket_mode mode;
 
@@ -277,6 +277,7 @@ extern "C" {
   #define PF_RING_TIMESTAMP         1 << 4
   #define PF_RING_HW_TIMESTAMP      1 << 5
   #define PF_RING_RX_PACKET_BOUNCE  1 << 6
+  #define PF_RING_DNA_FIXED_RSS_Q_0 1 << 7
 
   /* ********************************* */
 

@@ -102,7 +102,8 @@ pfring* pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags) 
   ring->direction           = rx_and_tx_direction;
   ring->mode                = send_and_recv_mode;
   ring->long_header         = (flags & PF_RING_LONG_HEADER) ? 1 : 0;
-  ring->symmetric_rss       = (flags & PF_RING_DNA_SYMMETRIC_RSS) ? 1 : 0;
+  ring->rss_mode            = (flags & PF_RING_DNA_SYMMETRIC_RSS) ? PF_RING_DNA_SYMMETRIC_RSS : 0;
+  ring->rss_mode            = (flags & PF_RING_DNA_FIXED_RSS_Q_0) ? PF_RING_DNA_FIXED_RSS_Q_0 : 0;
   ring->force_timestamp     = (flags & PF_RING_TIMESTAMP) ? 1 : 0;
   ring->enable_hw_timestamp = (flags & PF_RING_HW_TIMESTAMP) ? 1 : 0;
   ring->tx.enabled_rx_packet_send = (flags & PF_RING_RX_PACKET_BOUNCE) ? 1 : 0;
