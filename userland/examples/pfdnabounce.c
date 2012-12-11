@@ -242,8 +242,8 @@ int dummyProcessPacketZero(u_int16_t pkt_len, u_char *pkt, const u_char *user_by
     u_int16_t *short2 = (u_int16_t *) (&pkt[16]);
     u_int16_t *short3 = (u_int16_t *) (&pkt[18]);
     u_int16_t shorttmp = *short2;
-    *short2 = (*short3);
-    *short3 = (*short2) + 1;
+    *short2 = *short3;
+    *short3 = shorttmp + 1;
   }
 #endif
 
