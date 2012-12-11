@@ -239,11 +239,13 @@ int dummyProcessPacketZero(u_int16_t pkt_len, u_char *pkt, const u_char *user_by
 
 #if 0 /* change something inside the packet */
   {
-    u_int16_t *short2 = (u_int16_t *) (&pkt[16]);
-    u_int16_t *short3 = (u_int16_t *) (&pkt[18]);
-    u_int16_t shorttmp = *short2;
-    *short2 = *short3;
-    *short3 = shorttmp + 1;
+    u_int16_t *nshort2 = (u_int16_t *) (&pkt[16]);
+    u_int16_t *nshort3 = (u_int16_t *) (&pkt[18]);
+    u_int16_t newhshort3 = ntohs(*nshort2) + 1;
+    //printf(" [>] Changing 0x%04X 0x%04X\n", ntohs(*nshort2), ntohs(*nshort3));
+    *nshort2 = *nshort3;
+    *nshort3 = htons(newhshort3);
+    //printf("to 0x%04X 0x%04X\n", ntohs(*nshort2), ntohs(*nshort3));
   }
 #endif
 
