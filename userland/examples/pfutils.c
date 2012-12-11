@@ -29,7 +29,7 @@ typedef u_int64_t ticks;
 
 /* Bind this thread to a specific core */
 
-int bindthread2core(u_int thread_id, u_int core_id) {
+int bindthread2core(pthread_t thread_id, u_int core_id) {
 #ifdef HAVE_PTHREAD_SETAFFINITY_NP
   cpu_set_t cpuset;
   int s;
