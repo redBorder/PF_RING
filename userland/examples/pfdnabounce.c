@@ -237,6 +237,16 @@ int dummyProcessPacketZero(u_int16_t pkt_len, u_char *pkt, const u_char *user_by
   else
     di = &dir_stats[direction];
 
+#if 0 /* change something inside the packet */
+  {
+    u_int16_t *short2 = (u_int16_t *) (&pkt[16]);
+    u_int16_t *short3 = (u_int16_t *) (&pkt[18]);
+    u_int16_t shorttmp = *short2;
+    *short2 = (*short3);
+    *short3 = (*short2) + 1;
+  }
+#endif
+
   di->numPkts++;
   di->numBytes += pkt_len + 24 /* 8 Preamble + 4 CRC + 12 IFG */;
 
