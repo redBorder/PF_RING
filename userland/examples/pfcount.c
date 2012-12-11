@@ -47,7 +47,7 @@
 #ifdef ENABLE_BPF
 #include <pcap/pcap.h>
 #include <pcap/bpf.h>
-#include <linux/filter.h>
+//#include <linux/filter.h>
 #endif
 
 #include "pfring.h"
