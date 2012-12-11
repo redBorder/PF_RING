@@ -35,6 +35,10 @@ DNA_LIB="libs/libpfring_dna_$MACHINE$LIBARCH.a"
 VIRTUAL_LIB="libs/libpfring_mod_virtual_$MACHINE.a"
 VIRTUAL_HDR="pfring_mod_virtual.h"
 
+dnl> Check for a modern pthread library
+AC_CHECK_LIB(pthread, pthread_setaffinity_np, AC_DEFINE_UNQUOTED(HAVE_PTHREAD_SETAFFINITY_NP, 1, [libc has pthread_setaffinity_np]))
+
+if test "x$ac_cv_lib_pthread_pthread_setaffinity_np" = xyes; then :
 AC_MSG_CHECKING([Zero support])
 if test -f $ZERO_LIB; then
   HAVE_ZERO="-D HAVE_ZERO"
@@ -69,6 +73,8 @@ else
   AC_MSG_RESULT(no)
 fi
 
+dnl> end of pthread_setaffinity_np check
+fi
 
 AC_CHECK_HEADERS([librdi.h])
 
@@ -146,4 +152,5 @@ dnl> AC_CONFIG_FILES([Makefile])
 AC_CONFIG_FILES([../examples/Makefile])
 AC_CONFIG_FILES([../c++/Makefile])
 
+AC_CONFIG_HEADERS(config.h)
 AC_OUTPUT
