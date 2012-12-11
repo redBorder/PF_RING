@@ -59,6 +59,7 @@ LIBS       = ${LIBPFRING} @DAG_LIB@ -lpthread @SYSLIBS@ @BPF_LIB@  @SILICOM_LIBS
 PFPROGS   = pfcount pfcount_multichannel preflect pfbounce pfmap \
 	    pfbridge alldevs dummy_plugin_pfcount pcap2nspcap pfcount_dummy_plugin pffilter_test \
 	    pfcount_aggregator pfcount_bundle pfcount_82599 pfsystest pfsend pflatency \
+	    pfdump
 
 ifneq (@HAVE_ZERO@,)
 	PFPROGS += pfdnabounce pfdnacluster_master pfdnacluster_multithread
@@ -157,6 +158,9 @@ pfdnacluster_master: pfdnacluster_master.o ${LIBPFRING}
 
 pfdnacluster_multithread: pfdnacluster_multithread.o ${LIBPFRING}
 	${CC} ${CFLAGS} pfdnacluster_multithread.o ${LIBPCAP} ${LIBS} -o $@
+
+pfdump: pfdump.o ${LIBPFRING}
+	${CC} ${CFLAGS} pfdump.o ${LIBS} -o $@
 
 clean:
 	@rm -f ${TARGETS} *.o *~
