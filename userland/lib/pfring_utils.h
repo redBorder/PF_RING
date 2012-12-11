@@ -49,7 +49,7 @@ struct tcphdr {
   u_int32_t	seq;
   u_int32_t	ack_seq;
 #if defined(__LITTLE_ENDIAN_BITFIELD)
-  __u16	res1:4,
+  u_int16_t	res1:4,
     doff:4,
     fin:1,
     syn:1,
@@ -60,7 +60,7 @@ struct tcphdr {
     ece:1,
     cwr:1;
 #elif defined(__BIG_ENDIAN_BITFIELD)
-  __u16	doff:4,
+  u_int16_t	doff:4,
     res1:4,
     cwr:1,
     ece:1,
@@ -94,26 +94,26 @@ struct udphdr {
 
 struct ipv6hdr {
 #if defined(__LITTLE_ENDIAN_BITFIELD)
-  __u8		priority:4,
+  u_int8_t		priority:4,
 		version:4;
 #elif defined(__BIG_ENDIAN_BITFIELD)
-  __u8		version:4,
+  u_int8_t		version:4,
 		priority:4;
 #else
 #endif
-  __u8		flow_lbl[3];
+  u_int8_t		flow_lbl[3];
 
-  __be16	payload_len;
-  __u8		nexthdr;
-  __u8		hop_limit;
+  u_int8_t	        payload_len;
+  u_int8_t		nexthdr;
+  u_int8_t		hop_limit;
 
   struct in6_addr saddr;
   struct in6_addr daddr;
 };
 
 struct ipv6_opt_hdr {
-  __u8		nexthdr;
-  __u8 		hdrlen;
+  u_int8_t		nexthdr;
+  u_int8_t 		hdrlen;
 	/* TLV encoded option data follows */
 } __attribute__((packed));
 

@@ -43,6 +43,7 @@
 #include <arpa/inet.h>
 
 #include "pfring.h"
+#include "pfutils.c"
 
 #define ALARM_SLEEP             1
 #define DEFAULT_SNAPLEN       128
@@ -431,10 +432,11 @@ int32_t gmt2local(time_t t) {
 /* *************************************** */
 
 void* packet_consumer_thread(void* _id) {
-  int s;
   long thread_id = (long)_id;
 
   if(numCPU > 1) {
+#ifdef HAVE_PTHREAD_SETAFFINITY_NP
+    int s;
     /* Bind this thread to a specific core */
     cpu_set_t cpuset;
     u_long core_id;
@@ -452,6 +454,7 @@ void* packet_consumer_thread(void* _id) {
     else {
       printf("Set thread %lu on core %lu/%u\n", thread_id, core_id, numCPU);
     }
+#endif
   }
 
   while(!do_shutdown) {

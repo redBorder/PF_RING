@@ -43,6 +43,7 @@
 #include <arpa/inet.h>
 
 #include "pfring.h"
+#include "pfutils.c"
 
 /* *************************************** */
 /*

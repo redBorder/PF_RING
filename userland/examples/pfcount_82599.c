@@ -43,6 +43,7 @@
 #include <arpa/inet.h>
 
 #include "pfring.h"
+#include "pfutils.c"
 
 #define ALARM_SLEEP             1
 #define DEFAULT_SNAPLEN       128
@@ -473,14 +474,15 @@ void printHelp(void) {
 /* *************************************** */
 
 void* packet_consumer_thread(void* _id) {
-  int s;
   long thread_id = (long)_id;
   u_int numCPU = sysconf( _SC_NPROCESSORS_ONLN );
-  u_long core_id = thread_id % numCPU;
 
   if((num_threads > 1) && (numCPU > 1)) {
+#ifdef HAVE_PTHREAD_SETAFFINITY_NP
+    int s;
     /* Bind this thread to a specific core */
     cpu_set_t cpuset;
+    u_long core_id = thread_id % numCPU;
 
     CPU_ZERO(&cpuset);
     CPU_SET(core_id, &cpuset);
@@ -490,6 +492,7 @@ void* packet_consumer_thread(void* _id) {
     else {
       printf("Set thread %lu on core %lu/%u\n", thread_id, core_id, numCPU);
     }
+#endif
   }
 
   while(1) {

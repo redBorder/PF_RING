@@ -51,7 +51,6 @@
 #endif
 
 #include "pfring.h"
-
 #include "pfutils.c"
 
 #define ALARM_SLEEP             1

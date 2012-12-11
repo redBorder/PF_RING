@@ -44,6 +44,7 @@
 #include <arpa/inet.h>
 
 #include "pfring.h"
+#include "pfutils.c"
 
 #define ALARM_SLEEP             1
 #define MAX_NUM_THREADS         DNA_CLUSTER_MAX_NUM_SLAVES
@@ -361,17 +362,19 @@ static int fanout_distribution_function(const u_char *buffer, const u_int16_t bu
 /* *************************************** */
 
 void* packet_consumer_thread(void *_id) {
-  int i, s, rc;
+  int i, rc;
   long thread_id = (long)_id; 
   pfring_pkt_buff *pkt_handle = NULL;
   struct pfring_pkthdr hdr;
   u_char *buffer = NULL;
  
   if (numCPU > 1) {
+#ifdef HAVE_PTHREAD_SETAFFINITY_NP
     /* Bind this thread to a specific core */
     cpu_set_t cpuset;
     u_long core_id;
-    
+    int s;
+
     if (thread_stats[thread_id].thread_core_affinity != -1)
        core_id = thread_stats[thread_id].thread_core_affinity % numCPU;
     else
@@ -385,6 +388,7 @@ void* packet_consumer_thread(void *_id) {
     else {
       printf("Set thread %lu on core %lu/%u\n", thread_id, core_id, numCPU);
     }
+#endif
   }
 
   memset(&hdr, 0, sizeof(hdr));

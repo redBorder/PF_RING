@@ -40,7 +40,8 @@
 #include <pcap.h>
 #include <signal.h>
 
-#include "../lib/pfring.h"
+#include "pfring.h"
+#include "pfutils.c"
 
 #define ALARM_SLEEP             3
 #define DEFAULT_SNAPLEN       128

@@ -23,6 +23,14 @@
 
 #include "../lib/config.h"
 
+#ifndef __USE_GNU
+#define __USE_GNU
+#endif
+
+//#define _GNU_SOURCE
+#include <pthread.h>
+#include <sched.h> /* for CPU_XXXX */
+
 typedef u_int64_t ticks;
 
 /* *************************************** */

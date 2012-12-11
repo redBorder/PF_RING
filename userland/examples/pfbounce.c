@@ -42,6 +42,7 @@
 #include <arpa/inet.h>
 
 #include "pfring.h"
+#include "pfutils.c"
 
 pfring  *pd;
 pfring_stat pfringStats;

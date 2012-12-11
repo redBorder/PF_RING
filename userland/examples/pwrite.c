@@ -6,6 +6,7 @@
 #define HAVE_PCAP
 
 #include "pfring.h"
+//#include "pfutils.c"
 
 pfring  *pd;
 pcap_dumper_t *dumper = NULL;
