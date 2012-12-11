@@ -35,6 +35,7 @@
 #include <sys/socket.h>
 
 #include "pfring.h"
+#include "pfutils.c"
 
 u_int32_t num_sent = 0;
 
@@ -48,24 +49,6 @@ void printHelp(void) {
   printf("-a <device>     [First device name]\n");
   printf("-b <device>     [Second device name]\n");
   printf("-g <core_id>    Bind this app to a core\n");
-}
-
-/* *************************************** */
-
-/* Bind this thread to a specific core */
-
-int bind2core(u_int core_id) {
-  cpu_set_t cpuset;
-  int s;
-
-  CPU_ZERO(&cpuset);
-  CPU_SET(core_id, &cpuset);
-  if((s = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset)) != 0) {
-    fprintf(stderr, "Error while binding to core %u: errno=%i\n", core_id, s);
-    return(-1);
-  } else {
-    return(0);
-  }
 }
 
 /* ******************************** */

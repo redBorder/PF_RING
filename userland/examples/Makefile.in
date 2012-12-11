@@ -49,7 +49,7 @@ CFLAGS     = @CFLAGS@ ${O_FLAG} -Wall ${INCLUDE} ${DNA_DEFINE} @HAVE_ZERO@ @HAVE
 LIBS       = ${LIBPFRING} @DAG_LIB@ -lpthread @SYSLIBS@ @BPF_LIB@  @SILICOM_LIBS@ -lrt
 
 # How to make an object file
-%.o: %.c
+%.o: %.c pfutils.c
 #	@echo "=*= making object $@ =*="
 	${CC} ${CFLAGS} -c $< -o $@
 

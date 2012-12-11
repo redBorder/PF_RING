@@ -41,6 +41,7 @@
 #include <pcap.h>
 
 #include "pfring.h"
+#include "pfutils.c"
 
 struct packet {
   u_int16_t len;
@@ -118,34 +119,6 @@ void printHelp(void) {
   printf("./pfdnabounce -i dna1 -m 0 -g 2 -f -a\n");
   printf("./pfsend -i dna0 -l 60 -g 1\n");
   exit(0);
-}
-
-/* *************************************** */
-
-/* Bind this thread to a specific core */
-
-int bind2core(u_int core_id) {
-  cpu_set_t cpuset;
-  int s;
-
-  CPU_ZERO(&cpuset);
-  CPU_SET(core_id, &cpuset);
-  if((s = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset)) != 0) {
-    printf("Error while binding to core %u: errno=%i\n", core_id, s);
-    return(-1);
-  } else {
-    return(0);
-  }
-}
-
-/* *************************************** */
-
-static __inline__ ticks getticks(void)
-{
-  u_int32_t a, d;
-  // asm("cpuid"); // serialization
-  asm volatile("rdtsc" : "=a" (a), "=d" (d));
-  return (((ticks)a) | (((ticks)d) << 32));
 }
 
 /* ******************************************* */

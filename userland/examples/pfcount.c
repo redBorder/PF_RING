@@ -52,6 +52,8 @@
 
 #include "pfring.h"
 
+#include "pfutils.c"
+
 #define ALARM_SLEEP             1
 #define DEFAULT_SNAPLEN       128
 #define MAX_NUM_THREADS        64
@@ -583,24 +585,6 @@ void printHelp(void) {
   printf("-t              Touch payload (for force packet load on cache)\n");
   printf("-u <1|2>        For each incoming packet add a drop rule (1=hash, 2=wildcard rule)\n");
   printf("-v              Verbose\n");
-}
-
-/* *************************************** */
-
-/* Bind this thread to a specific core */
-
-int bind2core(u_int core_id) {
-  cpu_set_t cpuset;
-  int s;
-
-  CPU_ZERO(&cpuset);
-  CPU_SET(core_id, &cpuset);
-  if((s = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset)) != 0) {
-    fprintf(stderr, "Error while binding to core %u: errno=%i\n", core_id, s);
-    return(-1);
-  } else {
-    return(0);
-  }
 }
 
 /* *************************************** */

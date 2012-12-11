@@ -44,6 +44,7 @@
 #include <inttypes.h>
 
 #include "pfring.h"
+#include "pfutils.c"
 
 #define ALARM_SLEEP             1
 
@@ -89,27 +90,6 @@ double delta_time (struct timeval * now,
     -- delta_seconds;
   }
   return((double)(delta_seconds * 1000) + (double)delta_microseconds/1000);
-}
-
-/* ******************************** */
-
-int bind2core(u_int thread_id, u_int core_id) {
-  cpu_set_t cpuset;
-  int s;
-
-  if (numCPU <= 1)
-    return(0);
-
-  CPU_ZERO(&cpuset);
-  CPU_SET(core_id, &cpuset);
-
-  if((s = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset)) != 0) {
-    fprintf(stderr, "Error while binding thread %u to core %u: errno=%i\n", thread_id, core_id, s);
-    return(-1);
-  } else {
-    printf("Set thread %u on core %u/%u\n", thread_id, core_id, numCPU);
-    return(0);
-  }
 }
 
 /* ******************************** */
@@ -319,7 +299,7 @@ void dummyProcessPacket(const struct pfring_pkthdr *h, const u_char *p, const u_
 
 void* bouncer_dir2_thread(void *data) {
   if (bind_core[1] >= 0)
-    bind2core(1, bind_core[1]);
+    bindthread2core(1, bind_core[1]);
 
   if(pfring_dna_bouncer_loop(bouncer_handle2, dummyProcessPacketZero, (u_char *) &dir_stats[1], wait_for_packet) == -1) {
     printf("Problems while starting bouncer. See dmesg for details.\n");
@@ -463,7 +443,7 @@ int main(int argc, char* argv[]) {
   alarm(ALARM_SLEEP);
 
   if(bind_core[0] >= 0)
-    bind2core(0, bind_core[0]);
+    bindthread2core(0, bind_core[0]);
 
   switch (mode) {
   case 0: 

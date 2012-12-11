@@ -44,6 +44,7 @@
 #include <inttypes.h>
 
 #include "pfring.h"
+#include "pfutils.c"
 
 #define ALARM_SLEEP            1
 #define MAX_NUM_APP            DNA_CLUSTER_MAX_NUM_SLAVES
@@ -58,15 +59,6 @@ u_int8_t wait_for_packet = 1, print_interface_stats = 0, do_shutdown = 0, hashin
 socket_mode mode = recv_only_mode;
 
 static struct timeval startTime;
-
-void bind2core(u_int core_id) {
-  cpu_set_t cpuset;
-  CPU_ZERO(&cpuset);
-  CPU_SET(core_id, &cpuset);
-
-  if(pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset) != 0)
-    fprintf(stderr, "Error while binding to core %u\n", core_id);
-}
 
 /* *************************************** */
 

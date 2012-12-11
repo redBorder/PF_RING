@@ -43,6 +43,7 @@
 #include <pcap.h>
 
 #include "pfring.h"
+#include "pfutils.c"
 
 struct packet {
   u_int16_t len;
@@ -94,8 +95,6 @@ int send_len = 60;
 int if_index = -1;
 
 #define DEFAULT_DEVICE     "eth0"
-
-typedef u_int64_t ticks;
 
 /* *************************************** */
 /*
@@ -199,34 +198,6 @@ void printHelp(void) {
   printf("-x <if index>   Send to the selected interface, if supported\n");
   printf("-v              Verbose\n");
   exit(0);
-}
-
-/* *************************************** */
-
-/* Bind this thread to a specific core */
-
-int bind2core(u_int core_id) {
-  cpu_set_t cpuset;
-  int s;
-
-  CPU_ZERO(&cpuset);
-  CPU_SET(core_id, &cpuset);
-  if((s = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset)) != 0) {
-    printf("Error while binding to core %u: errno=%i\n", core_id, s);
-    return(-1);
-  } else {
-    return(0);
-  }
-}
-
-/* *************************************** */
-
-static __inline__ ticks getticks(void)
-{
-  u_int32_t a, d;
-  // asm("cpuid"); // serialization
-  asm volatile("rdtsc" : "=a" (a), "=d" (d));
-  return (((ticks)a) | (((ticks)d) << 32));
 }
 
 /* ******************************************* */
