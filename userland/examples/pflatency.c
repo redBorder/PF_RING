@@ -87,8 +87,6 @@ int if_index = -1;
 
 #define DEFAULT_DEVICE     "eth0"
 
-typedef u_int64_t ticks;
-
 /* ******************************** */
 
 void sigproc(int sig) {
