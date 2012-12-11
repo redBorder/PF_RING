@@ -299,7 +299,7 @@ void dummyProcessPacket(const struct pfring_pkthdr *h, const u_char *p, const u_
 
 void* bouncer_dir2_thread(void *data) {
   if (bind_core[1] >= 0)
-    bindthread2core(1, bind_core[1]);
+    bind2core(bind_core[1]);
 
   if(pfring_dna_bouncer_loop(bouncer_handle2, dummyProcessPacketZero, (u_char *) &dir_stats[1], wait_for_packet) == -1) {
     printf("Problems while starting bouncer. See dmesg for details.\n");
@@ -443,7 +443,7 @@ int main(int argc, char* argv[]) {
   alarm(ALARM_SLEEP);
 
   if(bind_core[0] >= 0)
-    bindthread2core(0, bind_core[0]);
+    bind2core(bind_core[0]);
 
   switch (mode) {
   case 0: 
