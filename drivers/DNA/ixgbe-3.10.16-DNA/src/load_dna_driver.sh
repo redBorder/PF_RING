@@ -49,9 +49,11 @@ do
   ifconfig ${IF[index]} up
   sleep 1
   bash ../scripts/set_irq_affinity.sh ${IF[index]}
-  ethtool -A ${IF[index]} autoneg off
-  #ethtool -A ${IF[index]} rx off      # default
-  #ethtool -A ${IF[index]} tx off      # default
+
+  # Flow Control automatically disabled by the driver (no need to use the following commands)
+  #ethtool -A ${IF[index]} autoneg off
+  #ethtool -A ${IF[index]} rx off
+  #ethtool -A ${IF[index]} tx off
   #ethtool -s ${IF[index]} speed 10000
 
   # Enable n-tuple hw filters

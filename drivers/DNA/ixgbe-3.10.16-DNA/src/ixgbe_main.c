@@ -5853,13 +5853,8 @@ static int __devinit ixgbe_sw_init(struct ixgbe_adapter *adapter)
 		hw->mbx.ops.init_params(hw);
 
 	/* default flow control settings */
-#ifdef ENABLE_DNA
-	hw->fc.requested_mode = ixgbe_fc_none;
-	hw->fc.current_mode = ixgbe_fc_none;	/* init for ethtool output */
-#else
 	hw->fc.requested_mode = ixgbe_fc_full;
 	hw->fc.current_mode = ixgbe_fc_full;	/* init for ethtool output */
-#endif
 
 	adapter->last_lfc_mode = hw->fc.current_mode;
 	ixgbe_pbthresh_setup(adapter);
@@ -7377,6 +7372,14 @@ static void ixgbe_service_task(struct work_struct *work)
 						     struct ixgbe_adapter,
 						     service_task);
 
+#ifdef ENABLE_DNA
+	struct ixgbe_hw *hw = &adapter->hw;
+	struct ethtool_pauseparam pause;
+	if (hw->fc.requested_mode != ixgbe_fc_none || hw->fc.disable_fc_autoneg == false) {
+		pause.rx_pause = pause.tx_pause = pause.autoneg = false;
+		adapter->netdev->ethtool_ops->set_pauseparam(adapter->netdev, &pause);
+	}
+#endif
 	ixgbe_reset_subtask(adapter);
 	ixgbe_sfp_detection_subtask(adapter);
 	ixgbe_sfp_link_config_subtask(adapter);
