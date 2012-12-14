@@ -241,8 +241,8 @@ void printHelp(void) {
 	 "                3 - Fan-Out\n");
   printf("-x <if index>   Forward all packets to the selected interface (Enable TX)\n");
   printf("-b              Bridge the interfaces listed in -i in pairs (Enable TX)\n");
-  printf("-z <device>     Directly open a RSS channel per thread and forward packets received from the\n"
-         "                cluster with zero-copy without passing through the cluster again (experimental)\n");
+  printf("-z <tx device>  Send packets received from the cluster directly to <tx device>\n"
+         "                in zero-copy using a per-thread RSS channel (experimental)\n");
   printf("-a              Active packet wait\n");
   printf("-u <mountpoint> Use hugepages for packet memory allocation\n");
   printf("-p              Print per-interface absolute stats\n");
