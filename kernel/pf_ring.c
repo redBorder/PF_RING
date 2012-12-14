@@ -7165,7 +7165,7 @@ static int ring_setsockopt(struct socket *sock,
     if(unlikely(enable_debug))
       printk("[PF_RING] * SO_ACTIVATE_RING *\n");
 
-    if(pfr->dna_device_entry != NULL) {
+    if(pfr->dna_device_entry != NULL && !pfr->ring_active /* already active, no check */) {
       int i;
 
       for(i=0; i<MAX_NUM_DNA_BOUND_SOCKETS; i++) {

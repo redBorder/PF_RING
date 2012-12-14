@@ -56,9 +56,10 @@ static struct timeval startTime;
 u_int8_t wait_for_packet = 1, print_interface_stats = 0, do_shutdown = 0;
 int rx_bind_core = 1, tx_bind_core = 2; /* core 0 free if possible */
 int hashing_mode = 0;
-int forward_packets = 0, bridge_interfaces = 0, enable_tx = 0, use_hugepages = 0;
+int forward_packets = 0, bridge_interfaces = 0, enable_tx = 0, use_hugepages = 0, rss_zerocopy_tx = 0;
 int tx_if_index;
 pfring_dna_cluster *dna_cluster_handle;
+pfring *rss_rings[MAX_NUM_THREADS] = { NULL };
 
 int num_dev = 0;
 pfring *pd[MAX_NUM_DEV];
@@ -240,6 +241,8 @@ void printHelp(void) {
 	 "                3 - Fan-Out\n");
   printf("-x <if index>   Forward all packets to the selected interface (Enable TX)\n");
   printf("-b              Bridge the interfaces listed in -i in pairs (Enable TX)\n");
+  printf("-z <device>     Directly open a RSS channel per thread and forward packets received from the\n"
+         "                cluster with zero-copy without passing through the cluster again (experimental)\n");
   printf("-a              Active packet wait\n");
   printf("-u <mountpoint> Use hugepages for packet memory allocation\n");
   printf("-p              Print per-interface absolute stats\n");
@@ -393,7 +396,7 @@ void* packet_consumer_thread(void *_id) {
 
   memset(&hdr, 0, sizeof(hdr));
 
-  if (enable_tx) {
+  if (enable_tx || rss_zerocopy_tx) {
     if ((pkt_handle = pfring_alloc_pkt_buff(thread_stats[thread_id].ring)) == NULL) {
       printf("Error allocating pkt buff\n");
       return NULL;
@@ -402,7 +405,15 @@ void* packet_consumer_thread(void *_id) {
 
   while (!do_shutdown) {
     if (!enable_tx) {
-      rc = pfring_recv(thread_stats[thread_id].ring, &buffer, 0, &hdr, wait_for_packet);
+      if (rss_zerocopy_tx) { 
+        /* tx is not enabled in the cluster, but we will send 
+         * received packets to a tx ring using zero-copy anyway */
+        rc = pfring_recv_pkt_buff(thread_stats[thread_id].ring, pkt_handle, &hdr, wait_for_packet);
+
+	pfring_send_pkt_buff(rss_rings[thread_id], pkt_handle, 0 /* !flush */);
+      } else {
+        rc = pfring_recv(thread_stats[thread_id].ring, &buffer, 0, &hdr, wait_for_packet);
+      }
     } else {
       rc = pfring_recv_pkt_buff(thread_stats[thread_id].ring, pkt_handle, &hdr, wait_for_packet);
 
@@ -447,7 +458,7 @@ int main(int argc, char* argv[]) {
   char c;
   char buf[32];
   char *bind_mask = NULL;
-  char *device = NULL, *dev, *dev_pos = NULL, *hugepages_mountpoint = NULL;
+  char *device = NULL, *dev, *dev_pos = NULL, *rss_device = NULL, *hugepages_mountpoint = NULL;
   u_int32_t version;
   int cluster_id = -1;
   socket_mode mode = recv_only_mode;
@@ -461,7 +472,7 @@ int main(int argc, char* argv[]) {
   numCPU = sysconf( _SC_NPROCESSORS_ONLN );
   startTime.tv_sec = 0;
 
-  while ((c = getopt(argc,argv,"ahi:bc:n:m:r:t:g:x:pu:")) != -1) {
+  while ((c = getopt(argc,argv,"ahi:bc:n:m:r:t:g:x:pu:z:")) != -1) {
     switch (c) {
     case 'a':
       wait_for_packet = 0;
@@ -504,6 +515,10 @@ int main(int argc, char* argv[]) {
       use_hugepages = 1;
       hugepages_mountpoint = strdup(optarg);
       break;
+    case 'z':
+      rss_device = strdup(optarg);
+      rss_zerocopy_tx = 1;
+      break;
     }
   }
 
@@ -536,6 +551,28 @@ int main(int argc, char* argv[]) {
     mode = send_and_recv_mode;
   }
 
+  if (rss_zerocopy_tx) {
+    int num_channels = pfring_open_multichannel(rss_device, 1500 /* snaplen */, PF_RING_PROMISC | PF_RING_DNA_FIXED_RSS_Q_0, rss_rings);
+
+    if(num_channels < num_threads) {
+      fprintf(stderr, "Error: interface %s has %u channels available, you need at least %u as the number of slave threads\n", 
+             rss_device, num_channels, num_threads);
+      return(-1);
+    }
+
+    for(i=0; i<num_channels; i++) {
+      char buf[32];
+      snprintf(buf, sizeof(buf), "pfdnacluster-zerocopy-tx-%ld", i);
+      pfring_set_application_name(rss_rings[i], buf);
+
+      if((rc = pfring_set_socket_mode(rss_rings[i], send_only_mode)) != 0)
+	fprintf(stderr, "pfring_set_socket_mode returned [rc=%d]\n", rc);
+    }
+
+    if (strncmp(device, rss_device, strlen(rss_device)) == 0)
+      enable_tx = 0; /* avoid misconfigurations */
+  }
+
   printf("Capturing from %s\n", device);
 
   /* Create the DNA cluster */
@@ -543,7 +580,7 @@ int main(int argc, char* argv[]) {
   					       num_threads, 
 					       0
 					       /* | DNA_CLUSTER_DIRECT_FORWARDING */
-  					       | (!enable_tx ? DNA_CLUSTER_NO_ADDITIONAL_BUFFERS : 0)
+  					       | ((!enable_tx && !rss_zerocopy_tx) ? DNA_CLUSTER_NO_ADDITIONAL_BUFFERS : 0)
 					       /* | DNA_CLUSTER_DCA */
 					       | (use_hugepages ? DNA_CLUSTER_HUGEPAGES : 0)
      )) == NULL) {
@@ -555,7 +592,8 @@ int main(int argc, char* argv[]) {
   dna_cluster_low_level_settings(dna_cluster_handle, 
                                  8192, // slave rx queue slots
                                  8192, // slave tx queue slots
-				 enable_tx ? 1 : 0  // slave additional buffers (available with  alloc/release)
+				 (enable_tx ? 1 : 0)  // slave additional buffers (available with  alloc/release)
+				 + (rss_zerocopy_tx ? (rss_rings[0]->dna.dna_dev.mem_info.tx.packet_memory_num_slots + 1) : 0)
 				 );
 
   if (use_hugepages) {
@@ -573,7 +611,8 @@ int main(int argc, char* argv[]) {
 
   dev = strtok_r(device, ",", &dev_pos);
   while(dev != NULL) {
-    pd[num_dev] = pfring_open(dev, 1500 /* snaplen */, PF_RING_PROMISC);
+    pd[num_dev] = pfring_open(dev, 1500 /* snaplen */, 
+      PF_RING_PROMISC | (rss_zerocopy_tx ? PF_RING_DNA_FIXED_RSS_Q_0 /* if RSS is enabled, all to queue 0 */ : 0));
     if(pd[num_dev] == NULL) {
       printf("pfring_open %s error [%s]\n", dev, strerror(errno));
       return(-1);
@@ -673,8 +712,16 @@ int main(int argc, char* argv[]) {
     snprintf(buf, sizeof(buf), "pfdnacluster_multithread-cluster-%d-thread-%ld", cluster_id, i);
     pfring_set_application_name(thread_stats[i].ring, buf);
 
-    if((rc = pfring_set_socket_mode(thread_stats[i].ring, mode)) != 0)
+    if ((rc = pfring_set_socket_mode(thread_stats[i].ring, mode)) != 0)
       fprintf(stderr, "pfring_set_socket_mode returned [rc=%d]\n", rc);
+
+    if (rss_zerocopy_tx) {
+      /* this call will do the magic making rss_rings[i] a zero-copy ring */
+      if ((rc = pfring_register_zerocopy_tx_ring(thread_stats[i].ring, rss_rings[i])) != 0) {
+        printf("pfring_register_zerocopy_tx_ring error: %d\n", rc);
+	return(-1);
+      }
+    }
 
     pfring_enable_ring(thread_stats[i].ring);
 
