@@ -225,6 +225,15 @@ Command: pfdnacluster_multithread -i dna0,dna1 -c 1 -n 2
 *******************************************************************************
 *******************************************************************************
 
+Test 9. Aggregate traffic from multiple interfaces, hash packets, read them on 2 threads, forward them directly to an egress interface using RSS queues
+
+Goal: Receive packets from multiple interfaces on one thread in a Round-Robin manner, hash them based on the IPs, and distribute them to consumer threads. In this example one thread will receive and hash packets, and two (-n) consumer thread will count and transmit them to an egress interface using per-thread RSS queues with standard DNA in zero-copy.
+
+Command: ./pfdnacluster_mt_rss_frwd -i dna0 -o dna1 -c 1 -n 2 -r 1 -g 2:3 
+
+*******************************************************************************
+*******************************************************************************
+
 Additional tests
 
 The above tests are just a few examples of what you can do with DNA and libzero. The best is that you link you favourite application (e.g. snort, nProbe, or tcpdump) with libzero and see yourself what you can do with it.
