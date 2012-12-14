@@ -37,7 +37,7 @@
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <netinet/ip6.h>
-#include <net/ethernet.h>     /* the L2 protocols */
+#include <net/ethernet.h>
 #include <sys/time.h>
 #include <time.h>
 #include <sys/socket.h>
@@ -48,21 +48,25 @@
 
 #define ALARM_SLEEP             1
 #define MAX_NUM_THREADS         DNA_CLUSTER_MAX_NUM_SLAVES
-#define MAX_NUM_DEV             DNA_CLUSTER_MAX_NUM_SOCKETS
 #define DEFAULT_DEVICE          "dna0"
 
 u_int numCPU;
 static struct timeval startTime;
 u_int8_t wait_for_packet = 1, print_interface_stats = 0, do_shutdown = 0;
-int rx_bind_core = 1, tx_bind_core = 2; /* core 0 free if possible */
+int rx_bind_core = 1; /* core 0 free if possible */
 int hashing_mode = 0;
-int forward_packets = 0, bridge_interfaces = 0, enable_tx = 0, use_hugepages = 0;
-int tx_if_index;
+int bridge_interfaces = 0, use_hugepages = 0, low_latency = 0;
+int cluster_id = -1;
 pfring_dna_cluster *dna_cluster_handle;
 
+#define DIRECTIONS 2
+#define DIR_1 0
+#define DIR_2 1
+pfring *rss_rings[DIRECTIONS][MAX_NUM_THREADS];
+
 int num_dev = 0;
-pfring *pd[MAX_NUM_DEV];
-int if_indexes[MAX_NUM_DEV];
+pfring *pd[DIRECTIONS];
+int if_indexes[DIRECTIONS];
 
 int num_threads = 1;
 struct thread_info {
@@ -223,26 +227,26 @@ void my_sigalarm(int sig) {
 /* *************************************** */
 
 void printHelp(void) {
-  printf("pfdnacluster_multithread - (C) 2012 ntop.org\n\n");
+  printf("pfdnacluster_mt_rss_frwd - (C) 2012 ntop.org\n\n");
+  printf("Forward packets received from a DNA Cluster in zero-copy to a DNA device\n"
+         "using a per-thread RSS channel. The \"all rx packets to queue 0\" RSS mode\n"
+	 "is applied to the devices involved in order to capture from a single queue.\n\n");
   printf("-h              Print this help\n");
-  printf("-i <device>     Device name (comma-separated list)\n");
+  printf("-i <device>     Ingress device name\n");
+  printf("-o <device>     Egress device name\n");
+  printf("-b              Bridge mode (bidirectional)\n");
   printf("-c <id>         DNA Cluster ID\n");
-  printf("-n <num>        Number of consumer threads\n");
+  printf("-n <num>        Number of consumer threads (<= num rss queues)\n");
   printf("-r <core>       Bind the RX thread to a core\n");
-  printf("-t <core>       Bind the TX thread to a core\n");
   printf("-g <id:id...>   Specifies the thread affinity mask (consumers). Each <id> represents\n"
          "                the codeId where the i-th will bind. Example: -g 7:6:5:4 binds thread\n"
          "                <device>@0 on coreId 7, <device>@1 on coreId 6 and so on.\n");
   printf("-m <hash mode>  Hashing modes:\n"
 	 "                0 - IP hash (default)\n"
 	 "                1 - MAC Address hash\n"
-	 "                2 - IP protocol hash\n"
-	 "                3 - Fan-Out\n");
-  printf("-x <if index>   Forward all packets to the selected interface (Enable TX)\n");
-  printf("-b              Bridge the interfaces listed in -i in pairs (Enable TX)\n");
-  printf("-z <tx device>  Send packets received from the cluster directly to <tx device>\n"
-         "                in zero-copy using a per-thread RSS channel (experimental)\n");
+	 "                2 - IP protocol hash\n");
   printf("-a              Active packet wait\n");
+  printf("-l              Low latency (worse throughput)\n");
   printf("-u <mountpoint> Use hugepages for packet memory allocation\n");
   printf("-p              Print per-interface absolute stats\n");
   exit(0);
@@ -250,7 +254,7 @@ void printHelp(void) {
 
 /* *************************************** */
 
-inline u_int32_t master_custom_hash_function(const u_char *buffer, const u_int16_t buffer_len) {
+static inline u_int32_t master_custom_hash_function(const u_char *buffer, const u_int16_t buffer_len) {
   u_int32_t l3_offset = sizeof(struct compact_eth_hdr);
   u_int16_t eth_type;
 
@@ -319,25 +323,13 @@ static int master_distribution_function(const u_char *buffer, const u_int16_t bu
   return DNA_CLUSTER_PASS;
 }
 
-/* ******************************** */
-
-static int fanout_distribution_function(const u_char *buffer, const u_int16_t buffer_len, const pfring_dna_cluster_slaves_info *slaves_info, u_int32_t *id_mask, u_int32_t *hash) {
-  u_int32_t n_zero_bits = 32 - slaves_info->num_slaves;
-
-  /* returning slave id bitmap */
-  *id_mask = ((0xFFFFFFFF << n_zero_bits) >> n_zero_bits);
-
-  return DNA_CLUSTER_PASS;
-}
-
 /* *************************************** */
 
 void* packet_consumer_thread(void *_id) {
-  int i, rc;
+  int rc;
   long thread_id = (long)_id; 
   pfring_pkt_buff *pkt_handle = NULL;
   struct pfring_pkthdr hdr;
-  u_char *buffer = NULL;
  
   if (numCPU > 1) {
 #ifdef HAVE_PTHREAD_SETAFFINITY_NP
@@ -349,7 +341,7 @@ void* packet_consumer_thread(void *_id) {
     if (thread_stats[thread_id].thread_core_affinity != -1)
        core_id = thread_stats[thread_id].thread_core_affinity % numCPU;
     else
-      core_id = ((!enable_tx ? rx_bind_core : tx_bind_core) + 1 + thread_id) % numCPU; 
+      core_id = (rx_bind_core + 1 + thread_id) % numCPU; 
 
     CPU_ZERO(&cpuset);
     CPU_SET(core_id, &cpuset);
@@ -364,48 +356,27 @@ void* packet_consumer_thread(void *_id) {
 
   memset(&hdr, 0, sizeof(hdr));
 
-  if (enable_tx) {
-    if ((pkt_handle = pfring_alloc_pkt_buff(thread_stats[thread_id].ring)) == NULL) {
-      printf("Error allocating pkt buff\n");
-      return NULL;
-    }
+  if ((pkt_handle = pfring_alloc_pkt_buff(thread_stats[thread_id].ring)) == NULL) {
+    printf("Error allocating pkt buff\n");
+    return NULL;
   }
 
   while (!do_shutdown) {
-    if (!enable_tx) {
-      rc = pfring_recv(thread_stats[thread_id].ring, &buffer, 0, &hdr, wait_for_packet);
-    } else {
-      rc = pfring_recv_pkt_buff(thread_stats[thread_id].ring, pkt_handle, &hdr, wait_for_packet);
-
-      if (rc > 0) {
-        buffer = pfring_get_pkt_buff_data(thread_stats[thread_id].ring, pkt_handle);
-        /* len already set pfring_set_pkt_buff_len(thread_stats[thread_id].ring, pkt_handle, len); */
-       
-        if (bridge_interfaces) {
-	  for (i = 0; i < num_dev; i++) {
-	    if (if_indexes[i] == hdr.extended_hdr.if_index) {
-	      pfring_set_pkt_buff_ifindex(thread_stats[thread_id].ring, pkt_handle, if_indexes[i ^ 0x1]);
-	      break;
-	    }
-	  }
-	} else if (forward_packets) {
-	  if (pfring_set_pkt_buff_ifindex(thread_stats[thread_id].ring, pkt_handle, tx_if_index) == PF_RING_ERROR_INVALID_ARGUMENT) {
-	    printf("Wrong interface id, packet will not be forwarded\n");
-	    goto next_pkt;
-          }
-	} /* else use incoming interface (already set) */
-
-        pfring_send_pkt_buff(thread_stats[thread_id].ring, pkt_handle, bridge_interfaces ? 1 : 0 /* flush flag */);
-      }
-    }
-next_pkt:
+    /* tx is not enabled in the cluster, but we will send 
+     * received packets to a tx ring using zero-copy anyway */
+    rc = pfring_recv_pkt_buff(thread_stats[thread_id].ring, pkt_handle, &hdr, wait_for_packet);
 
     if (rc > 0) {
+      if (bridge_interfaces && hdr.extended_hdr.if_index == if_indexes[DIR_2])
+        pfring_send_pkt_buff(rss_rings[DIR_2][thread_id], pkt_handle, low_latency /* flush */);
+      else
+        pfring_send_pkt_buff(rss_rings[DIR_1][thread_id], pkt_handle, low_latency /* flush */);
+
       thread_stats[thread_id].numPkts++;
       thread_stats[thread_id].numBytes += hdr.len + 24 /* 8 Preamble + 4 CRC + 12 IFG */;
     } else {
       if (!wait_for_packet) 
-        sched_yield(); //usleep(1);
+        usleep(1); //sched_yield();
     }
   }
 
@@ -414,17 +385,84 @@ next_pkt:
 
 /* *************************************** */
 
+int open_rss_rings(char *rss_device, pfring **rss_rings) {
+  long i;
+  int rc, num_channels;
+  
+  num_channels = pfring_open_multichannel(rss_device, 1500 /* snaplen */, PF_RING_PROMISC | PF_RING_DNA_FIXED_RSS_Q_0, rss_rings);
+
+  if(num_channels < num_threads) {
+    fprintf(stderr, "Error: interface %s has %u channels available, you need at least %u as the number of slave threads\n", 
+            rss_device, num_channels, num_threads);
+    return -1;
+  }
+
+  for(i=0; i<num_channels; i++) {
+    char buf[32];
+    snprintf(buf, sizeof(buf), "pfdnacluster-%s-channel-%ld", rss_device, i);
+    pfring_set_application_name(rss_rings[i], buf);
+
+    if((rc = pfring_set_socket_mode(rss_rings[i], send_only_mode)) != 0)
+      fprintf(stderr, "pfring_set_socket_mode returned [rc=%d]\n", rc);
+  }
+
+  return 0;
+}
+
+/* *************************************** */
+
+int open_rx_ring(char *rx_device) {
+  u_int32_t version;
+  char buf[32];
+
+  pd[num_dev] = pfring_open(rx_device, 1500 /* snaplen */, PF_RING_PROMISC | PF_RING_DNA_FIXED_RSS_Q_0 /* if RSS is enabled, steer all to queue 0 */);
+  if(pd[num_dev] == NULL) {
+    printf("pfring_open %s error [%s]\n", rx_device, strerror(errno));
+    return(-1);
+  }
+
+  if (num_dev == 0) {
+    pfring_version(pd[num_dev], &version);
+    printf("Using PF_RING v.%d.%d.%d\n", (version & 0xFFFF0000) >> 16, 
+           (version & 0x0000FF00) >> 8, version & 0x000000FF);
+  }
+
+  snprintf(buf, sizeof(buf), "pfdnacluster-%u-%s", cluster_id, rx_device);
+  pfring_set_application_name(pd[num_dev], buf);
+
+  if (bridge_interfaces && pfring_get_bound_device_ifindex(pd[num_dev], &if_indexes[num_dev]) < 0) {
+    fprintf(stderr, "Error reading interface id\n");
+    dna_cluster_destroy(dna_cluster_handle);
+    return -1;
+  }
+
+  if (bridge_interfaces && num_dev > 0)
+    printf("Bridging interfaces %d <-> %d\n", if_indexes[0], if_indexes[1]);
+
+  /* Add the ring we created to the cluster */
+  if (dna_cluster_register_ring(dna_cluster_handle, pd[num_dev]) < 0) {
+    fprintf(stderr, "Error registering rx socket\n");
+    dna_cluster_destroy(dna_cluster_handle);
+    return -1;
+  }
+
+  num_dev++;
+  return 0;
+}
+
+/* *************************************** */
+
 int main(int argc, char* argv[]) {
   char c;
   char buf[32];
   char *bind_mask = NULL;
-  char *device = NULL, *dev, *dev_pos = NULL, *hugepages_mountpoint = NULL;
-  u_int32_t version;
-  int cluster_id = -1;
+  char *in_device = NULL, *out_device = NULL, *hugepages_mountpoint = NULL;
   socket_mode mode = recv_only_mode;
   int rc;
   long i;
- 
+
+  memset(rss_rings, 0, sizeof(rss_rings));
+
   memset(thread_stats, 0, sizeof(thread_stats));
   for (i = 0; i < MAX_NUM_THREADS; i++)
     thread_stats[i].thread_core_affinity = -1;
@@ -432,16 +470,13 @@ int main(int argc, char* argv[]) {
   numCPU = sysconf( _SC_NPROCESSORS_ONLN );
   startTime.tv_sec = 0;
 
-  while ((c = getopt(argc,argv,"ahi:bc:n:m:r:t:g:x:pu:z:")) != -1) {
+  while ((c = getopt(argc,argv,"ahi:bc:n:m:r:g:pu:lo:")) != -1) {
     switch (c) {
     case 'a':
       wait_for_packet = 0;
       break;
     case 'r':
       rx_bind_core = atoi(optarg);
-      break;
-    case 't':
-      tx_bind_core = atoi(optarg);
       break;
     case 'g':
       bind_mask = strdup(optarg);
@@ -450,7 +485,13 @@ int main(int argc, char* argv[]) {
       printHelp();      
       break;
     case 'i':
-      device = strdup(optarg);
+      in_device = strdup(optarg);
+      break;
+    case 'o':
+      out_device = strdup(optarg);
+      break;
+    case 'l':
+      low_latency = 1;
       break;
     case 'c':
       cluster_id = atoi(optarg);
@@ -460,10 +501,6 @@ int main(int argc, char* argv[]) {
       break;
     case 'm':
       hashing_mode = atoi(optarg);
-      break;
-    case 'x':
-      forward_packets = 1;
-      tx_if_index = atoi(optarg);
       break;
     case 'b':
       bridge_interfaces = 1;
@@ -478,9 +515,7 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  if (cluster_id < 0 || num_threads < 1
-      || hashing_mode < 0 || hashing_mode > 3 
-      || (forward_packets && tx_if_index < 0))
+  if (out_device == NULL || cluster_id < 0 || num_threads < 1 || hashing_mode < 0 || hashing_mode > 2) 
     printHelp();
 
   if (num_threads > MAX_NUM_THREADS) {
@@ -488,7 +523,7 @@ int main(int argc, char* argv[]) {
     num_threads = MAX_NUM_THREADS;
   }
 
-  if (device == NULL) device = strdup(DEFAULT_DEVICE);
+  if (in_device == NULL) in_device = strdup(DEFAULT_DEVICE);
 
   if(bind_mask != NULL) {
     char *id = strtok(bind_mask, ":");
@@ -501,20 +536,23 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  /* Setting the cluster mode */
-  if (forward_packets || bridge_interfaces)  {
-    enable_tx = 1;
-    mode = send_and_recv_mode;
+  if (open_rss_rings(out_device, rss_rings[DIR_1]) < 0)
+    return -1;
+
+  if (bridge_interfaces) {
+    if (open_rss_rings(in_device, rss_rings[DIR_2]) < 0)
+      return -1;
   }
 
-  printf("Capturing from %s\n", device);
+  printf("Capturing from %s", in_device);
+  if (bridge_interfaces)
+    printf(" and %s", out_device);
+  printf("\n");
 
   /* Create the DNA cluster */
   if ((dna_cluster_handle = dna_cluster_create(cluster_id, 
   					       num_threads, 
 					       0
-					       /* | DNA_CLUSTER_DIRECT_FORWARDING */
-  					       | (!enable_tx ? DNA_CLUSTER_NO_ADDITIONAL_BUFFERS : 0)
 					       /* | DNA_CLUSTER_DCA */
 					       | (use_hugepages ? DNA_CLUSTER_HUGEPAGES : 0)
      )) == NULL) {
@@ -525,8 +563,10 @@ int main(int argc, char* argv[]) {
   /* Changing the default settings (experts only) */
   dna_cluster_low_level_settings(dna_cluster_handle, 
                                  8192, // slave rx queue slots
-                                 8192, // slave tx queue slots
-				 (enable_tx ? 1 : 0)  // slave additional buffers (available with  alloc/release)
+                                 0, // slave tx queue slots
+				 // slave additional buffers (available with  alloc/release)
+				 1 + rss_rings[DIR_1][0]->dna.dna_dev.mem_info.tx.packet_memory_num_slots +
+				 (bridge_interfaces ? rss_rings[DIR_2][0]->dna.dna_dev.mem_info.tx.packet_memory_num_slots : 0)
 				 );
 
   if (use_hugepages) {
@@ -536,76 +576,27 @@ int main(int argc, char* argv[]) {
     }
   }
 
-
   if (dna_cluster_set_mode(dna_cluster_handle, mode) < 0) {
     printf("dna_cluster_set_mode error\n");
     return(-1);
   }
 
-  dev = strtok_r(device, ",", &dev_pos);
-  while(dev != NULL) {
-    pd[num_dev] = pfring_open(dev, 1500 /* snaplen */, PF_RING_PROMISC);
-    if(pd[num_dev] == NULL) {
-      printf("pfring_open %s error [%s]\n", dev, strerror(errno));
-      return(-1);
-    }
+  if (open_rx_ring(in_device) < 0)
+    return -1;
 
-    if (num_dev == 0) {
-      pfring_version(pd[num_dev], &version);
-      printf("Using PF_RING v.%d.%d.%d\n", (version & 0xFFFF0000) >> 16, 
-	     (version & 0x0000FF00) >> 8, version & 0x000000FF);
-    }
-
-    snprintf(buf, sizeof(buf), "pfdnacluster_multithread-cluster-%d-socket-%d", cluster_id, num_dev);
-    pfring_set_application_name(pd[num_dev], buf);
-
-    if (bridge_interfaces && pfring_get_bound_device_ifindex(pd[num_dev], &if_indexes[num_dev]) < 0) {
-      fprintf(stderr, "Error reading interface id\n");
-      dna_cluster_destroy(dna_cluster_handle);
+  if (bridge_interfaces) {
+    if (open_rx_ring(out_device) < 0)
       return -1;
-    }
-
-    if (bridge_interfaces && (num_dev & 0x1))
-      printf("Bridging interfaces %d <-> %d\n", if_indexes[num_dev & ~0x1], if_indexes[num_dev]);
-
-    /* Add the ring we created to the cluster */
-    if (dna_cluster_register_ring(dna_cluster_handle, pd[num_dev]) < 0) {
-      fprintf(stderr, "Error registering rx socket\n");
-      dna_cluster_destroy(dna_cluster_handle);
-      return -1;
-    }
-
-    num_dev++;
-
-    dev = strtok_r(NULL, ",", &dev_pos);
-
-    if (num_dev == MAX_NUM_DEV && dev != NULL) {
-      printf("Too many devices\n");
-      break;
-    }
-  }
-
-  if (num_dev == 0) {
-    dna_cluster_destroy(dna_cluster_handle);
-    printHelp();
-  }
-
-  if (bridge_interfaces && (num_dev & 0x1)) {
-    fprintf(stderr, "Bridge mode requires an even number of interfaces\n");
-    printHelp();
   }
 
   /* Setting up important details... */
   dna_cluster_set_wait_mode(dna_cluster_handle, !wait_for_packet /* active_wait */);
-  dna_cluster_set_cpu_affinity(dna_cluster_handle, rx_bind_core, tx_bind_core);
+  dna_cluster_set_cpu_affinity(dna_cluster_handle, rx_bind_core, -1);
 
   /* The default distribution function allows to balance per IP 
     in a coherent mode (not like RSS that does not do that) */
   if (hashing_mode > 0) {
-    if (hashing_mode <= 2)
-      dna_cluster_set_distribution_function(dna_cluster_handle, master_distribution_function);
-    else /* hashing_mode == 2 */
-      dna_cluster_set_distribution_function(dna_cluster_handle, fanout_distribution_function);
+    dna_cluster_set_distribution_function(dna_cluster_handle, master_distribution_function);
   }
 
   switch(hashing_mode) {
@@ -617,9 +608,6 @@ int main(int argc, char* argv[]) {
     break;
   case 2:
     printf("Hashing packets per-IP protocol (TCP, UDP, ICMP...)\n");
-    break;
-  case 3:
-    printf("Replicating each packet on all threads (no copy)\n");
     break;
   }
 
@@ -637,7 +625,7 @@ int main(int argc, char* argv[]) {
     snprintf(buf, sizeof(buf), "dnacluster:%d@%ld", cluster_id, i);
     thread_stats[i].ring = pfring_open(buf, 1500 /* snaplen */, PF_RING_PROMISC);
     if (thread_stats[i].ring == NULL) {
-      printf("pfring_open %s error [%s]\n", device, strerror(errno));
+      printf("pfring_open %s error [%s]\n", in_device, strerror(errno));
       return(-1);
     }
 
@@ -646,6 +634,19 @@ int main(int argc, char* argv[]) {
 
     if ((rc = pfring_set_socket_mode(thread_stats[i].ring, mode)) != 0)
       fprintf(stderr, "pfring_set_socket_mode returned [rc=%d]\n", rc);
+
+    /* this call will do the magic making rss_rings[dir][i] a zero-copy ring */
+    if ((rc = pfring_register_zerocopy_tx_ring(thread_stats[i].ring, rss_rings[DIR_1][i])) != 0) {
+      printf("pfring_register_zerocopy_tx_ring error: %d\n", rc);
+      return(-1);
+    }
+
+    if (bridge_interfaces) {
+      if ((rc = pfring_register_zerocopy_tx_ring(thread_stats[i].ring, rss_rings[DIR_2][i])) != 0) {
+        printf("pfring_register_zerocopy_tx_ring error: %d\n", rc);
+        return(-1);
+      }
+    }
 
     pfring_enable_ring(thread_stats[i].ring);
 
