@@ -600,6 +600,15 @@ int pfring_set_application_name(pfring *ring, char *name) {
 
 /* **************************************************** */
 
+int pfring_set_application_stats(pfring *ring, char *stats) {
+  if(ring && ring->set_application_stats)
+    return ring->set_application_stats(ring, stats);
+
+  return(PF_RING_ERROR_NOT_SUPPORTED);
+}
+
+/* **************************************************** */
+
 int pfring_bind(pfring *ring, char *device_name) {
   if(ring && ring->bind)
     return ring->bind(ring, device_name);

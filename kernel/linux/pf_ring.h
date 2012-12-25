@@ -81,6 +81,7 @@
 #define SO_WAKE_UP_DNA_CLUSTER_SLAVE     130
 #define SO_ENABLE_RX_PACKET_BOUNCE       131
 #define SO_SEND_MSG_TO_PLUGIN            132 /* send user msg to plugin */
+#define SO_SET_APPL_STATS                133
 
 /* Get */
 #define SO_GET_RING_VERSION              170
@@ -99,6 +100,7 @@
 #define SO_GET_EXTRA_DMA_MEMORY          183
 #define SO_GET_BOUND_DEVICE_IFINDEX      184
 #define SO_GET_DEVICE_IFINDEX            185
+#define SO_GET_APPL_STATS_FILE_NAME      186
 
 /* Map */
 #define SO_MAP_DNA_DEVICE                190
@@ -1033,7 +1035,9 @@ struct pf_ring_socket {
   pkt_header_len header_len;
 
   /* /proc */
-  char sock_proc_name[64];
+  char sock_proc_name[64];       /* /proc/net/pf_ring/<sock_proc_name>             */
+  char sock_proc_stats_name[64]; /* /proc/net/pf_ring/stats/<sock_proc_stats_name> */
+  char statsString[256 + 1];
 
   /* Poll Watermark */
   u_int32_t num_poll_calls;

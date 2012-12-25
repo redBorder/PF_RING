@@ -124,7 +124,7 @@ double delta_time (struct timeval * now,
 void print_stats() {
   double deltaMillisec, currentThpt, avgThpt, currentThptBytes, avgThptBytes;
   struct timeval now;
-  char buf1[64], buf2[64], buf3[64], buf4[64], buf5[64];
+  char buf1[64], buf2[64], buf3[64], buf4[64], buf5[64], statsBuf[512];
 
   gettimeofday(&now, NULL);
   deltaMillisec = delta_time(&now, &lastTime);
@@ -137,12 +137,16 @@ void print_stats() {
   avgThptBytes = (double)(num_bytes_good_sent * 1000)/deltaMillisec;
   avgThptBytes /= (1000*1000*1000)/8;
 
-  fprintf(stdout, "TX rate: [current %s pps/%s Gbps][average %s pps/%s Gbps][total %s pkts]\n",
-	  pfring_format_numbers(currentThpt, buf1, sizeof(buf1), 1),
-	  pfring_format_numbers(currentThptBytes, buf2, sizeof(buf2), 1),
-	  pfring_format_numbers(avgThpt, buf3, sizeof(buf3), 1),
-	  pfring_format_numbers(avgThptBytes,  buf4, sizeof(buf4), 1),
-	  pfring_format_numbers(num_pkt_good_sent, buf5, sizeof(buf5), 1));
+  snprintf(statsBuf, sizeof(statsBuf),
+	   "TX rate: [current %s pps/%s Gbps][average %s pps/%s Gbps][total %s pkts]",
+	   pfring_format_numbers(currentThpt, buf1, sizeof(buf1), 1),
+	   pfring_format_numbers(currentThptBytes, buf2, sizeof(buf2), 1),
+	   pfring_format_numbers(avgThpt, buf3, sizeof(buf3), 1),
+	   pfring_format_numbers(avgThptBytes,  buf4, sizeof(buf4), 1),
+	   pfring_format_numbers(num_pkt_good_sent, buf5, sizeof(buf5), 1));
+  
+  fprintf(stdout, "%s\n", statsBuf);
+  pfring_set_application_stats(pd, statsBuf);
 
   memcpy(&lastTime, &now, sizeof(now));
   last_num_pkt_good_sent = num_pkt_good_sent, last_num_bytes_good_sent = num_bytes_good_sent;
@@ -296,7 +300,7 @@ static void forge_udp_packet(char *buffer, u_int idx) {
 /* *************************************** */
 
 int main(int argc, char* argv[]) {
-  char c, *pcap_in = NULL;
+  char c, *pcap_in = NULL, path[255] = { 0 };
   int i, verbose = 0, active_poll = 0, disable_zero_copy = 0;
   int use_zero_copy_tx = 0;
   u_int mac_a, mac_b, mac_c, mac_d, mac_e, mac_f;
@@ -606,6 +610,10 @@ int main(int argc, char* argv[]) {
 
   tosend = pkt_head;
   i = 0;
+
+  pfring_set_application_stats(pd, "Statistics not yet computed: please try again...");
+  if(pfring_get_appl_stats_file_name(pd, path, sizeof(path)) != NULL)
+    fprintf(stderr, "Dumping statistics on %s\n", path);
 
   if(gbit_s != 0)
     tick_start = getticks();

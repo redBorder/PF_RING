@@ -166,18 +166,22 @@ void print_stats() {
       fprintf(stderr, "\n");
 
     if(print_all && (lastTime.tv_sec > 0)) {
+      char buf[256];
+
       deltaMillisec = delta_time(&endTime, &lastTime);
       diff = nPkts-lastPkts;
       bytesDiff = nBytes - lastBytes;
       bytesDiff /= (1000*1000*1000)/8;
 
-      fprintf(stderr, "=========================\n"
-	      "Actual Stats: %llu pkts [%s ms][%s pps/%s Gbps]\n",
+      snprintf(buf, sizeof(buf),
+	      "Actual Stats: %llu pkts [%s ms][%s pps/%s Gbps]",
 	      (long long unsigned int)diff,
 	      pfring_format_numbers(deltaMillisec, buf1, sizeof(buf1), 1),
 	      pfring_format_numbers(((double)diff/(double)(deltaMillisec/1000)),  buf2, sizeof(buf2), 1),
-	      pfring_format_numbers(((double)bytesDiff/(double)(deltaMillisec/1000)),  buf3, sizeof(buf3), 1)
-	      );
+	      pfring_format_numbers(((double)bytesDiff/(double)(deltaMillisec/1000)),  buf3, sizeof(buf3), 1));
+
+      fprintf(stderr, "=========================\n%s\n", buf);
+      pfring_set_application_stats(pd, buf);
     }
 
     lastPkts = nPkts, lastBytes = nBytes;
@@ -649,7 +653,8 @@ void* packet_consumer_thread(void* _id) {
 /* *************************************** */
 
 int main(int argc, char* argv[]) {
-  char *device = NULL, c, buf[32], *reflector_device = NULL;
+  char *device = NULL, c, buf[32], path[256] = { 0 }, 
+    *reflector_device = NULL;
   u_char mac_address[6] = { 0 };
   int promisc, snaplen = DEFAULT_SNAPLEN, rc;
   u_int clusterId = 0;
@@ -918,7 +923,6 @@ int main(int argc, char* argv[]) {
   signal(SIGTERM, sigproc);
   signal(SIGINT, sigproc);
 
-
   if(!verbose) {
     signal(SIGALRM, my_sigalarm);
     alarm(ALARM_SLEEP);
@@ -1026,6 +1030,10 @@ int main(int argc, char* argv[]) {
 
     pfring_toggle_filtering_policy(pd, 0); /* Default to drop */
   }
+
+  pfring_set_application_stats(pd, "Statistics not yet computed: please try again...");
+  if(pfring_get_appl_stats_file_name(pd, path, sizeof(path)) != NULL)
+    fprintf(stderr, "Dumping statistics on %s\n", path);
 
   if (pfring_enable_ring(pd) != 0) {
     printf("Unable to enable ring :-(\n");

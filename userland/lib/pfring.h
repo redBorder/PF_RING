@@ -170,6 +170,8 @@ extern "C" {
     int       (*set_channel_id)               (pfring *, u_int32_t);
     int       (*set_channel_mask)             (pfring *, u_int32_t);
     int       (*set_application_name)         (pfring *, char *);
+    int       (*set_application_stats)        (pfring *, char *);
+    char*     (*get_appl_stats_file_name)     (pfring *ring, char *path, u_int path_len);
     int       (*bind)                         (pfring *, char *);
     int       (*send)                         (pfring *, char *, u_int, u_int8_t);
     int       (*send_ifindex)                 (pfring *, char *, u_int, u_int8_t, int);
@@ -310,6 +312,8 @@ extern "C" {
   int pfring_set_channel_id(pfring *ring, u_int32_t channel_id);
   int pfring_set_channel_mask(pfring *ring, u_int32_t channel_mask);
   int pfring_set_application_name(pfring *ring, char *name);
+  int pfring_set_application_stats(pfring *ring, char *stats);
+  char* pfring_get_appl_stats_file_name(pfring *ring, char *path, u_int path_len);
   int pfring_bind(pfring *ring, char *device_name);
   int pfring_send(pfring *ring, char *pkt, u_int pkt_len, u_int8_t flush_packet);
   int pfring_send_ifindex(pfring *ring, char *pkt, u_int pkt_len, u_int8_t flush_packet, int if_index);
