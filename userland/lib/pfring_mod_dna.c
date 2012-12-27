@@ -218,6 +218,8 @@ int pfring_dna_open(pfring *ring) {
   ring->set_poll_duration = pfring_mod_set_poll_duration;
   ring->set_channel_id = pfring_mod_set_channel_id;
   ring->set_application_name = pfring_mod_set_application_name;
+  ring->set_application_stats = pfring_mod_set_application_stats;
+  ring->get_appl_stats_file_name = pfring_mod_get_appl_stats_file_name;
   ring->bind = pfring_mod_bind;
   ring->get_num_rx_channels = pfring_mod_get_num_rx_channels;
   ring->get_selectable_fd = pfring_mod_get_selectable_fd;

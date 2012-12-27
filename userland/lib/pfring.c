@@ -609,6 +609,15 @@ int pfring_set_application_stats(pfring *ring, char *stats) {
 
 /* **************************************************** */
 
+char* pfring_get_appl_stats_file_name(pfring *ring, char *path, u_int path_len) {
+  if(ring && ring->get_appl_stats_file_name)
+    return ring->get_appl_stats_file_name(ring, path, path_len);
+
+  return(NULL);
+}
+
+/* **************************************************** */
+
 int pfring_bind(pfring *ring, char *device_name) {
   if(ring && ring->bind)
     return ring->bind(ring, device_name);

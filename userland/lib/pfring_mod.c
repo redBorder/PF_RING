@@ -85,7 +85,7 @@ int pfring_mod_open(pfring *ring) {
   ring->set_channel_mask = pfring_mod_set_channel_mask;
   ring->set_application_name  = pfring_mod_set_application_name;
   ring->set_application_stats = pfring_mod_set_application_stats;
-  ring->get_appl_stats_file_name = pfring_get_appl_stats_file_name;
+  ring->get_appl_stats_file_name = pfring_mod_get_appl_stats_file_name;
   ring->bind = pfring_mod_bind;
   ring->send = pfring_mod_send;
   ring->get_num_rx_channels = pfring_mod_get_num_rx_channels;
@@ -277,7 +277,7 @@ int pfring_mod_set_application_stats(pfring *ring, char *stats) {
 
 /* **************************************************** */
 
-char* pfring_get_appl_stats_file_name(pfring *ring, char *path, u_int path_len) {
+char* pfring_mod_get_appl_stats_file_name(pfring *ring, char *path, u_int path_len) {
   socklen_t len = (socklen_t)path_len;
   int rc = getsockopt(ring->fd, 0, SO_GET_APPL_STATS_FILE_NAME, path, &len);
 
