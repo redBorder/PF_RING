@@ -1,7 +1,7 @@
 /*
  *
- * (C) 2008-11 - Luca Deri <deri@ntop.org>
- * (C) 2011    - Alfredo Cardigliano <cardigliano@ntop.org>
+ * (C) 2008-12 - Luca Deri <deri@ntop.org>
+ * (C) 2011-12 - Alfredo Cardigliano <cardigliano@ntop.org>
  *
  *
  * This program is free software; you can redistribute it and/or modify
@@ -19,7 +19,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
 
-#define MAX_NUM_ADAPTERS       8
+#define MAX_NUM_ADAPTERS       16
 
 static char *adapters_to_enable[MAX_NUM_ADAPTERS] = { 0 };
 module_param_array(adapters_to_enable, charp, NULL, 0444);

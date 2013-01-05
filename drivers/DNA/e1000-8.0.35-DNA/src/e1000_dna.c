@@ -19,7 +19,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
 
-#define MAX_NUM_ADAPTERS       8
+#define MAX_NUM_ADAPTERS       16
 
 #define DEBUG
 
