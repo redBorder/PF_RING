@@ -1,10 +1,6 @@
 /*
  *
- * Copyright 2012 - ntop.org
- *
- * Authors:
- *  Alfredo Cardigliano <cardigliano@ntop.org>
- *  Luca Deri <deri@ntop.org>
+ * Copyright 2012-13 - ntop.org
  *
  */
 

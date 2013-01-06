@@ -1,7 +1,6 @@
 /* ***************************************************************
  *
- * (C) 2004-12 - Luca Deri <deri@ntop.org>
- *               Alfredo Cardigliano <cardigliano@ntop.org>
+ * (C) 2004-13 - ntop.org
  *
  * This code includes contributions courtesy of
  * - Amit D. Chaudhary <amit_ml@rajgad.com>
@@ -8818,7 +8817,7 @@ static int __init ring_init(void)
 #endif
 
   printk("[PF_RING] Welcome to PF_RING %s ($Revision: %s$)\n"
-	 "(C) 2004-12 L.Deri <deri@ntop.org>\n",
+	 "(C) 2004-13 ntop.org\n",
 	 RING_VERSION, SVN_REV);
 
 #if(LINUX_VERSION_CODE > KERNEL_VERSION(2,6,11))

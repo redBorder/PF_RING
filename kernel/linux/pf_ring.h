@@ -2,8 +2,7 @@
  *
  * Definitions for packet ring
  *
- * 2004-12 Luca Deri <deri@ntop.org>
- *         Alfredo Cardigliano <cardigliano@ntop.org>
+ * 2004-13 ntop.org
  *
  */
 
