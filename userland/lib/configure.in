@@ -17,12 +17,13 @@ if test -n "$GCC_VERSION"; then
     if test "$GCCMAJOR" -eq 4 && test "$GCCMINOR" -ge 6; then
       CPUSSE42=`grep -m 1 flags /proc/cpuinfo | grep -o sse4_2`
       if test "$CPUSSE42" = "sse4_2"; then
-        CFLAGS="-march=corei7 -mtune=corei7 $CFLAGS"
-        LIBARCH="_corei7"
         CPUAVX=`grep -m 1 flags /proc/cpuinfo | grep -o avx`
         if test "$CPUAVX" = "avx"; then
           CFLAGS="-march=corei7-avx -mtune=corei7-avx $CFLAGS"
           LIBARCH="_corei7-avx"
+	else
+          CFLAGS="-march=corei7 -mtune=corei7 $CFLAGS"
+          LIBARCH="_corei7"
         fi
       fi
     fi
