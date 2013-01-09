@@ -2789,7 +2789,10 @@ static inline int copy_data_to_ring(struct sk_buff *skb,
 	
 	if(hdr->extended_hdr.parsed_pkt.offset.l4_offset) hdr->extended_hdr.parsed_pkt.offset.l4_offset += sizeof(struct eth_vlan_hdr);
 	if(hdr->extended_hdr.parsed_pkt.offset.payload_offset) hdr->extended_hdr.parsed_pkt.offset.payload_offset += sizeof(struct eth_vlan_hdr);
-		
+	
+	hdr->len += sizeof(struct eth_vlan_hdr);
+	hdr->caplen = min_val(pfr->bucket_len - offset, hdr->caplen + sizeof(struct eth_vlan_hdr));
+
 	skb_copy_bits(skb, -displ, &ring_bucket[pfr->slot_header_len + offset], displ);
 	b = (u_int16_t*)&ring_bucket[pfr->slot_header_len + offset+12];
 	b[0] = ntohs(ETH_P_8021Q), b[1] = ntohs(vlan_tci), b[2] = v->h_vlan_proto;
