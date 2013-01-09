@@ -1,3 +1,39 @@
+---------------------------------------
+2013-01-09 PF_RING 5.5.2
+
+* PF_RING library
+ - New pfring_open() flag PF_RING_DNA_FIXED_RSS_Q_0 to send all traffic to queue 0. 
+   Other queues can be selected using hw filters (DNA cards with hw filtering only).
+ - Added ability to create a stats file under /proc/net/pf_ring/stats so that
+   applications can report stats via the /proc filesystem.
+  - pfring_set_application_stats() for reporting stats
+  - pfring_get_appl_stats_file_name() for getting the exac filename where the app sets the statistics
+
+* DNA drivers
+ - Flow Control disabled by default with the ixgbe-dna driver
+
+* Sample apps
+ - New pfdump.c sample app
+ - Userspace BPF support with DNA in pfcount.c
+ - pfcount.c and pfsend.c update to report stats using pfring_set_application_stats()
+
+* Libzero
+ - New experimental pfring_register_zerocopy_tx_ring() 
+ - New pfdnacluster_mt_rss_frwd sample app (packet forwarding using Libzero
+ DNA Cluster for rx/balancing and standard DNA with zero-copy on RSS queues for tx)
+
+* Libpcap
+ - pcap_get_pfring_id()
+ - pcap_set_master_id()
+ - pcap_set_master()
+ - pcap_set_application_name()
+ - pcap_set_watermark()
+
+* BUG fixes
+ - Fix for corrupted VLAN tagged packets
+ - Fix for wrong packet len with vlan stripping offload
+
+---------------------------------------
 2012-11-24 PF_RING 5.5.1
 
 - updated ixgbe driver to release 3.11.33
