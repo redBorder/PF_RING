@@ -2781,37 +2781,25 @@ static inline int copy_data_to_ring(struct sk_buff *skb,
       if((vlan_get_tag(skb, &vlan_tci) == 0) /* The packet is tagged... */
 	 && (hdr->extended_hdr.parsed_pkt.offset.vlan_offset == 0) /* but we have seen no tag -> it has been stripped */) {
 	/* VLAN-tagged packet with stripped VLAN tag */
-	//u_int16_t *b;
-	//struct vlan_ethhdr *v = vlan_eth_hdr(skb);
-	struct ethhdr *e;
-	struct eth_vlan_hdr *ev;
+        u_int16_t *b;
+        struct vlan_ethhdr *v = vlan_eth_hdr(skb);
 
-	hdr->extended_hdr.parsed_pkt.vlan_id = vlan_tci, hdr->extended_hdr.parsed_pkt.offset.vlan_offset += sizeof(struct ethhdr),
-	  hdr->extended_hdr.parsed_pkt.offset.l3_offset += sizeof(struct eth_vlan_hdr);
-	
-	if(hdr->extended_hdr.parsed_pkt.offset.l4_offset) hdr->extended_hdr.parsed_pkt.offset.l4_offset += sizeof(struct eth_vlan_hdr);
-	if(hdr->extended_hdr.parsed_pkt.offset.payload_offset) hdr->extended_hdr.parsed_pkt.offset.payload_offset += sizeof(struct eth_vlan_hdr);
-	
+        hdr->extended_hdr.parsed_pkt.vlan_id = vlan_tci, hdr->extended_hdr.parsed_pkt.offset.vlan_offset += sizeof(struct ethhdr),
+          hdr->extended_hdr.parsed_pkt.offset.l3_offset += sizeof(struct eth_vlan_hdr);
+
+        if(hdr->extended_hdr.parsed_pkt.offset.l4_offset) hdr->extended_hdr.parsed_pkt.offset.l4_offset += sizeof(struct eth_vlan_hdr);
+        if(hdr->extended_hdr.parsed_pkt.offset.payload_offset) hdr->extended_hdr.parsed_pkt.offset.payload_offset += sizeof(struct eth_vlan_hdr);
+
+        skb_copy_bits(skb, -displ, &ring_bucket[pfr->slot_header_len + offset], displ);
+        b = (u_int16_t*)&ring_bucket[pfr->slot_header_len + offset+12];
+        b[0] = ntohs(ETH_P_8021Q), b[1] = ntohs(vlan_tci), b[2] = v->h_vlan_proto;
+        if(skb_copy_bits(skb, 0, &ring_bucket[pfr->slot_header_len + offset + 18], hdr->caplen-14) < 0)
+          printk("[PF_RING] --> FAULT [skb->len=%u][len=%u]\n", skb->len, hdr->caplen-16);
+
 	hdr->len += sizeof(struct eth_vlan_hdr);
 	hdr->caplen = min_val(pfr->bucket_len - offset, hdr->caplen + sizeof(struct eth_vlan_hdr));
-
-	skb_copy_bits(skb, -displ, &ring_bucket[pfr->slot_header_len + offset], sizeof(struct ethhdr) - sizeof(u_int16_t));
-	
-	//b = (u_int16_t*) &ring_bucket[pfr->slot_header_len + offset + sizeof(struct ethhdr) - sizeof(u_int16_t)];
-	//b[0] = ntohs(ETH_P_8021Q), b[1] = ntohs(vlan_tci), b[2] = v->h_vlan_proto;
-	
-	e = (struct ethhdr *) &ring_bucket[pfr->slot_header_len + offset];
-        ev = (struct eth_vlan_hdr *) &ring_bucket[pfr->slot_header_len + offset + sizeof(struct ethhdr)];
-	e->h_proto = htons(ETH_P_8021Q);
-	ev->h_vlan_id = htons(vlan_tci);
-
-	if(skb_copy_bits(skb, sizeof(struct ethhdr) - sizeof(u_int16_t) - displ, 
-	   &ring_bucket[pfr->slot_header_len + offset + sizeof(struct ethhdr) + sizeof(struct eth_vlan_hdr)], 
-	   hdr->caplen - sizeof(struct ethhdr) - sizeof(u_int16_t) + sizeof(struct eth_vlan_hdr)) < 0)
-	  printk("[PF_RING] --> FAULT [skb->len=%u][caplen=%u]\n", skb->len, hdr->caplen);
-      } else {
-	skb_copy_bits(skb, -displ, &ring_bucket[pfr->slot_header_len + offset], hdr->caplen);
-      }    
+      } else
+        skb_copy_bits(skb, -displ, &ring_bucket[pfr->slot_header_len + offset], hdr->caplen);      
     } else {
       if(hdr->extended_hdr.parsed_header_len >= pfr->bucket_len) {
 	static u_char print_once = 0;

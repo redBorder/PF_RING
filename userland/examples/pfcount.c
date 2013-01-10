@@ -513,14 +513,13 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h,
     }
   }
   
-#if 0
-    {
+  if(verbose == 2) {
       int i;
-      for(i = 0; i < 30 /* h->caplen */; i++)
+
+      for(i = 0; i < h->caplen; i++)
         printf("%02X ", p[i]);
       printf("\n");
-    }
-#endif
+  }
 
   if(unlikely(add_drop_rule)) {
     if(h->ts.tv_sec == 0)
@@ -587,7 +586,7 @@ void printHelp(void) {
   printf("-s              Enable hw timestamping\n");
   printf("-t              Touch payload (for force packet load on cache)\n");
   printf("-u <1|2>        For each incoming packet add a drop rule (1=hash, 2=wildcard rule)\n");
-  printf("-v              Verbose\n");
+  printf("-v <mode>       Verbose [1: verbose, 2: very verbose (print packet payload)]\n");
 }
 
 /* *************************************** */
@@ -705,7 +704,7 @@ int main(int argc, char* argv[]) {
   startTime.tv_sec = 0;
   thiszone = gmt2local(0);
 
-  while((c = getopt(argc,argv,"hi:c:d:l:vae:n:w:p:b:rg:u:mts"
+  while((c = getopt(argc,argv,"hi:c:d:l:v:ae:n:w:p:b:rg:u:mts"
 #ifdef ENABLE_BPF
                               "f:"
 #endif
@@ -745,7 +744,7 @@ int main(int argc, char* argv[]) {
       num_threads = atoi(optarg);
       break;
     case 'v':
-      verbose = 1;
+      verbose = (atoi(optarg) == 1) ? 1 : 2;
       break;
 #ifdef ENABLE_BPF
     case 'f':
