@@ -1,0 +1,117 @@
+#! /bin/bash
+#
+# (C) 2003-13 - ntop.org
+#
+### BEGIN INIT INFO
+# Provides:          pf_ring
+# Required-Start:    $local_fs $remote_fs $network $syslog
+# Required-Stop:     $local_fs $remote_fs $network $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Start/stop pf_ring web
+### END INIT INFO
+
+
+start_pf_ring_eth() {
+    INTERFACE_NAME=$1
+    FORCE=$2
+
+    if [ -f /etc/pf_ring/pf_ring-${INTERFACE_NAME}.start ] || [ $FORCE -eq 1 ]; then
+	echo "Starting pf_ring $INTERFACE_NAME"
+
+	PID_FILE=$(cat /etc/pf_ring/pf_ring-${INTERFACE_NAME}.conf | grep '\-g='|cut -d '=' -f 2)
+        if [ -f $PID_FILE ]; then
+	    PID=$(cat $PID_FILE)
+            if [ $PID -gt 0 ]; then
+		IS_EXISTING=$(ps auxw | grep -v grep| grep $PID|wc -l)
+		if [ $IS_EXISTING -gt 0 ]; then
+		    echo "pf_ring $INTERFACE_NAME is already running [pid $PID]: not started"
+		    return 0
+		fi
+	    fi
+	fi
+	/usr/local/bin/pf_ring /etc/pf_ring/pf_ring-${INTERFACE_NAME}.conf > /dev/null &
+    else
+	echo "pf_ring $INTERFACE_NAME not started: missing /etc/pf_ring/pf_ring-${INTERFACE_NAME}.start"
+    fi
+    return 1
+}
+
+
+stop_pf_ring_eth() {
+    INTERFACE_NAME=$1
+    echo "Stopping pf_ring $INTERFACE_NAME"
+
+    if [ -f /etc/pf_ring/pf_ring-${INTERFACE_NAME}.conf ]; then
+	PID_FILE=$(cat /etc/pf_ring/pf_ring-${INTERFACE_NAME}.conf | grep '\-g='|cut -d '=' -f 2)
+	if [ -f $PID_FILE ]; then
+	    PID=$(cat $PID_FILE)
+	    if [ $PID -gt 0 ]; then
+		echo "Stopping pf_ring $INTERFACE_NAME"
+		kill -15 $PID > /dev/null
+		/bin/rm $PID_FILE
+	    else
+		echo "Unable to stop pf_ring $INTERFACE_NAME: invalid pid [$PID][$PID_FILE]"
+	    fi
+	else
+	    echo "Unable to stop pf_ring $INTERFACE_NAME: missing pid $PID_FILE"
+	fi
+    else
+	echo "pf_ring $INTERFACE_NAME can't be stopped: missing /etc/pf_ring/pf_ring-${INTERFACE_NAME}.conf"
+    fi
+
+    return 0
+}
+
+start_pf_ring() {
+    KERNEL_VERSION=$(uname -r)
+
+    insmod /lib/modules/$KERNEL_VERSION/kernel/net/pf_ring/pf_ring.ko
+
+    DNA_DRIVERS="$(/bin/ls /usr/local/pfring/drivers/DNA/|cut -d '.' -f 1)"
+    for D in $DNA_DRIVERS ; do
+	DRIVER_CONFIG="/etc/pfring/dna.$D.conf"
+	if [ -f $DRIVER_CONFIG ]; then
+	    PARAM="$(cat $DRIVER_CONFIG)"
+	    /sbin/insmod /usr/local/pfring/drivers/DNA/$D.ko $PARAM
+	    fi
+    done
+}
+
+
+stop_pf_ring() {
+    DNA_DRIVERS="$(/bin/ls /usr/local/pfring/drivers/DNA/|cut -d '.' -f 1)"
+    for D in $DNA_DRIVERS ; do
+	DRIVER_CONFIG="/etc/pfring/dna.$D.conf"
+	if [ -f $DRIVER_CONFIG ]; then
+	    /sbin/rmmod $D
+	fi
+    done
+
+    /sbin/rmmod pf_ring
+}
+
+########
+
+INTERFACE_NAME=$2
+
+case "$1" in
+  start)
+	start_pf_ring;
+	;;
+
+  stop)
+       	stop_pf_ring;
+	;;
+
+  restart)
+        stop_pf_ring;
+	start_pf_ring;
+	;;
+
+  *)
+	echo "Usage: /etc/init.d/pf_ring {start|stop|restart}"
+	exit 1
+esac
+
+exit 0
