@@ -25,18 +25,20 @@ mkdir -p $RPM_BUILD_ROOT/usr/local/include/linux
 mkdir -p $RPM_BUILD_ROOT/usr/local/lib
 mkdir -p $RPM_BUILD_ROOT/usr/local/pfring/drivers/DNA
 mkdir -p $RPM_BUILD_ROOT/usr/local/bin
+mkdir -p $RPM_BUILD_ROOT/etc/init.d
 # Kernel module
 cp $HOME/PF_RING/kernel/pf_ring.ko $RPM_BUILD_ROOT/usr/local/pfring/kernel
 cp $HOME/PF_RING/kernel/linux/pf_ring.h $RPM_BUILD_ROOT/usr/local/include/linux/
 # Userland
-cp $HOME/PF_RING/README.FIRST               $RPM_BUILD_ROOT/usr/local/pfring/
+cp $HOME/PF_RING/README.FIRST                  $RPM_BUILD_ROOT/usr/local/pfring/
 cp $HOME/PF_RING/userland/snort/pfring-daq-module/README.1st $RPM_BUILD_ROOT/usr/local/pfring/README-DAQ.1st
-cp $HOME/PF_RING/userland/lib/libpfring.a   $RPM_BUILD_ROOT/usr/local/lib
-cp $HOME/PF_RING/userland/lib/libpfring.so  $RPM_BUILD_ROOT/usr/local/lib
-cp $HOME/PF_RING/userland/lib/pfring.h      $RPM_BUILD_ROOT/usr/local/include
-cp $HOME/PF_RING/userland/libpcap/libpcap.a $RPM_BUILD_ROOT/usr/local/lib
-cp $HOME/PF_RING/userland/examples/pfcount  $RPM_BUILD_ROOT/usr/local/bin
-cp $HOME/PF_RING/userland/examples/pfsend   $RPM_BUILD_ROOT/usr/local/bin
+cp $HOME/PF_RING/userland/lib/libpfring.a      $RPM_BUILD_ROOT/usr/local/lib
+cp $HOME/PF_RING/userland/lib/libpfring.so     $RPM_BUILD_ROOT/usr/local/lib
+cp $HOME/PF_RING/userland/lib/pfring.h         $RPM_BUILD_ROOT/usr/local/include
+cp $HOME/PF_RING/userland/libpcap/libpcap.a    $RPM_BUILD_ROOT/usr/local/lib
+cp $HOME/PF_RING/userland/examples/pfcount     $RPM_BUILD_ROOT/usr/local/bin
+cp $HOME/PF_RING/userland/examples/pfsend      $RPM_BUILD_ROOT/usr/local/bin
+cp $HOME/PF_RING/package/etc/init.d/pf_ring    $RPM_BUILD_ROOT/etc/init.d
 # DNA
 mkdir -p $RPM_BUILD_ROOT/usr/local/lib/daq
 #cp $HOME/PF_RING/userland/snort/pfring-daq-module/.libs/daq_pfring.la $RPM_BUILD_ROOT/usr/local/lib/daq
@@ -81,6 +83,7 @@ rm -fr $RPM_BUILD_ROOT
 /usr/local/bin/pfsend
 /usr/local/pfring/README.FIRST
 /usr/local/pfring/README-DAQ.1st
+/etc/init.d/pf_ring
 
 # Set the default attributes of all of the files specified to have an
 # owner and group of root and to inherit the permissions of the file
