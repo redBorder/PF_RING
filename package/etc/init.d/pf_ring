@@ -12,57 +12,6 @@
 ### END INIT INFO
 
 
-start_pf_ring_eth() {
-    INTERFACE_NAME=$1
-    FORCE=$2
-
-    if [ -f /etc/pf_ring/pf_ring-${INTERFACE_NAME}.start ] || [ $FORCE -eq 1 ]; then
-	echo "Starting pf_ring $INTERFACE_NAME"
-
-	PID_FILE=$(cat /etc/pf_ring/pf_ring-${INTERFACE_NAME}.conf | grep '\-g='|cut -d '=' -f 2)
-        if [ -f $PID_FILE ]; then
-	    PID=$(cat $PID_FILE)
-            if [ $PID -gt 0 ]; then
-		IS_EXISTING=$(ps auxw | grep -v grep| grep $PID|wc -l)
-		if [ $IS_EXISTING -gt 0 ]; then
-		    echo "pf_ring $INTERFACE_NAME is already running [pid $PID]: not started"
-		    return 0
-		fi
-	    fi
-	fi
-	/usr/local/bin/pf_ring /etc/pf_ring/pf_ring-${INTERFACE_NAME}.conf > /dev/null &
-    else
-	echo "pf_ring $INTERFACE_NAME not started: missing /etc/pf_ring/pf_ring-${INTERFACE_NAME}.start"
-    fi
-    return 1
-}
-
-
-stop_pf_ring_eth() {
-    INTERFACE_NAME=$1
-    echo "Stopping pf_ring $INTERFACE_NAME"
-
-    if [ -f /etc/pf_ring/pf_ring-${INTERFACE_NAME}.conf ]; then
-	PID_FILE=$(cat /etc/pf_ring/pf_ring-${INTERFACE_NAME}.conf | grep '\-g='|cut -d '=' -f 2)
-	if [ -f $PID_FILE ]; then
-	    PID=$(cat $PID_FILE)
-	    if [ $PID -gt 0 ]; then
-		echo "Stopping pf_ring $INTERFACE_NAME"
-		kill -15 $PID > /dev/null
-		/bin/rm $PID_FILE
-	    else
-		echo "Unable to stop pf_ring $INTERFACE_NAME: invalid pid [$PID][$PID_FILE]"
-	    fi
-	else
-	    echo "Unable to stop pf_ring $INTERFACE_NAME: missing pid $PID_FILE"
-	fi
-    else
-	echo "pf_ring $INTERFACE_NAME can't be stopped: missing /etc/pf_ring/pf_ring-${INTERFACE_NAME}.conf"
-    fi
-
-    return 0
-}
-
 start_pf_ring() {
     KERNEL_VERSION=$(uname -r)
 
@@ -70,11 +19,19 @@ start_pf_ring() {
 
     DNA_DRIVERS="$(/bin/ls /usr/local/pfring/drivers/DNA/|cut -d '.' -f 1)"
     for D in $DNA_DRIVERS ; do
-	DRIVER_CONFIG="/etc/pfring/dna.$D.conf"
+	DRIVER_CONFIG="/etc/pfring/dna-$D.conf"
 	if [ -f $DRIVER_CONFIG ]; then
 	    PARAM="$(cat $DRIVER_CONFIG)"
 	    /sbin/insmod /usr/local/pfring/drivers/DNA/$D.ko $PARAM
 	    fi
+    done
+
+    # /sbin/ifup -a
+    
+    # Enable all interfaces DNA and non DNA
+    INTERFACES="$(cat /proc/net/dev | grep ':' | cut -d ':' -f 1|grep -v 'lo' | tr -d '\n' | sed 's/^  //'| sed 's/  / /')"
+    for D in $INTERFACES ; do
+	/sbin/ifconfig $D up
     done
 }
 
@@ -82,7 +39,7 @@ start_pf_ring() {
 stop_pf_ring() {
     DNA_DRIVERS="$(/bin/ls /usr/local/pfring/drivers/DNA/|cut -d '.' -f 1)"
     for D in $DNA_DRIVERS ; do
-	DRIVER_CONFIG="/etc/pfring/dna.$D.conf"
+	DRIVER_CONFIG="/etc/pfring/dna-$D.conf"
 	if [ -f $DRIVER_CONFIG ]; then
 	    /sbin/rmmod $D
 	fi
