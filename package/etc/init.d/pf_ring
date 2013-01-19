@@ -22,6 +22,8 @@ start_pf_ring() {
 	DRIVER_CONFIG="/etc/pfring/dna-$D.conf"
 	if [ -f $DRIVER_CONFIG ]; then
 	    PARAM="$(cat $DRIVER_CONFIG)"
+	    # Remove the driver first as the original vanilla driver might be the one we want to overwrite
+	    /sbin/rmmod $D
 	    /sbin/insmod /usr/local/pfring/drivers/DNA/$D.ko $PARAM
 	    fi
     done
