@@ -49,6 +49,7 @@ void printHelp(void) {
   printf("-a <device>     [First device name]\n");
   printf("-b <device>     [Second device name]\n");
   printf("-g <core_id>    Bind this app to a core\n");
+  printf("-w <watermark>  Watermark\n");
 }
 
 /* ******************************** */
@@ -71,6 +72,7 @@ int main(int argc, char* argv[]) {
   u_int8_t verbose = 0, use_pfring_send = 0;
   int a_ifindex, b_ifindex;
   int bind_core = -1;
+  u_int16_t watermark = 1;
 
   while((c = getopt(argc,argv, "ha:b:c:fvpg:")) != -1) {
     switch(c) {
@@ -92,6 +94,9 @@ int main(int argc, char* argv[]) {
 	break;
       case 'g':
         bind_core = atoi(optarg);
+        break;
+      case 'w':
+        watermark = atoi(optarg);
         break;
     }
   }  
@@ -116,6 +121,7 @@ int main(int argc, char* argv[]) {
     pfring_set_application_name(a_ring, "pfbridge-a");
     pfring_set_direction(a_ring, rx_only_direction);
     pfring_set_socket_mode(a_ring, recv_only_mode);
+    pfring_set_poll_watermark(a_ring, watermark);
     pfring_get_bound_device_ifindex(a_ring, &a_ifindex);
   }
 
