@@ -19,7 +19,7 @@ start_pf_ring() {
 
     DNA_DRIVERS="$(/bin/ls /usr/local/pfring/drivers/DNA/|cut -d '.' -f 1)"
     for D in $DNA_DRIVERS ; do
-	DRIVER_CONFIG="/etc/pfring/dna-$D.conf"
+	DRIVER_CONFIG="/etc/pf_ring/dna-$D.conf"
 	if [ -f $DRIVER_CONFIG ]; then
 	    PARAM="$(cat $DRIVER_CONFIG)"
 	    # Remove the driver first as the original vanilla driver might be the one we want to overwrite
@@ -41,7 +41,7 @@ start_pf_ring() {
 stop_pf_ring() {
     DNA_DRIVERS="$(/bin/ls /usr/local/pfring/drivers/DNA/|cut -d '.' -f 1)"
     for D in $DNA_DRIVERS ; do
-	DRIVER_CONFIG="/etc/pfring/dna-$D.conf"
+	DRIVER_CONFIG="/etc/pf_ring/dna-$D.conf"
 	if [ -f $DRIVER_CONFIG ]; then
 	    /sbin/rmmod $D
 	fi
