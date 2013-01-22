@@ -195,7 +195,6 @@ static bool dna_e1000e_clean_rx_irq(struct e1000_adapter *adapter) {
   int i, debug = 0;
   struct e1000_ring *rx_ring = adapter->rx_ring;
   union e1000_rx_desc_extended *rx_desc;
-  struct e1000_buffer *buffer_info;
   struct e1000_hw *hw = &adapter->hw;
   u32 staterr;
 
@@ -207,7 +206,6 @@ static bool dna_e1000e_clean_rx_irq(struct e1000_adapter *adapter) {
   rx_ring->next_to_clean = i; 
   rx_desc = E1000_RX_DESC_EXT(*rx_ring, i);
   staterr = le32_to_cpu(rx_desc->wb.upper.status_error);
-  buffer_info = &rx_ring->buffer_info[i];
   
   if(unlikely(debug))
     printk(KERN_INFO
