@@ -18,6 +18,7 @@ start_pf_ring() {
     insmod /lib/modules/$KERNEL_VERSION/kernel/net/pf_ring/pf_ring.ko
 
     DNA_DRIVERS="$(/bin/ls /usr/local/pfring/drivers/DNA/|cut -d '.' -f 1)"
+
     for D in $DNA_DRIVERS ; do
 	DRIVER_CONFIG="/etc/pf_ring/dna-$D.conf"
 	if [ -f $DRIVER_CONFIG ]; then
@@ -25,8 +26,10 @@ start_pf_ring() {
 	    # Remove the driver first as the original vanilla driver might be the one we want to overwrite
 	    /sbin/rmmod $D
 	    /sbin/insmod /usr/local/pfring/drivers/DNA/$D.ko $PARAM
-	    fi
+	fi
     done
+
+    sleep 1
 
     # /sbin/ifup -a
     
