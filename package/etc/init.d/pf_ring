@@ -42,6 +42,16 @@ start_pf_ring() {
 
 
 stop_pf_ring() {
+    if [ -f /etc/init.d/nprobe ]; then
+	/etc/init.d/nprobe stop
+	sleep 2
+    fi
+
+    if [ -f /etc/init.d/n2disk ]; then
+	/etc/init.d/n2disk stop
+	sleep 2
+    fi
+
     DNA_DRIVERS="$(/bin/ls /usr/local/pfring/drivers/DNA/|cut -d '.' -f 1)"
     for D in $DNA_DRIVERS ; do
 	DRIVER_CONFIG="/etc/pf_ring/dna-$D.conf"
