@@ -1,4 +1,5 @@
 #! /bin/sh
 
-/sbin/rmmod pfring
+/etc/init.d/pf_ring stop
+
 exit 0
