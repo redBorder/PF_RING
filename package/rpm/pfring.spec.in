@@ -26,6 +26,7 @@ mkdir -p $RPM_BUILD_ROOT/usr/local/lib
 mkdir -p $RPM_BUILD_ROOT/usr/local/pfring/drivers/DNA
 mkdir -p $RPM_BUILD_ROOT/usr/local/bin
 mkdir -p $RPM_BUILD_ROOT/etc/init.d
+mkdir -p $RPM_BUILD_ROOT/etc/init
 # Kernel module
 cp $HOME/PF_RING/kernel/pf_ring.ko $RPM_BUILD_ROOT/usr/local/pfring/kernel
 cp $HOME/PF_RING/kernel/linux/pf_ring.h $RPM_BUILD_ROOT/usr/local/include/linux/
@@ -39,6 +40,7 @@ cp $HOME/PF_RING/userland/libpcap/libpcap.a    $RPM_BUILD_ROOT/usr/local/lib
 cp $HOME/PF_RING/userland/examples/pfcount     $RPM_BUILD_ROOT/usr/local/bin
 cp $HOME/PF_RING/userland/examples/pfsend      $RPM_BUILD_ROOT/usr/local/bin
 cp $HOME/PF_RING/package/etc/init.d/pf_ring    $RPM_BUILD_ROOT/etc/init.d
+cp $HOME/PF_RING/package/etc/init/pf_ring.conf $RPM_BUILD_ROOT/etc/init
 # DNA
 mkdir -p $RPM_BUILD_ROOT/usr/local/lib/daq
 #cp $HOME/PF_RING/userland/snort/pfring-daq-module/.libs/daq_pfring.la $RPM_BUILD_ROOT/usr/local/lib/daq
@@ -84,6 +86,7 @@ rm -fr $RPM_BUILD_ROOT
 /usr/local/pfring/README.FIRST
 /usr/local/pfring/README-DAQ.1st
 /etc/init.d/pf_ring
+/etc/init/pf_ring.conf
 
 # Set the default attributes of all of the files specified to have an
 # owner and group of root and to inherit the permissions of the file

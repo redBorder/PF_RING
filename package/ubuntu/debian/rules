@@ -42,6 +42,7 @@ binary-arch: build install
 # Install sources
 	cp -r ./debian/usr ./debian/lib ../etc ./debian/tmp/
 	-find ./debian/tmp -name "\.svn" -type d -exec /bin/rm -rf {} ';'
+	-find ./debian/tmp -name "*~" -type d -exec /bin/rm -rf {} ';'
 	dh_link
 	dh_strip
 	dh_compress
