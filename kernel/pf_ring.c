@@ -5174,6 +5174,7 @@ static void free_extra_dma_memory(struct dma_memory_info *dma_memory)
 static struct dna_cluster* dna_cluster_create(u_int32_t dna_cluster_id, u_int32_t num_slots,
                                               u_int32_t num_slaves, u_int32_t slave_mem_len,
 					      u_int32_t master_persistent_mem_len, socket_mode mode,
+					      u_int32_t options, char *hugepages_dir,
                                               struct device *hwdev, u_int32_t slot_len, u_int32_t chunk_len,
 					      u_int32_t *recovered)
 {
@@ -5221,12 +5222,14 @@ static struct dna_cluster* dna_cluster_create(u_int32_t dna_cluster_id, u_int32_
     dnac->id = dna_cluster_id;
     dnac->num_slaves = num_slaves;
     dnac->mode = mode;
+    dnac->options = options;
+    memcpy(dnac->hugepages_dir, hugepages_dir, DNA_CLUSTER_MAX_HP_DIR_LEN);
 
     dnac->master = 0;
     for (i = 0; i < dnac->num_slaves; i++)
       dnac->active_slaves[i] = 0;
 
-    if(num_slots > 0) {
+    if(!(dnac->options & DNA_CLUSTER_OPT_HUGEPAGES)) {
       if((dnac->extra_dma_memory = allocate_extra_dma_memory(hwdev, num_slots, slot_len, chunk_len)) == NULL) {
         kfree(dnac);
         dnac = NULL;
@@ -5242,16 +5245,18 @@ static struct dna_cluster* dna_cluster_create(u_int32_t dna_cluster_id, u_int32_
       }
     }
 
-    if(num_slaves > 0) {
+    if(num_slaves > 0 /* when using direct forwarding num_slaves could also be 0 */) {
       dnac->slave_shared_memory_len = PAGE_ALIGN(slave_mem_len);
-      shared_mem_size = dnac->slave_shared_memory_len * num_slaves;
-      if((dnac->shared_memory = allocate_shared_memory(&shared_mem_size)) == NULL) {
-        printk("[PF_RING] %s() ERROR: not enough memory for DNA Cluster shared memory\n", __FUNCTION__);
-	if(num_slots > 0)
-          free_extra_dma_memory(dnac->extra_dma_memory);
-        kfree(dnac);
-        dnac = NULL;
-        goto unlock;
+      if (!(dnac->options & DNA_CLUSTER_OPT_HUGEPAGES)) {
+        shared_mem_size = dnac->slave_shared_memory_len * num_slaves;
+        if((dnac->shared_memory = allocate_shared_memory(&shared_mem_size)) == NULL) {
+          printk("[PF_RING] %s() ERROR: not enough memory for DNA Cluster shared memory\n", __FUNCTION__);
+	  if(!(dnac->options & DNA_CLUSTER_OPT_HUGEPAGES))
+            free_extra_dma_memory(dnac->extra_dma_memory);
+          kfree(dnac);
+          dnac = NULL;
+          goto unlock;
+        }
       }
     }
 
@@ -5259,8 +5264,9 @@ static struct dna_cluster* dna_cluster_create(u_int32_t dna_cluster_id, u_int32_
     shared_mem_size = dnac->master_persistent_memory_len;
     if((dnac->master_persistent_memory = allocate_shared_memory(&shared_mem_size)) == NULL) {
       printk("[PF_RING] %s() ERROR: not enough memory for DNA Cluster persistent memory\n", __FUNCTION__);
-      vfree(dnac->shared_memory);
-      if(num_slots > 0)
+      if (dnac->shared_memory != NULL)
+        vfree(dnac->shared_memory);
+      if(!(dnac->options & DNA_CLUSTER_OPT_HUGEPAGES))
         free_extra_dma_memory(dnac->extra_dma_memory);
       kfree(dnac);
       dnac = NULL;
@@ -5284,8 +5290,8 @@ static struct dna_cluster* dna_cluster_create(u_int32_t dna_cluster_id, u_int32_
 	|| (num_slaves > 0 && dnac->slave_shared_memory_len != PAGE_ALIGN(slave_mem_len))
 	|| dnac->master_persistent_memory_len != PAGE_ALIGN(master_persistent_mem_len)
 	|| dnac->mode != mode
-        || (num_slots  > 0 && (!dnac->extra_dma_memory || dnac->extra_dma_memory->num_slots != num_slots))
-	|| (num_slots == 0 && dnac->extra_dma_memory && dnac->extra_dma_memory->num_slots > 0)) {
+        || (!(dnac->options & DNA_CLUSTER_OPT_HUGEPAGES) && (!dnac->extra_dma_memory || dnac->extra_dma_memory->num_slots != num_slots))
+	|| ((dnac->options & DNA_CLUSTER_OPT_HUGEPAGES)  &&   dnac->extra_dma_memory && dnac->extra_dma_memory->num_slots > 0)) {
       dnac = NULL;
       goto unlock;
     }
@@ -5355,7 +5361,8 @@ static void dna_cluster_remove(struct dna_cluster *dnac, dna_cluster_client_type
 }
 
 static struct dna_cluster* dna_cluster_attach(u_int32_t dna_cluster_id, u_int32_t *slave_id, u_int32_t auto_slave_id,
-                                              wait_queue_head_t *slave_waitqueue, u_int32_t *mode)
+                                              wait_queue_head_t *slave_waitqueue, u_int32_t *mode, u_int32_t *options,
+					      u_int32_t *slave_mem_len, char *hugepages_dir)
 {
   struct list_head *ptr, *tmp_ptr;
   struct dna_cluster *entry;
@@ -5407,7 +5414,11 @@ static struct dna_cluster* dna_cluster_attach(u_int32_t dna_cluster_id, u_int32_
       }
 
       dnac->slave_waitqueue[*slave_id] = slave_waitqueue;
+
       *mode = dnac->mode;
+      *options = dnac->options;
+      *slave_mem_len = dnac->slave_shared_memory_len;
+      memcpy(hugepages_dir, dnac->hugepages_dir, DNA_CLUSTER_MAX_HP_DIR_LEN);
 
       break;
     }
@@ -5799,7 +5810,7 @@ unsigned long kvirt_to_pa(unsigned long adr)
 
 /* ************************************* */
 
-static int do_memory_mmap(struct vm_area_struct *vma, unsigned long size,
+static int do_memory_mmap(struct vm_area_struct *vma, unsigned long start_off, unsigned long size,
                           char *ptr, u_int ptr_pg_off, u_int flags, int mode)
 {
   unsigned long start;
@@ -5807,7 +5818,7 @@ static int do_memory_mmap(struct vm_area_struct *vma, unsigned long size,
   /* we do not want to have this area swapped out, lock it */
   vma->vm_flags |= flags;
 
-  start = vma->vm_start;
+  start = vma->vm_start + start_off;
 
   if(unlikely(enable_debug))
     printk("[PF_RING] %s(mode=%d, size=%lu, ptr=%p)\n", __FUNCTION__, mode, size, ptr);
@@ -5854,7 +5865,7 @@ static int ring_mmap(struct file *file,
 {
   struct sock *sk = sock->sk;
   struct pf_ring_socket *pfr = ring_sk(sk);
-  int rc;
+  int i, rc;
   unsigned long mem_id = vma->vm_pgoff; /* using vm_pgoff as memory id */
   unsigned long size = (unsigned long)(vma->vm_end - vma->vm_start);
 
@@ -5880,7 +5891,7 @@ static int ring_mmap(struct file *file,
       if(mem_id < pfr->dna_device->mem_info.rx.packet_memory_num_chunks) {
         /* DNA: RX packet memory */
 
-        if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->rx_packet_memory[mem_id], 0, VM_LOCKED, 1)) < 0)
+        if((rc = do_memory_mmap(vma, 0, size, (void *)pfr->dna_device->rx_packet_memory[mem_id], 0, VM_LOCKED, 1)) < 0)
           return(rc);
 
 	return(0);
@@ -5890,7 +5901,7 @@ static int ring_mmap(struct file *file,
 
         mem_id -= pfr->dna_device->mem_info.rx.packet_memory_num_chunks;
 
-        if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->tx_packet_memory[mem_id], 0, VM_LOCKED, 1)) < 0)
+        if((rc = do_memory_mmap(vma, 0, size, (void *)pfr->dna_device->tx_packet_memory[mem_id], 0, VM_LOCKED, 1)) < 0)
           return(rc);
 
 	return(0);
@@ -5905,7 +5916,7 @@ static int ring_mmap(struct file *file,
         if(pfr->extra_dma_memory->virtual_addr == NULL)
           return(-EINVAL);
 
-        if((rc = do_memory_mmap(vma, size, (void *)pfr->extra_dma_memory->virtual_addr[mem_id], 0, VM_LOCKED, 1)) < 0)
+        if((rc = do_memory_mmap(vma, 0, size, (void *)pfr->extra_dma_memory->virtual_addr[mem_id], 0, VM_LOCKED, 1)) < 0)
           return(rc);
 
 	return(0);
@@ -5922,14 +5933,25 @@ static int ring_mmap(struct file *file,
           mem_id -= pfr->extra_dma_memory->num_chunks;
       }
 
+      if (pfr->dna_cluster->options & DNA_CLUSTER_OPT_HUGEPAGES)
+        return(-EINVAL);
+
       if(pfr->dna_cluster->extra_dma_memory == NULL || pfr->dna_cluster->extra_dma_memory->virtual_addr == NULL)
         return(-EINVAL);
 
       if(mem_id >= pfr->dna_cluster->extra_dma_memory->num_chunks)
         return(-EINVAL);
 
-      if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_cluster->extra_dma_memory->virtual_addr[mem_id], 0, VM_LOCKED, 1)) < 0)
+      if (size < pfr->dna_cluster->extra_dma_memory->num_chunks * pfr->dna_cluster->extra_dma_memory->chunk_len)
+        return(-EINVAL);
+
+      for (i = 0; i < pfr->dna_cluster->extra_dma_memory->num_chunks; i++) {
+        if((rc = do_memory_mmap(vma, i * pfr->dna_cluster->extra_dma_memory->chunk_len, 
+	                        pfr->dna_cluster->extra_dma_memory->chunk_len, 
+				(void *)pfr->dna_cluster->extra_dma_memory->virtual_addr[i], 
+				0, VM_LOCKED, 1)) < 0)
         return(rc);
+      }
 
       return(0);
     }
@@ -5964,7 +5986,7 @@ static int ring_mmap(struct file *file,
         printk("[PF_RING] mmap [slot_len=%d][tot_slots=%d] for ring on device %s\n",
 	       pfr->slots_info->slot_len, pfr->slots_info->min_num_slots, pfr->ring_netdev->dev->name);
 
-      if((rc = do_memory_mmap(vma, size, pfr->ring_memory, 0, VM_LOCKED, 0)) < 0)
+      if((rc = do_memory_mmap(vma, 0, size, pfr->ring_memory, 0, VM_LOCKED, 0)) < 0)
         return(rc);
 
       break;
@@ -5976,7 +5998,7 @@ static int ring_mmap(struct file *file,
         return(-EINVAL);
       }
 
-      if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->rx_descr_packet_memory, 0, VM_LOCKED, 1)) < 0)
+      if((rc = do_memory_mmap(vma, 0, size, (void *)pfr->dna_device->rx_descr_packet_memory, 0, VM_LOCKED, 1)) < 0)
 	return(rc);
 
       break;
@@ -5988,7 +6010,7 @@ static int ring_mmap(struct file *file,
         return(-EINVAL);
       }
 
-      if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->phys_card_memory, 0, (VM_RESERVED | VM_IO), 2)) < 0)
+      if((rc = do_memory_mmap(vma, 0, size, (void *)pfr->dna_device->phys_card_memory, 0, (VM_RESERVED | VM_IO), 2)) < 0)
 	return(rc);
 
       break;
@@ -6000,7 +6022,7 @@ static int ring_mmap(struct file *file,
         return(-EINVAL);
       }
 
-      if((rc = do_memory_mmap(vma, size, (void *)pfr->dna_device->tx_descr_packet_memory, 0, VM_LOCKED, 1)) < 0)
+      if((rc = do_memory_mmap(vma, 0, size, (void *)pfr->dna_device->tx_descr_packet_memory, 0, VM_LOCKED, 1)) < 0)
 	return(rc);
 
       break;
@@ -6012,6 +6034,12 @@ static int ring_mmap(struct file *file,
         return(-EINVAL);
       }
 
+      if (pfr->dna_cluster->options & DNA_CLUSTER_OPT_HUGEPAGES) {
+        if(unlikely(enable_debug))
+	  printk("[PF_RING] %s() failed: trying to allocate kernel memory when using hugepages", __FUNCTION__);
+        return(-EINVAL);
+      }
+
       if(size > (pfr->dna_cluster->slave_shared_memory_len * pfr->dna_cluster->num_slaves)) {
         if(unlikely(enable_debug))
           printk("[PF_RING] %s() failed: area too large [%ld > %d]\n",
@@ -6019,7 +6047,7 @@ static int ring_mmap(struct file *file,
         return(-EINVAL);
       }
 
-      if((rc = do_memory_mmap(vma, size, pfr->dna_cluster->shared_memory, 0, VM_LOCKED, 0)) < 0)
+      if((rc = do_memory_mmap(vma, 0, size, pfr->dna_cluster->shared_memory, 0, VM_LOCKED, 0)) < 0)
         return(rc);
 
       break;
@@ -6031,6 +6059,12 @@ static int ring_mmap(struct file *file,
         return(-EINVAL);
       }
 
+      if (pfr->dna_cluster->options & DNA_CLUSTER_OPT_HUGEPAGES) {
+        if(unlikely(enable_debug))
+	  printk("[PF_RING] %s() failed: trying to allocate kernel memory when using hugepages", __FUNCTION__);
+        return(-EINVAL);
+      }
+
       if(size > pfr->dna_cluster->slave_shared_memory_len) {
         if(unlikely(enable_debug))
           printk("[PF_RING] %s() failed: area too large [%ld > %d]\n",
@@ -6038,7 +6072,7 @@ static int ring_mmap(struct file *file,
         return(-EINVAL);
       }
 
-      if((rc = do_memory_mmap(vma, size, pfr->dna_cluster->shared_memory,
+      if((rc = do_memory_mmap(vma, 0, size, pfr->dna_cluster->shared_memory,
 		 (pfr->dna_cluster->slave_shared_memory_len / PAGE_SIZE) * pfr->dna_cluster_slave_id,
 		 VM_LOCKED, 0)) < 0)
         return(rc);
@@ -6059,7 +6093,7 @@ static int ring_mmap(struct file *file,
         return(-EINVAL);
       }
 
-      if((rc = do_memory_mmap(vma, size, pfr->dna_cluster->master_persistent_memory, 0, VM_LOCKED, 0)) < 0)
+      if((rc = do_memory_mmap(vma, 0, size, pfr->dna_cluster->master_persistent_memory, 0, VM_LOCKED, 0)) < 0)
         return(rc);
 
       break;
@@ -7566,15 +7600,17 @@ static int ring_setsockopt(struct socket *sock,
       if(pfr->dna_device == NULL || pfr->dna_device->hwdev == NULL)
         return(-EINVAL);
 
-      if(optlen < (sizeof(cdnaci) + sizeof(u_int64_t) * cdnaci.num_slots))
-        return(-EINVAL);
+      if (!(cdnaci.options & DNA_CLUSTER_OPT_HUGEPAGES)) {
+        if(optlen < (sizeof(cdnaci) + sizeof(u_int64_t) * cdnaci.num_slots))
+          return(-EINVAL);
+      }
 
       if(pfr->dna_cluster) /* already called */
         return(-EINVAL);
 
       pfr->dna_cluster = dna_cluster_create(cdnaci.cluster_id, cdnaci.num_slots, cdnaci.num_slaves,
                                             cdnaci.slave_mem_len, cdnaci.master_persistent_mem_len,
-					    cdnaci.mode,
+					    cdnaci.mode, cdnaci.options, cdnaci.hugepages_dir, 
 					    pfr->dna_device->hwdev,
                                             pfr->dna_device->mem_info.rx.packet_memory_slot_len,
                                             pfr->dna_device->mem_info.rx.packet_memory_chunk_len,
@@ -7597,7 +7633,7 @@ static int ring_setsockopt(struct socket *sock,
       }
 
       /* copying dma addresses to userspace at the end of the structure */
-      if(cdnaci.num_slots > 0) {
+      if(!(cdnaci.options & DNA_CLUSTER_OPT_HUGEPAGES) && cdnaci.num_slots > 0) {
         if(copy_to_user(optval + sizeof(cdnaci), pfr->dna_cluster->extra_dma_memory->dma_addr,
                         sizeof(u_int64_t) * cdnaci.num_slots)) {
           dna_cluster_remove(pfr->dna_cluster, pfr->dna_cluster_type, 0);
@@ -7621,7 +7657,7 @@ static int ring_setsockopt(struct socket *sock,
 	return(-EFAULT);
 
       pfr->dna_cluster = dna_cluster_attach(adnaci.cluster_id, &adnaci.slave_id, adnaci.auto_slave_id,
-        &pfr->ring_slots_waitqueue, &adnaci.mode);
+        &pfr->ring_slots_waitqueue, &adnaci.mode, &adnaci.options, &adnaci.slave_mem_len, adnaci.hugepages_dir);
 
       if(pfr->dna_cluster == NULL) {
 	if(unlikely(enable_debug))

@@ -808,15 +808,19 @@ typedef struct {
 /* ************************************************* */
 
 #define DNA_CLUSTER_MAX_NUM_SLAVES 32
+#define DNA_CLUSTER_MAX_HP_DIR_LEN 256
+#define DNA_CLUSTER_OPT_HUGEPAGES  1 << 2 /* from pfring_zero.h (TO FIX) */
 
 struct create_dna_cluster_info {
   u_int32_t cluster_id;
   u_int32_t mode; /* socket_mode */
+  u_int32_t options;
   u_int32_t num_slots; /* total number of rx/tx nic/slaves slots */
   u_int32_t num_slaves;
   u_int32_t slave_mem_len; /* per slave shared memory size */
   u_int32_t master_persistent_mem_len;
-  u_int32_t recovered; /* fresh or recovered */ 
+  char      hugepages_dir[DNA_CLUSTER_MAX_HP_DIR_LEN];
+  u_int32_t recovered; /* fresh or recovered */
   u_int64_t dma_addr[];
 };
 
@@ -825,6 +829,9 @@ struct attach_dna_cluster_info {
   u_int32_t slave_id;
   u_int32_t auto_slave_id; /* ask for the next free id (bool) */
   u_int32_t mode; /* socket_mode */
+  u_int32_t options;
+  u_int32_t slave_mem_len;
+  char      hugepages_dir[DNA_CLUSTER_MAX_HP_DIR_LEN];
 };
 
 struct dna_cluster_global_stats {
@@ -978,6 +985,7 @@ struct dna_cluster {
   u_int32_t id;
   u_int32_t num_slaves;
   socket_mode mode;
+  u_int32_t options;
 
   u_int8_t master;
   u_int8_t active_slaves[DNA_CLUSTER_MAX_NUM_SLAVES];
@@ -986,6 +994,8 @@ struct dna_cluster {
 
   u_int32_t slave_shared_memory_len; /* per slave len */
   char *shared_memory;
+
+  char hugepages_dir[DNA_CLUSTER_MAX_HP_DIR_LEN];
 
   u_int32_t master_persistent_memory_len;
   char *master_persistent_memory;
