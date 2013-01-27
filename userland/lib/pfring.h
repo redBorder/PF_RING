@@ -129,7 +129,8 @@ extern "C" {
   /* ********************************* */
   
   struct __pfring {
-    u_int8_t initialized, enabled, long_header, rss_mode, force_timestamp, enable_hw_timestamp;
+    u_int8_t initialized, enabled, long_header, rss_mode;
+    u_int8_t force_timestamp, enable_hw_timestamp;
     packet_direction direction; /* Specify the capture direction for packets */
     socket_mode mode;
 
@@ -144,9 +145,10 @@ extern "C" {
     /* TODO these fields should be moved in ->priv_data */
     /* DNA (Direct NIC Access) */
     struct {
-      u_char dna_mapped_device;    
-      u_int16_t num_rx_pkts_before_dna_sync, num_tx_pkts_before_dna_sync, 
-	dna_rx_sync_watermark, dna_tx_sync_watermark;
+      u_int8_t dna_mapped_device;
+      u_int32_t sampling_counter;
+      u_int16_t num_rx_pkts_before_dna_sync, num_tx_pkts_before_dna_sync; 
+      u_int16_t dna_rx_sync_watermark, dna_tx_sync_watermark;
       u_int64_t tot_dna_read_pkts, tot_dna_lost_pkts;
       u_int32_t rx_reg, tx_reg, last_rx_slot_read;
       u_int32_t num_rx_slots_per_chunk, num_tx_slots_per_chunk;
@@ -255,6 +257,7 @@ extern "C" {
     char *buffer, *slots, *device_name;
     u_int32_t caplen;
     u_int16_t slot_header_len, mtu_len /* 0 = unknown */;
+    u_int32_t sampling_rate;
     u_int8_t kernel_packet_consumer, is_shutting_down, socket_default_accept_policy;
     int fd;
     FlowSlotInfo *slots_info;

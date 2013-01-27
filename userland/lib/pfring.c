@@ -745,8 +745,16 @@ u_int8_t pfring_get_num_rx_channels(pfring *ring) {
 /* **************************************************** */
 
 int pfring_set_sampling_rate(pfring *ring, u_int32_t rate /* 1 = no sampling */) {
-  if(ring && ring->set_sampling_rate)
-    return ring->set_sampling_rate(ring, rate);
+  if(ring && ring->set_sampling_rate) {
+    int rc;
+
+    rc = ring->set_sampling_rate(ring, rate);
+
+    if (rc == 0)
+      ring->sampling_rate = rate;
+      
+    return(rc);
+  }
 
   return(PF_RING_ERROR_NOT_SUPPORTED);
 }

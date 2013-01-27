@@ -130,6 +130,13 @@ void pfring_dna_close(pfring *ring) {
 
 /* **************************************************** */
 
+int pfring_dna_set_sampling_rate(pfring *ring, u_int32_t rate /* 1 = no sampling */) {
+  /* nothing to do here, just returning success */
+  return 0;
+}
+
+/* **************************************************** */
+
 int pfring_dna_stats(pfring *ring, pfring_stat *stats) {
   stats->recv = ring->dna.tot_dna_read_pkts;
   stats->drop = ring->dna.tot_dna_lost_pkts;
@@ -155,6 +162,16 @@ int pfring_dna_recv(pfring *ring, u_char** buffer, u_int buffer_len,
   pkt = ring->dna_next_packet(ring, buffer, buffer_len, hdr);
 
   if(pkt && (hdr->len > 0)) {
+
+    if(unlikely(ring->sampling_rate > 1)) {
+      if (likely(ring->dna.sampling_counter > 0)) {
+        ring->dna.sampling_counter--;
+	goto redo_pfring_recv;
+      } else {
+        ring->dna.sampling_counter = ring->sampling_rate-1;
+      }
+    }
+
     if(buffer_len > 0)
       pfring_parse_pkt(*buffer, hdr, 4, 1, 1);
 
@@ -208,6 +225,7 @@ int pfring_dna_open(pfring *ring) {
   ring->direction = rx_only_direction;
 
   ring->close = pfring_dna_close;
+  ring->set_sampling_rate = pfring_dna_set_sampling_rate;
   ring->stats = pfring_dna_stats;
   ring->recv  = pfring_dna_recv;
   ring->enable_ring = pfring_dna_enable_ring;
