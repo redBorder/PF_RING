@@ -683,11 +683,11 @@ static int dna_igb_clean_rx_irq(struct igb_q_vector *q_vector,
 				  struct igb_ring *rx_ring, int budget) {
   union e1000_adv_rx_desc	*rx_desc;
   u32				staterr;
-  u16				i, last_cleaned_idx;
+  u16				i;
   struct igb_adapter	        *adapter = q_vector->adapter;
   struct e1000_hw		*hw = &adapter->hw;
 
-  last_cleaned_idx  = i = E1000_READ_REG(hw, E1000_RDT(rx_ring->reg_idx));
+  i = E1000_READ_REG(hw, E1000_RDT(rx_ring->reg_idx));
   if(++i == rx_ring->count)
     i = 0;
 
