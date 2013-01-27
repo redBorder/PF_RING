@@ -16,7 +16,7 @@ rmmod pf_ring
 insmod ../../../../kernel/pf_ring.ko
 
 # As many queues as the number of processors
-insmod ./ixgbe.ko RSS=0,0,0,0
+#insmod ./ixgbe.ko RSS=0,0,0,0
 
 # Disable multiqueue
 insmod ./ixgbe.ko RSS=1,1,1,1 
