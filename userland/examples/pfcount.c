@@ -560,7 +560,7 @@ int32_t gmt2local(time_t t) {
 /* *************************************** */
 
 void printHelp(void) {
-  printf("pfcount - (C) 2005-12 ntop.org\n\n");
+  printf("pfcount - (C) 2005-13 ntop.org\n\n");
   printf("-h              Print this help\n");
   printf("-i <device>     Device name. Use:\n"
 	 "                - ethX@Y for channels\n"
@@ -585,6 +585,9 @@ void printHelp(void) {
   printf("-r              Rehash RSS packets\n");
   printf("-s              Enable hw timestamping\n");
   printf("-t              Touch payload (for force packet load on cache)\n");
+#ifdef ENABLE_QAT_PM
+  printf("-x <string>     Search string on payload\n");
+#endif
   printf("-u <1|2>        For each incoming packet add a drop rule (1=hash, 2=wildcard rule)\n");
   printf("-v <mode>       Verbose [1: verbose, 2: very verbose (print packet payload)]\n");
 }
@@ -652,8 +655,10 @@ void* packet_consumer_thread(void* _id) {
 /* *************************************** */
 
 int main(int argc, char* argv[]) {
-  char *device = NULL, c, buf[32], path[256] = { 0 }, 
-    *reflector_device = NULL;
+  char *device = NULL, c, buf[32], path[256] = { 0 }, *reflector_device = NULL;
+#ifdef ENABLE_QAT_PM
+  char *to_search = NULL;
+#endif
   u_char mac_address[6] = { 0 };
   int promisc, snaplen = DEFAULT_SNAPLEN, rc;
   u_int clusterId = 0;
@@ -705,8 +710,11 @@ int main(int argc, char* argv[]) {
   thiszone = gmt2local(0);
 
   while((c = getopt(argc,argv,"hi:c:d:l:v:ae:n:w:p:b:rg:u:mts"
+#ifdef ENABLE_QAT_PM
+		    "x:"
+#endif
 #ifdef ENABLE_BPF
-                              "f:"
+		    "f:"
 #endif
         )) != '?') {
     if((c == 255) || (c == -1)) break;
@@ -787,7 +795,11 @@ int main(int argc, char* argv[]) {
 	break;
       }
 
+#ifdef ENABLE_QAT_PM
+    case 'x':
+      to_search = strdup(optarg);
       break;
+#endif
     }
   }
   
@@ -884,6 +896,16 @@ int main(int argc, char* argv[]) {
         printf("Successfully removed BPF filter '%s'\n", bpfFilter);
 #endif
     }
+  }
+#endif
+
+#ifdef ENABLE_QAT_PM
+  if(to_search != NULL) {
+    rc = pfring_search_payload(pd, to_search);
+    if(rc < 0)
+      printf("pfring_search_payload() returned %d\n", rc);
+    else
+      printf("Successfully added string to search '%s'\n", to_search);  
   }
 #endif
 

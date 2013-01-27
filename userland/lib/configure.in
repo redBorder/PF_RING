@@ -74,6 +74,18 @@ else
   AC_MSG_RESULT(no)
 fi
 
+AC_MSG_CHECKING([Intel QAT])
+LIBQAT=../intel/qat/lib/libqat.a
+if test -f $LIBQAT; then
+   HAVE_QAT="-D ENABLE_QAT_PM -I ../intel/qat/include"
+   QAT_LIB="$LIBQAT"
+  AC_MSG_RESULT(found $LIBQAT)
+else
+  HAVE_QAT=""
+  QAT_LIB=""
+  AC_MSG_RESULT(no $LIBQAT. Please read README.QAT)
+fi
+
 dnl> end of pthread_setaffinity_np check
 fi
 
@@ -148,6 +160,8 @@ AC_SUBST(INSTALL_PREFIX)
 AC_SUBST(SILICOM_LIBS)
 AC_SUBST(HAVE_REDIRECTOR)
 AC_SUBST(HAVE_HW_TIMESTAMP)
+AC_SUBST(HAVE_QAT)
+AC_SUBST(QAT_LIB)
 
 dnl> AC_CONFIG_FILES([Makefile])
 AC_CONFIG_FILES([../examples/Makefile])

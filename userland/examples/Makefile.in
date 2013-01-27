@@ -22,7 +22,7 @@ DNA_DEFINE = #-DENABLE_DNA_SUPPORT
 #
 # PF_RING aware libpcap
 #
-O_FLAG     = -O2 -DHAVE_PF_RING
+O_FLAG     = -O2 -DHAVE_PF_RING @HAVE_QAT@
 EXTRA_LIBS = 
 PCAPDIR    = ../libpcap-1.1.1-ring
 LIBPCAP    = ${PCAPDIR}/libpcap.a  ${EXTRA_LIBS}
@@ -46,7 +46,7 @@ CFLAGS     = @CFLAGS@ ${O_FLAG} -Wall ${INCLUDE} ${DNA_DEFINE} @HAVE_ZERO@ @HAVE
 #
 # User and System libraries
 #
-LIBS       = ${LIBPFRING} @DAG_LIB@ -lpthread @SYSLIBS@ @BPF_LIB@  @SILICOM_LIBS@ -lrt
+LIBS       = ${LIBPFRING} @DAG_LIB@ -lpthread @SYSLIBS@ @BPF_LIB@  @SILICOM_LIBS@ @QAT_LIB@ -lrt
 
 # How to make an object file
 %.o: %.c pfutils.c

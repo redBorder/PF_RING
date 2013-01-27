@@ -46,6 +46,13 @@
 #include <librdi.h>
 #endif
 
+#ifdef ENABLE_QAT_PM
+#include <cpa_types.h>
+#include "cpa_pm.h"
+#include "cpa_pm_compile.h"
+#include "pfring_qat.h"
+#endif
+
 #define MAX_CAPLEN             65535
 #define PAGE_SIZE               4096
 
@@ -253,6 +260,10 @@ extern "C" {
     filtering_mode ft_mode;
     pfring_device_type ft_device_type;
 
+#ifdef ENABLE_QAT_PM
+    QAThandle qat;
+#endif
+
     /* All devices */
     char *buffer, *slots, *device_name;
     u_int32_t caplen;
@@ -384,7 +395,7 @@ extern "C" {
   void pfring_release_pkt_buff(pfring *ring, pfring_pkt_buff *pkt_handle);
   int pfring_recv_pkt_buff(pfring *ring, pfring_pkt_buff *pkt_handle, struct pfring_pkthdr *hdr, u_int8_t wait_for_incoming_packet); /* Note: this function fills the buffer pointed by pkt_handle */
   int pfring_send_pkt_buff(pfring *ring, pfring_pkt_buff *pkt_handle, u_int8_t flush_packet); /* Note: this function reset the buffer pointed by pkt_handle */
-
+  int pfring_search_payload(pfring *ring, char *string_to_search);
   int pfring_register_zerocopy_tx_ring(pfring *ring, pfring *tx_ring);
 
   /* PF_RING Socket bundle */

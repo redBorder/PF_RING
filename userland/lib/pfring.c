@@ -1,6 +1,6 @@
 /*
  *
- * (C) 2005-12 - Luca Deri <deri@ntop.org>
+ * (C) 2005-13 - ntop.org
  *
  *
  * This program is free software; you can redistribute it and/or modify
@@ -20,6 +20,10 @@
 
 #include "pfring.h"
 #include <net/ethernet.h>
+
+#ifdef ENABLE_QAT_PM
+#include "pfring_qat.c"
+#endif
 
 // #define RING_DEBUG
 
@@ -162,6 +166,10 @@ pfring* pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags) 
   if(ring->mtu_len == 0) ring->mtu_len =  9000 /* Jumbo MTU */;
   ring->mtu_len += sizeof(struct ether_header);
 
+#ifdef ENABLE_QAT_PM
+  initQAThandle(&ring->qat);
+#endif
+
   ring->initialized = 1;
 
 #ifdef RING_DEBUG
@@ -254,6 +262,10 @@ void pfring_close(pfring *ring) {
     pthread_rwlock_destroy(&ring->tx_lock);
   }
 
+#ifdef ENABLE_QAT_PM
+  freeHandle(&ring->qat);
+#endif
+
   free(ring->device_name);
   free(ring);
 }
@@ -324,6 +336,16 @@ int pfring_loop(pfring *ring, pfringProcesssPacket looper,
 
   while(!ring->break_recv_loop) {
     rc = ring->recv(ring, &buffer, 0, &hdr, wait_for_packet);
+
+#ifdef ENABLE_QAT_PM
+    if((rc > 0) && (ring->qat.patternId > 1)) {
+      /* We have something to search */
+      
+      if(checkMatch(&ring->qat, (char*)buffer, hdr.caplen) == 0)
+	rc = 0, ring->qat.num_filtered++;
+    }
+#endif
+
     if(rc < 0)
       break;
     else if(rc > 0) {
@@ -480,8 +502,15 @@ void pfring_bundle_close(pfring_bundle *bundle) {
 /* **************************************************** */
 
 int pfring_stats(pfring *ring, pfring_stat *stats) {
-  if(ring && ring->stats)
-    return ring->stats(ring, stats);
+  if(ring && ring->stats) {
+    int rc = ring->stats(ring, stats);
+
+#ifdef ENABLE_QAT_PM
+    stats->drop += ring->qat.num_filtered;
+#endif
+
+    return(rc);
+  }
 
   return(PF_RING_ERROR_NOT_SUPPORTED);
 }
@@ -503,6 +532,15 @@ int pfring_recv(pfring *ring, u_char** buffer, u_int buffer_len,
 
     ring->break_recv_loop = 0;
     rc = ring->recv(ring, buffer, buffer_len, hdr, wait_for_incoming_packet);
+
+#ifdef ENABLE_QAT_PM
+    if((rc > 0) && (ring->qat.patternId > 1)) {
+      /* We have something to search */
+
+      if(checkMatch(&ring->qat, (char*)*buffer, hdr->caplen) == 0)
+	return(0);
+    }
+#endif
 
     if(unlikely(ring->reflector_socket != NULL))
       pfring_send(ring->reflector_socket, (char *) *buffer, hdr->caplen, 0 /* flush */);
@@ -1299,4 +1337,14 @@ int pfring_send_pkt_buff(pfring *ring, pfring_pkt_buff *pkt_handle, u_int8_t flu
 }
 
 /* **************************************************** */
+
+int pfring_search_payload(pfring *ring, char *string_to_search) {
+  if (!ring) return(-1);
+
+#ifdef ENABLE_QAT_PM
+  return(addStringToSearch(&ring->qat, string_to_search));
+#else
+  return(-2);
+#endif
+}
 
