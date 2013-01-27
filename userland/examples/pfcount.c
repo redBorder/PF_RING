@@ -586,7 +586,7 @@ void printHelp(void) {
   printf("-s              Enable hw timestamping\n");
   printf("-t              Touch payload (for force packet load on cache)\n");
 #ifdef ENABLE_QAT_PM
-  printf("-x <string>     Search string on payload\n");
+  printf("-x <string>     Search string on payload. You can specify this option multiple times.\n");
 #endif
   printf("-u <1|2>        For each incoming packet add a drop rule (1=hash, 2=wildcard rule)\n");
   printf("-v <mode>       Verbose [1: verbose, 2: very verbose (print packet payload)]\n");
@@ -654,10 +654,13 @@ void* packet_consumer_thread(void* _id) {
 
 /* *************************************** */
 
+#define MAX_NUM_STRINGS  32
+
 int main(int argc, char* argv[]) {
   char *device = NULL, c, buf[32], path[256] = { 0 }, *reflector_device = NULL;
 #ifdef ENABLE_QAT_PM
-  char *to_search = NULL;
+  char *to_search[MAX_NUM_STRINGS] = { NULL };
+  u_int num_strings_to_search = 0;
 #endif
   u_char mac_address[6] = { 0 };
   int promisc, snaplen = DEFAULT_SNAPLEN, rc;
@@ -797,7 +800,10 @@ int main(int argc, char* argv[]) {
 
 #ifdef ENABLE_QAT_PM
     case 'x':
-      to_search = strdup(optarg);
+      if(num_strings_to_search >= MAX_NUM_STRINGS) {
+	printf("Too many strings specified (-x): maximum %u\n", MAX_NUM_STRINGS);
+      } else
+	to_search[num_strings_to_search++] = strdup(optarg);
       break;
 #endif
     }
@@ -900,12 +906,16 @@ int main(int argc, char* argv[]) {
 #endif
 
 #ifdef ENABLE_QAT_PM
-  if(to_search != NULL) {
-    rc = pfring_search_payload(pd, to_search);
-    if(rc < 0)
-      printf("pfring_search_payload() returned %d\n", rc);
-    else
-      printf("Successfully added string to search '%s'\n", to_search);  
+  if(num_strings_to_search > 0) {
+    int i;
+
+    for(i=0; i<num_strings_to_search; i++) {
+      rc = pfring_search_payload(pd, to_search[i]);
+      if(rc < 0)
+	printf("pfring_search_payload() returned %d\n", rc);
+      else
+	printf("Successfully added string to search '%s'\n", to_search[i]);  
+    }
   }
 #endif
 
