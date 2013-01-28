@@ -137,7 +137,7 @@ extern "C" {
   
   struct __pfring {
     u_int8_t initialized, enabled, long_header, rss_mode;
-    u_int8_t force_timestamp, enable_hw_timestamp;
+    u_int8_t force_timestamp, enable_hw_timestamp, hw_timestamp_len;
     packet_direction direction; /* Specify the capture direction for packets */
     socket_mode mode;
 
