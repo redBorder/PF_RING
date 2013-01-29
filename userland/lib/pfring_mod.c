@@ -353,7 +353,7 @@ int pfring_mod_bind(pfring *ring, char *device_name) {
       }
     }
 
-    pfring_enable_hw_timestamp(ring, elem, ring->enable_hw_timestamp ? 1 : 0, 0 /* TX timestamp disabled by default */);
+    pfring_enable_hw_timestamp(ring, elem, ring->hw_ts.enable_hw_timestamp ? 1 : 0, 0 /* TX timestamp disabled by default */);
 
     elem = strtok(NULL, ";,");
   }

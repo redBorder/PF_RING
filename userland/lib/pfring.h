@@ -136,11 +136,15 @@ extern "C" {
   /* ********************************* */
   
   struct __pfring {
-    u_int8_t initialized, enabled, long_header, rss_mode;
-    u_int8_t force_timestamp, enable_hw_timestamp;
-    u_int8_t hw_timestamp_len;
+    u_int8_t initialized, enabled, long_header, rss_mode, force_timestamp;
     packet_direction direction; /* Specify the capture direction for packets */
     socket_mode mode;
+
+    /* Hardware Timestamp */
+    struct {
+      u_int8_t force_timestamp, is_silicom_hw_timestamp_card, enable_hw_timestamp;
+      u_int32_t last_hw_timestamp_sec;
+    } hw_ts;
 
     struct {
       u_int8_t enabled_rx_packet_send;

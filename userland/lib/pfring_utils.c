@@ -52,8 +52,7 @@ int pfring_enable_hw_timestamp(pfring* ring, char *device_name, u_int8_t enable_
     rc = 0;
 
 #ifdef RING_DEBUG
-  printf("pfring_enable_hw_timestamp(%s) returned %d\n",
-	 device_name, rc);
+  printf("pfring_enable_hw_timestamp(%s) returned %d\n", device_name, rc);
 #endif
 
   close(sock_fd);
