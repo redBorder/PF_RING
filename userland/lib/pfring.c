@@ -350,7 +350,9 @@ int pfring_loop(pfring *ring, pfringProcesssPacket looper,
       /* We have something to search */
       
 	if(checkMatch(qat, (char*)buffer, hdr.caplen) == 0)
-	  rc = 0, qat->num_filtered++;
+	  rc = 0;
+	else
+	  qat->num_filtered++;
       }
     }
 #endif
@@ -515,7 +517,7 @@ int pfring_stats(pfring *ring, pfring_stat *stats) {
     int rc = ring->stats(ring, stats);
 
 #ifdef ENABLE_QAT_PM
-    stats->drop += ((QAThandle*)ring->qat)->num_filtered;
+    stats->droppedbyfilter += ((QAThandle*)ring->qat)->num_filtered;
 #endif
 
     return(rc);
