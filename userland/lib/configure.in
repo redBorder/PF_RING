@@ -91,18 +91,22 @@ fi
 
 AC_CHECK_HEADERS([librdi.h])
 
-dnl> Silicom Redirector NIC
-if test "x$ac_cv_header_librdi_h" = x""yes; then :
-   AC_CHECK_LIB( [rdi], [rdi_init])
+dnl> Silicom Redirector NIC - Default enabled
+AC_ARG_ENABLE([rdi], AS_HELP_STRING([--disable-rdi], [Disable Silicom Redirector support in PF_RING]))
 
-   AC_MSG_CHECKING([Silicom Redirector support])
-   if test "x$ac_cv_lib_rdi_rdi_init" = x""yes; then :
+if test "x$enable_rdi" != "xno"; then :
+  if test "x$ac_cv_header_librdi_h" = x""yes; then :
+    AC_CHECK_LIB( [rdi], [rdi_init])
+
+    AC_MSG_CHECKING([Silicom Redirector support])
+    if test "x$ac_cv_lib_rdi_rdi_init" = x""yes; then :
       HAVE_REDIRECTOR="-D HAVE_REDIRECTOR"
       SILICOM_LIBS="-lrdi"
       AC_MSG_RESULT(yes)
-   else
+    else
       AC_MSG_RESULT(no)
-   fi
+    fi
+  fi
 fi
 
 AC_CHECK_LIB( [nl], [nl_handle_alloc], [SYSLIBS="$SYSLIBS -lnl"])
