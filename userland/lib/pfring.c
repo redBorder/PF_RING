@@ -1352,9 +1352,13 @@ int pfring_send_pkt_buff(pfring *ring, pfring_pkt_buff *pkt_handle, u_int8_t flu
 /* **************************************************** */
 
 int pfring_search_payload(pfring *ring, char *string_to_search) {
-  if ((!ring) || (!ring->qat)) return(-1);
-
+  if (!ring)
+    return(-1);
+    
 #ifdef ENABLE_QAT_PM  
+  if (!ring->qat)
+    return(-1);
+
   return(addStringToSearch((QAThandle*)ring->qat, string_to_search));
 #else
   return(-2);
