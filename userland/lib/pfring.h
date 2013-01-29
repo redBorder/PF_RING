@@ -259,10 +259,7 @@ extern "C" {
 
     filtering_mode ft_mode;
     pfring_device_type ft_device_type;
-
-#ifdef ENABLE_QAT_PM
-    QAThandle qat;
-#endif
+    void *qat; /* Intel QAT PM */
 
     /* All devices */
     char *buffer, *slots, *device_name;

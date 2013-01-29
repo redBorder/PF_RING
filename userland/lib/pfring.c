@@ -167,7 +167,11 @@ pfring* pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags) 
   ring->mtu_len += sizeof(struct ether_header);
 
 #ifdef ENABLE_QAT_PM
-  initQAThandle(&ring->qat);
+  ring->qat = (QAThandle*)malloc(sizeof(QAThandle));
+  if(ring->qat == NULL) {
+    printf("[PF_RING] Not enough mempory for QAT\n");
+  } else
+    initQAThandle((QAThandle*)ring->qat);
 #endif
 
   ring->initialized = 1;
@@ -263,7 +267,8 @@ void pfring_close(pfring *ring) {
   }
 
 #ifdef ENABLE_QAT_PM
-  freeHandle(&ring->qat);
+  if(ring->qat)
+    freeHandle((QAThandle*)ring->qat);
 #endif
 
   free(ring->device_name);
@@ -338,11 +343,15 @@ int pfring_loop(pfring *ring, pfringProcesssPacket looper,
     rc = ring->recv(ring, &buffer, 0, &hdr, wait_for_packet);
 
 #ifdef ENABLE_QAT_PM
-    if((rc > 0) && (ring->qat.patternId > 1)) {
+    if((rc > 0) && (ring->qat != NULL)) {
+      QAThandle *qat = (QAThandle*)ring->qat;
+
+      if(qat->patternId > 1) {
       /* We have something to search */
       
-      if(checkMatch(&ring->qat, (char*)buffer, hdr.caplen) == 0)
-	rc = 0, ring->qat.num_filtered++;
+	if(checkMatch(qat, (char*)buffer, hdr.caplen) == 0)
+	  rc = 0, qat->num_filtered++;
+      }
     }
 #endif
 
@@ -506,7 +515,7 @@ int pfring_stats(pfring *ring, pfring_stat *stats) {
     int rc = ring->stats(ring, stats);
 
 #ifdef ENABLE_QAT_PM
-    stats->drop += ring->qat.num_filtered;
+    stats->drop += ((QAThandle*)ring->qat)->num_filtered;
 #endif
 
     return(rc);
@@ -534,11 +543,15 @@ int pfring_recv(pfring *ring, u_char** buffer, u_int buffer_len,
     rc = ring->recv(ring, buffer, buffer_len, hdr, wait_for_incoming_packet);
 
 #ifdef ENABLE_QAT_PM
-    if((rc > 0) && (ring->qat.patternId > 1)) {
-      /* We have something to search */
+    if((rc > 0) && (ring->qat != NULL)) {
+      QAThandle *qat = (QAThandle*)ring->qat;
 
-      if(checkMatch(&ring->qat, (char*)*buffer, hdr->caplen) == 0)
-	return(0);
+      if(qat->patternId > 1) {
+      /* We have something to search */
+	
+	if(checkMatch(qat, (char*)*buffer, hdr->caplen) == 0)
+	  return(0);
+      }
     }
 #endif
 
@@ -1339,10 +1352,10 @@ int pfring_send_pkt_buff(pfring *ring, pfring_pkt_buff *pkt_handle, u_int8_t flu
 /* **************************************************** */
 
 int pfring_search_payload(pfring *ring, char *string_to_search) {
-  if (!ring) return(-1);
+  if ((!ring) || (!ring->qat)) return(-1);
 
-#ifdef ENABLE_QAT_PM
-  return(addStringToSearch(&ring->qat, string_to_search));
+#ifdef ENABLE_QAT_PM  
+  return(addStringToSearch((QAThandle*)ring->qat, string_to_search));
 #else
   return(-2);
 #endif
