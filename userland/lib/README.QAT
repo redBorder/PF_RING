@@ -1,7 +1,7 @@
 If you want to use Intel QAT PM with PF_RING do
 cd ..
 svn co https://svn.ntop.org/svn/ntop/trunk/intel/
-cd intel/qat/
+cd intel/qat
 make
 cd ../../lib
 
