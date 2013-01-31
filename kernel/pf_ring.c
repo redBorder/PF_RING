@@ -4278,8 +4278,7 @@ static int skb_ring_handler(struct sk_buff *skb,
      could receive the packet: if none just stop here */
 
   if(ring_table_size == 0) {
-    /* if(unlikely(enable_debug)) printk("[PF_RING] (0) %s(): returned %d\n", __FUNCTION__, rc); */
-    return(rc);
+    return(0);
   }
 
   // prefetch(skb->data);
@@ -4305,8 +4304,7 @@ static int skb_ring_handler(struct sk_buff *skb,
      && (skb->dev
 	 && (skb->dev->ifindex < MAX_NUM_IFIDX)
 	 && (num_rings_per_device[skb->dev->ifindex] == 0))) {
-    /* if(unlikely(enable_debug)) printk("[PF_RING] (1) %s(): returned %d\n", __FUNCTION__, rc); */
-    return(rc);
+    return(0);
   }
 
 #ifdef PROFILING
@@ -4326,9 +4324,6 @@ static int skb_ring_handler(struct sk_buff *skb,
       but we decided not to handle transmitted
       packets.
     */
-    rc = 0;
-
-    if(unlikely(enable_debug)) printk("[PF_RING] (2) %s(): returned %d\n", __FUNCTION__, rc);
     return(0);
   }
 
@@ -4388,8 +4383,6 @@ static int skb_ring_handler(struct sk_buff *skb,
 	skb = skk = defrag_skb(skb, displ, &hdr, &defragmented_skb);
 
 	if(skb == NULL) {
-	  rc = 0;
-	  if(unlikely(enable_debug)) printk("[PF_RING] (3) %s(): returned %d\n", __FUNCTION__, rc);
 	  return(0);
 	}
       }
