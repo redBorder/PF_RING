@@ -3854,12 +3854,12 @@ static int add_skb_to_ring(struct sk_buff *skb,
   pfr->num_rx_channels = num_rx_channels; /* Constantly updated */
   hdr->extended_hdr.parsed_pkt.last_matched_rule_id = (u_int16_t)-1;
 
-  atomic_set(&pfr->num_ring_users, 1);
+  atomic_inc(&pfr->num_ring_users);
 
   /* [1] BPF Filtering */
   if(pfr->bpfFilter != NULL) {
     if(bpf_filter_skb(skb, pfr, displ) == 0) {
-      atomic_set(&pfr->num_ring_users, 0);
+      atomic_dec(&pfr->num_ring_users);
       return(-1);
     }
   }
@@ -3933,7 +3933,7 @@ static int add_skb_to_ring(struct sk_buff *skb,
 	if(free_parse_mem)
 	  free_parse_memory(parse_memory_buffer);
 
-	atomic_set(&pfr->num_ring_users, 0);
+	atomic_dec(&pfr->num_ring_users);
 	return(-1);
       }
 
@@ -3976,7 +3976,7 @@ static int add_skb_to_ring(struct sk_buff *skb,
   if(unlikely(enable_debug))
     printk("[PF_RING] %s() returned %d\n", __FUNCTION__, rc);
 
-  atomic_set(&pfr->num_ring_users, 0);
+  atomic_dec(&pfr->num_ring_users);
   return(rc);
 }
 
