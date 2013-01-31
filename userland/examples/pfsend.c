@@ -97,6 +97,43 @@ int if_index = -1;
 #define DEFAULT_DEVICE     "eth0"
 
 /* *************************************** */
+
+int is_fd_ready(int fd) {
+  struct timeval timeout = {0};
+  fd_set fdset;
+  FD_ZERO(&fdset);
+  FD_SET(fd, &fdset);
+  return (select(fd+1, &fdset, NULL, NULL, &timeout) == 1);
+}
+
+int read_packet_hex(u_char *buf, int buf_len) {
+  int i = 0, d, bytes = 0;
+  char c;
+  char s[3] = {0};
+
+  if (!is_fd_ready(fileno(stdin)))
+    return 0;
+
+  while ((d = fgetc(stdin)) != EOF) {
+    if (d < 0) break;
+    c = (u_char) d;
+    if ((c >= '0' && c <= '9') 
+     || (c >= 'a' && c <= 'f')
+     || (c >= 'A' && c <= 'F')) {
+      s[i&0x1] = c;
+      if (i&0x1) {
+        bytes = (i+1)/2;
+        sscanf(s, "%2hhx", &buf[bytes-1]);
+	if (bytes == buf_len) break;
+      }
+      i++;
+    }
+  }
+
+  return bytes;
+}
+
+/* *************************************** */
 /*
  * The time difference in millisecond
  */
@@ -248,7 +285,7 @@ static u_int32_t wrapsum (u_int32_t sum) {
 
 /* ******************************************* */
 
-static void forge_udp_packet(char *buffer, u_int idx) {
+static void forge_udp_packet(u_char *buffer, u_int idx) {
   int i;
   struct ip_header *ip_header;
   struct udp_header *udp_header;
@@ -304,7 +341,7 @@ int main(int argc, char* argv[]) {
   int i, verbose = 0, active_poll = 0, disable_zero_copy = 0;
   int use_zero_copy_tx = 0;
   u_int mac_a, mac_b, mac_c, mac_d, mac_e, mac_f;
-  char buffer[9000];
+  u_char buffer[9000];
   u_int32_t num_to_send = 0;
   int bind_core = -1;
   u_int16_t cpu_percentage = 0;
@@ -508,10 +545,17 @@ int main(int argc, char* argv[]) {
     }
   } else {
     struct packet *p = NULL, *last = NULL;
+    int stdin_packet_len;
+
+    if ((stdin_packet_len = read_packet_hex(buffer, sizeof(buffer))) > 0) {
+      send_len = stdin_packet_len;
+    }
 
     for (i = 0; i < num_balanced_pkts; i++) {
-
-      forge_udp_packet(buffer, i);
+     
+      if (stdin_packet_len <= 0)
+        forge_udp_packet(buffer, i);
+      /* TODO else: reforge IP only */
 
       p = (struct packet *) malloc(sizeof(struct packet));
       if(p) {
