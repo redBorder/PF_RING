@@ -215,12 +215,11 @@ void sigproc(int sig) {
 /* *************************************** */
 
 void printHelp(void) {
-  printf("pfsend - (C) 2011 Deri Luca <deri@ntop.org>\n\n");
-
+  printf("pfsend - (C) 2011 Deri Luca <deri@ntop.org>\n");
+  printf("Replay synthetic traffic, or a pcap, or a packet in hex format from standard input.\n\n"); 
   printf("pfsend -i out_dev [-a] [-f <.pcap file>] [-g <core_id>] [-h]\n"
          "       [-l <length>] [-n <num>][-r <rate>] [-m <dst MAC>]\n"
 	 "       [-w <TX watermark>] [-v]\n\n");
-
   printf("-a              Active send retry\n");
 #if 0
   printf("-b <cpu %%>      CPU pergentage priority (0-99)\n");
