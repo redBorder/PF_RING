@@ -136,14 +136,14 @@ extern "C" {
   /* ********************************* */
   
   struct __pfring {
-    u_int8_t initialized, enabled, long_header, rss_mode, force_timestamp;
+    u_int8_t initialized, enabled, long_header, rss_mode, force_timestamp, strip_hw_timestamp;
     packet_direction direction; /* Specify the capture direction for packets */
     socket_mode mode;
 
     /* Hardware Timestamp */
     struct {
       u_int8_t force_timestamp, is_silicom_hw_timestamp_card, enable_hw_timestamp;
-      u_int32_t last_hw_timestamp_sec;
+      u_int32_t last_hw_timestamp_sec, last_hw_timestamp_nsec;
     } hw_ts;
 
     struct {
@@ -288,14 +288,15 @@ extern "C" {
 
   /* ********************************* */
 
-  #define PF_RING_DNA_SYMMETRIC_RSS 1 << 0
-  #define PF_RING_REENTRANT         1 << 1
-  #define PF_RING_LONG_HEADER       1 << 2
-  #define PF_RING_PROMISC           1 << 3
-  #define PF_RING_TIMESTAMP         1 << 4
-  #define PF_RING_HW_TIMESTAMP      1 << 5
-  #define PF_RING_RX_PACKET_BOUNCE  1 << 6
-  #define PF_RING_DNA_FIXED_RSS_Q_0 1 << 7
+  #define PF_RING_DNA_SYMMETRIC_RSS    1 << 0
+  #define PF_RING_REENTRANT            1 << 1
+  #define PF_RING_LONG_HEADER          1 << 2
+  #define PF_RING_PROMISC              1 << 3
+  #define PF_RING_TIMESTAMP            1 << 4
+  #define PF_RING_HW_TIMESTAMP         1 << 5
+  #define PF_RING_RX_PACKET_BOUNCE     1 << 6
+  #define PF_RING_DNA_FIXED_RSS_Q_0    1 << 7
+  #define PF_RING_STRIP_HW_TIMESTAMP   1 << 8
 
   /* ********************************* */
 

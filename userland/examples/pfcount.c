@@ -74,7 +74,7 @@ u_int8_t userspace_bpf = 0;
 #endif
 
 u_int8_t wait_for_packet = 1, do_shutdown = 0, add_drop_rule = 0;
-u_int8_t use_extended_pkt_header = 0, touch_payload = 0, enable_hw_timestamp = 0;
+u_int8_t use_extended_pkt_header = 0, touch_payload = 0, enable_hw_timestamp = 0, dont_strip_timestamps = 0;
 
 /* *************************************** */
 /*
@@ -584,6 +584,7 @@ void printHelp(void) {
   printf("-m              Long packet header (with PF_RING extensions)\n");
   printf("-r              Rehash RSS packets\n");
   printf("-s              Enable hw timestamping\n");
+  printf("-S              Do not strip hw timestamps (if present)\n");
   printf("-t              Touch payload (for force packet load on cache)\n");
 #ifdef ENABLE_QAT_PM
   printf("-x <string>     Search string on payload. You can specify this option multiple times.\n");
@@ -712,7 +713,7 @@ int main(int argc, char* argv[]) {
   startTime.tv_sec = 0;
   thiszone = gmt2local(0);
 
-  while((c = getopt(argc,argv,"hi:c:d:l:v:ae:n:w:p:b:rg:u:mts"
+  while((c = getopt(argc,argv,"hi:c:d:l:v:ae:n:w:p:b:rg:u:mtsS"
 #ifdef ENABLE_QAT_PM
 		    "x:"
 #endif
@@ -783,6 +784,9 @@ int main(int argc, char* argv[]) {
     case 's':
       enable_hw_timestamp = 1;
       break;
+    case 'S':
+      dont_strip_timestamps = 1;
+      break;
     case 'g':
       bind_core = atoi(optarg);
       break;
@@ -828,6 +832,7 @@ int main(int argc, char* argv[]) {
   if(use_extended_pkt_header) flags |= PF_RING_LONG_HEADER;
   if(promisc)                 flags |= PF_RING_PROMISC;
   if(enable_hw_timestamp)     flags |= PF_RING_HW_TIMESTAMP;
+  if(!dont_strip_timestamps)  flags |= PF_RING_STRIP_HW_TIMESTAMP;
   flags |= PF_RING_DNA_SYMMETRIC_RSS;  /* Note that symmetric RSS is ignored by non-DNA drivers */
 
   pd = pfring_open(device, snaplen, flags);

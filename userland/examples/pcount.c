@@ -288,6 +288,14 @@ void dummyProcesssPacket(u_char *_deviceId,
 
   if(numPkts == 0) gettimeofday(&startTime, NULL);
   numPkts++, numBytes += h->len;
+
+  if(verbose == 2) {
+      int i;
+
+      for(i = 0; i < h->caplen; i++)
+        printf("%02X ", p[i]);
+      printf("\n");
+  }
  }
 
 /* *************************************** */
@@ -324,12 +332,13 @@ void printHelp(void) {
   char errbuf[PCAP_ERRBUF_SIZE];
   pcap_if_t *devpointer;
 
-  printf("pcount\n(C) 2003-12 Deri Luca <deri@ntop.org>\n");
+  printf("pcount\n(C) 2003-13 Deri Luca <deri@ntop.org>\n");
   printf("-h              [Print help]\n");
   printf("-i <device>     [Device name]\n");
   printf("-f <filter>     [pcap filter]\n");
   printf("-l <len>        [Capture length]\n");
-  printf("-v              [Verbose]\n");
+  printf("-S              [Do not strip hw timestamps (if present)]\n");
+  printf("-v <mode>       [Verbose [1: verbose, 2: very verbose (print packet payload)]]\n");
 
   if(pcap_findalldevs(&devpointer, errbuf) == 0) {
     int i = 0;
@@ -349,6 +358,7 @@ int main(int argc, char* argv[]) {
   char errbuf[PCAP_ERRBUF_SIZE];
   int promisc, snaplen = DEFAULT_SNAPLEN;;
   struct bpf_program fcode;
+  u_int8_t dont_strip_hw_ts = 0;
 
 #if 0
   struct sched_param schedparam;
@@ -388,7 +398,7 @@ int main(int argc, char* argv[]) {
   startTime.tv_sec = 0;
   thiszone = gmt2local(0);
 
-  while((c = getopt(argc,argv,"hi:l:vf:")) != '?') {
+  while((c = getopt(argc,argv,"hi:l:v:f:S")) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -403,10 +413,13 @@ int main(int argc, char* argv[]) {
       snaplen = atoi(optarg);
       break;
     case 'v':
-      verbose = 1;
+      verbose = atoi(optarg);
       break;
     case 'f':
       bpfFilter = strdup(optarg);
+      break;
+    case 'S':
+      dont_strip_hw_ts = 1;
       break;
     }
   }
@@ -417,6 +430,9 @@ int main(int argc, char* argv[]) {
       return(-1);
     }
   }
+
+  if(!dont_strip_hw_ts) setenv("PCAP_PF_RING_STRIP_HW_TIMESTAMP", "1", 1);
+
   printf("Capturing from %s\n", device);
 
   /* hardcode: promisc=1, to_ms=500 */

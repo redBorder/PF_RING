@@ -49,17 +49,18 @@ void sigproc(int sig) {
 
 void printHelp(void) {
 
-  printf("pcount\n(C) 2003-12 Deri Luca <deri@ntop.org>\n");
+  printf("pwrite\n(C) 2003-13 Deri Luca <deri@ntop.org>\n");
   printf("-h              [Print help]\n");
   printf("-i <device>     [Device name]\n");
   printf("-w <dump file>  [Dump file path]\n");
-  printf("-v              [Verbose]\n");
+  printf("-S              [Do not strip hw timestamps (if present)]\n");
 }
 
 /* *************************************** */
 
 int main(int argc, char* argv[]) {
   char *device = NULL, c;
+  u_int flags = PF_RING_PROMISC, dont_strip_hw_ts = 0;
 
 #if 0  
   struct sched_param schedparam;
@@ -96,7 +97,7 @@ int main(int argc, char* argv[]) {
 #endif
 #endif
 
-  while((c = getopt(argc,argv,"hi:w:v")) != -1) {
+  while((c = getopt(argc,argv,"hi:w:S")) != -1) {
     switch(c) {
     case 'h':
       printHelp();
@@ -112,9 +113,9 @@ int main(int argc, char* argv[]) {
     case 'i':
       device = strdup(optarg);
       break;
-    case 'v':
-      verbose = 1;
-      break;
+    case 'S':
+      dont_strip_hw_ts = 1;
+      break;      
     }
   }
 
@@ -123,7 +124,9 @@ int main(int argc, char* argv[]) {
     return(-1);
   }
 
-  if((pd = pfring_open(device, 1500, PF_RING_PROMISC)) == NULL) {
+  if(!dont_strip_hw_ts) flags |= PF_RING_STRIP_HW_TIMESTAMP;
+
+  if((pd = pfring_open(device, 1520, flags)) == NULL) {
     printf("pfring_open error [%s]\n", strerror(errno));
     return(-1);
   } else

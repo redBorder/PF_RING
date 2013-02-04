@@ -109,6 +109,7 @@ pfring* pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags) 
   ring->rss_mode            = (flags & PF_RING_DNA_SYMMETRIC_RSS) ? PF_RING_DNA_SYMMETRIC_RSS : 0;
   ring->rss_mode            = (flags & PF_RING_DNA_FIXED_RSS_Q_0) ? PF_RING_DNA_FIXED_RSS_Q_0 : 0;
   ring->force_timestamp     = (flags & PF_RING_TIMESTAMP) ? 1 : 0;
+  ring->strip_hw_timestamp  = (flags & PF_RING_STRIP_HW_TIMESTAMP) ? 1 : 0;
   ring->hw_ts.enable_hw_timestamp = (flags & PF_RING_HW_TIMESTAMP) ? 1 : 0;
   ring->tx.enabled_rx_packet_send = (flags & PF_RING_RX_PACKET_BOUNCE) ? 1 : 0;
 

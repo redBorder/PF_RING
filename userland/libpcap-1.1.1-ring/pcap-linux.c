@@ -1168,11 +1168,12 @@ pcap_activate_linux(pcap_t *handle)
 	if(!getenv("PCAP_NO_PF_RING")) {
 	  /* Code courtesy of Chris Wakelin <c.d.wakelin@reading.ac.uk> */
 	  char *clusterId;
-	  int flags = 0;
+	  int flags = PF_RING_TIMESTAMP;
 	  char *appname, *active = getenv("PCAP_PF_RING_ACTIVE_POLL"), *rss_rehash;
 
 	  if(handle->opt.promisc) flags |= PF_RING_PROMISC;
 	  if(getenv("PCAP_PF_RING_DNA_RSS")) flags |= PF_RING_DNA_SYMMETRIC_RSS;
+	  if(getenv("PCAP_PF_RING_STRIP_HW_TIMESTAMP")) flags |= PF_RING_STRIP_HW_TIMESTAMP;
 	  
 	  if(active) pf_ring_active_poll = atoi(active);
 	  handle->ring = pfring_open((char*)device, handle->snapshot, flags);
