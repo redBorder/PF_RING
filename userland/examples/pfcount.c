@@ -439,7 +439,6 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h,
     ehdr = (struct ether_header *) p;
 
     if(use_extended_pkt_header) {
-
       printf("%s[if_index=%d]",
         h->extended_hdr.rx_direction ? "[RX]" : "[TX]",
         h->extended_hdr.if_index);
@@ -835,6 +834,7 @@ int main(int argc, char* argv[]) {
   if(!dont_strip_timestamps)  flags |= PF_RING_STRIP_HW_TIMESTAMP;
   flags |= PF_RING_DNA_SYMMETRIC_RSS;  /* Note that symmetric RSS is ignored by non-DNA drivers */
 
+  //printf("flags: %d\n", flags);
   pd = pfring_open(device, snaplen, flags);
 
   if(pd == NULL) {

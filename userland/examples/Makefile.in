@@ -65,7 +65,7 @@ ifneq (@HAVE_ZERO@,)
 	PFPROGS += pfdnabounce pfdnacluster_master pfdnacluster_multithread pfdnacluster_mt_rss_frwd
 endif
 
-PCAPPROGS = pcount pwrite
+PCAPPROGS = pcount pfwrite
 TARGETS   = ${PFPROGS} ${PCAPPROGS}
 
 RCOBJS    = ringc.o interval.o
@@ -147,8 +147,8 @@ pcount: pcount.o ${LIBPCAP} ${LIBPFRING}
 alldevs: alldevs.o ${LIBPCAP} ${LIBPFRING}
 	${CC} ${CFLAGS} alldevs.o ${LIBPCAP} ${LIBS} -o $@
 
-pwrite: pwrite.o ${LIBPCAP} ${LIBPFRING}
-	${CC} ${CFLAGS} pwrite.o ${LIBPCAP} ${LIBS} -o $@
+pfwrite: pfwrite.o ${LIBPCAP} ${LIBPFRING}
+	${CC} ${CFLAGS} pfwrite.o ${LIBPCAP} ${LIBS} -o $@
 
 pfsystest: pfsystest.o ${LIBPFRING}
 	${CC} ${CFLAGS} pfsystest.o ${LIBS} -o $@
