@@ -1653,13 +1653,13 @@ static int ring_alloc_mem(struct sock *sk)
   else
     pfr->slot_header_len = sizeof(struct pfring_pkthdr);
 
+  the_slot_len = pfr->slot_header_len + pfr->bucket_len;
+
   if(unlikely((UINT_MAX - sizeof(FlowSlotInfo)) / the_slot_len < min_num_slots)) {
     printk("[PF_RING] ERROR: min_num_slots causes memory size to wrap\n");
     return(-1);
   }
   
-  the_slot_len = pfr->slot_header_len + pfr->bucket_len;
-
   tot_mem = sizeof(FlowSlotInfo) + (min_num_slots * the_slot_len);
 
   /* Memory is already zeroed */
