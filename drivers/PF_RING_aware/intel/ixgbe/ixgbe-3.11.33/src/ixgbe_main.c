@@ -1663,7 +1663,7 @@ static int pf_ring_handle_skb(struct ixgbe_q_vector *q_vector, struct sk_buff *s
     if(*hook->transparent_mode != standard_linux_path) {
       u_int8_t skb_reference_in_use;
       int rc = hook->ring_handler(skb, 1, 1, &skb_reference_in_use,
-				  q_vector->rx.ring->queue_index, 
+				  q_vector->rx.ring->queue_index,
 				  q_vector->adapter->num_rx_queues);
 
       if(rc > 0 /* Packet handled by PF_RING */) {
@@ -2146,6 +2146,55 @@ static bool ixgbe_clean_rx_irq(struct ixgbe_q_vector *q_vector,
 
 		cleaned_count++;
 
+#ifdef HAVE_PF_RING
+		if(q_vector->adapter->hw.silicom.has_hw_ts_card) {
+		  unsigned char sil_buf[9];
+		  silicom_ts_t *signature;
+		  u_int num_count = 0, ts_len;
+
+		STRIP_TS:
+		  skb_copy_bits(skb, skb->len - 9, sil_buf, 9);
+		  signature = (silicom_ts_t *)sil_buf;
+
+		  if(0)
+		    printk(KERN_DEBUG "Raw dump: %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
+			   sil_buf[0],sil_buf[1],sil_buf[2],sil_buf[3],sil_buf[4],
+			   sil_buf[5],sil_buf[6],sil_buf[7],sil_buf[8]);
+		  
+		  if (signature->status == 0xC3)
+		    {
+		      ts_len = 9;
+#if(LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22))
+		      skb->tstamp = ktime_set((long)ntohl(signature->sec), (long)ntohl(signature->nsec));
+#else
+		      skb->tstamp.off_sec = ntohl(signature->sec);
+		      skb->tstamp.off_usec = ntohl(signature->nsec) / 1000;
+#endif
+		      q_vector->adapter->hw.silicom.last_9_bytes_ts_sec = signature->sec;
+		    } else if (signature->status == 0xC2) {
+		    ts_len = 5;
+#if(LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22))
+		    skb->tstamp = ktime_set((long)ntohl(q_vector->adapter->hw.silicom.last_9_bytes_ts_sec), (long)ntohl(signature->nsec));
+#else
+		    skb->tstamp.off_sec = ntohl(q_vector->adapter->hw.silicom.last_9_bytes_ts_sec);
+		    skb->tstamp.off_usec = ntohl(signature->nsec) / 1000;
+#endif
+		  } else {
+		    ts_len = 0;
+
+		    if(num_count++ == 0) {
+		      /* printk(KERN_DEBUG "Trying to strip CRC\n"); */
+		      skb->tail -= 4, skb->len -= 4;
+		      goto STRIP_TS;
+		    } else {
+		      /* printk(KERN_DEBUG "There is no Silicom's TS\n"); */
+		      skb->tail += 4, skb->len += 4;
+		    }
+		  }
+
+		  skb->tail -= ts_len, skb->len -= ts_len;
+		}
+#endif
 		/* place incomplete frames back on ring for completion */
 		if (ixgbe_is_non_eop(rx_ring, rx_desc, skb))
 			continue;

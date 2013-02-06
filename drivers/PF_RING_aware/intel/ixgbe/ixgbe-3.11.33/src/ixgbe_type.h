@@ -3222,6 +3222,13 @@ struct ixgbe_hw {
 	int api_version;
 	bool force_full_reset;
 	bool allow_unsupported_sfp;
+
+#ifdef HAVE_PF_RING
+  struct {
+    bool has_hw_ts_card;
+    u32 last_9_bytes_ts_sec;
+  } silicom;
+#endif
 };
 
 #define ixgbe_call_func(hw, func, params, error) \

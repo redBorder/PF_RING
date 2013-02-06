@@ -179,6 +179,13 @@
 		counter |= current_counter;				 \
 	}
 
+#ifdef HAVE_PF_RING
+typedef struct {
+  u32 sec, nsec;
+  u8 status;
+} silicom_ts_t;
+#endif
+
 struct vf_stats {
 	u64 gprc;
 	u64 gorc;
