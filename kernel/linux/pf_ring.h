@@ -713,8 +713,7 @@ typedef struct {
 } mem_ring_info;
 
 typedef enum {
-  dna_v1 = 0,
-  dna_v2
+  dna_v1 = 0
 } dna_version;
 
 typedef struct {
