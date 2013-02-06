@@ -256,7 +256,8 @@ int main(int argc, char* argv[]) {
 	} else if(hdr.extended_hdr.parsed_pkt.eth_type == 0x86DD /* IPv6*/) {
 	  fprintf(dumper_fd, "\t%s:%d",    in6toa(hdr.extended_hdr.parsed_pkt.ipv6_src), hdr.extended_hdr.parsed_pkt.l4_src_port);
 	  fprintf(dumper_fd, "\t%s:%d\n", in6toa(hdr.extended_hdr.parsed_pkt.ipv6_dst), hdr.extended_hdr.parsed_pkt.l4_dst_port);
-	}
+	} else
+	  fprintf(dumper_fd, "\n");
       }
 
       num_pkts++;
