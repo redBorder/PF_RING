@@ -43,6 +43,7 @@
  * - Eric Leblond <eric@regit.org>
  * - Momina Khan <momina.azam@gmail.com>
  * - XTao <xutao881001@gmail.com>
+ * - James Juran <james.juran@mandiant.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -1652,6 +1653,11 @@ static int ring_alloc_mem(struct sock *sk)
   else
     pfr->slot_header_len = sizeof(struct pfring_pkthdr);
 
+  if(unlikely((UINT_MAX - sizeof(FlowSlotInfo)) / the_slot_len < min_num_slots)) {
+    printk("[PF_RING] ERROR: min_num_slots causes memory size to wrap\n");
+    return(-1);
+  }
+  
   the_slot_len = pfr->slot_header_len + pfr->bucket_len;
 
   tot_mem = sizeof(FlowSlotInfo) + (min_num_slots * the_slot_len);
