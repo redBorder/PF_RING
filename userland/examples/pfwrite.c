@@ -156,7 +156,7 @@ inline char* in6toa(struct in6_addr addr6) {
 
 int main(int argc, char* argv[]) {
   char *device = NULL, c, *out_dump = NULL;
-  u_int flags = PF_RING_PROMISC, dont_strip_hw_ts = 0, dump_digest = 0;
+  u_int flags = 0, dont_strip_hw_ts = 0, dump_digest = 0;
   int32_t thiszone;
   u_char *p;
   struct pfring_pkthdr hdr;
@@ -202,9 +202,9 @@ int main(int argc, char* argv[]) {
 
   memset(&hdr, 0, sizeof(hdr));
 
-  flags |= PF_RING_LONG_HEADER;
+  flags = PF_RING_PROMISC;
+  if(dump_digest)       flags |= PF_RING_LONG_HEADER;
   if(!dont_strip_hw_ts) flags |= PF_RING_STRIP_HW_TIMESTAMP;
-  flags |= PF_RING_DNA_SYMMETRIC_RSS;  /* Note that symmetric RSS is ignored by non-DNA drivers */
 
   if((pd = pfring_open(device, 1520, flags)) == NULL) {
     printf("pfring_open error [%s]\n", strerror(errno));
@@ -228,6 +228,11 @@ int main(int argc, char* argv[]) {
 	pcap_dump((u_char*)dumper, (struct pcap_pkthdr*)&hdr, p);
       else {
 	u_int32_t s, usec, nsec;
+
+	if(hdr.ts.tv_sec == 0) {
+	  memset((void*)&hdr.extended_hdr.parsed_pkt, 0, sizeof(struct pkt_parsing_info));
+	  pfring_parse_pkt((u_char*)p, (struct pfring_pkthdr*)&hdr, 5, 1, 1);
+	}
 
 	s = (hdr.ts.tv_sec + thiszone) % 86400;
 
