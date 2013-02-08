@@ -47,6 +47,8 @@
 #define wmb() gcc_mb()
 #endif
 
+#define ALIGN(a,b) (((a) + ((b)-1) ) & ~((b)-1))
+
 #if 0
 unsigned long long rdtsc() {
   unsigned long long a;
@@ -502,6 +504,15 @@ int pfring_mod_recv(pfring *ring, u_char** buffer, u_int buffer_len,
 	bktLen = hdr->caplen + hdr->extended_hdr.parsed_header_len;
 
       real_slot_len = ring->slot_header_len + bktLen;
+
+      /* padding at the end of the packet (it should contain the magic number) */
+      real_slot_len += sizeof(u_int16_t);
+      real_slot_len = ALIGN(real_slot_len, sizeof(u_int64_t));
+
+#if 0
+      printf("Real slot len adjusted to %u (MAGIC=%02X)\n", real_slot_len, bucket[ring->slot_header_len + bktLen]);
+#endif
+
       if(bktLen > buffer_len) bktLen = buffer_len;
 
       if(buffer_len == 0)

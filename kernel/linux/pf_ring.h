@@ -25,7 +25,7 @@
 
 #define RING_MAGIC
 #define RING_MAGIC_VALUE             0x88
-#define RING_FLOWSLOT_VERSION          14 /*
+#define RING_FLOWSLOT_VERSION          15 /*
 					    Increment whenever we change slot or packet header
 					    layout (e.g. we add/move a field
 					  */

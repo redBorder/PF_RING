@@ -655,6 +655,10 @@ static inline int get_next_slot_offset(struct pf_ring_socket *pfr, u_int32_t off
   if(pfr->header_len == long_pkt_header)
     real_slot_size += hdr->extended_hdr.parsed_header_len;
 
+  /* padding at the end of the packet (magic number added on insert) */
+  real_slot_size += sizeof(u_int16_t);
+  real_slot_size = ALIGN(real_slot_size, sizeof(u_int64_t));
+
   if((off + real_slot_size + pfr->slots_info->slot_len) > (pfr->slots_info->tot_mem - sizeof(FlowSlotInfo))) {
     return 0;
   }
@@ -2852,6 +2856,7 @@ static inline int copy_data_to_ring(struct sk_buff *skb,
 
   memcpy(ring_bucket, hdr, pfr->slot_header_len); /* Copy extended packet header */
 
+  memset(&ring_bucket[pfr->slot_header_len + offset + hdr->caplen], RING_MAGIC_VALUE, sizeof(u_int16_t));
   pfr->slots_info->insert_off = get_next_slot_offset(pfr, off);
 
   if(unlikely(enable_debug))
