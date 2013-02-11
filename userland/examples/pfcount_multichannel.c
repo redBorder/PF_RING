@@ -626,8 +626,11 @@ int main(int argc, char* argv[]) {
   printf("Capturing from %s\n", device);
 
   flags |= PF_RING_PROMISC; /* hardcode: promisc=1 */
-//  flags |= PF_RING_DNA_SYMMETRIC_RSS;  /* Note that symmetric RSS is ignored by non-DNA drivers */
+#if 0
   flags |=  PF_RING_DNA_FIXED_RSS_Q_0;
+#else
+  flags |= PF_RING_DNA_SYMMETRIC_RSS;  /* Note that symmetric RSS is ignored by non-DNA drivers */
+#endif
   flags |= PF_RING_LONG_HEADER;
   
   num_channels = pfring_open_multichannel(device, snaplen, flags, ring);
@@ -688,7 +691,7 @@ int main(int argc, char* argv[]) {
         if((rc = pfring_set_poll_watermark(ring[i], watermark)) != 0)
            fprintf(stderr, "pfring_set_poll_watermark returned [rc=%d][watermark=%d]\n", rc, watermark);
      }
-    
+#if 0    
   setup_steering(ring[0], "192.168.30.207", -1);
 
   /* UTDF */
@@ -700,7 +703,7 @@ int main(int argc, char* argv[]) {
   setup_steering(ring[0], "224.0.62.2", 2);
 
   /* default: should go to channel 0 */
-  
+#endif
      if(rehash_rss)
         pfring_enable_rss_rehash(ring[i]);
     
