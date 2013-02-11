@@ -51,7 +51,7 @@
 #define ALARM_SLEEP             1
 #define DEFAULT_SNAPLEN       128
 #define DEFAULT_DEVICE     "eth0"
-#define MAX_NUM_DEVS           16
+#define MAX_NUM_DEVS           64
 //#define VERBOSE_SUPPORT
 
 pfring  *pd[MAX_NUM_DEVS];
