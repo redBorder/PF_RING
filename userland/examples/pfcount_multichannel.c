@@ -96,7 +96,7 @@ void print_stats() {
   int i;
   unsigned long long nBytes = 0, nPkts = 0, pkt_dropped = 0;
   unsigned long long nPktsLast = 0;
-  double pkt_thpt = 0, delta;
+  double pkt_thpt = 0, tot_thpt = 0, delta;
 
   if(startTime.tv_sec == 0) {
     gettimeofday(&startTime, NULL);
@@ -129,13 +129,13 @@ void print_stats() {
 	
 	diff = numPkts[i]-lastPkts[i];
 	nPktsLast += diff;
+	tot_thpt += thpt;
 	pps = ((double)diff/(double)(delta/1000));
 	fprintf(stderr, "=========================\n"
 		"Actual Stats: [channel=%d][%llu pkts][%.1f ms][%.1f pkt/sec]\n",
 		i, (long long unsigned int)diff, delta, pps);
 	pkt_thpt += pps;
       }
-
 
       lastPkts[i] = numPkts[i];
     }
@@ -144,8 +144,8 @@ void print_stats() {
   lastTime.tv_sec = endTime.tv_sec, lastTime.tv_usec = endTime.tv_usec;
 
   fprintf(stderr, "=========================\n");
-  fprintf(stderr, "Aggregate stats (all channels): [%.1f pkt/sec][%llu pkts dropped]\n", 
-	  (double)(nPktsLast*1000)/(double)delta, pkt_dropped);
+  fprintf(stderr, "Aggregate stats (all channels): [%.1f pkt/sec][%.2f Mbit/sec][%llu pkts dropped]\n", 
+	  (double)(nPktsLast*1000)/(double)delta, tot_thpt, pkt_dropped);
   fprintf(stderr, "=========================\n\n");
 }
 
