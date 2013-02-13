@@ -4622,8 +4622,7 @@ static int packet_rcv(struct sk_buff *skb, struct net_device *dev,
 /* ********************************** */
 
 void register_device_handler(void) {
-  if(transparent_mode == driver2pf_ring_non_transparent
-     || (transparent_mode == driver2pf_ring_transparent && !enable_tx_capture))
+  if(transparent_mode != standard_linux_path && !enable_tx_capture)
     return;
 
   prot_hook.func = packet_rcv;
@@ -4634,8 +4633,7 @@ void register_device_handler(void) {
 /* ********************************** */
 
 void unregister_device_handler(void) {
-   if(transparent_mode == driver2pf_ring_non_transparent
-     || (transparent_mode == driver2pf_ring_transparent && !enable_tx_capture))
+  if(transparent_mode != standard_linux_path && !enable_tx_capture)
     return;
 
   dev_remove_pack(&prot_hook); /* Remove protocol hook */
