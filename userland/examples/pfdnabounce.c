@@ -69,6 +69,8 @@ struct dir_info {
 };
 struct dir_info dir_stats[2];
 
+u_int8_t handle_ts_card = 0;
+
 /* *************************************** */
 /*
  * The time difference in millisecond
@@ -232,6 +234,26 @@ void printHelp(void) {
 int dummyProcessPacketZero(u_int16_t pkt_len, u_char *pkt, const u_char *user_bytes, u_int8_t direction) {
   struct dir_info *di;
 
+  if(unlikely(handle_ts_card)) {
+    u_int8_t ts_len;
+
+    switch(pkt[pkt_len-1]) {
+    case 0xC3:
+      ts_len = 9;
+      break;
+      
+    case 0xC2:
+      ts_len = 5;
+      break;
+
+    default:
+      ts_len = 0;
+    }
+
+    // printf("ts_len: %u\n", ts_len);
+    pkt_len -= ts_len;
+  }
+
   if (bidirectional == 2)
     di = (struct dir_info *) user_bytes;
   else
@@ -337,7 +359,7 @@ int main(int argc, char* argv[]) {
   numCPU = sysconf( _SC_NPROCESSORS_ONLN );
   startTime.tv_sec = 0;
 
-  while((c = getopt(argc,argv,"hai:o:m:b:c:g:fp")) != -1) {
+  while((c = getopt(argc,argv,"hai:o:m:b:c:g:fpt")) != -1) {
     switch(c) {
     case 'h':
       printHelp();      
@@ -369,6 +391,9 @@ int main(int argc, char* argv[]) {
     case 'p':
       print_interface_stats = 1;
       break;
+    case 't':
+      handle_ts_card = 1;
+      break;
     }
   }
 
@@ -382,6 +407,8 @@ int main(int argc, char* argv[]) {
   if (mode == 1 && cluster_id < 0) printHelp();
 
   printf("Bouncing packets from %s to %s (%s)\n", in_dev, out_dev, bidirectional ? "two-way" : "one-way");
+
+  if(handle_ts_card) printf("Stripping timestamp before bouncing packets\n");
 
   if(bind_mask != NULL) {
     char *id;
