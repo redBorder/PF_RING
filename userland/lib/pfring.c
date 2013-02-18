@@ -124,7 +124,32 @@ pfring* pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags) 
 
     while (pfring_module_list[++i].name) {
       char *str1;
+#ifdef HAVE_DNA
+      u_int8_t is_dna = 0;
+      if(!strcmp(pfring_module_list[i].name, "dna")) { 
+        /* DNA module: check proc for renamed interfaces */
+        FILE *proc_net_pfr;
+	char line[256];
+        snprintf(line, sizeof(line), "/proc/net/pf_ring/dev/%s/info", device_name);
+	proc_net_pfr = fopen(line, "r");
+	if(proc_net_pfr != NULL) {
+	  const char *str_mode = "Polling Mode:";
+	  while(fgets(line, sizeof(line), proc_net_pfr) != NULL) {
+	    char *p = &line[0];
+	    if (!strncmp(p, str_mode, strlen(str_mode))) {
+	      p += strlen(str_mode);
+	      while (*p != '\0' && *p == ' ') p++;
+	      if(!strncmp(p, "DNA", strlen("DNA"))) {
+                is_dna = 1;
+		break;
+	      }
+	    }
+	  }
+	}
+      }
 
+      if (!is_dna) /* if already recognized as dna do not check module prefix */
+#endif
       if(!(str = strstr(device_name, pfring_module_list[i].name))) continue;
       if(!pfring_module_list[i].open)                              continue;
 
