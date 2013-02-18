@@ -87,7 +87,7 @@ pfring* pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags) 
   int i = -1;
   int mod_found = 0;
   int ret;
-  char *str;
+  char *str, *str1;
   pfring *ring;
 
 #ifdef RING_DEBUG
@@ -123,7 +123,7 @@ pfring* pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags) 
     ring->device_name = NULL;
 
     while (pfring_module_list[++i].name) {
-      char *str1;
+      str = str1 = NULL;
 #ifdef HAVE_DNA
       u_int8_t is_dna = 0;
       if(!strcmp(pfring_module_list[i].name, "dna")) { 
@@ -138,11 +138,8 @@ pfring* pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags) 
 	    char *p = &line[0];
 	    if (!strncmp(p, str_mode, strlen(str_mode))) {
 	      p += strlen(str_mode);
-	      while (*p != '\0' && *p == ' ') p++;
-	      if(!strncmp(p, "DNA", strlen("DNA"))) {
-                is_dna = 1;
-		break;
-	      }
+              is_dna = (strstr(p, "DNA") != NULL);
+              break;
 	    }
 	  }
 	}
@@ -152,15 +149,17 @@ pfring* pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags) 
 #endif
       if(!(str = strstr(device_name, pfring_module_list[i].name))) continue;
       if(!pfring_module_list[i].open)                              continue;
-
-      str1 = strchr(str, ':');
-
+      mod_found = 1;
 #ifdef RING_DEBUG
       printf("pfring_open: found module %s\n", pfring_module_list[i].name);
 #endif
 
-      mod_found = 1;
-      ring->device_name = str1 ? strdup(++str1) : strdup(device_name);
+      if (str != NULL) {
+        str1 = strchr(str, ':');
+	if (str1 != NULL) str1++;
+      }
+
+      ring->device_name = str1 ? strdup(str1) : strdup(device_name);
       ret = pfring_module_list[i].open(ring);
       break;
     }
