@@ -3216,6 +3216,12 @@ struct ixgbe_hw {
 	bool adapter_stopped;
 	bool force_full_reset;
 	bool allow_unsupported_sfp;
+
+#ifdef ENABLE_DNA
+  struct {
+    bool has_hw_ts_card;
+  } silicom;
+#endif
 };
 
 #define ixgbe_call_func(hw, func, params, error) \

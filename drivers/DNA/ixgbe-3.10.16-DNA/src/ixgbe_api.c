@@ -44,6 +44,16 @@ s32 ixgbe_init_shared_code(struct ixgbe_hw *hw)
 {
 	s32 status;
 
+#ifdef ENABLE_DNA
+	if((hw->subsystem_vendor_id == 0x1374)  /* Silicom subvendor id */
+	   && (hw->subsystem_device_id == 0x0F00))
+	  hw->silicom.has_hw_ts_card = 1; /* Silicom Hw Timestamping card found */
+	else
+	  hw->silicom.has_hw_ts_card = 0;
+
+	/* printk("[DNA] Silicom TS Card: %d\n", hw->silic_ts_card); */
+#endif
+
 	/*
 	 * Set the mac type
 	 */

@@ -701,7 +701,8 @@ typedef enum {
   intel_ixgbe_82598,
   intel_ixgbe_82599,
   intel_igb_82580,
-  intel_e1000
+  intel_e1000,
+  intel_ixgbe_82599_ts
 } dna_device_model;
 
 typedef struct {
@@ -793,7 +794,7 @@ struct add_to_cluster {
 
 typedef enum {
   standard_nic_family = 0, /* No Hw Filtering */
-  intel_82599_family,
+  intel_82599_family
 } pfring_device_type;
 
 typedef struct {

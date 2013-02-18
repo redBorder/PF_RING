@@ -984,6 +984,9 @@ static int ring_proc_dev_get_info(char *buf, char **start, off_t offset,
       case intel_ixgbe_82599:
 	dev_family = "Intel ixgbe 82599"; break;
 	break;
+      case intel_ixgbe_82599_ts:
+	dev_family = "Silicom ixgbe 82599 HW TS"; break;
+	break;
       }
     } else {
       switch(dev_ptr->device_type) {
@@ -4751,8 +4754,8 @@ static int ring_proc_virtual_filtering_dev_get_info(char *buf, char **start, off
     char *dev_family = "???";
 
     switch(info->device_type) {
-    case standard_nic_family: dev_family = "Standard NIC"; break;
-    case intel_82599_family:  dev_family = "Intel 82599"; break;
+    case standard_nic_family:    dev_family = "Standard NIC"; break;
+    case intel_82599_family:     dev_family = "Intel 82599"; break;
     }
 
     rlen =  sprintf(buf,      "Name:              %s\n", info->device_name);
