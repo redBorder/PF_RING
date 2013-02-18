@@ -231,27 +231,18 @@ void printHelp(void) {
 
 /* *************************************** */
 
-int dummyProcessPacketZero(u_int16_t pkt_len, u_char *pkt, const u_char *user_bytes, u_int8_t direction) {
+int dummyProcessPacketZero(u_int32_t *pkt_len, u_char *pkt, const u_char *user_bytes, u_int8_t direction) {
   struct dir_info *di;
+  u_int32_t len = *pkt_len;
 
   if(unlikely(handle_ts_card)) {
-    u_int8_t ts_len;
-
-    switch(pkt[pkt_len-1]) {
-    case 0xC3:
-      ts_len = 9;
-      break;
-      
-    case 0xC2:
-      ts_len = 5;
-      break;
-
-    default:
-      ts_len = 0;
+    u_int8_t ts_len = 0;
+    switch(pkt[len-1]) {
+      case 0xC3: ts_len = 9; break;
+      case 0xC2: ts_len = 5; break;
     }
-
     // printf("ts_len: %u\n", ts_len);
-    pkt_len -= ts_len;
+    len -= ts_len;
   }
 
   if (bidirectional == 2)
@@ -272,8 +263,9 @@ int dummyProcessPacketZero(u_int16_t pkt_len, u_char *pkt, const u_char *user_by
 #endif
 
   di->numPkts++;
-  di->numBytes += pkt_len + 24 /* 8 Preamble + 4 CRC + 12 IFG */;
+  di->numBytes += len + 24 /* 8 Preamble + 4 CRC + 12 IFG */;
 
+  *pkt_len = len;
   return DNA_BOUNCER_PASS;
 }
 
