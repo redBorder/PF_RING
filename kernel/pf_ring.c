@@ -973,7 +973,7 @@ static int ring_proc_dev_get_info(char *buf, char **start, off_t offset,
 	dev_family = "Intel igb"; break;
 	break;
       case intel_igb_82580:
-	dev_family = "Intel igb 82580"; break;
+	dev_family = "Intel igb 82580/i350 HW TS"; break;
 	break;
       case intel_ixgbe:
 	dev_family = "Intel ixgbe"; break;
