@@ -3778,7 +3778,11 @@ static void e1000_setup_rctl(struct e1000_adapter *adapter)
 	 * per packet.
 	 */
 	pages = PAGE_USE_COUNT(adapter->netdev->mtu);
-	if ((pages <= 3) && (PAGE_SIZE <= 16384) && (rctl & E1000_RCTL_LPE))
+	if ((pages <= 3) && (PAGE_SIZE <= 16384) && (rctl & E1000_RCTL_LPE)
+#ifdef ENABLE_DNA /* packet split is not supported with DNA */
+            && !adapter->dna.dna_enabled
+#endif
+           )
 		adapter->rx_ps_pages = pages;
 	else
 		adapter->rx_ps_pages = 0;
@@ -3845,7 +3849,11 @@ static void e1000_configure_rx(struct e1000_adapter *adapter)
 		adapter->clean_rx = e1000_clean_rx_irq_ps;
 		adapter->alloc_rx_buf = e1000_alloc_rx_buffers_ps;
 #ifdef CONFIG_E1000E_NAPI
-	} else if (adapter->netdev->mtu > ETH_FRAME_LEN + ETH_FCS_LEN) {
+	} else if (adapter->netdev->mtu > ETH_FRAME_LEN + ETH_FCS_LEN
+#ifdef ENABLE_DNA
+                   && !adapter->dna.dna_enabled
+#endif
+                   ) {
 		rdlen = rx_ring->count * sizeof(union e1000_rx_desc_extended);
 		adapter->clean_rx = e1000_clean_jumbo_rx_irq;
 		adapter->alloc_rx_buf = e1000_alloc_jumbo_rx_buffers;
@@ -4587,6 +4595,24 @@ static int __devinit e1000_sw_init(struct e1000_adapter *adapter)
 	struct net_device *netdev = adapter->netdev;
 	s32 rc;
 
+#ifdef ENABLE_DNA
+	if(    mtu != netdev->mtu
+	   &&  mtu >= ETH_ZLEN + ETH_FCS_LEN + VLAN_HLEN
+	   && (mtu + ETH_HLEN + ETH_FCS_LEN) <= adapter->max_hw_frame_size) {
+		int max_frame = mtu + ETH_HLEN + ETH_FCS_LEN;
+
+	        netdev->mtu = mtu;
+
+		if (max_frame <= 2048)
+			adapter->rx_buffer_len = 2048; 
+		else if (max_frame <= 4096)                                                
+			adapter->rx_buffer_len = 4096; 
+		else if (max_frame <= 8192)
+			adapter->rx_buffer_len = 8192;
+		else if (max_frame <= 16384)
+			adapter->rx_buffer_len = 16384;
+	} else 
+#endif
 	adapter->rx_buffer_len = ETH_FRAME_LEN + VLAN_HLEN + ETH_FCS_LEN;
 	adapter->rx_ps_bsize0 = 128;
 	adapter->max_frame_size = netdev->mtu + ETH_HLEN + ETH_FCS_LEN;
@@ -6345,6 +6371,13 @@ static int e1000_change_mtu(struct net_device *netdev, int new_mtu)
 		e_err("Jumbo Frames not supported on this device when CRC stripping is disabled.\n");
 		return -EINVAL;
 	}
+
+#ifdef ENABLE_DNA
+	if(adapter->dna.dna_enabled) {
+		printk("[DNA] MTU resize is not YET supported on DNA (TODO)\n");
+		return -EINVAL;
+	}
+#endif
 
 	/* 82573 Errata 17 */
 	if (((adapter->hw.mac.type == e1000_82573) ||

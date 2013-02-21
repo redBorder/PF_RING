@@ -31,6 +31,10 @@ static unsigned int enable_debug = 0;
 module_param(enable_debug, uint, 0644);
 MODULE_PARM_DESC(enable_debug, "Set to 1 to enable DNA debug tracing into the syslog");
 
+static unsigned int mtu = 1500;
+module_param(mtu, uint, 0644);
+MODULE_PARM_DESC(mtu, "Change the default Maximum Transmission Unit");
+
 /* Forward */
 static void e1000_irq_enable(struct e1000_adapter *adapter);
 static void e1000_irq_disable(struct e1000_adapter *adapter);
