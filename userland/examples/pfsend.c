@@ -284,7 +284,7 @@ static u_int32_t wrapsum (u_int32_t sum) {
 
 /* ******************************************* */
 
-static void forge_udp_packet(u_char *buffer, u_int idx) {
+static void forge_udp_packet(u_char *buffer, u_int buffer_len, u_int idx) {
   int i;
   struct ip_header *ip_header;
   struct udp_header *udp_header;
@@ -293,7 +293,7 @@ static void forge_udp_packet(u_char *buffer, u_int idx) {
   u_int16_t src_port = 2012, dst_port = 3000;
 
   /* Reset packet */
-  memset(buffer, 0, sizeof(buffer));
+  memset(buffer, 0, buffer_len);
 
   for(i=0; i<12; i++) buffer[i] = i;
   buffer[12] = 0x08, buffer[13] = 0x00; /* IP */
@@ -553,7 +553,7 @@ int main(int argc, char* argv[]) {
     for (i = 0; i < num_balanced_pkts; i++) {
      
       if (stdin_packet_len <= 0)
-        forge_udp_packet(buffer, i);
+        forge_udp_packet(buffer, sizeof(buffer), i);
       /* TODO else: reforge IP only */
 
       p = (struct packet *) malloc(sizeof(struct packet));
