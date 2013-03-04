@@ -226,6 +226,7 @@ void printHelp(void) {
   printf("-f              Flush packets immediately (do not use watermarks)\n");
   printf("-g <core id>    Bind this app to a core (with -b 2 use <core id>:<core id>)\n");
   printf("-a              Active packet wait\n");
+  printf("-p              Print per-interface absolute stats\n");
   exit(0);
 }
 
