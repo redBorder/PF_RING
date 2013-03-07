@@ -117,21 +117,20 @@ void print_stats() {
 
     deltaMillisecStart = delta_time(&endTime, &startTime);
     snprintf(buf, sizeof(buf),
-        "Duration:%s\n"
-        "Packets: %lu\n"
-        "Dropped: %lu\n"
+             "Duration: %s\n"
+             "Packets:  %lu\n"
+             "Dropped:  %lu\n"
 #ifdef ENABLE_BPF
-	"Filtered: %lu\n"
+	     "Filtered: %lu\n"
 #endif
-        "Bytes:   %lu\n",
-        sec2dhms((deltaMillisecStart/1000), timebuf, sizeof(timebuf)),
-        (long unsigned int) pfringStat.recv,
-        (long unsigned int) pfringStat.drop,
+             "Bytes:    %lu\n",
+             sec2dhms((deltaMillisecStart/1000), timebuf, sizeof(timebuf)),
+             (long unsigned int) pfringStat.recv,
+             (long unsigned int) pfringStat.drop,
 #ifdef ENABLE_BPF
-	(long unsigned int) nPktsFiltered,
+	     (long unsigned int) nPktsFiltered,
 #endif
-        (long unsigned int) nBytes
-    );
+             (long unsigned int) nBytes);
     pfring_set_application_stats(pd, buf);
 
     thpt = ((double)8*nBytes)/(deltaMillisec*1000);

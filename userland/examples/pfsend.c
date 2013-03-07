@@ -138,7 +138,8 @@ int read_packet_hex(u_char *buf, int buf_len) {
 void print_stats() {
   double deltaMillisec, currentThpt, avgThpt, currentThptBytes, avgThptBytes;
   struct timeval now;
-  char buf1[64], buf2[64], buf3[64], buf4[64], buf5[64], statsBuf[512];
+  char buf1[64], buf2[64], buf3[64], buf4[64], buf5[64], statsBuf[512], timebuf[128];
+  u_int64_t deltaMillisecStart;
 
   gettimeofday(&now, NULL);
   deltaMillisec = delta_time(&now, &lastTime);
@@ -160,6 +161,15 @@ void print_stats() {
 	   pfring_format_numbers(num_pkt_good_sent, buf5, sizeof(buf5), 1));
   
   fprintf(stdout, "%s\n", statsBuf);
+
+  deltaMillisecStart = delta_time(&now, &startTime);
+  snprintf(statsBuf, sizeof(statsBuf),
+           "Duration:    %s\n"
+           "SentPackets: %lu\n"
+           "SentBytes:   %lu\n",
+           sec2dhms((deltaMillisecStart/1000), timebuf, sizeof(timebuf)),
+           (long unsigned int) num_pkt_good_sent,
+           (long unsigned int) num_bytes_good_sent);
   pfring_set_application_stats(pd, statsBuf);
 
   memcpy(&lastTime, &now, sizeof(now));
