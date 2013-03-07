@@ -134,29 +134,6 @@ int read_packet_hex(u_char *buf, int buf_len) {
 }
 
 /* *************************************** */
-/*
- * The time difference in millisecond
- */
-double delta_time (struct timeval * now,
-		   struct timeval * before) {
-  time_t delta_seconds;
-  time_t delta_microseconds;
-
-  /*
-   * compute delta in second, 1/10's and 1/1000's second units
-   */
-  delta_seconds      = now -> tv_sec  - before -> tv_sec;
-  delta_microseconds = now -> tv_usec - before -> tv_usec;
-
-  if(delta_microseconds < 0) {
-    /* manually carry a one from the seconds field */
-    delta_microseconds += 1000000;  /* 1e6 */
-    -- delta_seconds;
-  }
-  return((double)(delta_seconds * 1000) + (double)delta_microseconds/1000);
-}
-
-/* *************************************** */
 
 void print_stats() {
   double deltaMillisec, currentThpt, avgThpt, currentThptBytes, avgThptBytes;

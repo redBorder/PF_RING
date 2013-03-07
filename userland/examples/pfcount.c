@@ -76,29 +76,6 @@ u_int8_t userspace_bpf = 0;
 u_int8_t wait_for_packet = 1, do_shutdown = 0, add_drop_rule = 0;
 u_int8_t use_extended_pkt_header = 0, touch_payload = 0, enable_hw_timestamp = 0, dont_strip_timestamps = 0;
 
-/* *************************************** */
-/*
- * The time difference in millisecond
- */
-double delta_time (struct timeval * now,
-		   struct timeval * before) {
-  time_t delta_seconds;
-  time_t delta_microseconds;
-
-  /*
-   * compute delta in second, 1/10's and 1/1000's second units
-   */
-  delta_seconds      = now -> tv_sec  - before -> tv_sec;
-  delta_microseconds = now -> tv_usec - before -> tv_usec;
-
-  if(delta_microseconds < 0) {
-    /* manually carry a one from the seconds field */
-    delta_microseconds += 1000000;  /* 1e6 */
-    -- delta_seconds;
-  }
-  return((double)(delta_seconds * 1000) + (double)delta_microseconds/1000);
-}
-
 /* ******************************** */
 
 void print_stats() {
@@ -110,7 +87,8 @@ void print_stats() {
   static u_int64_t lastBytes = 0;
   double diff, bytesDiff;
   static struct timeval lastTime;
-  char buf1[64], buf2[64], buf3[64];
+  char buf[256], buf1[64], buf2[64], buf3[64], timebuf[128];
+  u_int64_t deltaMillisecStart;
 
   if(startTime.tv_sec == 0) {
     gettimeofday(&startTime, NULL);
@@ -136,6 +114,25 @@ void print_stats() {
       nPktsFiltered += numPktsFiltered[i];
 #endif
     }
+
+    deltaMillisecStart = delta_time(&endTime, &startTime);
+    snprintf(buf, sizeof(buf),
+        "Duration:%s\n"
+        "Packets: %lu\n"
+        "Dropped: %lu\n"
+#ifdef ENABLE_BPF
+	"Filtered: %lu\n"
+#endif
+        "Bytes:   %lu\n",
+        sec2dhms((deltaMillisecStart/1000), timebuf, sizeof(timebuf)),
+        (long unsigned int) pfringStat.recv,
+        (long unsigned int) pfringStat.drop,
+#ifdef ENABLE_BPF
+	(long unsigned int) nPktsFiltered,
+#endif
+        (long unsigned int) nBytes
+    );
+    pfring_set_application_stats(pd, buf);
 
     thpt = ((double)8*nBytes)/(deltaMillisec*1000);
 
@@ -166,8 +163,6 @@ void print_stats() {
       fprintf(stderr, "\n");
 
     if(print_all && (lastTime.tv_sec > 0)) {
-      char buf[256];
-
       deltaMillisec = delta_time(&endTime, &lastTime);
       diff = nPkts-lastPkts;
       bytesDiff = nBytes - lastBytes;
@@ -181,7 +176,6 @@ void print_stats() {
 	      pfring_format_numbers(((double)bytesDiff/(double)(deltaMillisec/1000)),  buf3, sizeof(buf3), 1));
 
       fprintf(stderr, "=========================\n%s\n", buf);
-      pfring_set_application_stats(pd, buf);
     }
 
     lastPkts = nPkts, lastBytes = nBytes;

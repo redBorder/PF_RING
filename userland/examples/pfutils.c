@@ -34,6 +34,41 @@
 typedef u_int64_t ticks;
 
 /* *************************************** */
+/*
+ * The time difference in millisecond
+ */
+double delta_time (struct timeval * now,
+		   struct timeval * before) {
+  time_t delta_seconds;
+  time_t delta_microseconds;
+
+  /*
+   * compute delta in second, 1/10's and 1/1000's second units
+   */
+  delta_seconds      = now -> tv_sec  - before -> tv_sec;
+  delta_microseconds = now -> tv_usec - before -> tv_usec;
+
+  if(delta_microseconds < 0) {
+    /* manually carry a one from the seconds field */
+    delta_microseconds += 1000000;  /* 1e6 */
+    -- delta_seconds;
+  }
+  return((double)(delta_seconds * 1000) + (double)delta_microseconds/1000);
+}
+
+/* *************************************** */
+
+static char* sec2dhms(u_int32_t sec, char *buf, u_int buf_len) {
+  snprintf(buf, buf_len, "%u:%02u:%02u:%02u", 
+    (sec / (60 * 60 * 24)), 
+    (sec / (60 * 60)) % 24, 
+    (sec /  60) % 60, 
+    (sec % 60)
+  );
+  return(buf);
+}
+
+/* *************************************** */
 
 /* Bind this thread to a specific core */
 

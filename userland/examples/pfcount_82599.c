@@ -59,29 +59,6 @@ unsigned long long numPkts[MAX_NUM_THREADS] = { 0 }, numBytes[MAX_NUM_THREADS] =
 u_int8_t wait_for_packet = 1, dna_mode = 0, do_shutdown = 0;
 u_int8_t use_extended_pkt_header = 0;
 
-/* *************************************** */
-/*
- * The time difference in millisecond
- */
-double delta_time (struct timeval * now,
-		   struct timeval * before) {
-  time_t delta_seconds;
-  time_t delta_microseconds;
-
-  /*
-   * compute delta in second, 1/10's and 1/1000's second units
-   */
-  delta_seconds      = now -> tv_sec  - before -> tv_sec;
-  delta_microseconds = now -> tv_usec - before -> tv_usec;
-
-  if(delta_microseconds < 0) {
-    /* manually carry a one from the seconds field */
-    delta_microseconds += 1000000;  /* 1e6 */
-    -- delta_seconds;
-  }
-  return((double)(delta_seconds * 1000) + (double)delta_microseconds/1000);
-}
-
 /* ******************************** */
 
 void print_stats() {

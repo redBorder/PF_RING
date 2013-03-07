@@ -60,23 +60,6 @@ socket_mode mode = recv_only_mode;
 
 static struct timeval startTime;
 
-/* *************************************** */
-
-double delta_time (struct timeval * now,
-		   struct timeval * before) {
-  time_t delta_seconds;
-  time_t delta_microseconds;
-
-  delta_seconds      = now -> tv_sec  - before -> tv_sec;
-  delta_microseconds = now -> tv_usec - before -> tv_usec;
-
-  if(delta_microseconds < 0) {
-    delta_microseconds += 1000000;  /* 1e6 */
-    -- delta_seconds;
-  }
-  return((double)(delta_seconds * 1000) + (double)delta_microseconds/1000);
-}
-
 /* ******************************** */
 
 void daemonize() {
