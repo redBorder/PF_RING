@@ -10,11 +10,7 @@
  * (at your option) any later version.
  *
  *
- * This code includes contributions courtesy of
- * - Fedor Sakharov <fedor.sakharov@gmail.com>
- *
  */
-
 
 #include "pfring.h"
 #include "pfring_utils.h"

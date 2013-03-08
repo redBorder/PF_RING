@@ -13,6 +13,8 @@
  * Many thanks to Intel and in particular
  * - Joseph Gasparakis <joseph.gasparakis@intel.com>
  * - James Chapman <james.p.chapman@intel.com>
+ *
+ *
  */
 
 #ifndef _PFRING_QAT_H_

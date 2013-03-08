@@ -9,9 +9,6 @@
  * (at your option) any later version.
  *
  *
- * This code includes contributions courtesy of
- * - Fedor Sakharov <fedor.sakharov@gmail.com>
- *
  */
 
 #define __USE_XOPEN2K
