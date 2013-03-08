@@ -6144,6 +6144,23 @@ static int ring_recvmsg(struct kiocb *iocb, struct socket *sock,
 
 /* ************************************* */
 
+static int pf_ring_inject_packet_to_stack(struct net_device *netdev, struct msghdr *msg, size_t len) {
+  int err = 0;
+  struct sk_buff *skb = __netdev_alloc_skb(netdev, len, GFP_KERNEL);
+  if(skb == NULL) 
+    return -ENOBUFS;
+  err = memcpy_fromiovec(skb_put(skb,len), msg->msg_iov, len);
+  if(err)
+    return err;
+  skb->protocol = eth_type_trans(skb, netdev);
+  err = netif_rx_ni(skb);
+  if (unlikely(enable_debug && err == NET_RX_SUCCESS))
+    printk("[PF_RING] Packet injected into the linux kernel!\n");
+  return err;
+}
+
+/* ************************************* */
+
 /* This code is mostly coming from af_packet.c */
 static int ring_sendmsg(struct kiocb *iocb, struct socket *sock,
 			struct msghdr *msg, size_t len)
@@ -6200,6 +6217,9 @@ static int ring_sendmsg(struct kiocb *iocb, struct socket *sock,
   err = -EMSGSIZE;
   if(len > pfr->ring_netdev->dev->mtu + pfr->ring_netdev->dev->hard_header_len)
     goto out;
+
+  if (0) /* TODO */
+    return pf_ring_inject_packet_to_stack(pfr->ring_netdev->dev, msg, len); 
 
   err = -ENOBUFS;
   skb = sock_wmalloc(sock->sk, len + LL_RESERVED_SPACE(pfr->ring_netdev->dev), 0, GFP_KERNEL);
@@ -6320,7 +6340,7 @@ unsigned int ring_poll(struct file *file,
 
     /* printk("Before [num_queued_pkts(pfr)=%u]\n", num_queued_pkts(pfr)); */
 
-    if(num_queued_pkts(pfr) < pfr->poll_num_pkts_watermark) {
+    if(num_queued_pkts(pfr) < pfr->poll_num_pkts_watermark /* || pfr->num_poll_calls == 1 */) {
       poll_wait(file, &pfr->ring_slots_waitqueue, wait);
       // smp_mb();
     }
