@@ -74,17 +74,17 @@ else
   AC_MSG_RESULT(no)
 fi
 
-dnl> AC_MSG_CHECKING([Intel QAT])
-dnl> LIBQAT=../intel/qat/lib/libqat.a
-dnl> if test -f $LIBQAT; then
-dnl>   HAVE_QAT="-D ENABLE_QAT_PM -I ../intel/qat/include"
-dnl>   QAT_LIB="$LIBQAT"
-dnl>   QAT_OBJS="ac_alg.o CpaPmAPI.o"
-dnl>   QAT_DEP="extract_qat_lib"	
-dnl>   AC_MSG_RESULT(found $LIBQAT)
-dnl> else
-dnl>   AC_MSG_RESULT(no $LIBQAT. Please read README.QAT)
-dnl> fi
+AC_MSG_CHECKING([Intel QAT])
+LIBQAT=../intel/qat/lib/libqat.a
+if test -f $LIBQAT && test -f pfring_qat.c && test -f pfring_qat.h; then
+  HAVE_QAT="-D ENABLE_QAT_PM -I ../intel/qat/include"
+  QAT_LIB="$LIBQAT"
+  QAT_OBJS="ac_alg.o CpaPmAPI.o"
+  QAT_DEP="extract_qat_lib"	
+  AC_MSG_RESULT(found $LIBQAT)
+else
+  AC_MSG_RESULT(no $LIBQAT or no qat module. Please read README.QAT)
+fi
 
 dnl> end of pthread_setaffinity_np check
 fi
@@ -164,10 +164,10 @@ AC_SUBST(INSTALL_PREFIX)
 AC_SUBST(SILICOM_LIBS)
 AC_SUBST(HAVE_REDIRECTOR)
 AC_SUBST(HAVE_HW_TIMESTAMP)
-dnl> AC_SUBST(HAVE_QAT)
-dnl> AC_SUBST(QAT_LIB)
-dnl> AC_SUBST(QAT_OBJS)
-dnl> AC_SUBST(QAT_DEP)
+AC_SUBST(HAVE_QAT)
+AC_SUBST(QAT_LIB)
+AC_SUBST(QAT_OBJS)
+AC_SUBST(QAT_DEP)
 
 dnl> AC_CONFIG_FILES([Makefile])
 AC_CONFIG_FILES([../examples/Makefile])
