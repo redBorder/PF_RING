@@ -41,7 +41,7 @@ QAT_OBJS  = @QAT_OBJS@
 #
 # Object files
 #
-OBJS      = pfring.o pfring_mod.o pfring_utils.o pfring_mod_usring.o pfring_hw_filtering.o ${ZERO_OBJS} ${DNA_OBJS} ${VIRTUAL_OBJS} ${DAG_OBJS} ${QAT_OBJS}
+OBJS      = pfring.o pfring_mod.o pfring_utils.o pfring_mod_stack.o pfring_mod_usring.o pfring_hw_filtering.o ${ZERO_OBJS} ${DNA_OBJS} ${VIRTUAL_OBJS} ${DAG_OBJS} ${QAT_OBJS}
 
 #
 # C compiler and flags

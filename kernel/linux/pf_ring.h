@@ -81,6 +81,7 @@
 #define SO_ENABLE_RX_PACKET_BOUNCE       131
 #define SO_SEND_MSG_TO_PLUGIN            132 /* send user msg to plugin */
 #define SO_SET_APPL_STATS                133
+#define SO_SET_STACK_INJECTION_MODE      134 /* stack injection/interception from userspace */
 
 /* Get */
 #define SO_GET_RING_VERSION              170
@@ -1042,6 +1043,7 @@ struct pf_ring_socket {
   packet_direction direction; /* Specify the capture direction for packets */
   socket_mode mode; /* Specify the link direction to enable (RX, TX, both) */
   pkt_header_len header_len;
+  u_int8_t stack_injection_mode;
 
   /* /proc */
   char sock_proc_name[64];       /* /proc/net/pf_ring/<sock_proc_name>             */

@@ -6218,8 +6218,10 @@ static int ring_sendmsg(struct kiocb *iocb, struct socket *sock,
   if(len > pfr->ring_netdev->dev->mtu + pfr->ring_netdev->dev->hard_header_len)
     goto out;
 
-  if (0) /* TODO */
-    return pf_ring_inject_packet_to_stack(pfr->ring_netdev->dev, msg, len); 
+  if (pfr->stack_injection_mode) {
+    err = pf_ring_inject_packet_to_stack(pfr->ring_netdev->dev, msg, len); 
+    goto out;
+  }
 
   err = -ENOBUFS;
   skb = sock_wmalloc(sock->sk, len + LL_RESERVED_SPACE(pfr->ring_netdev->dev), 0, GFP_KERNEL);
@@ -7780,6 +7782,12 @@ static int ring_setsockopt(struct socket *sock,
       return(-EFAULT);
 
     ret = setSocketStats(pfr, statsString);
+    found = 1;
+    break;
+
+  case SO_SET_STACK_INJECTION_MODE:
+    pfr->stack_injection_mode = 1; 
+    found = 1;
     break;
 
   default:

@@ -27,7 +27,7 @@
 /* ********************************* */
 
 #include "pfring_mod.h"
-
+#include "pfring_mod_stack.h"
 #include "pfring_mod_usring.h"
 
 #ifdef HAVE_DAG
@@ -46,6 +46,10 @@ static pfring_module_info pfring_module_list[] = {
   { /* usually you don't need to specify this */
     .name = "default",
     .open = pfring_mod_open,
+  },
+  {
+    .name = "stack",
+    .open = pfring_mod_stack_open,
   },
 #ifdef HAVE_VIRTUAL
   { /* vPF_RING (guest-side) */
@@ -123,7 +127,7 @@ pfring* pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags) 
       str = str1 = NULL;
 #ifdef HAVE_DNA
       u_int8_t is_dna = 0;
-      if(!strcmp(pfring_module_list[i].name, "dna")) { 
+      if(strcmp(pfring_module_list[i].name, "dna") == 0) { 
         /* DNA module: check proc for renamed interfaces */
         FILE *proc_net_pfr;
 	char line[256];
