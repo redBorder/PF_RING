@@ -136,7 +136,7 @@ int read_packet_hex(u_char *buf, int buf_len) {
 /* *************************************** */
 
 void print_stats() {
-  double deltaMillisec, currentThpt, avgThpt, currentThptBytes, avgThptBytes;
+  double deltaMillisec, currentThpt, avgThpt, currentThptBits, currentThptBytes, avgThptBits, avgThptBytes;
   struct timeval now;
   char buf1[64], buf2[64], buf3[64], buf4[64], buf5[64], statsBuf[512], timebuf[128];
   u_int64_t deltaMillisecStart;
@@ -145,31 +145,35 @@ void print_stats() {
   deltaMillisec = delta_time(&now, &lastTime);
   currentThpt = (double)((num_pkt_good_sent-last_num_pkt_good_sent) * 1000)/deltaMillisec;
   currentThptBytes = (double)((num_bytes_good_sent-last_num_bytes_good_sent) * 1000)/deltaMillisec;
-  currentThptBytes /= (1000*1000*1000)/8;
+  currentThptBits = currentThptBytes * 8;
 
   deltaMillisec = delta_time(&now, &startTime);
   avgThpt = (double)(num_pkt_good_sent * 1000)/deltaMillisec;
   avgThptBytes = (double)(num_bytes_good_sent * 1000)/deltaMillisec;
-  avgThptBytes /= (1000*1000*1000)/8;
+  avgThptBits = avgThptBytes * 8;
 
   snprintf(statsBuf, sizeof(statsBuf),
 	   "TX rate: [current %s pps/%s Gbps][average %s pps/%s Gbps][total %s pkts]",
 	   pfring_format_numbers(currentThpt, buf1, sizeof(buf1), 1),
-	   pfring_format_numbers(currentThptBytes, buf2, sizeof(buf2), 1),
+	   pfring_format_numbers(currentThptBits/(1000*1000*1000), buf2, sizeof(buf2), 1),
 	   pfring_format_numbers(avgThpt, buf3, sizeof(buf3), 1),
-	   pfring_format_numbers(avgThptBytes,  buf4, sizeof(buf4), 1),
+	   pfring_format_numbers(avgThptBits/(1000*1000*1000),  buf4, sizeof(buf4), 1),
 	   pfring_format_numbers(num_pkt_good_sent, buf5, sizeof(buf5), 1));
   
   fprintf(stdout, "%s\n", statsBuf);
 
   deltaMillisecStart = delta_time(&now, &startTime);
   snprintf(statsBuf, sizeof(statsBuf),
-           "Duration:    %s\n"
-           "SentPackets: %lu\n"
-           "SentBytes:   %lu\n",
+           "Duration:          %s\n"
+           "SentPackets:       %lu\n"
+           "SentBytes:         %lu\n"
+           "CurrentSentPps:    %lu\n"
+           "CurrentSentBitps:  %lu\n",
            sec2dhms((deltaMillisecStart/1000), timebuf, sizeof(timebuf)),
            (long unsigned int) num_pkt_good_sent,
-           (long unsigned int) num_bytes_good_sent);
+           (long unsigned int) num_bytes_good_sent,
+	   (long unsigned int) currentThpt,
+	   (long unsigned int) currentThptBits);
   pfring_set_application_stats(pd, statsBuf);
 
   memcpy(&lastTime, &now, sizeof(now));
