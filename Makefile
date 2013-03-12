@@ -1,7 +1,7 @@
 all:
 	cd kernel; make
 	cd userland; make
-	cd drivers; make
+	cd drivers; make dna
 
 clean:
 	cd kernel; make clean
