@@ -2708,12 +2708,14 @@ static const struct ethtool_ops igb_ethtool_ops = {
 	.get_advcoal		= igb_get_adv_coal,
 	.set_advcoal		= igb_set_dmac_coal,
 #endif /* ETHTOOL_GADV_COAL */
+#if (!(RHEL_RELEASE_CODE && RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,4))) /* HAVE_PF_RING */
 #ifdef ETHTOOL_GEEE
 	.get_eee		= igb_get_eee,
 #endif
 #ifdef ETHTOOL_SEEE
 	.set_eee		= igb_set_eee,
 #endif
+#endif /* HAVE_PF_RING */
 #ifdef ETHTOOL_GRXRINGS
 	.get_rxnfc		= igb_get_rxnfc,
 	.set_rxnfc		= igb_set_rxnfc,

@@ -3209,6 +3209,7 @@ extern void _kc_skb_add_rx_frag(struct sk_buff *, int, struct page *,
 
 /******************************************************************************/
 #if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,7,0) )
+#if (!(RHEL_RELEASE_CODE && RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,4))) /* HAVE_PF_RING */
 #ifdef ETHTOOL_GEEE
 #include <linux/mdio.h>
 /**
@@ -3266,5 +3267,6 @@ static inline u32 mmd_eee_adv_to_ethtool_adv_t(u16 eee_adv)
 	return adv;
 }
 #endif /* ETHTOOL_GEEE */
+#endif /* HAVE_PF_RING */
 #endif /* < 3.7.0 */
 #endif /* _KCOMPAT_H_ */
