@@ -11,6 +11,7 @@
 # Short-Description: Start/stop pf_ring
 ### END INIT INFO
 
+MGMG_INTERFACE_DRIVER="$(/sbin/ethtool -i eth0 | grep driver | cut -d ' ' -f 2)"
 
 start_pf_ring() {
     KERNEL_VERSION=$(uname -r)
@@ -22,13 +23,17 @@ start_pf_ring() {
     for D in $DNA_DRIVERS ; do
 	DRIVER_CONFIG="/etc/pf_ring/dna-$D.conf"
 	if [ -f $DRIVER_CONFIG ]; then
-	    PARAM="$(cat $DRIVER_CONFIG)"
-	    # Remove the driver first as the original vanilla driver might be the one we want to overwrite	    
-	    NUM="$(grep $D /proc/modules|wc -l)"
-	    if [ $NUM -gt 0 ]; then
-		/sbin/rmmod $D
+	    if [ "$D" == "$MGMG_INTERFACE_DRIVER" ]; then
+		echo "Unable to replace $D as it is used by the management interface"
+	    else
+		PARAM="$(cat $DRIVER_CONFIG)"
+ 	        # Remove the driver first as the original vanilla driver might be the one we want to overwrite	    
+		NUM="$(grep $D /proc/modules|wc -l)"
+		if [ $NUM -gt 0 ]; then
+		    /sbin/rmmod $D
+		fi
+		/sbin/insmod /usr/local/pfring/drivers/DNA/$D.ko $PARAM
 	    fi
-	    /sbin/insmod /usr/local/pfring/drivers/DNA/$D.ko $PARAM
 	fi
     done
 
@@ -61,7 +66,11 @@ stop_pf_ring() {
 	if [ -f $DRIVER_CONFIG ]; then
 	    NUM="$(grep $D /proc/modules |wc -l)"
 	    if [ $NUM -gt 0 ]; then
-		/sbin/rmmod $D
+		if [ "$D" == "$MGMG_INTERFACE_DRIVER" ]; then
+		    echo "Unable to replace $D as it is used by the management interface"
+		else
+		    /sbin/rmmod $D
+		fi
 	    fi
 	fi
     done
