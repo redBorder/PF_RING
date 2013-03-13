@@ -772,6 +772,13 @@ pcap_lookupnet(device, netp, maskp, errbuf)
 	ifr.ifr_addr.sa_family = AF_INET;
 #endif
 	(void)strncpy(ifr.ifr_name, device, sizeof(ifr.ifr_name));
+#ifdef HAVE_PF_RING
+	{	/* Trick for interface list */
+		char *comma;
+		if ((comma = strrchr(ifr.ifr_name, ',')) != NULL)
+			comma[0] = '\0';
+	}
+#endif
 	if (ioctl(fd, SIOCGIFADDR, (char *)&ifr) < 0) {
 		if (errno == EADDRNOTAVAIL) {
 			(void)snprintf(errbuf, PCAP_ERRBUF_SIZE,
@@ -792,6 +799,13 @@ pcap_lookupnet(device, netp, maskp, errbuf)
 	ifr.ifr_addr.sa_family = AF_INET;
 #endif
 	(void)strncpy(ifr.ifr_name, device, sizeof(ifr.ifr_name));
+#ifdef HAVE_PF_RING
+	{	/* Trick for interface list */
+		char *comma;
+		if ((comma = strrchr(ifr.ifr_name, ',')) != NULL)
+			comma[0] = '\0';
+	}
+#endif
 	if (ioctl(fd, SIOCGIFNETMASK, (char *)&ifr) < 0) {
 		(void)snprintf(errbuf, PCAP_ERRBUF_SIZE,
 		    "SIOCGIFNETMASK: %s: %s", device, pcap_strerror(errno));
