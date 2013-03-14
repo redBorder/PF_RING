@@ -24,6 +24,8 @@
 
 // #define RING_DEBUG
 
+#define EXTRA_SAFE 1
+
 /* ********************************* */
 
 #include "pfring_mod.h"
@@ -451,18 +453,16 @@ int pfring_bundle_read(pfring_bundle *bundle,
   int i, sock_id = -1, found, rc, empty_rings, scans;
   struct timespec ts = { 0 };
   struct timespec tmpts;
+  u_int8_t founds[32] = { 0 };
 
 redo_pfring_bundle_read:
 
   switch(bundle->policy) {
   case pick_round_robin:
     for(i=0; i<bundle->num_sockets; i++) {
-      bundle->last_read_socket = (bundle->last_read_socket + 1) % bundle->num_sockets;
-
-      if(pfring_is_pkt_available(bundle->sockets[bundle->last_read_socket])) {
-	return(pfring_recv(bundle->sockets[bundle->last_read_socket], buffer,
-			   buffer_len, hdr, 0));
-      }
+      rc = pfring_recv(bundle->sockets[bundle->last_read_socket], buffer, buffer_len, hdr, 0);
+      if(++bundle->last_read_socket == bundle->num_sockets) bundle->last_read_socket = 0;
+      if(rc > 0) return(rc);
     }
     break;
 
@@ -474,26 +474,30 @@ redo_pfring_bundle_read:
   sockets_scan:
     scans++;
     for(i=0; i<bundle->num_sockets; i++) {
-      pfring *ring = bundle->sockets[i];
-
-      rc = pfring_next_pkt_time(ring, &tmpts);
-
-      if (rc == 0) {
-      	if(!found || timespec_is_before(&tmpts, &ts)) {
-	  memcpy(&ts, &tmpts, sizeof(struct timespec));
-	  found = 1;
-	  sock_id = i;
+      if(founds[i] == 0) {
+	pfring *ring = bundle->sockets[i];
+	
+	rc = pfring_next_pkt_time(ring, &tmpts);
+	
+	if(rc == 0) {
+	  if(!found || timespec_is_before(&tmpts, &ts)) {
+	    memcpy(&ts, &tmpts, sizeof(struct timespec));
+	    found = 1, founds[i] = 1;
+	    sock_id = i;
+	  }
+	} else if (rc == PF_RING_ERROR_NO_PKT_AVAILABLE) {
+	  empty_rings = 1;
+	} else {
+	  /* error */
 	}
-      } else if (rc == PF_RING_ERROR_NO_PKT_AVAILABLE) {
-        empty_rings = 1;
-      } else {
-        /* error */
       }
     }
-
+    
     if(found) {
-      if (empty_rings > 0 && scans == 1)
+#ifdef EXTRA_SAFE
+      if(empty_rings && (scans == 1))
         goto sockets_scan; /* scanning ring twice (safety check) */
+#endif
 
       return(pfring_recv(bundle->sockets[sock_id], buffer, buffer_len, hdr, 0));
     }
@@ -1153,7 +1157,7 @@ int pfring_disable_ring(pfring *ring) {
 
 /* **************************************************** */
 
-int pfring_is_pkt_available(pfring *ring){
+int pfring_is_pkt_available(pfring *ring) {
   if(ring && ring->is_pkt_available) {
     return ring->is_pkt_available(ring);
   }
@@ -1163,7 +1167,7 @@ int pfring_is_pkt_available(pfring *ring){
 
 /* **************************************************** */
 
-int pfring_next_pkt_time(pfring *ring, struct timespec *ts){
+int pfring_next_pkt_time(pfring *ring, struct timespec *ts) {
   if(ring && ring->next_pkt_time) {
     return ring->next_pkt_time(ring, ts);
   }
@@ -1173,9 +1177,9 @@ int pfring_next_pkt_time(pfring *ring, struct timespec *ts){
 
 /* **************************************************** */
 
-int pfring_next_pkt_raw_timestamp(pfring *ring, u_int64_t *timestamp_ns){
+int pfring_next_pkt_raw_timestamp(pfring *ring, u_int64_t *ts) {
   if(ring && ring->next_pkt_raw_timestamp) {
-    return ring->next_pkt_raw_timestamp(ring, timestamp_ns);
+    return ring->next_pkt_raw_timestamp(ring, ts);
   }
 
   return(PF_RING_ERROR_NOT_SUPPORTED);
@@ -1183,7 +1187,7 @@ int pfring_next_pkt_raw_timestamp(pfring *ring, u_int64_t *timestamp_ns){
 
 /* **************************************************** */
 
-int pfring_set_bpf_filter(pfring *ring, char *filter_buffer){
+int pfring_set_bpf_filter(pfring *ring, char *filter_buffer) {
   if(ring && ring->set_bpf_filter) {
     return ring->set_bpf_filter(ring, filter_buffer);
   }
@@ -1193,7 +1197,7 @@ int pfring_set_bpf_filter(pfring *ring, char *filter_buffer){
 
 /* **************************************************** */
 
-int pfring_remove_bpf_filter(pfring *ring){
+int pfring_remove_bpf_filter(pfring *ring) {
   if(ring && ring->remove_bpf_filter) {
     return ring->remove_bpf_filter(ring);
   }
@@ -1226,7 +1230,7 @@ int pfring_send_last_rx_packet(pfring *ring, int tx_interface_id) {
 
 /* **************************************************** */
 
-int pfring_set_filtering_mode(pfring *ring, filtering_mode mode){
+int pfring_set_filtering_mode(pfring *ring, filtering_mode mode) {
   if(!ring)
     return -1;
 

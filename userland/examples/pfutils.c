@@ -58,7 +58,7 @@ double delta_time (struct timeval * now,
 
 /* *************************************** */
 
-static char* sec2dhms(u_int32_t sec, char *buf, u_int buf_len) {
+char* sec2dhms(u_int32_t sec, char *buf, u_int buf_len) {
   snprintf(buf, buf_len, "%u:%02u:%02u:%02u", 
     (sec / (60 * 60 * 24)), 
     (sec / (60 * 60)) % 24, 

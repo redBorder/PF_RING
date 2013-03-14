@@ -368,7 +368,7 @@ int32_t gmt2local(time_t t) {
 /* *************************************** */
 
 void printHelp(void) {
-  printf("pfcount\n(C) 2005-12 Deri Luca <deri@ntop.org>\n\n");
+  printf("pfcount\n(C) 2005-13 ntop.org\n\n");
   printf("-h              Print this help\n");
   printf("-i <device>     Device name. Use device@channel for channels\n");
 
@@ -378,7 +378,8 @@ void printHelp(void) {
   printf("-s <string>     String to search on packets\n");
   printf("-l <len>        Capture length\n");
   printf("-w <watermark>  Watermark\n");
-  printf("-b <cpu %%>     CPU pergentage priority (0-99)\n");
+  printf("-b <cpu %%>      CPU pergentage priority (0-99)\n");
+  printf("-g <core_id>    Bind this app to a core\n");
   printf("-r              Rehash RSS packets\n");
   printf("-a              Active packet wait\n");
   printf("-q              Set FIFO policy (Default: Round Robin)\n");
@@ -414,11 +415,12 @@ int main(int argc, char* argv[]) {
   u_int16_t watermark = 0;
   bundle_read_policy bundle_policy = pick_round_robin;
   u_int32_t version;
+  int bind_core = -1;
 
   startTime.tv_sec = 0;
   thiszone = gmt2local(0);
 
-  while((c = getopt(argc,argv,"hi:dl:vaw:q")) != '?') {
+  while((c = getopt(argc,argv,"hi:dl:vaw:qg:")) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -434,6 +436,9 @@ int main(int argc, char* argv[]) {
       break;
     case 'i':
       device = strdup(optarg);
+      break;
+    case 'g':
+      bind_core = atoi(optarg);
       break;
     case 'v':
       verbose = 1;
@@ -473,13 +478,21 @@ int main(int argc, char* argv[]) {
     pfring_set_application_name(ring[num_ring], "pfcount_bundle");
     pfring_version(ring[num_ring], &version);
 
+    if(ring[num_ring]->next_pkt_time == NULL) {
+      if(bundle_policy == pick_fifo) {
+	printf("FIFO policy has been disabled as %s does not support TS for ordering packets\n", dev);
+	bundle.policy = pick_round_robin;
+      }
+    }
+
     if(watermark > 0) {
       int rc;
 
       if((rc = pfring_set_poll_watermark(ring[num_ring], watermark)) != 0)
 	printf("pfring_set_poll_watermark returned [rc=%d][watermark=%d]\n", rc, watermark);
     }
-    
+
+    pfring_set_direction(ring[num_ring], rx_only_direction);
     pfring_bundle_add(&bundle, ring[num_ring]);
 
     num_ring++;    
@@ -499,6 +512,9 @@ int main(int argc, char* argv[]) {
     signal(SIGALRM, my_sigalarm);
     alarm(ALARM_SLEEP);
   }
+
+  if(bind_core >= 0)
+    bind2core(bind_core);
 
   packet_consumer();
 

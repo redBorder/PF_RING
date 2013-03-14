@@ -215,7 +215,7 @@ extern "C" {
     int       (*poll)                         (pfring *, u_int);
     int       (*is_pkt_available)             (pfring *);
     int       (*next_pkt_time)                (pfring *, struct timespec *);
-    int       (*next_pkt_raw_timestamp)       (pfring *, u_int64_t *);
+    int       (*next_pkt_raw_timestamp)       (pfring *, u_int64_t *ts);
     int       (*version)                      (pfring *, u_int32_t *);
     int       (*get_bound_device_address)     (pfring *, u_char [6]);
     int       (*get_bound_device_ifindex)     (pfring *, int *);
