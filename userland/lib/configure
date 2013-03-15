@@ -3369,21 +3369,6 @@ else
 $as_echo "no" >&6; }
 fi
 
-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking Intel QAT" >&5
-$as_echo_n "checking Intel QAT... " >&6; }
-LIBQAT=../intel/qat/lib/libqat.a
-if test -f $LIBQAT && test -f pfring_qat.c && test -f pfring_qat.h; then
-  HAVE_QAT="-D ENABLE_QAT_PM -I ../intel/qat/include"
-  QAT_LIB="$LIBQAT"
-  QAT_OBJS="ac_alg.o CpaPmAPI.o"
-  QAT_DEP="extract_qat_lib"
-  { $as_echo "$as_me:${as_lineno-$LINENO}: result: found $LIBQAT" >&5
-$as_echo "found $LIBQAT" >&6; }
-else
-  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no $LIBQAT or no qat module. Please read README.QAT" >&5
-$as_echo "no $LIBQAT or no qat module. Please read README.QAT" >&6; }
-fi
-
 fi
 
 for ac_header in librdi.h

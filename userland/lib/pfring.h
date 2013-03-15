@@ -243,6 +243,7 @@ extern "C" {
     void      (*release_pkt_buff)             (pfring *, pfring_pkt_buff *);
     int       (*recv_pkt_buff)                (pfring *, pfring_pkt_buff *, struct pfring_pkthdr *, u_int8_t);
     int       (*send_pkt_buff)                (pfring *, pfring_pkt_buff *, u_int8_t);
+    void      (*flush_tx_packets)             (pfring *);
     int       (*register_zerocopy_tx_ring)    (pfring *, pfring *);
 
     /* DNA only */
@@ -398,6 +399,7 @@ extern "C" {
   void pfring_release_pkt_buff(pfring *ring, pfring_pkt_buff *pkt_handle);
   int pfring_recv_pkt_buff(pfring *ring, pfring_pkt_buff *pkt_handle, struct pfring_pkthdr *hdr, u_int8_t wait_for_incoming_packet); /* Note: this function fills the buffer pointed by pkt_handle */
   int pfring_send_pkt_buff(pfring *ring, pfring_pkt_buff *pkt_handle, u_int8_t flush_packet); /* Note: this function reset the buffer pointed by pkt_handle */
+  int pfring_flush_tx_packets(pfring *ring);
   int pfring_search_payload(pfring *ring, char *string_to_search);
   int pfring_register_zerocopy_tx_ring(pfring *ring, pfring *tx_ring);
 

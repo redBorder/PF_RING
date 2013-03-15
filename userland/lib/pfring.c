@@ -1383,6 +1383,17 @@ int pfring_send_pkt_buff(pfring *ring, pfring_pkt_buff *pkt_handle, u_int8_t flu
 
 /* **************************************************** */
 
+int pfring_flush_tx_packets(pfring *ring) {
+  if(ring && ring->flush_tx_packets) {
+    ring->flush_tx_packets(ring);
+    return(0);
+  }
+
+  return(PF_RING_ERROR_NOT_SUPPORTED);
+}
+
+/* **************************************************** */
+
 int pfring_search_payload(pfring *ring, char *string_to_search) {
   if (!ring)
     return(-1);

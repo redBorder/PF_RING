@@ -74,18 +74,6 @@ else
   AC_MSG_RESULT(no)
 fi
 
-AC_MSG_CHECKING([Intel QAT])
-LIBQAT=../intel/qat/lib/libqat.a
-if test -f $LIBQAT && test -f pfring_qat.c && test -f pfring_qat.h; then
-  HAVE_QAT="-D ENABLE_QAT_PM -I ../intel/qat/include"
-  QAT_LIB="$LIBQAT"
-  QAT_OBJS="ac_alg.o CpaPmAPI.o"
-  QAT_DEP="extract_qat_lib"	
-  AC_MSG_RESULT(found $LIBQAT)
-else
-  AC_MSG_RESULT(no $LIBQAT or no qat module. Please read README.QAT)
-fi
-
 dnl> end of pthread_setaffinity_np check
 fi
 
