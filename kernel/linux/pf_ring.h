@@ -685,7 +685,7 @@ struct ring_sock {
 /* *********************************** */
 
 typedef int (*dna_wait_packet)(void *adapter, int mode);
-typedef void (*dna_device_notify)(void *adapter, u_int8_t device_in_use);
+typedef void (*dna_device_notify)(void *rx_adapter_ptr, void *tx_adapter_ptr, u_int8_t device_in_use);
 
 typedef enum {
   add_device_mapping = 0, remove_device_mapping
@@ -760,7 +760,7 @@ typedef struct {
   void *packet_waitqueue;
 #endif
   u_int8_t *interrupt_received, in_use;
-  void *adapter_ptr;
+  void *rx_adapter_ptr, *tx_adapter_ptr;
   dna_wait_packet wait_packet_function_ptr;
   dna_device_notify usage_notification;
 } dna_device;
@@ -1292,7 +1292,7 @@ typedef void  (*handle_ring_dna_device)(dna_device_operation operation,
 					u_char *device_address,
 					wait_queue_head_t *packet_waitqueue,
 					u_int8_t *interrupt_received,
-					void *adapter_ptr,
+					void *rx_adapter_ptr, void *tx_adapter_ptr,
 					dna_wait_packet wait_packet_function_ptr,
 					dna_device_notify dev_notify_function_ptr);
 typedef u_int8_t (*pfring_tx_pkt)(void* private_data, char *pkt, u_int pkt_len);
@@ -1328,7 +1328,7 @@ extern void do_ring_dna_device_handler(dna_device_operation operation,
 				       u_char *device_address,
 				       wait_queue_head_t * packet_waitqueue,
 				       u_int8_t * interrupt_received,
-				       void *adapter_ptr,
+				       void *rx_adapter_ptr, void *tx_adapter_ptr,
 				       dna_wait_packet wait_packet_function_ptr,
 				       dna_device_notify dev_notify_function_ptr);
 

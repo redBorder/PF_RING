@@ -135,7 +135,7 @@ void init_dna(struct e1000_adapter *adapter) {
 
 /* ********************************** */
 
-void notify_function_ptr(void *data, u_int8_t device_in_use) {
+void notify_function_ptr(void *rx_data, void *tx_data, u_int8_t device_in_use) {
   /* struct e1000_adapter *adapter = (struct e1000_adapter*)data; */ /* Just in case */
 
   if(device_in_use)
@@ -433,7 +433,7 @@ void alloc_dna_memory(struct e1000_adapter *adapter) {
 				    adapter->netdev->dev_addr,
 				    &adapter->dna.packet_waitqueue,
 				    &adapter->dna.interrupt_received,
-				    (void*)adapter,
+				    (void*)adapter, NULL,
 				    wait_packet_function_ptr,
 				    notify_function_ptr);
 

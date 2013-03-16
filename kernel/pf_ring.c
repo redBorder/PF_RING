@@ -146,7 +146,7 @@
 
 const static ip_addr ip_zero = { IN6ADDR_ANY_INIT };
 
-static u_int8_t pfring_enabled = 0;
+static u_int8_t pfring_enabled = 1;
 
 /* Dummy 'any' device */
 static ring_device_element any_device_element, none_device_element;
@@ -6368,7 +6368,7 @@ unsigned int ring_poll(struct file *file,
       return(0);
     }
 
-    rc = pfr->dna_device->wait_packet_function_ptr(pfr->dna_device->adapter_ptr, 1);
+    rc = pfr->dna_device->wait_packet_function_ptr(pfr->dna_device->rx_adapter_ptr, 1);
 
     if(unlikely(enable_debug))
       printk("[PF_RING] wait_packet_function_ptr(1) returned %d\n", rc);
@@ -6383,7 +6383,7 @@ unsigned int ring_poll(struct file *file,
       if(unlikely(enable_debug))
 	printk("[PF_RING] poll_wait() just returned\n");
     } else
-      rc = pfr->dna_device->wait_packet_function_ptr(pfr->dna_device->adapter_ptr, 0);
+      rc = pfr->dna_device->wait_packet_function_ptr(pfr->dna_device->rx_adapter_ptr, 0);
 
     if(unlikely(enable_debug))
       printk("[PF_RING] wait_packet_function_ptr(0) returned %d\n", rc);
@@ -6616,7 +6616,9 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 	  if(unlikely(enable_debug))
 	    printk("[PF_RING] ring_map_dna_device(%s): removed mapping [num_bound_sockets=%u]\n",
 		   mapping->device_name, entry->num_bound_sockets);
-	  pfr->dna_device->usage_notification(pfr->dna_device->adapter_ptr, 0 /* unlock */);
+	  pfr->dna_device->usage_notification(pfr->dna_device->rx_adapter_ptr, 
+					      pfr->dna_device->tx_adapter_ptr, 
+					      0 /* unlock */);
 	  // pfr->dna_device = NULL;
 	}
 	/* Continue for all devices: no break */
@@ -6691,7 +6693,9 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 	if(unlikely(enable_debug))
 	  printk("[PF_RING] ===> ring_map_dna_device(%s): added mapping [num_bound_sockets=%u]\n",
 		 mapping->device_name, entry->num_bound_sockets);
-	pfr->dna_device->usage_notification(pfr->dna_device->adapter_ptr, 1 /* lock */);
+	pfr->dna_device->usage_notification(pfr->dna_device->rx_adapter_ptr,
+					    pfr->dna_device->tx_adapter_ptr, 
+					    1 /* lock */);
 
 	ring_proc_add(pfr);
 	return(0);
@@ -8286,7 +8290,7 @@ void dna_device_handler(dna_device_operation operation,
 			u_char *device_address,
 			wait_queue_head_t *packet_waitqueue,
 			u_int8_t *interrupt_received,
-			void *adapter_ptr,
+			void *rx_adapter_ptr, void *tx_adapter_ptr,
 			dna_wait_packet wait_packet_function_ptr,
 			dna_device_notify dev_notify_function_ptr)
 {
@@ -8335,7 +8339,8 @@ void dna_device_handler(dna_device_operation operation,
       memcpy(next->dev.device_address, device_address, 6);
       next->dev.packet_waitqueue = packet_waitqueue;
       next->dev.interrupt_received = interrupt_received;
-      next->dev.adapter_ptr = adapter_ptr;
+      next->dev.rx_adapter_ptr = rx_adapter_ptr;
+      next->dev.tx_adapter_ptr = tx_adapter_ptr;
       next->dev.wait_packet_function_ptr = wait_packet_function_ptr;
       next->dev.usage_notification = dev_notify_function_ptr;
       list_add(&next->list, &ring_dna_devices_list);

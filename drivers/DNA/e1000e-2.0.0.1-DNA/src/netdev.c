@@ -2083,7 +2083,8 @@ static void e1000_clean_rx_ring(struct e1000_ring *rx_ring)
 					    adapter->netdev->dev_addr,
 					    &adapter->dna.packet_waitqueue,
 					    &adapter->dna.interrupt_received,
-					    (void*)adapter, NULL, NULL);
+					    (void*)adapter, NULL,
+					    NULL, NULL);
 
 	      printk("[DNA] Disabled DNA on %s\n", adapter->netdev->name);
 	    } else

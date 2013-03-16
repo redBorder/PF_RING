@@ -211,8 +211,8 @@ dna_device_model dna_model(struct ixgbe_hw *hw){
 
 /* ********************************** */
 
-void notify_function_ptr(void *data, u_int8_t device_in_use) {
-  struct ixgbe_ring	*rx_ring = (struct ixgbe_ring*)data;
+void notify_function_ptr(void *rx_data, void *tx_data, u_int8_t device_in_use) {
+  struct ixgbe_ring	*rx_ring = (struct ixgbe_ring*)rx_data;
   struct ixgbe_adapter	*adapter = netdev_priv(rx_ring->netdev);
   //struct ixgbe_ring     *tx_ring = adapter->tx_ring[rx_ring->queue_index];
 
@@ -605,7 +605,7 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
 				rx_ring->netdev->dev_addr,
 				&rx_ring->dna.rx_tx.rx.packet_waitqueue,
 				&rx_ring->dna.rx_tx.rx.interrupt_received,
-				(void*)rx_ring,
+				(void*)rx_ring, (void*)tx_ring,
 				wait_packet_function_ptr,
 				notify_function_ptr);
 

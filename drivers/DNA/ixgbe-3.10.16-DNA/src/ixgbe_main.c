@@ -5514,7 +5514,7 @@ void ixgbe_clean_rx_ring(struct ixgbe_ring *rx_ring)
 					    rx_ring->netdev->dev_addr,
 					    &rx_ring->dna.rx_tx.rx.packet_waitqueue,
 					    &rx_ring->dna.rx_tx.rx.interrupt_received,
-					    (void*)rx_ring,
+					    (void*)rx_ring, (void*)tx_ring,
 					    NULL, //wait_packet_function_ptr,
 					    NULL //notify_function_ptr
 					    );
