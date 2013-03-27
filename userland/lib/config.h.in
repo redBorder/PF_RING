@@ -18,6 +18,9 @@
 /* libc has pthread_setaffinity_np */
 #undef HAVE_PTHREAD_SETAFFINITY_NP
 
+/* pthread has rw locks */
+#undef HAVE_RW_LOCK
+
 /* Define to 1 if you have the <stdint.h> header file. */
 #undef HAVE_STDINT_H
 

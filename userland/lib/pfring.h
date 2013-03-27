@@ -63,6 +63,15 @@
 #define POLL_SLEEP_MAX          1000 /* ns */
 #define POLL_QUEUE_MIN_LEN       500 /* # packets */
 
+#ifndef HAVE_RW_LOCK
+#define pthread_rwlock_t       pthread_mutex_t
+#define pthread_rwlock_init    pthread_mutex_init
+#define pthread_rwlock_rdlock  pthread_mutex_lock
+#define pthread_rwlock_wrlock  pthread_mutex_lock
+#define pthread_rwlock_unlock  pthread_mutex_unlock
+#define pthread_rwlock_destroy pthread_mutex_destroy
+#endif
+
 #ifndef max
 #define max(a, b) (a > b ? a : b)
 #endif

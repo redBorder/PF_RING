@@ -51,6 +51,23 @@ else
   AC_MSG_RESULT(no)
 fi
 
+dnl> R/W locks are broken on some BSD releases
+if test "$IS_FREEBSD" != "1"; then
+AC_MSG_CHECKING([if r/w locks are supported])
+AC_TRY_RUN([
+#include <pthread.h>
+
+int main()
+{
+        pthread_rwlock_t t;
+        return 0;
+}
+
+]
+, [ AC_MSG_RESULT(yes) AC_DEFINE_UNQUOTED(HAVE_RW_LOCK, 1, [pthread has rw locks]) ], [AC_MSG_RESULT(no)]
+)
+fi
+
 AC_MSG_CHECKING([DNA support])
 if test -f $DNA_LIB; then
   HAVE_DNA="-D HAVE_DNA"
