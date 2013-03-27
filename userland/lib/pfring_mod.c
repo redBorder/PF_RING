@@ -18,6 +18,7 @@
 #ifdef ENABLE_BPF
 #include <pcap/pcap.h>
 #include <pcap/bpf.h>
+#include <linux/types.h>
 #include <linux/filter.h>
 #endif
 
