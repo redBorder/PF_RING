@@ -656,7 +656,9 @@ static inline int get_next_slot_offset(struct pf_ring_socket *pfr, u_int32_t off
     real_slot_size += hdr->extended_hdr.parsed_header_len;
 
   /* padding at the end of the packet (magic number added on insert) */
-  real_slot_size += sizeof(u_int16_t);
+  real_slot_size += sizeof(u_int16_t); /* RING_MAGIC_VALUE */
+
+  /* Align slot size to 64 bit */
   real_slot_size = ALIGN(real_slot_size, sizeof(u_int64_t));
 
   if((off + real_slot_size + pfr->slots_info->slot_len) > (pfr->slots_info->tot_mem - sizeof(FlowSlotInfo))) {
@@ -1661,6 +1663,7 @@ static int ring_alloc_mem(struct sock *sk)
     pfr->slot_header_len = sizeof(struct pfring_pkthdr);
 
   the_slot_len = pfr->slot_header_len + pfr->bucket_len;
+  the_slot_len = ALIGN(the_slot_len + sizeof(u_int16_t) /* RING_MAGIC_VALUE */, sizeof(u_int64_t));
 
   if(unlikely((UINT_MAX - sizeof(FlowSlotInfo)) / the_slot_len < min_num_slots)) {
     printk("[PF_RING] ERROR: min_num_slots (%u, slot len = %u) causes memory size to wrap\n", min_num_slots, the_slot_len);
@@ -4298,11 +4301,10 @@ static int skb_ring_handler(struct sk_buff *skb,
   // prefetch(skb->data);
 
   if(recv_packet) {
-    /* Hack for identifying a packet received by the e1000 */
     if(real_skb)
-      displ = SKB_DISPLACEMENT;
+      displ = skb->dev->hard_header_len;
     else
-      displ = 0; /* Received by the e1000 wrapper */
+      displ = 0;
   } else
     displ = 0;
 

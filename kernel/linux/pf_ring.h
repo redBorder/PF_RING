@@ -15,14 +15,6 @@
 #include <netinet/in.h>
 #endif /* __KERNEL__ */
 
-#define INCLUDE_MAC_INFO
-
-#ifdef INCLUDE_MAC_INFO
-#define SKB_DISPLACEMENT    14 /* Include MAC address information */
-#else
-#define SKB_DISPLACEMENT    0  /* Do NOT include MAC address information */
-#endif
-
 #define RING_MAGIC
 #define RING_MAGIC_VALUE             0x88
 #define RING_FLOWSLOT_VERSION          15 /*
