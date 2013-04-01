@@ -185,7 +185,6 @@ typedef struct {
   u8 status;
 } silicom_ts_t;
 #endif
-
 struct vf_stats {
 	u64 gprc;
 	u64 gorc;
