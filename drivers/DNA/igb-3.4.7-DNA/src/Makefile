@@ -176,15 +176,15 @@ ifneq ($(KSRC),$(shell readlink /lib/modules/$(KVER)/build))
 endif
 endif
 
-KVER_CODE := $(shell $(CC) $(EXTRA_CFLAGS) -E -dM $(VSP) 2>/dev/null |\
-	grep -m 1 LINUX_VERSION_CODE | awk '{ print $$3 }' | sed 's/\"//g')
+#KVER_CODE := $(shell $(CC) $(EXTRA_CFLAGS) -E -dM $(VSP) 2>/dev/null |\
+#	grep -m 1 LINUX_VERSION_CODE | awk '{ print $$3 }' | sed 's/\"//g')
 
 # abort the build on kernels older than 2.4.21
-ifneq (1,$(shell [ $(KVER_CODE) -ge 132117 ] && echo 1 || echo 0))
-  $(error *** Aborting the build. \
-          *** This driver is not supported on kernel versions older than 2.4.21, \
-              because this driver requires NAPI support.)
-endif
+#ifneq (1,$(shell [ $(KVER_CODE) -ge 132117 ] && echo 1 || echo 0))
+#  $(error *** Aborting the build. \
+#          *** This driver is not supported on kernel versions older than 2.4.21, \
+#              because this driver requires NAPI support.)
+#endif
 
 # look for PCI in config.h
 PCI := $(shell $(CC) $(EXTRA_CFLAGS) -E -dM $(CONFIG_FILE) | \
@@ -225,7 +225,7 @@ endif
 ###########################################################################
 # Kernel Version Specific rules
 
-ifeq (1,$(shell [ $(KVER_CODE) -ge 132352 ] && echo 1 || echo 0))
+#ifeq (1,$(shell [ $(KVER_CODE) -ge 132352 ] && echo 1 || echo 0))
 
 # Makefile for 2.5.x and newer kernel
 TARGET = $(DRIVER_NAME).ko
@@ -247,43 +247,43 @@ else
 endif
 endif
 
-else # ifeq (1,$(shell [ $(KVER_CODE) -ge 132352 ] && echo 1 || echo 0))
+#else # ifeq (1,$(shell [ $(KVER_CODE) -ge 132352 ] && echo 1 || echo 0))
 
 # Makefile for 2.4.x kernel
-TARGET = $(DRIVER_NAME).o
+#TARGET = $(DRIVER_NAME).o
 
 # man page
-MANSECTION = 7
-MANFILE = $(TARGET:.o=.$(MANSECTION))
+#MANSECTION = 7
+#MANFILE = $(TARGET:.o=.$(MANSECTION))
 
 # Get rid of compile warnings in kernel header files from SuSE
-ifneq (,$(wildcard /etc/SuSE-release))
-  EXTRA_CFLAGS += -Wno-sign-compare -fno-strict-aliasing
-endif
+#ifneq (,$(wildcard /etc/SuSE-release))
+#  EXTRA_CFLAGS += -Wno-sign-compare -fno-strict-aliasing
+#endif
 
 # Get rid of compile warnings in kernel header files from fedora
-ifneq (,$(wildcard /etc/fedora-release))
-  EXTRA_CFLAGS += -fno-strict-aliasing
-endif
-CFLAGS += $(EXTRA_CFLAGS)
+#ifneq (,$(wildcard /etc/fedora-release))
+#  EXTRA_CFLAGS += -fno-strict-aliasing
+#endif
+#CFLAGS += $(EXTRA_CFLAGS)
 
-.SILENT: $(TARGET)
-$(TARGET): $(filter-out $(TARGET), $(CFILES:.c=.o))
-	$(LD) $(LDFLAGS) -r $^ -o $@
-	echo; echo
-	echo "**************************************************"
-	echo "** $(TARGET) built for $(KVER)"
-	echo -n "** SMP               "
-	if [ "$(SMP)" = "1" ]; \
-		then echo "Enabled"; else echo "Disabled"; fi
-	echo "**************************************************"
-	echo
+#.SILENT: $(TARGET)
+#$(TARGET): $(filter-out $(TARGET), $(CFILES:.c=.o))
+#	$(LD) $(LDFLAGS) -r $^ -o $@
+#	echo; echo
+#	echo "**************************************************"
+#	echo "** $(TARGET) built for $(KVER)"
+#	echo -n "** SMP               "
+#	if [ "$(SMP)" = "1" ]; \
+#		then echo "Enabled"; else echo "Disabled"; fi
+#	echo "**************************************************"
+#	echo
+#
+#$(CFILES:.c=.o): $(HFILES) Makefile
+#default:
+#	$(MAKE)
 
-$(CFILES:.c=.o): $(HFILES) Makefile
-default:
-	$(MAKE)
-
-endif # ifeq (1,$(shell [ $(KVER_CODE) -ge 132352 ] && echo 1 || echo 0))
+#endif # ifeq (1,$(shell [ $(KVER_CODE) -ge 132352 ] && echo 1 || echo 0))
 
 ifeq (,$(MANDIR))
   # find the best place to install the man page
