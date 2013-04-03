@@ -6017,7 +6017,13 @@ static int ring_mmap(struct file *file,
         return(-EINVAL);
       }
 
-      if((rc = do_memory_mmap(vma, 0, size, (void *)pfr->dna_device->phys_card_memory, 0, (VM_RESERVED | VM_IO), 2)) < 0)
+      if((rc = do_memory_mmap(vma, 0, size, (void *)pfr->dna_device->phys_card_memory, 0, (
+#if(LINUX_VERSION_CODE < KERNEL_VERSION(3,7,0))
+                                                                                           VM_IO | VM_RESERVED
+#else
+                                                                                           VM_IO | VM_DONTEXPAND | VM_DONTDUMP
+#endif
+	                                                                                  ), 2)) < 0)
 	return(rc);
 
       break;
