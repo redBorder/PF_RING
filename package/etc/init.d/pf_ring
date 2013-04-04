@@ -16,7 +16,12 @@ MGMG_INTERFACE_DRIVER="$(/sbin/ethtool -i eth0 | grep driver | cut -d ' ' -f 2)"
 start_pf_ring() {
     KERNEL_VERSION=$(uname -r)
 
-    insmod /lib/modules/$KERNEL_VERSION/kernel/net/pf_ring/pf_ring.ko
+    PFRING_CONFIG="/etc/pf_ring/pfring.conf"
+    PARAM=""
+    if [ -f $PFRING_CONFIG ]; then
+        PARAM="$(cat $PFRING_CONFIG)"
+    fi
+    /sbin/insmod /lib/modules/$KERNEL_VERSION/kernel/net/pf_ring/pf_ring.ko $PARAM
 
     DNA_DRIVERS="$(/bin/ls /usr/local/pfring/drivers/DNA/|cut -d '.' -f 1)"
 
