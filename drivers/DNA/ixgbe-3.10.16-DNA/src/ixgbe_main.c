@@ -9340,7 +9340,13 @@ static pci_ers_result_t ixgbe_io_error_detected(struct pci_dev *pdev,
 		goto skip_bad_vf_detection;
 
 	bdev = pdev->bus->self;
-	while (bdev && (bdev->pcie_type != PCI_EXP_TYPE_ROOT_PORT))
+	while (bdev && (
+#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,7,0) )
+	                bdev->pcie_type
+#else
+	                pci_pcie_type(bdev)
+#endif
+	                != PCI_EXP_TYPE_ROOT_PORT))
 		bdev = bdev->bus->self;
 
 	if (!bdev)
