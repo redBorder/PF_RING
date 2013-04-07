@@ -327,8 +327,8 @@ static void forge_udp_packet(u_char *buffer, u_int buffer_len, u_int idx) {
 /* *************************************** */
 
 int main(int argc, char* argv[]) {
-  char c, *pcap_in = NULL, path[255] = { 0 };
-  int i, verbose = 0, active_poll = 0, disable_zero_copy = 0;
+  char *pcap_in = NULL, path[255] = { 0 };
+  int c, i, verbose = 0, active_poll = 0, disable_zero_copy = 0;
   int use_zero_copy_tx = 0;
   u_int mac_a, mac_b, mac_c, mac_d, mac_e, mac_f;
   u_char buffer[9000];
@@ -344,11 +344,7 @@ int main(int argc, char* argv[]) {
   u_int num_pcap_pkts = 0;
   int send_full_pcap_once = 1;
 
-  while((c = getopt(argc,argv,"b:hi:n:g:l:af:r:vm:w:zx:"
-#if 0
-		    "b:"
-#endif
-		    )) != -1) {
+  while((c = getopt(argc, argv, "b:hi:n:g:l:af:r:vm:w:zx:")) != -1) {
     switch(c) {
     case 'b':
       num_balanced_pkts = atoi(optarg);
@@ -384,12 +380,6 @@ int main(int argc, char* argv[]) {
     case 'r':
       sscanf(optarg, "%lf", &gbit_s);
       break;
-#if 0
-    case 'b':
-      cpu_percentage = atoi(optarg);
-#endif
-      break;
-
     case 'm':
       if(sscanf(optarg, "%02X:%02X:%02X:%02X:%02X:%02X", &mac_a, &mac_b, &mac_c, &mac_d, &mac_e, &mac_f) != 6) {
 	printf("Invalid MAC address format (XX:XX:XX:XX:XX:XX)\n");
@@ -408,10 +398,14 @@ int main(int argc, char* argv[]) {
     case 'z':
       disable_zero_copy = 1;
       break;
+
+    default:
+      printHelp();
     }
   }
 
-  if((in_dev == NULL) || (num_balanced_pkts < 1))
+  if((in_dev == NULL) || (num_balanced_pkts < 1)
+     || (optind < argc) /* Extra argument */)
     printHelp();
 
   printf("Sending packets on %s\n", in_dev);
