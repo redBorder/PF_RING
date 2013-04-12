@@ -224,6 +224,16 @@ static rwlock_t dna_cluster_lock =
 #endif
 ;
 
+/* List of generic cluster referees */
+static struct list_head cluster_referee_list;
+static rwlock_t cluster_referee_lock =
+#if(LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39))
+  RW_LOCK_UNLOCKED
+#else
+  (rwlock_t) __RW_LOCK_UNLOCKED(cluster_referee_lock)
+#endif
+;
+
 /* Dummy buffer used for loopback_test */
 u_int32_t loobpack_test_buffer_len = 4*1024*1024;
 u_char *loobpack_test_buffer = NULL;
@@ -1450,7 +1460,7 @@ static int ring_proc_get_info(char *buf, char **start, off_t offset,
 			  pfr->dna_device_entry->dev.mem_info.tx.packet_memory_chunk_len   )
 			+ pfr->dna_device_entry->dev.mem_info.rx.descr_packet_memory_tot_len
 			+ pfr->dna_device_entry->dev.mem_info.tx.descr_packet_memory_tot_len);
-	if(pfr->dna_cluster && pfr->dna_cluster_type == dna_cluster_master && pfr->dna_cluster->stats) {
+	if(pfr->dna_cluster && pfr->dna_cluster_type == cluster_master && pfr->dna_cluster->stats) {
 	  rlen += sprintf(buf + rlen, "Cluster: Tot Recvd : %lu\n", (unsigned long)pfr->dna_cluster->stats->tot_rx_packets);
 	  rlen += sprintf(buf + rlen, "Cluster: Tot Sent  : %lu\n", (unsigned long)pfr->dna_cluster->stats->tot_tx_packets);
 	}
@@ -4715,6 +4725,7 @@ static int ring_create(
   atomic_set(&pfr->num_ring_users, 0);
   INIT_LIST_HEAD(&pfr->sw_filtering_rules);
   INIT_LIST_HEAD(&pfr->hw_filtering_rules);
+  INIT_LIST_HEAD(&pfr->locked_objects_list);
   pfr->master_ring = NULL;
   pfr->ring_netdev = &none_device_element; /* Unbound socket */
   pfr->sample_rate = 1;	/* No sampling */
@@ -5321,7 +5332,7 @@ unlock:
   return dnac;
 }
 
-static void dna_cluster_remove(struct dna_cluster *dnac, dna_cluster_client_type type, u_int32_t slave_id)
+static void dna_cluster_remove(struct dna_cluster *dnac, cluster_client_type type, u_int32_t slave_id)
 {
   struct list_head *ptr, *tmp_ptr;
   struct dna_cluster *entry;
@@ -5334,9 +5345,9 @@ static void dna_cluster_remove(struct dna_cluster *dnac, dna_cluster_client_type
 
     if(entry == dnac) {
 
-      if(type == dna_cluster_master)
+      if(type == cluster_master)
         dnac->master = 0;
-      else if(type == dna_cluster_slave) {
+      else if(type == cluster_slave) {
         dnac->slave_waitqueue[slave_id] = NULL;
 	dnac->active_slaves[slave_id] = 0;
       }
@@ -5443,6 +5454,235 @@ unlock:
   }
 
   return dnac;
+}
+
+/* ********************************** */
+
+static int create_cluster_referee(struct pf_ring_socket *pfr, u_int32_t cluster_id, u_int32_t *recovered)
+{
+  struct list_head *ptr, *tmp_ptr;
+  struct cluster_referee *entry;
+  struct cluster_referee *cr = NULL;
+
+  if(pfr->cluster_referee) /* already called */
+    return -1;
+
+  write_lock(&cluster_referee_lock);
+
+  /* checking if the dna cluster already exists */
+  list_for_each_safe(ptr, tmp_ptr, &cluster_referee_list) {
+    entry = list_entry(ptr, struct cluster_referee, list);
+
+    if(entry->id == cluster_id) {
+
+      if(unlikely(enable_debug))
+        printk("[PF_RING] %s: cluster %u already exists [users: %u]\n",
+               __FUNCTION__, cluster_id, entry->users);
+
+      if(entry->master_running) /* multiple masters not allowed */
+        goto unlock;
+
+      cr = entry;
+      break;
+    }
+  }
+
+  /* Creating a new dna cluster */
+  if(cr == NULL) {
+    if(unlikely(enable_debug))
+      printk("[PF_RING] %s: attempting to create a referee for cluster %u\n", __FUNCTION__, cluster_id);
+
+    cr = kcalloc(1, sizeof(struct cluster_referee), GFP_KERNEL);
+
+    if(cr == NULL) {
+      if(unlikely(enable_debug))
+	printk("[PF_RING] %s: failure [cluster: %u]\n", __FUNCTION__, cluster_id);
+      goto unlock;
+    }
+
+    cr->id = cluster_id;
+
+    list_add(&cr->list, &cluster_referee_list);
+
+    if(unlikely(enable_debug))
+      printk("[PF_RING] %s: new cluster referee created for cluster %u\n",  __FUNCTION__, cluster_id);
+
+    *recovered = 0;
+  } else {
+    *recovered = 1;
+  }
+
+  pfr->cluster_role = cluster_master;
+  pfr->cluster_referee = cr;
+  cr->users++;
+  cr->master_running = 1;
+
+unlock:
+  write_unlock(&cluster_referee_lock);
+
+  if(cr == NULL) {
+    printk("[PF_RING] %s: error\n", __FUNCTION__);
+    return -1;
+  } else {
+    if(unlikely(enable_debug))
+      printk("[PF_RING] %s: cluster %u found or created\n", __FUNCTION__, cluster_id);
+  }
+
+  return 0;
+}
+
+static void remove_cluster_referee(struct pf_ring_socket *pfr)
+{
+  struct cluster_referee *cr = pfr->cluster_referee;
+  struct list_head *ptr, *tmp_ptr;
+  struct cluster_referee *entry;
+  struct list_head *obj_ptr, *obj_tmp_ptr, *c_obj_ptr, *c_obj_tmp_ptr;
+  cluster_object *obj_entry = NULL, *c_obj_entry = NULL;
+
+  write_lock(&cluster_referee_lock);
+
+  list_for_each_safe(ptr, tmp_ptr, &cluster_referee_list) {
+    entry = list_entry(ptr, struct cluster_referee, list);
+
+    if(entry == cr) {
+
+      entry->users--;
+      if (pfr->cluster_role == cluster_master)
+        entry->master_running = 0;
+
+      /* removing locked objects from socket */
+      list_for_each_safe(obj_ptr, obj_tmp_ptr, &pfr->locked_objects_list) {
+        obj_entry = list_entry(obj_ptr, cluster_object, list);
+        
+	/* removing locks on current object from cluster */
+        list_for_each_safe(c_obj_ptr, c_obj_tmp_ptr, &cr->objects_list) {
+          c_obj_entry = list_entry(c_obj_ptr, cluster_object, list);
+          if(c_obj_entry->object_type == obj_entry->object_type && c_obj_entry->object_id == obj_entry->object_id) {
+
+            c_obj_entry->lock_bitmap &= ~obj_entry->lock_bitmap;
+
+            if (!c_obj_entry->lock_bitmap) { /* lock bitmap empty, removing object*/
+	      list_del(c_obj_ptr);
+	      kfree(c_obj_entry); 
+	    }
+	  }
+	}
+
+	list_del(obj_ptr);
+	kfree(obj_entry);
+      }
+
+      if(entry->users == 0) {
+        list_del(ptr);
+        kfree(entry);
+
+	if(unlikely(enable_debug))
+	  printk("[PF_RING] %s: success\n", __FUNCTION__);
+      }
+
+      break;
+    }
+  }
+
+  write_unlock(&cluster_referee_lock);
+
+  pfr->cluster_referee = NULL;
+}
+
+static int lock_cluster_object(struct pf_ring_socket *pfr, 
+                                                   u_int32_t cluster_id, u_int32_t object_type, u_int32_t object_id,
+                                                   u_int32_t lock_mask, u_int8_t increase_users) 
+{
+  struct list_head *ptr, *tmp_ptr;
+  struct cluster_referee *entry, *cr = NULL;
+  struct list_head *obj_ptr, *obj_tmp_ptr;
+  cluster_object *obj_entry, *obj;
+  int rc = -1;
+
+  write_lock(&cluster_referee_lock);
+
+  list_for_each_safe(ptr, tmp_ptr, &cluster_referee_list) {
+    entry = list_entry(ptr, struct cluster_referee, list);
+
+    if(entry->id == cluster_id) {
+
+      if(unlikely(enable_debug))
+        printk("[PF_RING] %s: cluster %u found\n", __FUNCTION__, cluster_id);
+
+      cr = entry;
+
+      /* adding locked objects to the cluster */
+      obj = NULL;
+      list_for_each_safe(obj_ptr, obj_tmp_ptr, &cr->objects_list) {
+        obj_entry = list_entry(obj_ptr, cluster_object, list);
+        if(obj_entry->object_type == object_type && obj_entry->object_id == object_id) {
+	  obj = obj_entry;
+	  if (obj->lock_bitmap & lock_mask) {
+            if(unlikely(enable_debug))
+              printk("[PF_RING] %s: trying to lock already-locked features on cluster %u\n", __FUNCTION__, cluster_id);
+	    goto unlock;
+	  }
+	  break;
+	}
+      }
+
+      if(obj == NULL) {
+        obj = kcalloc(1, sizeof(cluster_object), GFP_KERNEL);
+        if(obj == NULL) {
+          if(unlikely(enable_debug))
+            printk("[PF_RING] %s: memory allocation failure\n", __FUNCTION__);
+          goto unlock;
+        }
+
+        list_add(&obj->list, &cr->objects_list);
+      }
+
+      obj->lock_bitmap |= lock_mask;
+
+      /* adding locked objects to the socket */
+      obj = NULL;
+      list_for_each_safe(obj_ptr, obj_tmp_ptr, &pfr->locked_objects_list) {
+        obj_entry = list_entry(obj_ptr, cluster_object, list);
+        if(obj_entry->object_type == object_type && obj_entry->object_id == object_id) {
+	  obj = obj_entry;
+	  break;
+	}
+      }
+
+      if(obj == NULL) {
+        obj = kcalloc(1, sizeof(cluster_object), GFP_KERNEL);
+        if(obj == NULL) {
+          if(unlikely(enable_debug))
+            printk("[PF_RING] %s: memory allocation failure\n", __FUNCTION__);
+          goto unlock;
+        }
+
+        list_add(&obj->list, &pfr->locked_objects_list);
+      }
+
+      obj->lock_bitmap |= lock_mask;
+
+      printk("[PF_RING] %s: new object lock on cluster %u\n", __FUNCTION__, cluster_id);
+
+      if (pfr->cluster_referee == NULL) {
+        pfr->cluster_referee = cr;
+        cr->users++;
+      }
+
+      rc = 0;
+      break;
+    }
+  }
+
+unlock:
+  write_unlock(&cluster_referee_lock);
+
+  if (cr == NULL) {
+    if(unlikely(enable_debug))
+      printk("[PF_RING] %s: cluster %u not found\n", __FUNCTION__, cluster_id);
+  }
+
+  return rc;
 }
 
 /* *********************************************** */
@@ -5602,6 +5842,9 @@ static int ring_release(struct socket *sock)
 
   if(pfr->dna_cluster != NULL)
     dna_cluster_remove(pfr->dna_cluster, pfr->dna_cluster_type, pfr->dna_cluster_slave_id);
+
+  if(pfr->cluster_referee != NULL)
+    remove_cluster_referee(pfr);
 
   if(pfr->dna_device_entry != NULL) {
     dna_device_mapping mapping;
@@ -6041,7 +6284,7 @@ static int ring_mmap(struct file *file,
       break;
     case 4:
       /* DNA cluster shared memory (master) */
-      if(pfr->dna_cluster == NULL || pfr->dna_cluster_type != dna_cluster_master) {
+      if(pfr->dna_cluster == NULL || pfr->dna_cluster_type != cluster_master) {
         if(unlikely(enable_debug))
 	  printk("[PF_RING] %s() failed: operation for DNA cluster master only", __FUNCTION__);
         return(-EINVAL);
@@ -6066,7 +6309,7 @@ static int ring_mmap(struct file *file,
       break;
     case 5:
       /* DNA cluster shared memory (slave) */
-      if(pfr->dna_cluster == NULL || pfr->dna_cluster_type != dna_cluster_slave) {
+      if(pfr->dna_cluster == NULL || pfr->dna_cluster_type != cluster_slave) {
         if(unlikely(enable_debug))
 	  printk("[PF_RING] %s() failed: operation for DNA cluster slave only", __FUNCTION__);
         return(-EINVAL);
@@ -6093,7 +6336,7 @@ static int ring_mmap(struct file *file,
       break;
     case 6:
       /* DNA cluster persistent memory (master) */
-      if(pfr->dna_cluster == NULL || pfr->dna_cluster_type != dna_cluster_master) {
+      if(pfr->dna_cluster == NULL || pfr->dna_cluster_type != cluster_master) {
         if(unlikely(enable_debug))
 	  printk("[PF_RING] %s() failed: operation for DNA cluster master only", __FUNCTION__);
         return(-EINVAL);
@@ -6335,7 +6578,7 @@ unsigned int ring_poll(struct file *file,
     // smp_rmb();
 
     /* DNA cluster */
-    if(pfr->dna_cluster != NULL && pfr->dna_cluster_type == dna_cluster_slave) {
+    if(pfr->dna_cluster != NULL && pfr->dna_cluster_type == cluster_slave) {
       poll_wait(file, &pfr->ring_slots_waitqueue, wait);
       // if(1) /* queued packets info not available */
         mask |= POLLIN | POLLRDNORM;
@@ -7662,7 +7905,7 @@ static int ring_setsockopt(struct socket *sock,
         return(-EINVAL);
       }
 
-      pfr->dna_cluster_type = dna_cluster_master;
+      pfr->dna_cluster_type = cluster_master;
 
       /* copying back the structure (actually we need cdnaci.recovered only) */
       if(copy_to_user(optval, &cdnaci, sizeof(cdnaci))) {
@@ -7706,7 +7949,7 @@ static int ring_setsockopt(struct socket *sock,
       }
 
       pfr->dna_cluster_slave_id = adnaci.slave_id;
-      pfr->dna_cluster_type = dna_cluster_slave;
+      pfr->dna_cluster_type = cluster_slave;
 
       if(copy_to_user(optval, &adnaci, sizeof(adnaci))) { /* copying back values (return adnaci.mode) */
         dna_cluster_remove(pfr->dna_cluster, pfr->dna_cluster_type, pfr->dna_cluster_slave_id);
@@ -7731,6 +7974,49 @@ static int ring_setsockopt(struct socket *sock,
       if(pfr->dna_cluster && slave_id < pfr->dna_cluster->num_slaves && pfr->dna_cluster->slave_waitqueue[slave_id])
         wake_up_interruptible(pfr->dna_cluster->slave_waitqueue[slave_id]);
     }
+    break;
+
+    case SO_CREATE_CLUSTER_REFEREE:
+    {
+      struct create_cluster_referee_info ccri;
+
+      if(optlen < sizeof(ccri))
+        return(-EINVAL);
+
+      if(copy_from_user(&ccri, optval, sizeof(ccri)))
+	return(-EFAULT);
+
+      if (create_cluster_referee(pfr, ccri.cluster_id, &ccri.recovered) < 0)
+        return(-EINVAL);
+
+      /* copying back the structure (actually we need ccri.recovered only) */
+      if(copy_to_user(optval, &ccri, sizeof(ccri))) {
+        remove_cluster_referee(pfr);
+        return(-EFAULT);
+      }
+
+      if(unlikely(enable_debug))
+        printk("[PF_RING] SO_CREATE_CLUSTER_REFEREE done [%u]\n", ccri.cluster_id);
+    }
+
+    found = 1;
+    break;
+
+    case SO_LOCK_CLUSTER_OBJECT:
+    {
+      struct lock_cluster_object_info lcoi;
+
+      if(copy_from_user(&lcoi, optval, sizeof(lcoi)))
+	return(-EFAULT);
+
+      if (lock_cluster_object(pfr, lcoi.cluster_id, lcoi.object_type, lcoi.object_id, lcoi.lock_mask, pfr->cluster_referee == NULL) < 0)
+        return(-EINVAL);
+
+      if(unlikely(enable_debug))
+        printk("[PF_RING] SO_LOCK_CLUSTER_OBJECT done [%u.%u@%u]\n", lcoi.object_type, lcoi.object_id, lcoi.cluster_id);
+    }
+
+    found = 1;
     break;
 
   case SO_SHUTDOWN_RING:
@@ -8918,6 +9204,7 @@ static int __init ring_init(void)
   INIT_LIST_HEAD(&ring_dna_devices_list);
   INIT_LIST_HEAD(&userspace_ring_list);
   INIT_LIST_HEAD(&dna_cluster_list);
+  INIT_LIST_HEAD(&cluster_referee_list);
 
   for(i = 0; i < MAX_NUM_DEVICES; i++)
     INIT_LIST_HEAD(&device_ring_list[i]);
