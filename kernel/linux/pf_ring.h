@@ -75,7 +75,8 @@
 #define SO_SET_APPL_STATS                133
 #define SO_SET_STACK_INJECTION_MODE      134 /* stack injection/interception from userspace */
 #define SO_CREATE_CLUSTER_REFEREE        135
-#define SO_LOCK_CLUSTER_OBJECT           136
+#define SO_PUBLISH_CLUSTER_OBJECT        136
+#define SO_LOCK_CLUSTER_OBJECT           137
 
 /* Get */
 #define SO_GET_RING_VERSION              170
@@ -842,6 +843,13 @@ struct create_cluster_referee_info {
   u_int32_t recovered; /* fresh or recovered */
 };
 
+struct public_cluster_object_info {
+  u_int32_t cluster_id;
+  u_int32_t object_type;
+  u_int32_t object_id;
+  u_int32_t references;
+};
+
 struct lock_cluster_object_info {
   u_int32_t cluster_id;
   u_int32_t object_type;
@@ -1021,6 +1029,7 @@ struct dna_cluster {
 typedef struct {
   u_int32_t object_type;
   u_int32_t object_id;
+  u_int32_t references;
   u_int32_t lock_bitmap;
 
   struct list_head list;

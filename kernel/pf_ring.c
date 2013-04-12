@@ -5535,7 +5535,6 @@ unlock:
 
 static void remove_cluster_referee(struct pf_ring_socket *pfr)
 {
-  struct cluster_referee *cr = pfr->cluster_referee;
   struct list_head *ptr, *tmp_ptr;
   struct cluster_referee *entry;
   struct list_head *obj_ptr, *obj_tmp_ptr, *c_obj_ptr, *c_obj_tmp_ptr;
@@ -5546,27 +5545,18 @@ static void remove_cluster_referee(struct pf_ring_socket *pfr)
   list_for_each_safe(ptr, tmp_ptr, &cluster_referee_list) {
     entry = list_entry(ptr, struct cluster_referee, list);
 
-    if(entry == cr) {
-
-      entry->users--;
-      if (pfr->cluster_role == cluster_master)
-        entry->master_running = 0;
+    if(entry == pfr->cluster_referee) {
 
       /* removing locked objects from socket */
       list_for_each_safe(obj_ptr, obj_tmp_ptr, &pfr->locked_objects_list) {
         obj_entry = list_entry(obj_ptr, cluster_object, list);
         
 	/* removing locks on current object from cluster */
-        list_for_each_safe(c_obj_ptr, c_obj_tmp_ptr, &cr->objects_list) {
+        list_for_each_safe(c_obj_ptr, c_obj_tmp_ptr, &entry->objects_list) {
           c_obj_entry = list_entry(c_obj_ptr, cluster_object, list);
           if(c_obj_entry->object_type == obj_entry->object_type && c_obj_entry->object_id == obj_entry->object_id) {
-
             c_obj_entry->lock_bitmap &= ~obj_entry->lock_bitmap;
-
-            if (!c_obj_entry->lock_bitmap) { /* lock bitmap empty, removing object*/
-	      list_del(c_obj_ptr);
-	      kfree(c_obj_entry); 
-	    }
+	    c_obj_entry->references -= obj_entry->references;
 	  }
 	}
 
@@ -5574,12 +5564,32 @@ static void remove_cluster_referee(struct pf_ring_socket *pfr)
 	kfree(obj_entry);
       }
 
+      if (pfr->cluster_role == cluster_master)
+        entry->master_running = 0;
+
+      if (!entry->master_running) { /* with no master objects without a reference get removed */
+        list_for_each_safe(c_obj_ptr, c_obj_tmp_ptr, &entry->objects_list) {
+          c_obj_entry = list_entry(c_obj_ptr, cluster_object, list);
+	  if (c_obj_entry->references == 0) {
+	    list_del(c_obj_ptr);
+	    kfree(c_obj_entry); 
+	  }
+	}
+      }
+
+      entry->users--;
+
       if(entry->users == 0) {
+
+	/* removing all objects from cluster */
+        list_for_each_safe(c_obj_ptr, c_obj_tmp_ptr, &entry->objects_list) {
+          c_obj_entry = list_entry(c_obj_ptr, cluster_object, list);
+	  list_del(c_obj_ptr);
+	  kfree(c_obj_entry); 
+	}
+
         list_del(ptr);
         kfree(entry);
-
-	if(unlikely(enable_debug))
-	  printk("[PF_RING] %s: success\n", __FUNCTION__);
       }
 
       break;
@@ -5591,99 +5601,156 @@ static void remove_cluster_referee(struct pf_ring_socket *pfr)
   pfr->cluster_referee = NULL;
 }
 
-static int lock_cluster_object(struct pf_ring_socket *pfr, 
-                               u_int32_t cluster_id, u_int32_t object_type, u_int32_t object_id,
-                               u_int32_t lock_mask, u_int8_t increase_users) 
+static int publish_cluster_object(struct pf_ring_socket *pfr, u_int32_t cluster_id, 
+                                 u_int32_t object_type, u_int32_t object_id, u_int32_t *references) 
 {
   struct list_head *ptr, *tmp_ptr;
   struct cluster_referee *entry, *cr = NULL;
   struct list_head *obj_ptr, *obj_tmp_ptr;
-  cluster_object *obj_entry, *obj;
+  cluster_object *obj_entry, *c_obj = NULL;
   int rc = -1;
 
   write_lock(&cluster_referee_lock);
 
   list_for_each_safe(ptr, tmp_ptr, &cluster_referee_list) {
     entry = list_entry(ptr, struct cluster_referee, list);
-
     if(entry->id == cluster_id) {
-
-      if(unlikely(enable_debug))
-        printk("[PF_RING] %s: cluster %u found\n", __FUNCTION__, cluster_id);
-
       cr = entry;
-
-      /* adding locked objects to the cluster */
-      obj = NULL;
-      list_for_each_safe(obj_ptr, obj_tmp_ptr, &cr->objects_list) {
-        obj_entry = list_entry(obj_ptr, cluster_object, list);
-        if(obj_entry->object_type == object_type && obj_entry->object_id == object_id) {
-	  obj = obj_entry;
-	  if (obj->lock_bitmap & lock_mask) {
-            if(unlikely(enable_debug))
-              printk("[PF_RING] %s: trying to lock already-locked features on cluster %u\n", __FUNCTION__, cluster_id);
-	    goto unlock;
-	  }
-	  break;
-	}
-      }
-
-      if(obj == NULL) {
-        obj = kcalloc(1, sizeof(cluster_object), GFP_KERNEL);
-        if(obj == NULL) {
-          if(unlikely(enable_debug))
-            printk("[PF_RING] %s: memory allocation failure\n", __FUNCTION__);
-          goto unlock;
-        }
-
-        list_add(&obj->list, &cr->objects_list);
-      }
-
-      obj->lock_bitmap |= lock_mask;
-
-      /* adding locked objects to the socket */
-      obj = NULL;
-      list_for_each_safe(obj_ptr, obj_tmp_ptr, &pfr->locked_objects_list) {
-        obj_entry = list_entry(obj_ptr, cluster_object, list);
-        if(obj_entry->object_type == object_type && obj_entry->object_id == object_id) {
-	  obj = obj_entry;
-	  break;
-	}
-      }
-
-      if(obj == NULL) {
-        obj = kcalloc(1, sizeof(cluster_object), GFP_KERNEL);
-        if(obj == NULL) {
-          if(unlikely(enable_debug))
-            printk("[PF_RING] %s: memory allocation failure\n", __FUNCTION__);
-          goto unlock;
-        }
-
-        list_add(&obj->list, &pfr->locked_objects_list);
-      }
-
-      obj->lock_bitmap |= lock_mask;
-      
-      if(unlikely(enable_debug))
-        printk("[PF_RING] %s: new object lock on cluster %u\n", __FUNCTION__, cluster_id);
-
-      if (pfr->cluster_referee == NULL) {
-        pfr->cluster_referee = cr;
-        cr->users++;
-      }
-
-      rc = 0;
       break;
     }
   }
 
+  if (cr == NULL) {
+    if(unlikely(enable_debug))
+      printk("[PF_RING] %s: cluster %u not found\n", __FUNCTION__, cluster_id);
+    goto unlock;
+  }
+
+  list_for_each_safe(obj_ptr, obj_tmp_ptr, &cr->objects_list) {
+    obj_entry = list_entry(obj_ptr, cluster_object, list);
+    if(obj_entry->object_type == object_type && obj_entry->object_id == object_id) {
+      /* already published or with references (recovery) */
+      c_obj = obj_entry;
+      break;
+    }
+  }
+
+  if(c_obj == NULL) {
+    c_obj = kcalloc(1, sizeof(cluster_object), GFP_KERNEL);
+    if(c_obj == NULL) {
+      if(unlikely(enable_debug))
+        printk("[PF_RING] %s: memory allocation failure\n", __FUNCTION__);
+      goto unlock;
+    }
+
+    c_obj->object_type = object_type;
+    c_obj->object_id = object_id;
+
+    list_add(&c_obj->list, &cr->objects_list);
+  }
+
+  if(unlikely(enable_debug))
+    printk("[PF_RING] %s: object %u.%u published in cluster %u\n", __FUNCTION__, object_type, object_id, cluster_id);
+
+  *references = c_obj->references;
+  rc = 0;
+
 unlock:
   write_unlock(&cluster_referee_lock);
+
+  return rc;
+}
+
+static int lock_cluster_object(struct pf_ring_socket *pfr, u_int32_t cluster_id, 
+                               u_int32_t object_type, u_int32_t object_id, u_int32_t lock_mask) 
+{
+  struct list_head *ptr, *tmp_ptr;
+  struct cluster_referee *entry, *cr = NULL;
+  struct list_head *obj_ptr, *obj_tmp_ptr;
+  cluster_object *obj_entry, *obj = NULL, *c_obj = NULL;
+  int rc = -1;
+
+  write_lock(&cluster_referee_lock);
+
+  list_for_each_safe(ptr, tmp_ptr, &cluster_referee_list) {
+    entry = list_entry(ptr, struct cluster_referee, list);
+    if(entry->id == cluster_id) {
+      cr = entry;
+      break;
+    }
+  }
 
   if (cr == NULL) {
     if(unlikely(enable_debug))
       printk("[PF_RING] %s: cluster %u not found\n", __FUNCTION__, cluster_id);
+    goto unlock;
   }
+
+  /* adding locked objects to the cluster */
+  list_for_each_safe(obj_ptr, obj_tmp_ptr, &cr->objects_list) {
+    obj_entry = list_entry(obj_ptr, cluster_object, list);
+
+    if(unlikely(enable_debug))
+      printk("[PF_RING] %s: obj %u.%u\n", __FUNCTION__, obj_entry->object_type, obj_entry->object_id); 
+
+    if(obj_entry->object_type == object_type && obj_entry->object_id == object_id) {
+      c_obj = obj_entry;
+      if (c_obj->lock_bitmap & lock_mask) {
+        if(unlikely(enable_debug))
+          printk("[PF_RING] %s: trying to lock already-locked features on cluster %u\n", __FUNCTION__, cluster_id);
+        goto unlock;
+      }
+      break;
+    }
+  }
+
+  if(c_obj == NULL) {
+    if(unlikely(enable_debug))
+      printk("[PF_RING] %s: object %u.%u not in the public list of cluster %u\n", __FUNCTION__, object_type, object_id, cluster_id);
+    goto unlock;
+  }
+
+  /* adding locked objects to the socket */
+  list_for_each_safe(obj_ptr, obj_tmp_ptr, &pfr->locked_objects_list) {
+    obj_entry = list_entry(obj_ptr, cluster_object, list);
+    if(obj_entry->object_type == object_type && obj_entry->object_id == object_id) {
+      obj = obj_entry;
+      break;
+    }
+  }
+
+  if(obj == NULL) {
+    obj = kcalloc(1, sizeof(cluster_object), GFP_KERNEL);
+    if(obj == NULL) {
+      if(unlikely(enable_debug))
+        printk("[PF_RING] %s: memory allocation failure\n", __FUNCTION__);
+      goto unlock;
+    }
+
+    obj->object_type = object_type;
+    obj->object_id = object_id;
+
+    list_add(&obj->list, &pfr->locked_objects_list);
+  }
+
+  c_obj->lock_bitmap |= lock_mask;
+  c_obj->references++;
+
+  obj->lock_bitmap |= lock_mask;
+  obj->references++;
+      
+  if(unlikely(enable_debug))
+    printk("[PF_RING] %s: new object lock on cluster %u\n", __FUNCTION__, cluster_id);
+
+  if (pfr->cluster_referee == NULL) {
+    pfr->cluster_referee = cr;
+    cr->users++;
+  }
+
+  rc = 0;
+
+unlock:
+  write_unlock(&cluster_referee_lock);
 
   return rc;
 }
@@ -8005,6 +8072,28 @@ static int ring_setsockopt(struct socket *sock,
     found = 1;
     break;
 
+    case SO_PUBLISH_CLUSTER_OBJECT:
+    {
+      struct public_cluster_object_info pcoi;
+
+      if(copy_from_user(&pcoi, optval, sizeof(pcoi)))
+	return(-EFAULT);
+
+      if (publish_cluster_object(pfr, pcoi.cluster_id, pcoi.object_type, pcoi.object_id, &pcoi.references) < 0)
+        return(-EINVAL);
+
+      /* copying back the structure (actually we need pcoi.references only) */
+      if(copy_to_user(optval, &pcoi, sizeof(pcoi))) {
+        return(-EFAULT);
+      }
+
+      if(unlikely(enable_debug))
+        printk("[PF_RING] SO_PUBLISH_CLUSTER_OBJECT done [%u.%u@%u]\n", pcoi.object_type, pcoi.object_id, pcoi.cluster_id);
+    }
+
+    found = 1;
+    break;
+
     case SO_LOCK_CLUSTER_OBJECT:
     {
       struct lock_cluster_object_info lcoi;
@@ -8012,7 +8101,7 @@ static int ring_setsockopt(struct socket *sock,
       if(copy_from_user(&lcoi, optval, sizeof(lcoi)))
 	return(-EFAULT);
 
-      if (lock_cluster_object(pfr, lcoi.cluster_id, lcoi.object_type, lcoi.object_id, lcoi.lock_mask, pfr->cluster_referee == NULL) < 0)
+      if (lock_cluster_object(pfr, lcoi.cluster_id, lcoi.object_type, lcoi.object_id, lcoi.lock_mask) < 0)
         return(-EINVAL);
 
       if(unlikely(enable_debug))
