@@ -5501,6 +5501,7 @@ static int create_cluster_referee(struct pf_ring_socket *pfr, u_int32_t cluster_
     }
 
     cr->id = cluster_id;
+    INIT_LIST_HEAD(&cr->objects_list);
 
     list_add(&cr->list, &cluster_referee_list);
 
@@ -5521,7 +5522,8 @@ unlock:
   write_unlock(&cluster_referee_lock);
 
   if(cr == NULL) {
-    printk("[PF_RING] %s: error\n", __FUNCTION__);
+    if(unlikely(enable_debug)) 
+      printk("[PF_RING] %s: error\n", __FUNCTION__);
     return -1;
   } else {
     if(unlikely(enable_debug))
@@ -5590,8 +5592,8 @@ static void remove_cluster_referee(struct pf_ring_socket *pfr)
 }
 
 static int lock_cluster_object(struct pf_ring_socket *pfr, 
-                                                   u_int32_t cluster_id, u_int32_t object_type, u_int32_t object_id,
-                                                   u_int32_t lock_mask, u_int8_t increase_users) 
+                               u_int32_t cluster_id, u_int32_t object_type, u_int32_t object_id,
+                               u_int32_t lock_mask, u_int8_t increase_users) 
 {
   struct list_head *ptr, *tmp_ptr;
   struct cluster_referee *entry, *cr = NULL;
@@ -5661,8 +5663,9 @@ static int lock_cluster_object(struct pf_ring_socket *pfr,
       }
 
       obj->lock_bitmap |= lock_mask;
-
-      printk("[PF_RING] %s: new object lock on cluster %u\n", __FUNCTION__, cluster_id);
+      
+      if(unlikely(enable_debug))
+        printk("[PF_RING] %s: new object lock on cluster %u\n", __FUNCTION__, cluster_id);
 
       if (pfr->cluster_referee == NULL) {
         pfr->cluster_referee = cr;
