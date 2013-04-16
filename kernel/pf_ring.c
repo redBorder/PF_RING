@@ -5686,6 +5686,12 @@ static int lock_cluster_object(struct pf_ring_socket *pfr, u_int32_t cluster_id,
     goto unlock;
   }
 
+  if (!cr->master_running) {
+    if(unlikely(enable_debug))
+      printk("[PF_RING] %s: cluster %u not running, new locks are not allowed\n", __FUNCTION__, cluster_id);
+    goto unlock;
+  }
+
   /* adding locked objects to the cluster */
   list_for_each_safe(obj_ptr, obj_tmp_ptr, &cr->objects_list) {
     obj_entry = list_entry(obj_ptr, cluster_object, list);
