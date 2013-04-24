@@ -6495,7 +6495,7 @@ static int ring_sendmsg(struct kiocb *iocb, struct socket *sock,
   struct pf_ring_socket *pfr = ring_sk(sock->sk);
   struct sockaddr_pkt *saddr;
   struct sk_buff *skb;
-  __be16 proto=0;
+  __be16 proto = 0;
   int err = 0;
 
   /* Userspace RING: Waking up the ring consumer */
@@ -6544,7 +6544,7 @@ static int ring_sendmsg(struct kiocb *iocb, struct socket *sock,
   err = -EMSGSIZE;
   if(len > pfr->ring_netdev->dev->mtu + pfr->ring_netdev->dev->hard_header_len)
     goto out;
-
+ 
   if (pfr->stack_injection_mode) {
     err = pf_ring_inject_packet_to_stack(pfr->ring_netdev->dev, msg, len); 
     goto out;
@@ -6619,10 +6619,12 @@ static int ring_sendmsg(struct kiocb *iocb, struct socket *sock,
   kfree_skb(skb);
 
  out:
-  if(err == 0)
-    pfr->slots_info->good_pkt_sent++;
-  else
-    pfr->slots_info->pkt_send_error++;
+  if(pfr->slots_info) {
+    if(err == 0)
+      pfr->slots_info->good_pkt_sent++;
+    else
+      pfr->slots_info->pkt_send_error++;
+  }
 
   return err;
 }
