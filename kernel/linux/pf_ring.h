@@ -1064,6 +1064,24 @@ typedef u_int32_t (*do_rehash_rss)(struct sk_buff *skb, struct pfring_pkthdr *hd
 
 /* ************************************************* */
 
+#define NUM_FRAGMENTS_HASH_SLOTS 4096
+
+struct hash_fragment_node {
+  /* Key */
+  u_int16_t ip_fragment_id;
+
+  /* Value */
+  u_int8_t cluster_app_id; /* Identifier of the app where the main fragment has been placed */
+
+  /* Expire */
+  unsigned long expire_jiffies; /* Time at which this entry will be expired */
+
+  /* Next element of collision list */
+  struct hash_fragment_node *next;
+};
+
+/* ************************************************* */
+
 #define MAX_NUM_DEVICES_ID    MAX_NUM_IFIDX
 /*
  * Ring options
@@ -1111,7 +1129,7 @@ struct pf_ring_socket {
   struct dma_memory_info *extra_dma_memory;
 
   /* Cluster */
-  u_short cluster_id; /* 0 = no cluster */
+  u_int16_t cluster_id /* 0 = no cluster */;
 
   /* Channel */
   int32_t channel_id_mask;  /* -1 = any channel */
