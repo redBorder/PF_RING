@@ -51,7 +51,8 @@
 #define MAX_NUM_DEV            DNA_CLUSTER_MAX_NUM_SOCKETS
 #define DEFAULT_DEVICE         "dna0"
 
-int num_app = 1, num_dev = 0;
+int num_dev = 0, num_apps = 0, tot_num_slaves = 0;
+int instances_per_app[MAX_NUM_APP];
 pfring *pd[MAX_NUM_DEV];
 pfring_dna_cluster *dna_cluster_handle;
 
@@ -206,7 +207,7 @@ void printHelp(void) {
   printf("-h              Print this help\n");
   printf("-i <device>     Device name (comma-separated list)\n");
   printf("-c <cluster>    Cluster ID\n");
-  printf("-n <num app>    Number of applications\n");
+  printf("-n <num>        Number of app instances (comma-separated list for multiple apps)\n");
   printf("-r <core_id>    Bind the RX thread to a core\n");
   printf("-t <core_id>    Bind the TX thread to a core\n");
   printf("-m <hash mode>  Hashing modes:\n"
@@ -282,14 +283,33 @@ inline u_int32_t master_custom_hash_function(const u_char *buffer, const u_int16
 
 static int master_distribution_function(const u_char *buffer, const u_int16_t buffer_len, const pfring_dna_cluster_slaves_info *slaves_info, u_int32_t *id_mask, u_int32_t *hash) {
   u_int32_t slave_idx;
+  
+  /* computing a bidirectional software hash */
+  *hash = master_custom_hash_function(buffer, buffer_len);
+	   
+  /* balancing on hash */
+  slave_idx = (*hash) % slaves_info->num_slaves;
+  *id_mask = (1 << slave_idx);
+
+  return DNA_CLUSTER_PASS;
+}
+
+/* ******************************* */
+
+static int multi_app_distribution_function(const u_char *buffer, const u_int16_t buffer_len, const pfring_dna_cluster_slaves_info *slaves_info, u_int32_t *id_mask, u_int32_t *hash) {
+  u_int32_t i, offset = 0, app_instance, slaves_mask = 0;
 
   /* computing a bidirectional software hash */
   *hash = master_custom_hash_function(buffer, buffer_len);
 
   /* balancing on hash */
-  slave_idx = (*hash) % slaves_info->num_slaves;
-  *id_mask = (1 << slave_idx);
+  for (i = 0; i < num_apps; i++) {
+    app_instance = (*hash) % instances_per_app[i];
+    slaves_mask |= (1 << (offset + app_instance));
+    offset += instances_per_app[i];
+  }
 
+  *id_mask = slaves_mask;
   return DNA_CLUSTER_PASS;
 }
 
@@ -311,8 +331,10 @@ int main(int argc, char* argv[]) {
   char buf[32];
   u_int32_t version;
   int rx_bind_core = 0, tx_bind_core = 1;
-  int cluster_id = -1;
-  char *device = NULL, *dev, *dev_pos = NULL, *hugepages_mountpoint = NULL;
+  int off, i, j, cluster_id = -1;
+  char *device = NULL, *dev, *dev_pos = NULL;
+  char *applications = NULL, *app, *app_pos = NULL;
+  char *hugepages_mountpoint = NULL;
   int daemon_mode = 0;
 
   startTime.tv_sec = 0;
@@ -341,7 +363,7 @@ int main(int argc, char* argv[]) {
       cluster_id = atoi(optarg);
       break;
     case 'n':
-      num_app = atoi(optarg);
+      applications = strdup(optarg);
       break;
     case 'm':
       hashing_mode = atoi(optarg);
@@ -359,14 +381,33 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  if (cluster_id < 0 || num_app < 1
-      || hashing_mode < 0 || hashing_mode > 3)
-    printHelp();
+  if (applications != NULL) {
+    app = strtok_r(applications, ",", &app_pos);
+    while(app != NULL) {
+      instances_per_app[num_apps] = atoi(app);
 
-  if (num_app > MAX_NUM_APP) {
-    printf("WARNING: You cannot instantiate more than %u slave applications\n", MAX_NUM_APP);
-    num_app = MAX_NUM_APP;
+      if (instances_per_app[num_apps] <= 0)
+        printHelp();
+
+      tot_num_slaves += instances_per_app[num_apps];
+      num_apps++;
+
+      app = strtok_r(NULL, ",", &app_pos);
+    }
   }
+
+  if (tot_num_slaves > MAX_NUM_APP) {
+    printf("WARNING: You cannot instantiate more than %u slave applications\n", MAX_NUM_APP);
+    printHelp();
+  }
+
+  if (num_apps == 0) {
+    instances_per_app[num_apps] = 1;
+    num_apps = 1;
+  }
+
+  if (cluster_id < 0 || hashing_mode < 0 || hashing_mode > 3)
+    printHelp();
 
   if (device == NULL) device = strdup(DEFAULT_DEVICE);
 
@@ -374,10 +415,10 @@ int main(int argc, char* argv[]) {
     daemonize();
 
   printf("Capturing from %s\n", device);
-
+  
   /* Create the DNA cluster */
   if ((dna_cluster_handle = dna_cluster_create(cluster_id, 
-                                               num_app, 
+                                               tot_num_slaves, 
 					       0 
 					       /* | DNA_CLUSTER_DIRECT_FORWARDING */
                                                /* | DNA_CLUSTER_NO_ADDITIONAL_BUFFERS */
@@ -449,27 +490,25 @@ int main(int argc, char* argv[]) {
   dna_cluster_set_wait_mode(dna_cluster_handle, !wait_for_packet /* active_wait */);
   dna_cluster_set_cpu_affinity(dna_cluster_handle, rx_bind_core, tx_bind_core);
 
-  /* The default distribution function allows to balance per IP 
-    in a coherent mode (not like RSS that does not do that) */
-  if (hashing_mode > 0) {
-    if (hashing_mode <= 2)
-      dna_cluster_set_distribution_function(dna_cluster_handle, master_distribution_function);
-    else /* hashing_mode == 2 */
-      dna_cluster_set_distribution_function(dna_cluster_handle, fanout_distribution_function);
-  }
-
   switch(hashing_mode) {
   case 0:
     printf("Hashing packets per-IP Address\n");
+    /* The default distribution function already balances per IP in a coherent mode */
+    if (num_apps > 1) dna_cluster_set_distribution_function(dna_cluster_handle, multi_app_distribution_function);
     break;
   case 1:
     printf("Hashing packets per-MAC Address\n");
+    if (num_apps > 1) dna_cluster_set_distribution_function(dna_cluster_handle, multi_app_distribution_function);
+    else dna_cluster_set_distribution_function(dna_cluster_handle, master_distribution_function);
     break;
   case 2:
     printf("Hashing packets per-IP protocol (TCP, UDP, ICMP...)\n");
+    if (num_apps > 1) dna_cluster_set_distribution_function(dna_cluster_handle, multi_app_distribution_function);
+    else dna_cluster_set_distribution_function(dna_cluster_handle, master_distribution_function);
     break;
   case 3:
     printf("Replicating each packet on all applications (no copy)\n");
+    dna_cluster_set_distribution_function(dna_cluster_handle, fanout_distribution_function);
     break;
   }
 
@@ -481,9 +520,19 @@ int main(int argc, char* argv[]) {
   }
 
   printf("The DNA cluster [id: %u][num slave apps: %u] is now running...\n", 
-	 cluster_id, num_app);
-  printf("You can now attach to DNA cluster up to %d slaves as follows:\n", num_app);
-  printf("\tpfcount -i dnacluster:%d\n", cluster_id);
+	 cluster_id, tot_num_slaves);
+  printf("You can now attach to DNA cluster up to %d slaves as follows:\n", 
+         tot_num_slaves);
+  if (num_apps == 1) {
+    printf("\tpfcount -i dnacluster:%d\n", cluster_id);
+  } else {
+    off = 0;
+    for (i = 0; i < num_apps; i++) {
+      printf("Application %u\n", i);
+      for (j = 0; j < instances_per_app[i]; j++)
+        printf("\tpfcount -i dnacluster:%d@%u\n", cluster_id, off++);
+    }
+  }
 
   signal(SIGINT, sigproc);
   signal(SIGTERM, sigproc);
