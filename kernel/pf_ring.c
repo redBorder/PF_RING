@@ -195,8 +195,8 @@ static struct pf_ring_socket* device_rings[MAX_NUM_IFIDX][MAX_NUM_RX_CHANNELS] =
 static u_int8_t num_rings_per_device[MAX_NUM_IFIDX] = { 0 };
 static u_int8_t num_any_rings = 0;
 
-/* 
-   Fragment handling for clusters 
+/*
+   Fragment handling for clusters
 
    As in a cluster packet fragments cannot be hashed, we have a cache where we can keep
    the association between the IP packet identifier and the balanced application.
@@ -211,7 +211,6 @@ static rwlock_t cluster_fragments_lock =
   (rwlock_t)__RW_LOCK_UNLOCKED(cluster_fragments_lock)
 #endif
 ;
-
 
 /* List of all DNA (Direct NIC Access) devices */
 static struct list_head ring_dna_devices_list;
@@ -277,6 +276,8 @@ static int reflect_packet(struct sk_buff *skb,
 			  int displ, rule_action_behaviour behaviour,
 			  u_int8_t do_clone_skb);
 
+static void purge_idle_fragment_cache(void);
+
 /* ********************************** */
 
 static rwlock_t ring_mgmt_lock;
@@ -341,8 +342,8 @@ static int remove_from_cluster(struct sock *sock, struct pf_ring_socket *pfr);
 static int ring_map_dna_device(struct pf_ring_socket *pfr,
 			       dna_device_mapping * mapping);
 
-static u_int8_t get_fragment_app_id(u_int16_t fragment_id);
-static void add_fragment_app_id(u_int16_t fragment_id, u_int8_t app_id);
+static u_int8_t get_fragment_app_id(u_int32_t ipv4_src_host, u_int32_t ipv4_dst_host, u_int16_t fragment_id);
+static void add_fragment_app_id(u_int32_t ipv4_src_host, u_int32_t ipv4_dst_host, u_int16_t fragment_id, u_int8_t app_id);
 
 /* Extern */
 extern
@@ -1423,17 +1424,21 @@ static int ring_proc_get_info(char *buf, char **start, off_t offset,
 
   if(data == NULL) {
     /* /proc/net/pf_ring/info */
-    rlen = sprintf(buf, "PF_RING Version     : %s ($Revision: %s$)\n", RING_VERSION, SVN_REV);
-    rlen += sprintf(buf + rlen, "Ring slots          : %d\n", min_num_slots);
-    rlen += sprintf(buf + rlen, "Slot version        : %d\n", RING_FLOWSLOT_VERSION);
-    rlen += sprintf(buf + rlen, "Capture TX          : %s\n", enable_tx_capture ? "Yes [RX+TX]" : "No [RX only]");
-    rlen += sprintf(buf + rlen, "IP Defragment       : %s\n", enable_ip_defrag ? "Yes" : "No");
-    rlen += sprintf(buf + rlen, "Socket Mode         : %s\n", quick_mode ? "Quick" : "Standard");
-    rlen += sprintf(buf + rlen, "Transparent mode    : %s\n",
-		    (transparent_mode == standard_linux_path ? "Yes (mode 0)" :
-		     (transparent_mode == driver2pf_ring_transparent ? "Yes (mode 1)" : "No (mode 2)")));
-    rlen += sprintf(buf + rlen, "Total rings         : %d\n", ring_table_size);
-    rlen += sprintf(buf + rlen, "Total plugins       : %d\n", plugin_registration_size);
+    rlen = sprintf(buf,         "PF_RING Version        : %s ($Revision: %s$)\n", RING_VERSION, SVN_REV);
+    rlen += sprintf(buf + rlen, "Ring slots             : %d\n", min_num_slots);
+    rlen += sprintf(buf + rlen, "Slot version           : %d\n", RING_FLOWSLOT_VERSION);
+    rlen += sprintf(buf + rlen, "Total rings            : %d\n", ring_table_size);
+    rlen += sprintf(buf + rlen, "\nStandard (non DNA) Options\n");
+    rlen += sprintf(buf + rlen, "Capture TX             : %s\n", enable_tx_capture ? "Yes [RX+TX]" : "No [RX only]");
+    rlen += sprintf(buf + rlen, "IP Defragment          : %s\n", enable_ip_defrag ? "Yes" : "No");
+    rlen += sprintf(buf + rlen, "Socket Mode            : %s\n", quick_mode ? "Quick" : "Standard");
+    rlen += sprintf(buf + rlen, "Transparent mode       : %s\n",
+		    (transparent_mode == standard_linux_path ? "Yes [mode 0]" :
+		     (transparent_mode == driver2pf_ring_transparent ? "Yes [mode 1]" : "No [mode 2]")));
+    rlen += sprintf(buf + rlen, "Total plugins          : %d\n", plugin_registration_size);
+
+    purge_idle_fragment_cache();
+    rlen += sprintf(buf + rlen, "Cluster Fragment Queue : %u\n", num_cluster_fragments);
   } else {
     /* Detailed statistics about a PF_RING */
     struct pf_ring_socket *pfr = (struct pf_ring_socket *)data;
@@ -2264,7 +2269,7 @@ static int parse_pkt(struct sk_buff *skb,
 		     u_int16_t skb_displ,
 		     struct pfring_pkthdr *hdr,
 		     u_int16_t *ip_id,
-		     u_int8_t *first_fragment, 
+		     u_int8_t *first_fragment,
 		     u_int8_t *second_fragment) {
   int rc;
   u_char buffer[128]; /* Enough for standard and tunneled headers */
@@ -2490,9 +2495,9 @@ static int match_filtering_rule(struct pf_ring_socket *pfr,
 
   if(hdr->extended_hdr.parsed_pkt.ip_version == 6) {
     /* IPv6 */
-    if(!match_ipv6(&hdr->extended_hdr.parsed_pkt.ip_src, &rule->rule.extended_fields.tunnel.dhost_mask, 
+    if(!match_ipv6(&hdr->extended_hdr.parsed_pkt.ip_src, &rule->rule.extended_fields.tunnel.dhost_mask,
 		   &rule->rule.extended_fields.tunnel.dhost)
-       || !match_ipv6(&hdr->extended_hdr.parsed_pkt.ip_dst, &rule->rule.extended_fields.tunnel.shost_mask, 
+       || !match_ipv6(&hdr->extended_hdr.parsed_pkt.ip_dst, &rule->rule.extended_fields.tunnel.shost_mask,
 		      &rule->rule.extended_fields.tunnel.shost))
       return(0);
   } else {
@@ -2512,9 +2517,9 @@ static int match_filtering_rule(struct pf_ring_socket *pfr,
 
   if(hdr->extended_hdr.parsed_pkt.ip_version == 6) {
     /* IPv6 */
-    if(!match_ipv6(&hdr->extended_hdr.parsed_pkt.ip_src, &rule->rule.core_fields.shost_mask, 
+    if(!match_ipv6(&hdr->extended_hdr.parsed_pkt.ip_src, &rule->rule.core_fields.shost_mask,
 		   &rule->rule.core_fields.shost)
-       || !match_ipv6(&hdr->extended_hdr.parsed_pkt.ip_dst, &rule->rule.core_fields.dhost_mask, 
+       || !match_ipv6(&hdr->extended_hdr.parsed_pkt.ip_dst, &rule->rule.core_fields.dhost_mask,
 		      &rule->rule.core_fields.dhost))
         goto swap_direction;
   } else {
@@ -2551,9 +2556,9 @@ swap_direction:
 
   if(hdr->extended_hdr.parsed_pkt.ip_version == 6) {
     /* IPv6 */
-    if(!match_ipv6(&hdr->extended_hdr.parsed_pkt.ip_src, &rule->rule.core_fields.dhost_mask, 
+    if(!match_ipv6(&hdr->extended_hdr.parsed_pkt.ip_src, &rule->rule.core_fields.dhost_mask,
 		   &rule->rule.core_fields.dhost)
-       || !match_ipv6(&hdr->extended_hdr.parsed_pkt.ip_dst, &rule->rule.core_fields.shost_mask, 
+       || !match_ipv6(&hdr->extended_hdr.parsed_pkt.ip_dst, &rule->rule.core_fields.shost_mask,
 		      &rule->rule.core_fields.shost))
       return(0);
   } else {
@@ -3004,7 +3009,7 @@ static int add_packet_to_ring(struct pf_ring_socket *pfr,
   if(parse_pkt_first) {
     u_int16_t ip_id;
     u_int8_t first_fragment, second_fragment;
-    
+
     parse_pkt(skb, real_skb, displ, hdr, &ip_id, &first_fragment, &second_fragment);
   }
 
@@ -4085,7 +4090,9 @@ static u_int hash_pkt_cluster(ring_cluster_element *cluster_ptr,
 
     case cluster_per_flow_tcp_5_tuple:
       if(second_fragment)
-	idx = get_fragment_app_id(ip_id);
+	idx = get_fragment_app_id(hdr->extended_hdr.parsed_pkt.ipv4_src,
+				  hdr->extended_hdr.parsed_pkt.ipv4_dst,
+				  ip_id);
       else {
 	if(((hdr->extended_hdr.parsed_pkt.tunnel.tunnel_id == NO_TUNNEL_ID) ?
 	    hdr->extended_hdr.parsed_pkt.l3_proto : hdr->extended_hdr.parsed_pkt.tunnel.tunneled_proto) == IPPROTO_TCP)
@@ -4096,7 +4103,9 @@ static u_int hash_pkt_cluster(ring_cluster_element *cluster_ptr,
 	}
 
 	if(first_fragment)
-	  add_fragment_app_id(ip_id, idx);
+	  add_fragment_app_id(hdr->extended_hdr.parsed_pkt.ipv4_src,
+			      hdr->extended_hdr.parsed_pkt.ipv4_dst,
+			      ip_id, idx);
       }
       break;
 
@@ -4470,7 +4479,8 @@ static int skb_ring_handler(struct sk_buff *skb,
 					  displ, 0, NULL, NULL, 0, real_skb ? &clone_id : NULL);
     }
   } else {
-    is_ip_pkt = parse_pkt(skb, real_skb, displ, &hdr, &ip_id, &first_fragment, &second_fragment);
+    is_ip_pkt = parse_pkt(skb, real_skb, displ, &hdr,
+			  &ip_id, &first_fragment, &second_fragment);
 
     if(enable_ip_defrag) {
       if(real_skb
@@ -4535,10 +4545,11 @@ static int skb_ring_handler(struct sk_buff *skb,
     /* [2] Check socket clusters */
     while(cluster_ptr != NULL) {
       struct pf_ring_socket *pfr;
-      
+
       if(cluster_ptr->cluster.num_cluster_elements > 0) {
-	u_int skb_hash = hash_pkt_cluster(cluster_ptr, &hdr, ip_id, first_fragment, second_fragment);
 	u_short num_iterations;
+	u_int skb_hash = hash_pkt_cluster(cluster_ptr, &hdr,
+					  ip_id, first_fragment, second_fragment);
 
 	/*
 	  We try to add the packet to the right cluster
@@ -7111,13 +7122,14 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 
 /* ************************************* */
 
-static u_int8_t get_fragment_app_id(u_int16_t fragment_id) {
+static u_int8_t get_fragment_app_id(u_int32_t ipv4_src_host, u_int32_t ipv4_dst_host,
+				    u_int16_t fragment_id) {
   u_int hash_id = fragment_id % NUM_FRAGMENTS_HASH_SLOTS;
   struct hash_fragment_node *head, *prev, *next;
   u_int8_t app_id;
 
   if(unlikely(enable_debug))
-    printk("[PF_RING] %s(fragment_id=%d) [num_cluster_fragments=%d]\n", 
+    printk("[PF_RING] %s(fragment_id=%d) [num_cluster_fragments=%d]\n",
 	   __FUNCTION__, fragment_id, num_cluster_fragments);
 
   if(cluster_fragment_hash[hash_id] == NULL)
@@ -7128,7 +7140,9 @@ static u_int8_t get_fragment_app_id(u_int16_t fragment_id) {
 
   while(head != NULL) {
     next = head->next;
-    if(head->ip_fragment_id == fragment_id) {
+    if((head->ip_fragment_id == fragment_id)
+       && (head->ipv4_src_host == ipv4_src_host)
+       && (head->ipv4_dst_host == ipv4_dst_host)) {
       /* Found: 1) return queue_id and 2) delete this entry */
       app_id = head->cluster_app_id;
 
@@ -7136,17 +7150,17 @@ static u_int8_t get_fragment_app_id(u_int16_t fragment_id) {
 	cluster_fragment_hash[hash_id] = next;
       else
 	prev->next = next;
-      
+
       kfree(head), num_cluster_fragments--;
 
       if(unlikely(enable_debug))
 	printk("[PF_RING] %s(fragment_id=%d): found %d [num_cluster_fragments=%d]\n",
 	       __FUNCTION__, fragment_id, app_id, num_cluster_fragments);
-      
+
       write_unlock(&cluster_fragments_lock);
       return(app_id);
     }
-    
+
     prev = head;
     head = next;
   } /* while */
@@ -7179,7 +7193,7 @@ static void purge_idle_fragment_cache(void)
 
 	  if(head->expire_jiffies < jiffies) {
 	    kfree(head), num_cluster_fragments--;
-	    
+
 	    if(prev == NULL)
 	      cluster_fragment_hash[i] = next;
 	    else
@@ -7197,12 +7211,18 @@ static void purge_idle_fragment_cache(void)
 
 /* ************************************* */
 
-static void add_fragment_app_id(u_int16_t fragment_id, u_int8_t app_id) {
+static void add_fragment_app_id(u_int32_t ipv4_src_host, u_int32_t ipv4_dst_host,
+				u_int16_t fragment_id, u_int8_t app_id) {
   u_int hash_id = fragment_id % NUM_FRAGMENTS_HASH_SLOTS;
   struct hash_fragment_node *node;
 
+  if(num_cluster_fragments > MAX_CLUSTER_FRAGMENTS_LEN) {
+    /* Avoid filling up all memory */
+    return;
+  }
+
   if(unlikely(enable_debug))
-    printk("[PF_RING] %s(fragment_id=%d, app_id=%d) [num_cluster_fragments=%d]\n", 
+    printk("[PF_RING] %s(fragment_id=%d, app_id=%d) [num_cluster_fragments=%d]\n",
 	   __FUNCTION__, fragment_id, app_id, num_cluster_fragments);
 
   write_lock(&cluster_fragments_lock);
@@ -7211,7 +7231,9 @@ static void add_fragment_app_id(u_int16_t fragment_id, u_int8_t app_id) {
   node = cluster_fragment_hash[hash_id];
 
   while(node != NULL) {
-    if(node->ip_fragment_id == fragment_id) {
+    if((node->ip_fragment_id == fragment_id)
+       && (node->ipv4_src_host == ipv4_src_host)
+       && (node->ipv4_dst_host == ipv4_dst_host)) {
       /* Duplicate found */
       node->cluster_app_id = app_id, node->expire_jiffies = jiffies + 5*HZ;
       write_unlock(&cluster_fragments_lock);
@@ -7226,8 +7248,11 @@ static void add_fragment_app_id(u_int16_t fragment_id, u_int8_t app_id) {
     write_unlock(&cluster_fragments_lock);
     return;
   }
-  
-  node->ip_fragment_id = fragment_id, node->cluster_app_id = app_id, node->expire_jiffies = jiffies + 5*HZ;
+
+  node->ip_fragment_id = fragment_id, node->ipv4_src_host = ipv4_src_host,
+    node->ipv4_dst_host = ipv4_dst_host, node->cluster_app_id = app_id,
+    node->expire_jiffies = jiffies + 5*HZ;
+
   node->next = cluster_fragment_hash[hash_id];
   cluster_fragment_hash[hash_id] = node;
   num_cluster_fragments++, next_fragment_purge_jiffies = node->expire_jiffies;
@@ -9445,16 +9470,16 @@ static void __exit ring_exit(void)
     list_del(ptr);
     kfree(dev_ptr);
   }
-  
+
   if(num_cluster_fragments > 0) {
     int i;
-    
+
     for(i=0; i<NUM_FRAGMENTS_HASH_SLOTS; i++) {
       if(cluster_fragment_hash[i] != NULL) {
 	struct hash_fragment_node *next, *head;
-	
+
 	head = cluster_fragment_hash[i];
-	
+
 	while(head != NULL) {
 	  next = head->next;
 	  kfree(head);

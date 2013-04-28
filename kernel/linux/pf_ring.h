@@ -1064,10 +1064,12 @@ typedef u_int32_t (*do_rehash_rss)(struct sk_buff *skb, struct pfring_pkthdr *hd
 
 /* ************************************************* */
 
-#define NUM_FRAGMENTS_HASH_SLOTS 4096
+#define NUM_FRAGMENTS_HASH_SLOTS                          4096
+#define MAX_CLUSTER_FRAGMENTS_LEN   8*NUM_FRAGMENTS_HASH_SLOTS
 
 struct hash_fragment_node {
   /* Key */
+  u_int32_t ipv4_src_host, ipv4_dst_host;
   u_int16_t ip_fragment_id;
 
   /* Value */
