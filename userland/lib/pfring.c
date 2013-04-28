@@ -18,10 +18,6 @@
 #include "pfring.h"
 #include <net/ethernet.h>
 
-#ifdef ENABLE_QAT_PM
-#include "pfring_qat.c"
-#endif
-
 // #define RING_DEBUG
 
 #define EXTRA_SAFE 1
@@ -194,14 +190,6 @@ pfring* pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags) 
   if(ring->mtu_len == 0) ring->mtu_len =  9000 /* Jumbo MTU */;
   ring->mtu_len += sizeof(struct ether_header);
 
-#ifdef ENABLE_QAT_PM
-  ring->qat = (QAThandle*)malloc(sizeof(QAThandle));
-  if(ring->qat == NULL) {
-    printf("[PF_RING] Not enough mempory for QAT\n");
-  } else
-    initQAThandle((QAThandle*)ring->qat);
-#endif
-
   ring->initialized = 1;
 
 #ifdef RING_DEBUG
@@ -294,11 +282,6 @@ void pfring_close(pfring *ring) {
     pthread_rwlock_destroy(&ring->tx_lock);
   }
 
-#ifdef ENABLE_QAT_PM
-  if(ring->qat)
-    freeHandle((QAThandle*)ring->qat);
-#endif
-
   free(ring->device_name);
   free(ring);
 }
@@ -370,24 +353,11 @@ int pfring_loop(pfring *ring, pfringProcesssPacket looper,
   while(!ring->break_recv_loop) {
     rc = ring->recv(ring, &buffer, 0, &hdr, wait_for_packet);
 
-#ifdef ENABLE_QAT_PM
-    if((rc > 0) && (ring->qat != NULL)) {
-      QAThandle *qat = (QAThandle*)ring->qat;
-
-      if(qat->patternId > 1) {
-      /* We have something to search */
-      
-	if(checkMatch(qat, (char*)buffer, hdr.caplen) == 0)
-	  rc = 0;
-	else
-	  qat->num_filtered++;
-      }
-    }
-#endif
-
     if(rc < 0)
       break;
     else if(rc > 0) {
+      hdr.caplen = min_val(hdr.caplen, ring->caplen);
+
       looper(&hdr, buffer, user_bytes);
     } else {
       /* if(!wait_for_packet) usleep(1); */
@@ -543,15 +513,8 @@ void pfring_bundle_close(pfring_bundle *bundle) {
 /* **************************************************** */
 
 int pfring_stats(pfring *ring, pfring_stat *stats) {
-  if(ring && ring->stats) {
-    int rc = ring->stats(ring, stats);
-
-#ifdef ENABLE_QAT_PM
-    stats->droppedbyfilter += ((QAThandle*)ring->qat)->num_filtered;
-#endif
-
-    return(rc);
-  }
+  if(ring && ring->stats)
+    return(ring->stats(ring, stats));
 
   return(PF_RING_ERROR_NOT_SUPPORTED);
 }
@@ -573,19 +536,7 @@ int pfring_recv(pfring *ring, u_char** buffer, u_int buffer_len,
 
     ring->break_recv_loop = 0;
     rc = ring->recv(ring, buffer, buffer_len, hdr, wait_for_incoming_packet);
-
-#ifdef ENABLE_QAT_PM
-    if((rc > 0) && (ring->qat != NULL)) {
-      QAThandle *qat = (QAThandle*)ring->qat;
-
-      if(qat->patternId > 1) {
-      /* We have something to search */
-	
-	if(checkMatch(qat, (char*)*buffer, hdr->caplen) == 0)
-	  return(0);
-      }
-    }
-#endif
+    hdr->caplen = min_val(hdr->caplen, ring->caplen);
 
     if(unlikely(ring->reflector_socket != NULL))
       pfring_send(ring->reflector_socket, (char *) *buffer, hdr->caplen, 0 /* flush */);
@@ -1398,13 +1349,6 @@ int pfring_search_payload(pfring *ring, char *string_to_search) {
   if (!ring)
     return(-1);
     
-#ifdef ENABLE_QAT_PM  
-  if (!ring->qat)
-    return(-1);
-
-  return(addStringToSearch((QAThandle*)ring->qat, string_to_search));
-#else
   return(-2);
-#endif
 }
 

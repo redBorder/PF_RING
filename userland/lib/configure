@@ -600,10 +600,6 @@ ac_includes_default="\
 
 ac_subst_vars='LTLIBOBJS
 LIBOBJS
-QAT_DEP
-QAT_OBJS
-QAT_LIB
-HAVE_QAT
 HAVE_HW_TIMESTAMP
 HAVE_REDIRECTOR
 SILICOM_LIBS
@@ -3578,10 +3574,6 @@ if test ".${prefix}" = ".NONE"; then
 else
    INSTALL_PREFIX=${prefix};
 fi
-
-
-
-
 
 
 

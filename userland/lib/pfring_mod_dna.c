@@ -158,7 +158,6 @@ int pfring_dna_recv(pfring *ring, u_char** buffer, u_int buffer_len,
   pkt = ring->dna_next_packet(ring, buffer, buffer_len, hdr);
 
   if(pkt && (hdr->len > 0)) {
-
     if(unlikely(ring->sampling_rate > 1)) {
       if (likely(ring->dna.sampling_counter > 0)) {
         ring->dna.sampling_counter--;
@@ -173,6 +172,7 @@ int pfring_dna_recv(pfring *ring, u_char** buffer, u_int buffer_len,
 
     hdr->extended_hdr.rx_direction = 1;
 
+    hdr->caplen = min_val(hdr->caplen, ring->caplen);
     if(unlikely(ring->reentrant)) pthread_rwlock_unlock(&ring->rx_lock);
     return(1);
   }

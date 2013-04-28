@@ -583,6 +583,7 @@ void printHelp(void) {
 #endif
   printf("-u <1|2>        For each incoming packet add a drop rule (1=hash, 2=wildcard rule)\n");
   printf("-v <mode>       Verbose [1: verbose, 2: very verbose (print packet payload)]\n");
+  exit(0);
 }
 
 /* *************************************** */
@@ -748,7 +749,12 @@ int main(int argc, char* argv[]) {
       num_threads = atoi(optarg);
       break;
     case 'v':
-      verbose = (atoi(optarg) == 1) ? 1 : 2;
+      if(optarg[0] == '1')
+	verbose = 1;
+      else if(optarg[0] == '2')
+	verbose = 2;
+      else
+	printHelp();
       break;
 #ifdef ENABLE_BPF
     case 'f':

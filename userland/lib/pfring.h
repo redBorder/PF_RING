@@ -46,13 +46,6 @@
 #include <librdi.h>
 #endif
 
-#ifdef ENABLE_QAT_PM
-#include <cpa_types.h>
-#include "cpa_pm.h"
-#include "cpa_pm_compile.h"
-#include "pfring_qat.h"
-#endif
-
 #define MAX_CAPLEN             65535
 #define PAGE_SIZE               4096
 
