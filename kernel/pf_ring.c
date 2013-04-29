@@ -4555,12 +4555,6 @@ static int skb_ring_handler(struct sk_buff *skb,
 	int skb_hash = hash_pkt_cluster(cluster_ptr, &hdr,
 					ip_id, first_fragment, second_fragment);
 
-	
-	if(skb_hash < 0) {
-	  // printk("[PF_RING] hash_pkt_cluster()=%d\n", skb_hash);
-	  num_cluster_discarded_fragments++;
-	}
-	
 	/*
 	  If the hashing value is negative, then this is a fragment that we are 
 	  not able to reassemble and thus we discard as the application has no
@@ -4610,7 +4604,8 @@ static int skb_ring_handler(struct sk_buff *skb,
 	    else
 	      skb_hash = (skb_hash + 1) % cluster_ptr->cluster.num_cluster_elements;
 	  }
-	}
+	} else
+	  num_cluster_discarded_fragments++;
       }
 
       cluster_ptr = (ring_cluster_element*)lockless_list_get_next(&ring_cluster_list, &last_list_idx);
