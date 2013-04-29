@@ -202,6 +202,7 @@ static u_int8_t num_any_rings = 0;
    the association between the IP packet identifier and the balanced application.
 */
 static u_int16_t num_cluster_fragments = 0;
+static u_int32_t num_cluster_discarded_fragments = 0;
 static unsigned long next_fragment_purge_jiffies = 0;
 static struct hash_fragment_node *cluster_fragment_hash[NUM_FRAGMENTS_HASH_SLOTS] = { NULL };
 static rwlock_t cluster_fragments_lock =
@@ -342,7 +343,7 @@ static int remove_from_cluster(struct sock *sock, struct pf_ring_socket *pfr);
 static int ring_map_dna_device(struct pf_ring_socket *pfr,
 			       dna_device_mapping * mapping);
 
-static u_int8_t get_fragment_app_id(u_int32_t ipv4_src_host, u_int32_t ipv4_dst_host, u_int16_t fragment_id);
+static int  get_fragment_app_id(u_int32_t ipv4_src_host, u_int32_t ipv4_dst_host, u_int16_t fragment_id);
 static void add_fragment_app_id(u_int32_t ipv4_src_host, u_int32_t ipv4_dst_host, u_int16_t fragment_id, u_int8_t app_id);
 
 /* Extern */
@@ -1424,21 +1425,22 @@ static int ring_proc_get_info(char *buf, char **start, off_t offset,
 
   if(data == NULL) {
     /* /proc/net/pf_ring/info */
-    rlen = sprintf(buf,         "PF_RING Version        : %s ($Revision: %s$)\n", RING_VERSION, SVN_REV);
-    rlen += sprintf(buf + rlen, "Ring slots             : %d\n", min_num_slots);
-    rlen += sprintf(buf + rlen, "Slot version           : %d\n", RING_FLOWSLOT_VERSION);
-    rlen += sprintf(buf + rlen, "Total rings            : %d\n", ring_table_size);
+    rlen = sprintf(buf,         "PF_RING Version          : %s ($Revision: %s$)\n", RING_VERSION, SVN_REV);
+    rlen += sprintf(buf + rlen, "Ring slots               : %d\n", min_num_slots);
+    rlen += sprintf(buf + rlen, "Slot version             : %d\n", RING_FLOWSLOT_VERSION);
+    rlen += sprintf(buf + rlen, "Total rings              : %d\n", ring_table_size);
     rlen += sprintf(buf + rlen, "\nStandard (non DNA) Options\n");
-    rlen += sprintf(buf + rlen, "Capture TX             : %s\n", enable_tx_capture ? "Yes [RX+TX]" : "No [RX only]");
-    rlen += sprintf(buf + rlen, "IP Defragment          : %s\n", enable_ip_defrag ? "Yes" : "No");
-    rlen += sprintf(buf + rlen, "Socket Mode            : %s\n", quick_mode ? "Quick" : "Standard");
-    rlen += sprintf(buf + rlen, "Transparent mode       : %s\n",
+    rlen += sprintf(buf + rlen, "Capture TX               : %s\n", enable_tx_capture ? "Yes [RX+TX]" : "No [RX only]");
+    rlen += sprintf(buf + rlen, "IP Defragment            : %s\n", enable_ip_defrag ? "Yes" : "No");
+    rlen += sprintf(buf + rlen, "Socket Mode              : %s\n", quick_mode ? "Quick" : "Standard");
+    rlen += sprintf(buf + rlen, "Transparent mode         : %s\n",
 		    (transparent_mode == standard_linux_path ? "Yes [mode 0]" :
 		     (transparent_mode == driver2pf_ring_transparent ? "Yes [mode 1]" : "No [mode 2]")));
-    rlen += sprintf(buf + rlen, "Total plugins          : %d\n", plugin_registration_size);
+    rlen += sprintf(buf + rlen, "Total plugins            : %d\n", plugin_registration_size);
 
     purge_idle_fragment_cache();
-    rlen += sprintf(buf + rlen, "Cluster Fragment Queue : %u\n", num_cluster_fragments);
+    rlen += sprintf(buf + rlen, "Cluster Fragment Queue   : %u\n", num_cluster_fragments);
+    rlen += sprintf(buf + rlen, "Cluster Fragment Discard : %u\n", num_cluster_discarded_fragments);
   } else {
     /* Detailed statistics about a PF_RING */
     struct pf_ring_socket *pfr = (struct pf_ring_socket *)data;
@@ -4065,20 +4067,21 @@ static int add_skb_to_ring(struct sk_buff *skb,
 
 /* ********************************** */
 
-static u_int hash_pkt_cluster(ring_cluster_element *cluster_ptr,
-			      struct pfring_pkthdr *hdr,
-			      u_int16_t ip_id, u_int8_t first_fragment, u_int8_t second_fragment)
+static int hash_pkt_cluster(ring_cluster_element *cluster_ptr,
+			    struct pfring_pkthdr *hdr,
+			    u_int16_t ip_id, u_int8_t first_fragment, u_int8_t second_fragment)
 {
-  u_int idx;
+  int idx;
 
   if(unlikely(enable_debug))
     printk("[PF_RING] %s(ip_id=%02X, first_fragment=%d, second_fragment=%d)\n",
 	   __FUNCTION__, ip_id, first_fragment, second_fragment);
 
   if(second_fragment) {
-    idx = get_fragment_app_id(hdr->extended_hdr.parsed_pkt.ipv4_src,
-			      hdr->extended_hdr.parsed_pkt.ipv4_dst,
-			      ip_id);
+    if((idx = get_fragment_app_id(hdr->extended_hdr.parsed_pkt.ipv4_src,
+				  hdr->extended_hdr.parsed_pkt.ipv4_dst,
+				  ip_id)) < 0)
+      return(idx);
   } else {
     switch(cluster_ptr->cluster.hashing_mode) {
 
@@ -4549,51 +4552,64 @@ static int skb_ring_handler(struct sk_buff *skb,
 
       if(cluster_ptr->cluster.num_cluster_elements > 0) {
 	u_short num_iterations;
-	u_int skb_hash = hash_pkt_cluster(cluster_ptr, &hdr,
-					  ip_id, first_fragment, second_fragment);
+	int skb_hash = hash_pkt_cluster(cluster_ptr, &hdr,
+					ip_id, first_fragment, second_fragment);
 
+	
+	if(skb_hash < 0) {
+	  // printk("[PF_RING] hash_pkt_cluster()=%d\n", skb_hash);
+	  num_cluster_discarded_fragments++;
+	}
+	
 	/*
-	  We try to add the packet to the right cluster
-	  element, but if we're working in round-robin and this
-	  element is full, we try to add this to the next available
-	  element. If none with at least a free slot can be found
-	  then we give up :-(
+	  If the hashing value is negative, then this is a fragment that we are 
+	  not able to reassemble and thus we discard as the application has no
+	  idea to what do with it
 	*/
-	for(num_iterations = 0;
-	    num_iterations < cluster_ptr->cluster.num_cluster_elements;
-	    num_iterations++) {
+	if(skb_hash >= 0) {
+	  /*
+	    We try to add the packet to the right cluster
+	    element, but if we're working in round-robin and this
+	    element is full, we try to add this to the next available
+	    element. If none with at least a free slot can be found
+	    then we give up :-(
+	  */
+	  for(num_iterations = 0;
+	      num_iterations < cluster_ptr->cluster.num_cluster_elements;
+	      num_iterations++) {
 
-	  skElement = cluster_ptr->cluster.sk[skb_hash];
+	    skElement = cluster_ptr->cluster.sk[skb_hash];
 
-	  if(skElement != NULL) {
-	    pfr = ring_sk(skElement);
+	    if(skElement != NULL) {
+	      pfr = ring_sk(skElement);
 
-	    if((pfr != NULL)
-	       && (pfr->ring_slots != NULL)
-	       && (test_bit(skb->dev->ifindex, pfr->netdev_mask)
-		   || ((skb->dev->flags & IFF_SLAVE)
-		       && (pfr->ring_netdev->dev == skb->dev->master)))
-	       && is_valid_skb_direction(pfr->direction, recv_packet)
-	       ) {
-	      if(check_free_ring_slot(pfr) /* Not full */) {
-		/* We've found the ring where the packet can be stored */
-		room_available |= add_skb_to_ring(skb, real_skb, pfr, &hdr, is_ip_pkt,
-						  displ, channel_id, num_rx_channels, &clone_id);
-		rc = 1; /* Ring found: we've done our job */
-		break;
+	      if((pfr != NULL)
+		 && (pfr->ring_slots != NULL)
+		 && (test_bit(skb->dev->ifindex, pfr->netdev_mask)
+		     || ((skb->dev->flags & IFF_SLAVE)
+			 && (pfr->ring_netdev->dev == skb->dev->master)))
+		 && is_valid_skb_direction(pfr->direction, recv_packet)
+		 ) {
+		if(check_free_ring_slot(pfr) /* Not full */) {
+		  /* We've found the ring where the packet can be stored */
+		  room_available |= add_skb_to_ring(skb, real_skb, pfr, &hdr, is_ip_pkt,
+						    displ, channel_id, num_rx_channels, &clone_id);
+		  rc = 1; /* Ring found: we've done our job */
+		  break;
 
-	      } else if((cluster_ptr->cluster.hashing_mode != cluster_round_robin)
-			/* We're the last element of the cluster so no further cluster element to check */
-			|| ((num_iterations + 1) > cluster_ptr->cluster.num_cluster_elements)) {
-		pfr->slots_info->tot_pkts++, pfr->slots_info->tot_lost++;
+		} else if((cluster_ptr->cluster.hashing_mode != cluster_round_robin)
+			  /* We're the last element of the cluster so no further cluster element to check */
+			  || ((num_iterations + 1) > cluster_ptr->cluster.num_cluster_elements)) {
+		  pfr->slots_info->tot_pkts++, pfr->slots_info->tot_lost++;
+		}
 	      }
 	    }
-	  }
 
-	  if(cluster_ptr->cluster.hashing_mode != cluster_round_robin)
-	    break;
-	  else
-	    skb_hash = (skb_hash + 1) % cluster_ptr->cluster.num_cluster_elements;
+	    if(cluster_ptr->cluster.hashing_mode != cluster_round_robin)
+	      break;
+	    else
+	      skb_hash = (skb_hash + 1) % cluster_ptr->cluster.num_cluster_elements;
+	  }
 	}
       }
 
@@ -7123,8 +7139,8 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 
 /* ************************************* */
 
-static u_int8_t get_fragment_app_id(u_int32_t ipv4_src_host, u_int32_t ipv4_dst_host,
-				    u_int16_t fragment_id) {
+static int get_fragment_app_id(u_int32_t ipv4_src_host, u_int32_t ipv4_dst_host,
+			       u_int16_t fragment_id) {
   u_int hash_id = fragment_id % NUM_FRAGMENTS_HASH_SLOTS;
   struct hash_fragment_node *head, *prev, *next;
   u_int8_t app_id;
@@ -7134,7 +7150,7 @@ static u_int8_t get_fragment_app_id(u_int32_t ipv4_src_host, u_int32_t ipv4_dst_
 	   __FUNCTION__, fragment_id, num_cluster_fragments);
 
   if(cluster_fragment_hash[hash_id] == NULL)
-    return(0); /* Not found */
+    return(-1); /* Not found */
 
   write_lock(&cluster_fragments_lock);
   head = cluster_fragment_hash[hash_id], prev = NULL;
@@ -7167,7 +7183,8 @@ static u_int8_t get_fragment_app_id(u_int32_t ipv4_src_host, u_int32_t ipv4_dst_
   } /* while */
 
   write_unlock(&cluster_fragments_lock);
-  return(0); /* Not found */
+
+  return(-1); /* Not found */
 }
 
 /* ************************************* */
