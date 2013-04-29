@@ -4075,7 +4075,13 @@ static u_int hash_pkt_cluster(ring_cluster_element *cluster_ptr,
     printk("[PF_RING] %s(ip_id=%02X, first_fragment=%d, second_fragment=%d)\n",
 	   __FUNCTION__, ip_id, first_fragment, second_fragment);
 
-  switch(cluster_ptr->cluster.hashing_mode) {
+  if(second_fragment) {
+    idx = get_fragment_app_id(hdr->extended_hdr.parsed_pkt.ipv4_src,
+			      hdr->extended_hdr.parsed_pkt.ipv4_dst,
+			      ip_id);
+  } else {
+    switch(cluster_ptr->cluster.hashing_mode) {
+
     case cluster_round_robin:
       idx = cluster_ptr->cluster.hashing_id++;
       break;
@@ -4089,24 +4095,12 @@ static u_int hash_pkt_cluster(ring_cluster_element *cluster_ptr,
       break;
 
     case cluster_per_flow_tcp_5_tuple:
-      if(second_fragment)
-	idx = get_fragment_app_id(hdr->extended_hdr.parsed_pkt.ipv4_src,
-				  hdr->extended_hdr.parsed_pkt.ipv4_dst,
-				  ip_id);
-      else {
 	if(((hdr->extended_hdr.parsed_pkt.tunnel.tunnel_id == NO_TUNNEL_ID) ?
 	    hdr->extended_hdr.parsed_pkt.l3_proto : hdr->extended_hdr.parsed_pkt.tunnel.tunneled_proto) == IPPROTO_TCP)
-	  idx = hash_pkt_header(hdr, HASH_PKT_HDR_RECOMPUTE | HASH_PKT_HDR_MASK_VLAN); /* 5 tuple */
-	else {
-	  /* This is a tunneled packet */
-	  idx = hash_pkt_header(hdr, HASH_PKT_HDR_RECOMPUTE | HASH_PKT_HDR_MASK_VLAN | HASH_PKT_HDR_MASK_PORT); /* 2 tuple (GTP) */
-	}
+	  idx = hash_pkt_header(hdr, HASH_PKT_HDR_RECOMPUTE | HASH_PKT_HDR_MASK_VLAN); /* 5 tuple for TCP */
+	else 
+	  idx = hash_pkt_header(hdr, HASH_PKT_HDR_RECOMPUTE | HASH_PKT_HDR_MASK_PORT | HASH_PKT_HDR_MASK_PROTO | HASH_PKT_HDR_MASK_VLAN); /* 2 tuple for non-TCP */
 
-	if(first_fragment)
-	  add_fragment_app_id(hdr->extended_hdr.parsed_pkt.ipv4_src,
-			      hdr->extended_hdr.parsed_pkt.ipv4_dst,
-			      ip_id, idx);
-      }
       break;
 
     case cluster_per_flow_5_tuple:
@@ -4117,6 +4111,13 @@ static u_int hash_pkt_cluster(ring_cluster_element *cluster_ptr,
     default:
       idx = hash_pkt_header(hdr, 0);
       break;
+    }
+
+    if(first_fragment) {
+      add_fragment_app_id(hdr->extended_hdr.parsed_pkt.ipv4_src,
+			  hdr->extended_hdr.parsed_pkt.ipv4_dst,
+			  ip_id, idx);
+    }
   }
 
   return(idx % cluster_ptr->cluster.num_cluster_elements);
