@@ -538,8 +538,10 @@ int pfring_recv(pfring *ring, u_char** buffer, u_int buffer_len,
     rc = ring->recv(ring, buffer, buffer_len, hdr, wait_for_incoming_packet);
     hdr->caplen = min_val(hdr->caplen, ring->caplen);
 
-    if(unlikely(ring->reflector_socket != NULL))
-      pfring_send(ring->reflector_socket, (char *) *buffer, hdr->caplen, 0 /* flush */);
+    if(unlikely(ring->reflector_socket != NULL)) {
+      if (rc > 0)
+        pfring_send(ring->reflector_socket, (char *) *buffer, hdr->caplen, 0 /* flush */);
+    }
 
     return rc;
   }
