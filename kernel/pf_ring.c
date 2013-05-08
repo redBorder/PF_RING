@@ -2796,8 +2796,9 @@ static inline int copy_data_to_ring(struct sk_buff *skb,
     (enable_tx_capture && pfr->direction == rx_and_tx_direction) ||
     (pfr->num_bound_devices > 1) ||
     (pfr->num_channels_per_ring > 1) ||
+    (pfr->rehash_rss != NULL && get_num_rx_queues(skb->dev) > 1) ||
     (pfr->cluster_id != 0)
-    ) ? 1 : 0;
+  );
 
   if(pfr->ring_slots == NULL) return(0);
 
