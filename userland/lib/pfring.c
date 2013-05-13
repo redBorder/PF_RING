@@ -105,12 +105,14 @@ pfring* pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags) 
   ring->direction           = rx_and_tx_direction;
   ring->mode                = send_and_recv_mode;
   ring->long_header         = (flags & PF_RING_LONG_HEADER) ? 1 : 0;
-  ring->rss_mode            = (flags & PF_RING_DNA_SYMMETRIC_RSS) ? PF_RING_DNA_SYMMETRIC_RSS : 0;
-  ring->rss_mode            = (flags & PF_RING_DNA_FIXED_RSS_Q_0) ? PF_RING_DNA_FIXED_RSS_Q_0 : 0;
+  ring->rss_mode            = (flags & PF_RING_DNA_SYMMETRIC_RSS) ? PF_RING_DNA_SYMMETRIC_RSS : (
+                              (flags & PF_RING_DNA_FIXED_RSS_Q_0) ? PF_RING_DNA_FIXED_RSS_Q_0 : 0);
   ring->force_timestamp     = (flags & PF_RING_TIMESTAMP) ? 1 : 0;
   ring->strip_hw_timestamp  = (flags & PF_RING_STRIP_HW_TIMESTAMP) ? 1 : 0;
   ring->hw_ts.enable_hw_timestamp = (flags & PF_RING_HW_TIMESTAMP) ? 1 : 0;
   ring->tx.enabled_rx_packet_send = (flags & PF_RING_RX_PACKET_BOUNCE) ? 1 : 0;
+  ring->disable_parsing     = (flags & PF_RING_DO_NOT_PARSE) ? 1 : 0;
+  ring->disable_timestamp   = (flags & PF_RING_DO_NOT_TIMESTAMP) ? 1 : 0;
 
 #ifdef RING_DEBUG
   printf("pfring_open: device_name=%s\n", device_name);

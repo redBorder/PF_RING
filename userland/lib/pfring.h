@@ -138,7 +138,8 @@ extern "C" {
   /* ********************************* */
   
   struct __pfring {
-    u_int8_t initialized, enabled, long_header, rss_mode, force_timestamp, strip_hw_timestamp;
+    u_int8_t initialized, enabled, long_header, rss_mode, force_timestamp, strip_hw_timestamp, 
+             disable_parsing, disable_timestamp;
     packet_direction direction; /* Specify the capture direction for packets */
     socket_mode mode;
 
@@ -300,6 +301,8 @@ extern "C" {
   #define PF_RING_RX_PACKET_BOUNCE     1 << 6
   #define PF_RING_DNA_FIXED_RSS_Q_0    1 << 7
   #define PF_RING_STRIP_HW_TIMESTAMP   1 << 8
+  #define PF_RING_DO_NOT_PARSE         1 << 9  /* parsing already disabled in zero-copy */
+  #define PF_RING_DO_NOT_TIMESTAMP     1 << 10 /* sw timestamp already disabled in zero-copy */
 
   /* ********************************* */
 

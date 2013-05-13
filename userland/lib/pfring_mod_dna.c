@@ -167,11 +167,6 @@ int pfring_dna_recv(pfring *ring, u_char** buffer, u_int buffer_len,
       }
     }
 
-    if(buffer_len > 0)
-      pfring_parse_pkt(*buffer, hdr, 4, 1, 1);
-
-    hdr->extended_hdr.rx_direction = 1;
-
     hdr->caplen = min_val(hdr->caplen, ring->caplen);
     if(unlikely(ring->reentrant)) pthread_rwlock_unlock(&ring->rx_lock);
     return(1);
