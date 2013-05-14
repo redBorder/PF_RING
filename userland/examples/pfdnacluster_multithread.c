@@ -575,6 +575,7 @@ int main(int argc, char* argv[]) {
   /* Setting up important details... */
   dna_cluster_set_wait_mode(dna_cluster_handle, !wait_for_packet /* active_wait */);
   dna_cluster_set_cpu_affinity(dna_cluster_handle, rx_bind_core, tx_bind_core);
+  dna_cluster_set_thread_name(dna_cluster_handle, "rx-thread", "tx-thread");
 
   /* The default distribution function allows to balance per IP 
     in a coherent mode (not like RSS that does not do that) */
