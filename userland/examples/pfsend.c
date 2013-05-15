@@ -462,7 +462,7 @@ int main(int argc, char* argv[]) {
     struct pcap_pkthdr *h;
     pcap_t *pt = pcap_open_offline(pcap_in, ebuf);
     struct timeval beginning = { 0, 0 };
-    int avg_send_len = 0;
+    u_int64_t avg_send_len = 0;
 
     if(pt) {
       struct packet *last = NULL;
