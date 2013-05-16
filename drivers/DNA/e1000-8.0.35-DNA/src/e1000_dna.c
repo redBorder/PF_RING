@@ -353,17 +353,9 @@ void alloc_dna_memory(struct e1000_adapter *adapter) {
 #endif
 
 	rx_desc = E1000_RX_DESC(*rx_ring, i);
-	rx_desc->read.buffer_addr = cpu_to_le64(buffer_rx_info->dma);
-	rx_desc->read.reserved = 0; /*
-				      This field is used to store indexes so we better
-				      set it to zero
-				    */
-
-#ifdef DEBUG
-	if(0)
-	  printk("[DNA] RX descriptor %d [len=%d][status=%u]\n",
-		 i, rx_desc->wb.upper.length, rx_desc->wb.upper.status_error);
-#endif
+	rx_desc->buffer_addr = cpu_to_le64(buffer_rx_info->dma);
+	rx_desc->status = 0;
+	rx_desc->errors = 0;
 
 	shadow_rx_desc = E1000_RX_DESC(*rx_ring, i + rx_ring->count);
 	memcpy(shadow_rx_desc, rx_desc, sizeof(struct e1000_rx_desc));
