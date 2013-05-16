@@ -25,6 +25,14 @@
 
 unsigned long long numPkts = 0, numBytes = 0;
 
+struct gtpv1_header {
+  u_int8_t flags, message_type;
+  u_int16_t total_length;
+  u_int32_t tunnel_id;
+  u_int16_t sequence_number;
+  u_int8_t pdu_nuber, next_ext_header;
+} __attribute__((__packed__));
+
 #define DEFAULT_DEVICE "eth0"
 
 pfring *pd;
@@ -59,6 +67,8 @@ void printHelp(void) {
   printf("-h              [Print help]\n");
   printf("-i <device>     [Device name]\n");
   printf("-w <dump file>  [Dump file path]\n");
+  printf("-f <BPF filter> [Ingress BPF filter]\n");
+  printf("-g <GTP TEID>   [Dump only the specified tunnel (example -g 94148 [dec] or -g 381CE8C0 [hex])]\n");
   printf("-d              [Save packet digest instead of pcap packets]\n");
   printf("-S              [Do not strip hw timestamps (if present)]\n");
   printf("\n"
@@ -154,14 +164,19 @@ inline char* in6toa(struct in6_addr addr6) {
 
 /* *************************************** */
 
+#define MAX_NUM_GTP_TUNNELS 8
+
 int main(int argc, char* argv[]) {
   char *device = NULL, c, *out_dump = NULL;
   u_int flags = 0, dont_strip_hw_ts = 0, dump_digest = 0;
   int32_t thiszone;
   u_char *p;
+  char *bpfFilter = NULL;
   struct pfring_pkthdr hdr;
+  u_int num_gtp_tunnels = 0;
+  u_int32_t gtp_tunnels[MAX_NUM_GTP_TUNNELS];
 
-  while((c = getopt(argc,argv,"hi:w:Sd")) != -1) {
+  while((c = getopt(argc,argv,"hi:w:Sdg:f:")) != -1) {
     switch(c) {
     case 'd':
       dump_digest = 1;
@@ -173,11 +188,28 @@ int main(int argc, char* argv[]) {
     case 'w':
       out_dump = strdup(optarg);
       break;
+    case 'g':
+      if(num_gtp_tunnels < MAX_NUM_GTP_TUNNELS) {
+	u_int32_t v;
+
+	if(strlen(optarg) == 8)
+	  sscanf(optarg, "%08X", &v);
+	else
+	  v = atoi(optarg);
+
+	gtp_tunnels[num_gtp_tunnels++]=v;
+	printf("Added GTP tunnel to filter %u/%08X\n", v, v);
+      } else
+	printf("Too many GTP tunnels defined (-g): ignored\n");
+      break;
     case 'i':
       device = strdup(optarg);
       break;
     case 'S':
       dont_strip_hw_ts = 1;
+      break;
+    case 'f':
+      bpfFilter = optarg;
       break;
     }
   }
@@ -216,6 +248,15 @@ int main(int argc, char* argv[]) {
   printf("Capture device: %s\n", device);
   printf("Dump file path: %s\n", out_dump);
 
+  if(bpfFilter != NULL) {
+    int rc = pfring_set_bpf_filter(pd, bpfFilter);
+
+    if(rc != 0)
+      printf("pfring_set_bpf_filter(%s) returned %d\n", bpfFilter, rc);
+    else
+      printf("Successfully set BPF filter '%s'\n", bpfFilter);
+  }
+
   signal(SIGINT, sigproc);
 
   pfring_enable_ring(pd);
@@ -224,9 +265,39 @@ int main(int argc, char* argv[]) {
 
   while(1) {
     if(pfring_recv(pd, &p, 0, &hdr, 1 /* wait_for_packet */) > 0) {
-      if(dumper)
+      if(dumper) {
+	if(num_gtp_tunnels > 0) {
+	  pfring_parse_pkt((u_char*)p, (struct pfring_pkthdr*)&hdr, 5, 0, 0);
+
+	  if(hdr.extended_hdr.parsed_pkt.eth_type == 0x0800 /* IPv4*/ ) {
+	    printf("[IPv4][%s:%d ", intoa(hdr.extended_hdr.parsed_pkt.ipv4_src), hdr.extended_hdr.parsed_pkt.l4_src_port);
+	    printf("-> %s:%d] ", intoa(hdr.extended_hdr.parsed_pkt.ipv4_dst), hdr.extended_hdr.parsed_pkt.l4_dst_port);
+	  } else {
+	    printf("[IPv6][%s:%d ",    in6toa(hdr.extended_hdr.parsed_pkt.ipv6_src), hdr.extended_hdr.parsed_pkt.l4_src_port);
+	    printf("-> %s:%d] ", in6toa(hdr.extended_hdr.parsed_pkt.ipv6_dst), hdr.extended_hdr.parsed_pkt.l4_dst_port);
+	  }
+	  printf("[TEOD: %08X]\n", hdr.extended_hdr.parsed_pkt.tunnel.tunnel_id);
+
+	  if(hdr.extended_hdr.parsed_pkt.tunnel.tunnel_id != 0xFFFFFFFF) {
+	    u_int8_t found = 0, i;
+ 
+	    printf("%08X\n", hdr.extended_hdr.parsed_pkt.tunnel.tunnel_id);
+
+	    for(i=0; i<num_gtp_tunnels; i++)
+	      if(gtp_tunnels[i] == hdr.extended_hdr.parsed_pkt.tunnel.tunnel_id) {
+		found = 1;
+		break;
+	      }
+
+	    if(!found) continue;
+	  } else
+	    continue;
+	  
+	}
+
+	printf("Dump \n");
 	pcap_dump((u_char*)dumper, (struct pcap_pkthdr*)&hdr, p);
-      else {
+      } else {
 	u_int32_t s, usec, nsec;
 
 	if(hdr.ts.tv_sec == 0) {
