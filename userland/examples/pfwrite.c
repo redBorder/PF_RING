@@ -5,6 +5,12 @@
 
 #define HAVE_PCAP
 
+#include "config.h"
+
+#ifdef HAVE_REDIS
+#include <hiredis/hiredis.h>
+#endif
+
 #include "pfring.h"
 //#include "pfutils.c"
 
@@ -68,6 +74,9 @@ void printHelp(void) {
   printf("-i <device>     [Device name]\n");
   printf("-w <dump file>  [Dump file path]\n");
   printf("-f <BPF filter> [Ingress BPF filter]\n");
+#ifdef HAVE_REDIS
+  printf("-m <imsi>       [Dump only the specified IMSI traffic (Example: -m 284031122831060)]\n");
+#endif
   printf("-g <GTP TEID>   [Dump only the specified tunnel (example -g 94148 [dec] or -g 381CE8C0 [hex])]\n");
   printf("-d              [Save packet digest instead of pcap packets]\n");
   printf("-S              [Do not strip hw timestamps (if present)]\n");
@@ -176,7 +185,11 @@ int main(int argc, char* argv[]) {
   u_int num_gtp_tunnels = 0;
   u_int32_t gtp_tunnels[MAX_NUM_GTP_TUNNELS];
 
-  while((c = getopt(argc,argv,"hi:w:Sdg:f:")) != -1) {
+  while((c = getopt(argc,argv,"hi:w:Sdg:f:"
+#ifdef HAVE_REDIS
+		    "m:"
+#endif
+		    )) != -1) {
     switch(c) {
     case 'd':
       dump_digest = 1;
@@ -188,6 +201,41 @@ int main(int argc, char* argv[]) {
     case 'w':
       out_dump = strdup(optarg);
       break;
+#ifdef HAVE_REDIS
+    case 'm':
+      {
+	redisContext *redis = redisConnect("127.0.0.1", 6379);
+	redisReply* r;
+
+	if(redis == NULL) {
+	  printf("Fatal error: Unable to connect to local redis 127.0.0.1:6379\n");
+	  return(-1);
+	}
+
+	if(((r = redisCommand(redis, "GET imsi.%s", optarg)) == NULL) || (r->str == NULL)) {
+	  printf("Fatal error: Unable to retrieve redis key imsi.%s\n", optarg);
+	  return(-1);
+	}
+
+	if(strtok(r->str, ";") != NULL) {
+	  char *tunnel;
+	  int i;
+
+	  for(i=0; i<2; i++)
+	    if((tunnel = strtok(NULL, ";")) != NULL) {
+	      gtp_tunnels[num_gtp_tunnels] = atoi(tunnel);
+	      printf("Added GTP tunnel to filter %u/%08X\n",
+		     gtp_tunnels[num_gtp_tunnels], gtp_tunnels[num_gtp_tunnels]);
+	      num_gtp_tunnels++;
+	    }
+
+	  free(r->str);
+	}
+
+	redisFree(redis);
+      }
+      break;
+#endif
     case 'g':
       if(num_gtp_tunnels < MAX_NUM_GTP_TUNNELS) {
 	u_int32_t v;
@@ -282,7 +330,7 @@ int main(int argc, char* argv[]) {
 
 	  if(hdr.extended_hdr.parsed_pkt.tunnel.tunnel_id != 0xFFFFFFFF) {
 	    u_int8_t found = 0, i;
- 
+
 #ifdef DEBUG
 	    printf("%08X\n", hdr.extended_hdr.parsed_pkt.tunnel.tunnel_id);
 #endif
@@ -295,7 +343,7 @@ int main(int argc, char* argv[]) {
 	    if(!found) continue;
 	  } else
 	    continue;
-	  
+
 	}
 
 #ifdef DEBUG
