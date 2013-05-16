@@ -264,7 +264,7 @@ void alloc_dna_memory(struct e1000_adapter *adapter) {
   struct e1000_tx_ring *tx_ring = adapter->tx_ring;
   struct e1000_tx_desc *tx_desc, *shadow_tx_desc;
   struct pfring_hooks *hook = (struct pfring_hooks*)netdev->pfring_ptr;
-  union e1000_rx_desc_extended *rx_desc, *shadow_rx_desc;
+  struct e1000_rx_desc *rx_desc, *shadow_rx_desc;
   struct e1000_rx_buffer *buffer_rx_info;
   struct e1000_buffer    *buffer_tx_info;
   u16 cache_line_size;
@@ -352,7 +352,7 @@ void alloc_dna_memory(struct e1000_adapter *adapter) {
 		 i, buffer_rx_info->dma, adapter->dna.packet_slot_len);
 #endif
 
-	rx_desc = E1000_RX_DESC_EXT(*rx_ring, i);
+	rx_desc = E1000_RX_DESC(*rx_ring, i);
 	rx_desc->read.buffer_addr = cpu_to_le64(buffer_rx_info->dma);
 	rx_desc->read.reserved = 0; /*
 				      This field is used to store indexes so we better
@@ -365,8 +365,8 @@ void alloc_dna_memory(struct e1000_adapter *adapter) {
 		 i, rx_desc->wb.upper.length, rx_desc->wb.upper.status_error);
 #endif
 
-	shadow_rx_desc = E1000_RX_DESC_EXT(*rx_ring, i + rx_ring->count);
-	memcpy(shadow_rx_desc, rx_desc, sizeof(union e1000_rx_desc_extended));
+	shadow_rx_desc = E1000_RX_DESC(*rx_ring, i + rx_ring->count);
+	memcpy(shadow_rx_desc, rx_desc, sizeof(struct e1000_rx_desc));
       }
 
       wmb();
