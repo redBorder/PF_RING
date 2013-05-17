@@ -213,15 +213,11 @@ int dummyProcessPacketZero(u_int32_t *pkt_len, u_char *pkt, const u_char *user_b
   struct dir_info *di;
   u_int32_t len = *pkt_len;
 
-
-  if(1) {
+#ifdef DEBUG
     int i = 0;
-
     for(i=0; i<32; i++) printf("%02X ", pkt[i]);
     printf("\n");
-
-  }
-
+#endif
 
   if(unlikely(handle_ts_card)) {
     u_int8_t ts_len = 0;
@@ -302,15 +298,12 @@ void packetConsumerLoopZeroCluster() {
 /* *************************************** */
 
 void dummyProcessPacket(const struct pfring_pkthdr *h, const u_char *p, const u_char *user_bytes) { 
-  
-  if(1) {
-    int i = 0;
 
+#ifdef DEBUG
+    int i = 0;
     for(i=0; i<32; i++) printf("%02X ", p[i]);
     printf("\n");
-
-  }
-
+#endif
 
   pfring_send(pd2, (char*)p, h->caplen, flush);
 
