@@ -3,6 +3,9 @@
 /* Define to 1 if you have the <inttypes.h> header file. */
 #undef HAVE_INTTYPES_H
 
+/* Define to 1 if you have the `hiredis' library (-lhiredis). */
+#undef HAVE_LIBHIREDIS
+
 /* Define to 1 if you have the `rdi' library (-lrdi). */
 #undef HAVE_LIBRDI
 
@@ -17,6 +20,9 @@
 
 /* libc has pthread_setaffinity_np */
 #undef HAVE_PTHREAD_SETAFFINITY_NP
+
+/* redis is present */
+#undef HAVE_REDIS
 
 /* pthread has rw locks */
 #undef HAVE_RW_LOCK
