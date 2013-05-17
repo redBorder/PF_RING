@@ -329,7 +329,7 @@ int main(int argc, char* argv[]) {
 
 	  pfring_parse_pkt((u_char*)p, (struct pfring_pkthdr*)&hdr, 5, 0, 0);
 
-#ifndef DEBUG
+#ifdef DEBUG
 	  if(hdr.extended_hdr.parsed_pkt.eth_type == 0x0800 /* IPv4*/ ) {
 	    printf("[IPv4][%s:%d ", intoa(hdr.extended_hdr.parsed_pkt.ipv4_src), hdr.extended_hdr.parsed_pkt.l4_src_port);
 	    printf("-> %s:%d] ", intoa(hdr.extended_hdr.parsed_pkt.ipv4_dst), hdr.extended_hdr.parsed_pkt.l4_dst_port);
@@ -339,12 +339,6 @@ int main(int argc, char* argv[]) {
 	  }
 	  printf("[TEID: %08X]\n", hdr.extended_hdr.parsed_pkt.tunnel.tunnel_id);
 #endif
-
-
-	  if(hdr.extended_hdr.parsed_pkt.l4_src_port == 2152) {
-	    printf(".\n");
-	    pfring_parse_pkt((u_char*)p, (struct pfring_pkthdr*)&hdr, 5, 0, 0);
-	  }
 
 	  if((hdr.extended_hdr.parsed_pkt.tunnel.tunnel_id != 0xFFFFFFFF)
 	     && (hdr.extended_hdr.parsed_pkt.l3_proto == IPPROTO_UDP)
