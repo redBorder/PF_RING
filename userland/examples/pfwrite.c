@@ -340,14 +340,14 @@ int main(int argc, char* argv[]) {
 
 	  if((hdr.extended_hdr.parsed_pkt.tunnel.tunnel_id != 0xFFFFFFFF)
 	     && (hdr.extended_hdr.parsed_pkt.l3_proto == IPPROTO_UDP)
-	     && (hdr.extended_hdr.parsed_pkt.l4_src_port == 2123)
-	     && (hdr.extended_hdr.parsed_pkt.l4_dst_port == 2123)) {
+	     && (((hdr.extended_hdr.parsed_pkt.l4_src_port == 2123) && (hdr.extended_hdr.parsed_pkt.l4_dst_port == 2123))
+		 || ((hdr.extended_hdr.parsed_pkt.l4_src_port == 2152) && (hdr.extended_hdr.parsed_pkt.l4_dst_port == 2152)))) {
 	    u_int8_t found = 0, i;
 	    struct gtpv1_header *g = (struct gtpv1_header*)&p[hdr.extended_hdr.parsed_pkt.offset.payload_offset];
 
 	    if((g->message_type == 0x10) /* Create Request */
 	       || (g->message_type == 0x12) /* Update Request */) {
-	      u_int16_t displ = 12;
+	      u_int16_t displ = 12+hdr.extended_hdr.parsed_pkt.offset.payload_offset;
 
 	      while(displ < hdr.caplen) {
 		u_int8_t field_id = p[displ];
