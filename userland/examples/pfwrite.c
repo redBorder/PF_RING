@@ -455,7 +455,7 @@ int main(int argc, char* argv[]) {
 	  usec = (hdr.extended_hdr.timestamp_ns / 1000) % 1000000;
 	  nsec = hdr.extended_hdr.timestamp_ns % 1000;
 	} else {
-	  usec = hdr.ts.tv_usec;
+	  usec = hdr.ts.tv_usec, nsec = 0;
 	}
 
 	fprintf(dumper_fd, "%02d:%02d:%02d.%06u%03u"
