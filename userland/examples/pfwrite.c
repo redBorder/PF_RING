@@ -325,9 +325,11 @@ int main(int argc, char* argv[]) {
     if(pfring_recv(pd, &p, 0, &hdr, 1 /* wait_for_packet */) > 0) {
       if(dumper) {
 	if((num_gtp_tunnels > 0) || (imsi != NULL)) {
+	  memset(&hdr.extended_hdr, 0, sizeof(hdr.extended_hdr));
+
 	  pfring_parse_pkt((u_char*)p, (struct pfring_pkthdr*)&hdr, 5, 0, 0);
 
-#ifdef DEBUG
+#ifndef DEBUG
 	  if(hdr.extended_hdr.parsed_pkt.eth_type == 0x0800 /* IPv4*/ ) {
 	    printf("[IPv4][%s:%d ", intoa(hdr.extended_hdr.parsed_pkt.ipv4_src), hdr.extended_hdr.parsed_pkt.l4_src_port);
 	    printf("-> %s:%d] ", intoa(hdr.extended_hdr.parsed_pkt.ipv4_dst), hdr.extended_hdr.parsed_pkt.l4_dst_port);
@@ -335,8 +337,14 @@ int main(int argc, char* argv[]) {
 	    printf("[IPv6][%s:%d ",    in6toa(hdr.extended_hdr.parsed_pkt.ipv6_src), hdr.extended_hdr.parsed_pkt.l4_src_port);
 	    printf("-> %s:%d] ", in6toa(hdr.extended_hdr.parsed_pkt.ipv6_dst), hdr.extended_hdr.parsed_pkt.l4_dst_port);
 	  }
-	  printf("[TEOD: %08X]\n", hdr.extended_hdr.parsed_pkt.tunnel.tunnel_id);
+	  printf("[TEID: %08X]\n", hdr.extended_hdr.parsed_pkt.tunnel.tunnel_id);
 #endif
+
+
+	  if(hdr.extended_hdr.parsed_pkt.l4_src_port == 2152) {
+	    printf(".\n");
+	    pfring_parse_pkt((u_char*)p, (struct pfring_pkthdr*)&hdr, 5, 0, 0);
+	  }
 
 	  if((hdr.extended_hdr.parsed_pkt.tunnel.tunnel_id != 0xFFFFFFFF)
 	     && (hdr.extended_hdr.parsed_pkt.l3_proto == IPPROTO_UDP)
