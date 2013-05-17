@@ -184,6 +184,7 @@ int main(int argc, char* argv[]) {
   struct pfring_pkthdr hdr;
   u_int num_gtp_tunnels = 0;
   u_int32_t gtp_tunnels[MAX_NUM_GTP_TUNNELS];
+  char *imsi = NULL;
 
   while((c = getopt(argc,argv,"hi:w:Sdg:f:"
 #ifdef HAVE_REDIS
@@ -194,48 +195,54 @@ int main(int argc, char* argv[]) {
     case 'd':
       dump_digest = 1;
       break;
+
     case 'h':
       printHelp();
       return(0);
       break;
+
     case 'w':
       out_dump = strdup(optarg);
       break;
-#ifdef HAVE_REDIS
+
     case 'm':
+      imsi = strdup(optarg);
+
+#ifdef HAVE_REDIS
       {
 	redisContext *redis = redisConnect("127.0.0.1", 6379);
 	redisReply* r;
 
 	if(redis == NULL) {
-	  printf("Fatal error: Unable to connect to local redis 127.0.0.1:6379\n");
-	  return(-1);
-	}
+	  printf("WARNING: Unable to connect to local redis 127.0.0.1:6379\n");
+	  // return(-1);
+	} else {
+	  if(((r = redisCommand(redis, "GET imsi.%s", optarg)) == NULL) || (r->str == NULL)) {
+	    printf("WARNING: Unable to retrieve redis key imsi.%s\n", optarg);
+	    // return(-1);
+	  } else {
+	    if(strtok(r->str, ";") != NULL) {
+	      char *tunnel;
+	      int i;
 
-	if(((r = redisCommand(redis, "GET imsi.%s", optarg)) == NULL) || (r->str == NULL)) {
-	  printf("Fatal error: Unable to retrieve redis key imsi.%s\n", optarg);
-	  return(-1);
-	}
+	      for(i=0; i<2; i++)
+		if((tunnel = strtok(NULL, ";")) != NULL) {
+		  gtp_tunnels[num_gtp_tunnels] = atoi(tunnel);
+		  printf("Added GTP tunnel to filter %u/%08X\n",
+			 gtp_tunnels[num_gtp_tunnels], gtp_tunnels[num_gtp_tunnels]);
+		  num_gtp_tunnels++;
+		}
 
-	if(strtok(r->str, ";") != NULL) {
-	  char *tunnel;
-	  int i;
-
-	  for(i=0; i<2; i++)
-	    if((tunnel = strtok(NULL, ";")) != NULL) {
-	      gtp_tunnels[num_gtp_tunnels] = atoi(tunnel);
-	      printf("Added GTP tunnel to filter %u/%08X\n",
-		     gtp_tunnels[num_gtp_tunnels], gtp_tunnels[num_gtp_tunnels]);
-	      num_gtp_tunnels++;
+	      free(r->str);
 	    }
+	  }
 
-	  free(r->str);
+	  redisFree(redis);
 	}
-
-	redisFree(redis);
       }
-      break;
 #endif
+      break;
+
     case 'g':
       if(num_gtp_tunnels < MAX_NUM_GTP_TUNNELS) {
 	u_int32_t v;
@@ -250,12 +257,15 @@ int main(int argc, char* argv[]) {
       } else
 	printf("Too many GTP tunnels defined (-g): ignored\n");
       break;
+
     case 'i':
       device = strdup(optarg);
       break;
+
     case 'S':
       dont_strip_hw_ts = 1;
       break;
+
     case 'f':
       bpfFilter = optarg;
       break;
@@ -314,7 +324,7 @@ int main(int argc, char* argv[]) {
   while(1) {
     if(pfring_recv(pd, &p, 0, &hdr, 1 /* wait_for_packet */) > 0) {
       if(dumper) {
-	if(num_gtp_tunnels > 0) {
+	if((num_gtp_tunnels > 0) || (imsi != NULL)) {
 	  pfring_parse_pkt((u_char*)p, (struct pfring_pkthdr*)&hdr, 5, 0, 0);
 
 #ifdef DEBUG
@@ -328,22 +338,96 @@ int main(int argc, char* argv[]) {
 	  printf("[TEOD: %08X]\n", hdr.extended_hdr.parsed_pkt.tunnel.tunnel_id);
 #endif
 
-	  if(hdr.extended_hdr.parsed_pkt.tunnel.tunnel_id != 0xFFFFFFFF) {
+	  if((hdr.extended_hdr.parsed_pkt.tunnel.tunnel_id != 0xFFFFFFFF)
+	     && (hdr.extended_hdr.parsed_pkt.l3_proto == IPPROTO_UDP)
+	     && (hdr.extended_hdr.parsed_pkt.l4_src_port == 2123)
+	     && (hdr.extended_hdr.parsed_pkt.l4_dst_port == 2123)) {
 	    u_int8_t found = 0, i;
+	    struct gtpv1_header *g = (struct gtpv1_header*)&p[hdr.extended_hdr.parsed_pkt.offset.payload_offset];
 
+	    if((g->message_type == 0x10) /* Create Request */
+	       || (g->message_type == 0x12) /* Update Request */) {
+	      u_int16_t displ = 12;
+
+	      while(displ < hdr.caplen) {
+		u_int8_t field_id = p[displ];
+
+		if(field_id == 0x02 /* IMSI */) {
+		  int i, j = 0;
+		  char *_imsi = (char*)&p[displ+1], u_imsi[24];
+
+		  for(i = 0; i < 8; i++) {
+		    if((_imsi[i] & 0x0F) <= 9)
+		      u_imsi[j++] = (_imsi[i] & 0x0F) + 0x30;
+		    if(((_imsi[i] >> 4) & 0x0F) <= 9)
+		      u_imsi[j++] = ((_imsi[i] >> 4) & 0x0F) + 0x30;
+		  }
+		  u_imsi[j] = '\0';
+
+		  if(strcmp(imsi, u_imsi) == 0) {
+		    ; /* Ok we can dump the packet */
+		  } else
+		    continue;
+
+		  displ += 9;
+		  break;
+		} else {
+		  switch(field_id) {
+		  case 0x03: /* Routing Area Info */
+		    displ += 7;
+		    break;
+
+		  case 0x14: /* NSAPI */
+		    displ += 2;
+		    break;
+
+		  case 0x00: /* Ignore */
+		  case 0x01: /* Cause */
+		  case 0x08: /* Reordering Required */
+		  case 0x0E: /* Recovery */
+		  case 0x0F: /* Selection Mode */
+		  case 0x13: /* Teardown Indicator */
+		  case 0xB4: /* PS Handover XID Parameters 7.7.79 */
+		    displ += 2;
+		    break;
+
+		  case 0x10: /* TEID Data */
+		    displ += 5;
+		    break;
+
+		  case 0x11: /* TEID Control */
+		    displ += 5;
+		    break;
+
+		  case 0x1A: /* Charging Characteristics */
+		    displ += 3;
+		    break;
+
+		  case 0x7F: /* Charging ID */
+		    displ += 5;
+		    break;
+
+		  default:
+		    displ += ntohs(*(u_int16_t*)&p[displ+1]) + 3;
+		    break;
+		  }
+		}
+	      } /* while */
+	    } else if(g->message_type == 0xFF /* Data */) {
 #ifdef DEBUG
-	    printf("%08X\n", hdr.extended_hdr.parsed_pkt.tunnel.tunnel_id);
+	      printf("%08X\n", hdr.extended_hdr.parsed_pkt.tunnel.tunnel_id);
 #endif
-	    for(i=0; i<num_gtp_tunnels; i++)
-	      if(gtp_tunnels[i] == hdr.extended_hdr.parsed_pkt.tunnel.tunnel_id) {
-		found = 1;
-		break;
-	      }
+	      for(i=0; i<num_gtp_tunnels; i++)
+		if(gtp_tunnels[i] == hdr.extended_hdr.parsed_pkt.tunnel.tunnel_id) {
+		  found = 1;
+		  break;
+		}
 
-	    if(!found) continue;
+	      if(!found) continue;
+	    } else
+	      continue;
 	  } else
 	    continue;
-
 	}
 
 #ifdef DEBUG
