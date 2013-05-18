@@ -2837,7 +2837,9 @@ static inline int copy_data_to_ring(struct sk_buff *skb,
   ring_bucket = get_slot(pfr, off);
 
   if(skb != NULL) {
-    /* skb copy mode */
+    /* Copy skb data */
+
+    hdr->caplen = min_val(hdr->caplen, pfr->bucket_len - offset);
 
     if(hdr->ts.tv_sec == 0)
       set_skb_time(skb, hdr);
@@ -2912,29 +2914,30 @@ static inline int copy_data_to_ring(struct sk_buff *skb,
       /* printk("[PF_RING] copy_data_to_ring(): clone_id=%d\n", *clone_id); */
     }
   } else {
-    /* Raw data copy mode */
-    raw_data_len = min_val(raw_data_len, pfr->bucket_len); /* Avoid overruns */
-    memcpy(&ring_bucket[pfr->slot_header_len], raw_data, raw_data_len); /* Copy raw data if present */
-    hdr->len = hdr->caplen = raw_data_len;
+    /* Copy Raw data */
+    hdr->len = raw_data_len;
+    hdr->caplen = min_val(raw_data_len, pfr->bucket_len);
+    memcpy(&ring_bucket[pfr->slot_header_len], raw_data, hdr->caplen);
     if(pfr->header_len == long_pkt_header)
       hdr->extended_hdr.if_index = FAKE_PACKET;
-    /* printk("[PF_RING] Copied raw data at slot with offset %d [len=%d]\n", off, raw_data_len); */
+    /* printk("[PF_RING] Copied raw data at slot with offset %d [len=%d, caplen=%d]\n", off, hdr->len, hdr->caplen); */
   }
 
-  memcpy(ring_bucket, hdr, pfr->slot_header_len); /* Copy extended packet header */
+  /* Copy extended packet header */
+  memcpy(ring_bucket, hdr, pfr->slot_header_len);
 
+  /* Set Magic value */
   memset(&ring_bucket[pfr->slot_header_len + offset + hdr->caplen], RING_MAGIC_VALUE, sizeof(u_int16_t));
+
+  /* Update insert offset */
   pfr->slots_info->insert_off = get_next_slot_offset(pfr, off);
 
   if(unlikely(enable_debug))
     printk("[PF_RING] ==> insert_off=%d\n", pfr->slots_info->insert_off);
 
-  /*
-    NOTE: smp_* barriers are _compiler_ barriers on UP, mandatory barriers on SMP
-    a consumer _must_ see the new value of tot_insert only after the buffer update completes
-  */
-  smp_mb();
-  //wmb();
+  /* NOTE: smp_* barriers are _compiler_ barriers on UP, mandatory barriers on SMP
+   * a consumer _must_ see the new value of tot_insert only after the buffer update completes */
+  smp_mb(); //wmb();
 
   pfr->slots_info->tot_insert++;
 
@@ -2946,7 +2949,7 @@ static inline int copy_data_to_ring(struct sk_buff *skb,
 #ifdef VPFRING_SUPPORT
   if(pfr->vpfring_host_eventfd_ctx && !(pfr->slots_info->vpfring_guest_flags & VPFRING_GUEST_NO_INTERRUPT))
      eventfd_signal(pfr->vpfring_host_eventfd_ctx, 1);
-#endif //VPFRING_SUPPORT
+#endif
 
   return(1);
 }
@@ -2983,8 +2986,6 @@ static inline int add_pkt_to_ring(struct sk_buff *skb,
      && (channel_id != RING_ANY_CHANNEL)
      && (!(pfr->channel_id_mask & the_bit)))
     return(0); /* Wrong channel */
-
-  hdr->caplen = min_val(pfr->bucket_len - offset, hdr->caplen);
 
   if(pfr->kernel_consumer_plugin_id
      && plugin_registration[pfr->kernel_consumer_plugin_id]->pfring_packet_reader) {
@@ -4454,14 +4455,12 @@ static int skb_ring_handler(struct sk_buff *skb,
   memset(&hdr, 0, sizeof(hdr));
 
   hdr.ts.tv_sec = 0;
-  /*
-     The min() below is not really necessary but we have observed that sometimes
-     skb->len > MTU thus it's better to be on the safe side
-  */
+  hdr.len = hdr.caplen = skb->len + displ;
+
+#if 0 /* safety check (this leads to wrong numbers with GSO) */
   hdr.len = hdr.caplen = min(skb->len + displ,
-			     skb->dev->mtu /* 1500 */
-			     + skb->dev->hard_header_len /* 14 */
-			     + 4 /* VLAN header */);
+    skb->dev->mtu /* 1500 */ + skb->dev->hard_header_len /* 14 */ + 4 /* VLAN header */);
+#endif
 
   if(quick_mode) {
     pfr = device_rings[skb->dev->ifindex][channel_id];
@@ -4479,7 +4478,7 @@ static int skb_ring_handler(struct sk_buff *skb,
     if((pfr != NULL) && is_valid_skb_direction(pfr->direction, recv_packet)) {
       /* printk("==>>> [%d][%d]\n", skb->dev->ifindex, channel_id); */
 
-      rc = 1, hdr.caplen = min_val(hdr.caplen, pfr->bucket_len);
+      rc = 1;
       room_available |= copy_data_to_ring(real_skb ? skb : NULL, pfr, &hdr,
 					  displ, 0, NULL, NULL, 0, real_skb ? &clone_id : NULL);
     }
@@ -4529,12 +4528,12 @@ static int skb_ring_handler(struct sk_buff *skb,
 	 && is_valid_skb_direction(pfr->direction, recv_packet)
 	 ) {
 	/* We've found the ring where the packet can be stored */
-	int old_caplen = hdr.caplen;  /* Keep old lenght */
+	int old_len = hdr.len, old_caplen = hdr.caplen;  /* Keep old lenght */
 
-	hdr.caplen = min_val(hdr.caplen, pfr->bucket_len);
 	room_available |= add_skb_to_ring(skb, real_skb, pfr, &hdr, is_ip_pkt,
 					  displ, channel_id, num_rx_channels, &clone_id);
-	hdr.caplen = old_caplen;
+
+	hdr.len = old_len, hdr.caplen = old_caplen;
 	rc = 1;	/* Ring found: we've done our job */
       }
 
@@ -4587,8 +4586,12 @@ static int skb_ring_handler(struct sk_buff *skb,
 		 ) {
 		if(check_free_ring_slot(pfr) /* Not full */) {
 		  /* We've found the ring where the packet can be stored */
+	          int old_len = hdr.len, old_caplen = hdr.caplen;  /* Keep old lenght */
+
 		  room_available |= add_skb_to_ring(skb, real_skb, pfr, &hdr, is_ip_pkt,
 						    displ, channel_id, num_rx_channels, &clone_id);
+	
+		  hdr.len = old_len, hdr.caplen = old_caplen;
 		  rc = 1; /* Ring found: we've done our job */
 		  break;
 
