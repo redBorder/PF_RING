@@ -1426,10 +1426,10 @@ static int ring_proc_get_info(char *buf, char **start, off_t offset,
   if(data == NULL) {
     /* /proc/net/pf_ring/info */
     rlen = sprintf(buf,         "PF_RING Version          : %s ($Revision: %s$)\n", RING_VERSION, SVN_REV);
-    rlen += sprintf(buf + rlen, "Ring slots               : %d\n", min_num_slots);
-    rlen += sprintf(buf + rlen, "Slot version             : %d\n", RING_FLOWSLOT_VERSION);
     rlen += sprintf(buf + rlen, "Total rings              : %d\n", ring_table_size);
     rlen += sprintf(buf + rlen, "\nStandard (non DNA) Options\n");
+    rlen += sprintf(buf + rlen, "Ring slots               : %d\n", min_num_slots);
+    rlen += sprintf(buf + rlen, "Slot version             : %d\n", RING_FLOWSLOT_VERSION);
     rlen += sprintf(buf + rlen, "Capture TX               : %s\n", enable_tx_capture ? "Yes [RX+TX]" : "No [RX only]");
     rlen += sprintf(buf + rlen, "IP Defragment            : %s\n", enable_ip_defrag ? "Yes" : "No");
     rlen += sprintf(buf + rlen, "Socket Mode              : %s\n", quick_mode ? "Quick" : "Standard");
