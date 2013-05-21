@@ -1,4 +1,34 @@
 ---------------------------------------
+2013-05-22 PF_RING 5.5.4
+
+* PF_RING Kernel module
+ - Support for injecting packets to the stack
+ - Added ability to balance tunneled/fragmented packets with the cluster
+ - Improved init.d script
+ - Packet len fix with GSO enabled, caplen fix with multiple clusters
+ - Bug fixes for race condition with rss rehash, memory corruption, transparent mode and tx capture, kernels >= 3.7.
+
+* Drivers
+ - Added PF_RING-aware driver for Chelsio cards (cxgb3-2.0.0.1)
+ - New release for PF_RING-aware igb (igb-4.1.2)
+
+* DNA
+ - Added support for Silicom 10 Gbit hw timestamping commodity NIC card
+ - Added pfring_flush_tx_packets() for flushing queued tx packets
+ - Fixes for cutting packets to snaplen, e1000-dna rx
+
+* Libzero
+ - pfdnacluster_master support for multiple instances of multiple applications
+ - Added dna_cluster_set_thread_name() to name the master rx/tx threads
+ - Fix for direct forwarding with the DNA Cluster
+ - Changed len to a ptr in DNA Bouncer decision function to allow user change forwarded packet content and lenght
+
+* Examples
+ - Added ability to replay a packet with pfsend passing hex from stdin
+ - Added pfwrite to the package
+ - Fix for rate control with huge files in pfsend
+
+---------------------------------------
 2013-01-09 PF_RING 5.5.2
 
 * PF_RING library
