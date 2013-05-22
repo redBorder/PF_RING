@@ -42,10 +42,15 @@
 #include <sys/sysinfo.h> /* get_nprocs(void) */
 #include <unistd.h>
 #include <signal.h>
+#include <arpa/inet.h>
 
 #include "pfring.h"
 #include "sfbpf.h"
 #include "daq_api.h"
+
+#ifdef HAVE_REDIS
+#include "hiredis.h"
+#endif
 
 #define DAQ_PF_RING_VERSION 1
 
@@ -85,6 +90,11 @@ typedef struct _pfring_context
   uint32_t base_recv[DAQ_PF_RING_MAX_NUM_DEVICES];
   uint32_t base_drop[DAQ_PF_RING_MAX_NUM_DEVICES];
   DAQ_State state;
+#ifdef HAVE_REDIS
+  redisContext *redis_ctx = NULL;
+  char *redis_ip = NULL;
+  int redis_port = -1;
+#endif
 } Pfring_Context_t;
 
 static void pfring_daq_reset_stats(void *handle);
@@ -424,7 +434,31 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
 		 __FUNCTION__);
         return DAQ_ERROR;
       }
-    } else {
+    }
+#ifdef HAVE_REDIS
+    else if (!strcmp(entry->key, "redis")) {
+     char *ipPort = strdup(entry->value)
+     if (ipPort != NULL) {
+	int i = 0;
+	char *temp, *temp2 = NULL;
+	temp = strtok_r(ipPort, ":", &temp2);
+	while (temp != NULL || i < 2) {
+	  if (i == 0)
+	    redis_ip = strdup(temp);
+	  else
+	    redis_port = atoi(temp);
+	  temp = strtok_r(NULL, ":", &temp2);
+	  i++;
+	}
+	if (temp != NULL) {
+	  snprintf(errbuf, len, "%s: Incorrect format for <redis ip>:<redis port>\n", __FUNCTION__);
+	  free(temp);
+	  return DAQ_ERROR;
+	}
+      }
+    }
+#endif
+    else {
       snprintf(errbuf, len,
 	       "%s: unsupported variable(%s=%s)\n",
 	       __FUNCTION__, entry->key, entry->value);
@@ -442,6 +476,15 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
         return DAQ_ERROR;
     }
   }
+
+#ifdef HAVE_REDIS
+  if (context->redis_ip != NULL && context->redis_port != -1) {
+    if ((context->redis_ctx = redisConnect(context->redis_ip, context->redis_port)) == NULL || context->redis_ctx->err) {
+      snprintf(errbuf, len, "redis connection error: %s", context->redis_ctx->err);
+      return DAQ_ERROR;
+    }
+  }
+#endif
 
   context->state = DAQ_STATE_INITIALIZED;
 
@@ -535,6 +578,52 @@ static int pfring_daq_send_packet(Pfring_Context_t *context, pfring *send_ring,
   return(DAQ_SUCCESS);
 }
 
+#ifdef HAVE_REDIS
+int pfring_daq_redis_insert_to_set(redisContext *redis_ctx, char *set_name, char *ip) {
+  redisReply *r = NULL;
+  const int TTL = 3600;
+ 
+#if 0
+  if ((r = redisCommand(redis_ctx, "SISMEMBER %s %s", set_name, ip)) != NULL) {
+    if (r->integer != 0) {
+      freeReplyObject(r);
+      return DAQ_ERROR;
+    }
+  } else {
+    freeReplyObject(r);
+    return DAQ_ERROR;
+  }
+  freeReplyObject(r);
+#endif
+
+  if ((r = redisCommand(redis_ctx, "SADD %s %s", set_name, ip)) != NULL) {
+    //printf("[DEBUG] Entry added to %s SET: %s\n",set_name,ip);
+    freeReplyObject(r);
+  } else{
+    freeReplyObject(r);
+    return DAQ_ERROR;
+  }
+
+  if((r = redisCommand(redis_ctx, "INCR %s", ip)) != NULL) {
+    //printf("[DEBUG] Incrementing the entry added to %s SET: %s\n",set_name,ip);
+    freeReplyObject(r);
+  } else {
+    freeReplyObject(r);
+    return DAQ_ERROR;
+  }
+  
+  if((r = redisCommand(redis_ctx, "EXPIRE %s %d", ip, TTL)) != NULL){
+    //printf("[DEBUG] Setting the expire time of %d sec to the entry added to %s SET: %s\n",TTL,set_name,ip);
+    freeReplyObject(r);
+  } else {
+    freeReplyObject(r);
+    return DAQ_ERROR;
+  }
+
+  return DAQ_SUCCESS;
+}
+#endif
+
 static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callback, 
 #if (DAQ_API_VERSION >= 0x00010002)
                               DAQ_Meta_Func_t metaback,
@@ -544,6 +633,7 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
   int ret = 0, i, current_ring_idx = context->num_devices - 1, rx_ring_idx;
   struct pollfd pfd[DAQ_PF_RING_MAX_NUM_DEVICES];
   hash_filtering_rule hash_rule;
+
   memset(&hash_rule, 0, sizeof(hash_rule));
 
   context->analysis_func = callback;
@@ -629,7 +719,7 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
       switch(verdict) {
       case DAQ_VERDICT_BLACKLIST: /* Block the packet and block all future packets in the same flow systemwide. */
 	if (context->use_kernel_filters) {
-          
+	  
 	  pfring_parse_pkt(context->pkt_buffer, &phdr, 4, 0, 0);
 	  /* or use pfring_recv_parsed() to force parsing. */
 
@@ -664,8 +754,34 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
 	         hash_rule.port_peer_b & 0xFFFF,
 	         verdict,
 		 hash_rule.rule_action);
-#endif
+#endif	  
 	}
+
+#ifdef HAVE_REDIS
+	if (context->redis_ctx != NULL) {
+          char ipAttacker[INET_ADDRSTRLEN];
+          char ipTarget[INET_ADDRSTRLEN];
+
+	  pfring_parse_pkt(context->pkt_buffer, &phdr, 4, 0, 0);
+
+	  /* Attacker */
+	  if (inet_ntop(AF_INET, (const void *) &phdr.extended_hdr.parsed_pkt.ipv4_src, ipAttacker, INET_ADDRSTRLEN) != NULL) {
+	    if (pfring_daq_redis_insert_to_set(context->redis_ctx, "Attackers", ipAttacker) != DAQ_SUCCESS) {
+	      DPE(context->errbuf, "%s: Insert into Attackers Set failed: %s", __FUNCTION__, ipAttacker);
+	      return DAQ_ERROR;
+	    }
+	  }
+	  
+	  /* target */
+	  if (inet_ntop(AF_INET,(const void *) &phdr.extended_hdr.parsed_pkt.ipv4_dst, ipTarget, INET_ADDRSTRLEN) != NULL) {
+	    if (pfring_daq_redis_insert_to_set(context->redis_ctx, "Targets", ipTarget) != DAQ_SUCCESS) {
+	      DPE(context->errbuf, "%s: Insert into Targets Set failed: %s", __FUNCTION__, ipTarget);
+	      return DAQ_ERROR;
+	    }
+	  }
+	}
+#endif
+
 	break;
 
       case DAQ_VERDICT_WHITELIST: /* Pass the packet and fastpath all future packets in the same flow systemwide. */
@@ -770,6 +886,11 @@ static void pfring_daq_shutdown(void *handle) {
 
   if(context->filter_string)
     free(context->filter_string);
+
+#ifdef HAVE_REDIS
+  if(context->redis_ctx != NULL)
+    redisFree(context->redis_ctx);
+#endif
 
   free(context);
 }
