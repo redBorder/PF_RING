@@ -91,9 +91,9 @@ typedef struct _pfring_context
   uint32_t base_drop[DAQ_PF_RING_MAX_NUM_DEVICES];
   DAQ_State state;
 #ifdef HAVE_REDIS
-  redisContext *redis_ctx = NULL;
-  char *redis_ip = NULL;
-  int redis_port = -1;
+  redisContext *redis_ctx;
+  char *redis_ip;
+  int redis_port;
 #endif
 } Pfring_Context_t;
 
@@ -261,6 +261,9 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
   context->devices[DAQ_PF_RING_PASSIVE_DEV_IDX] = strdup(config->name);
   context->num_devices = 1;
   context->cluster_mode = cluster_per_flow_2_tuple;
+#ifdef HAVE_REDIS
+  context->redis_port = -1;
+#endif
 
   if(!context->devices[DAQ_PF_RING_PASSIVE_DEV_IDX]) {
     snprintf(errbuf, len, "%s: Couldn't allocate memory for the device string!", __FUNCTION__);
@@ -437,16 +440,16 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
     }
 #ifdef HAVE_REDIS
     else if (!strcmp(entry->key, "redis")) {
-     char *ipPort = strdup(entry->value)
+     char *ipPort = strdup(entry->value);
      if (ipPort != NULL) {
 	int i = 0;
 	char *temp, *temp2 = NULL;
 	temp = strtok_r(ipPort, ":", &temp2);
 	while (temp != NULL || i < 2) {
 	  if (i == 0)
-	    redis_ip = strdup(temp);
+	    context->redis_ip = strdup(temp);
 	  else
-	    redis_port = atoi(temp);
+	    context->redis_port = atoi(temp);
 	  temp = strtok_r(NULL, ":", &temp2);
 	  i++;
 	}
