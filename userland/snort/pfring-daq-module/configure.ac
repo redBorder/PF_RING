@@ -51,6 +51,12 @@ if test "x$with_pfring_libraries" != "xno"; then
 	LDFLAGS="${LDFLAGS} -L${with_pfring_libraries}"
 fi
 
+AC_CHECK_LIB([hiredis], [redisCommand])
+if test "x$ac_cv_lib_hiredis_redisCommand" = xyes; then
+	CPPFLAGS="${CPPFLAGS} -D HAVE_REDIS" 
+	LDFLAGS="${LDFLAGS} -lhiredis"
+fi
+
 # PF_RING headers/library checks
 AC_CHECK_HEADER([pfring.h],  [], [AC_MSG_ERROR([Could not find pfring.h! ])])
 

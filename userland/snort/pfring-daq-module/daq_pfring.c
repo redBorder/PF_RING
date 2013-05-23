@@ -49,7 +49,7 @@
 #include "daq_api.h"
 
 #ifdef HAVE_REDIS
-#include "hiredis.h"
+#include "hiredis/hiredis.h"
 #endif
 
 #define DAQ_PF_RING_VERSION 1
@@ -483,7 +483,7 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
 #ifdef HAVE_REDIS
   if (context->redis_ip != NULL && context->redis_port != -1) {
     if ((context->redis_ctx = redisConnect(context->redis_ip, context->redis_port)) == NULL || context->redis_ctx->err) {
-      snprintf(errbuf, len, "redis connection error: %s", context->redis_ctx->err);
+      snprintf(errbuf, len, "redis connection error: %d", context->redis_ctx->err);
       return DAQ_ERROR;
     }
   }
@@ -582,7 +582,7 @@ static int pfring_daq_send_packet(Pfring_Context_t *context, pfring *send_ring,
 }
 
 #ifdef HAVE_REDIS
-int pfring_daq_redis_insert_to_set(redisContext *redis_ctx, char *set_name, char *ip) {
+int pfring_daq_redis_insert_to_set(redisContext *redis_ctx, const char *set_name, char *ip) {
   redisReply *r = NULL;
   const int TTL = 3600;
  
