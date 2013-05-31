@@ -16,6 +16,7 @@
 #include "pfring_mod_usring.h"
 
 #define gcc_mb() __asm__ __volatile__("": : :"memory");
+#define ALIGN(a,b) (((a) + ((b)-1) ) & ~((b)-1))
 
 #define USE_WATERMARK
 
@@ -147,6 +148,12 @@ static inline int get_next_slot_offset(pfring *ring, u_int32_t off)
 
   real_slot_size = ring->slot_header_len + hdr->caplen;
 
+  /* padding at the end of the packet (magic number added on insert) */ 
+  real_slot_size += sizeof(u_int16_t); /* RING_MAGIC_VALUE */ 
+
+  /* Align slot size to 64 bit */
+  real_slot_size = ALIGN(real_slot_size, sizeof(u_int64_t));
+
   //TODO extended_hdr.parsed_header
   //if(ring->slot_header_len == sizeof(struct pfring_pkthdr)) /* !quick_mode */
   //  real_slot_size += hdr->extended_hdr.parsed_header_len;
@@ -172,7 +179,7 @@ static inline u_int32_t num_queued_pkts(pfring *ring)
 
 /* ******************************* */
 
-static inline int check_and_init_free_slot(pfring *ring, int off)
+static inline int check_free_ring_slot(pfring *ring, int off)
 {
   if(ring->slots_info->insert_off == ring->slots_info->remove_off) {
     if(num_queued_pkts(ring) >= ring->slots_info->min_num_slots)
@@ -201,7 +208,7 @@ static inline int copy_data_to_ring(pfring *ring, struct pfring_pkthdr *pkt_hdr,
   off = ring->slots_info->insert_off;
   ring->slots_info->tot_pkts++;
 
-  if(!check_and_init_free_slot(ring, off)) {
+  if(!check_free_ring_slot(ring, off)) {
     ring->slots_info->tot_lost++;
     return -1;
   }
