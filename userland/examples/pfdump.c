@@ -48,6 +48,8 @@
 #define DEFAULT_DEVICE     "eth0"
 #define NO_ZC_BUFFER_LEN     9000
 
+u_int clusterId = 0;
+
 pfring  *pd;
 pcap_dumper_t *dumper = NULL;
 pfring_stat pfringStats;
@@ -157,13 +159,14 @@ void printHelp(void) {
 	 "                - dag:dagX:Y for Endace DAG cards\n"
 #endif
 	 );
+  printf("-c <cluster id> Cluster id\n");
   printf("-f <filter>     [BPF filter]\n");
   printf("-e <direction>  0=RX+TX, 1=RX only, 2=TX only\n");
   printf("-s <len>        Packet capture length (snaplen)\n");
   printf("-w <dump file>  pcap dump file path\n");
   printf("-a              Active packet wait\n");
   printf("-t <time>       Periodic stats dump period (sec)\n");
-  printf("-c <time>       Maximum capture duration (sec)\n");
+  printf("-d <time>       Maximum capture duration (sec)\n");
 }
 
 /* *************************************** */
@@ -220,7 +223,7 @@ int main(int argc, char* argv[]) {
   alarm_sleep = 1;
   capval=0; // by default leave 15 minutes
 
-  while((c = getopt(argc,argv,"hi:ae:w:f:t:c:s:")) != '?') {
+  while((c = getopt(argc,argv,"hi:d:ae:w:f:t:c:s:")) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -240,6 +243,9 @@ int main(int argc, char* argv[]) {
 	break;
       }
       break;
+    case 'c':
+      clusterId = atoi(optarg);
+      break;
     case 's':
       snaplen = atoi(optarg);
       break;
@@ -252,7 +258,7 @@ int main(int argc, char* argv[]) {
     case 't':
       alarm_sleep = atoi(optarg);
       break;
-    case 'c':
+    case 'd':
       capval = atoi(optarg);
       capstop = 0;
       break;
@@ -323,6 +329,11 @@ int main(int argc, char* argv[]) {
       printf("pfring_set_bpf_filter(%s) returned %d\n", bpfFilter, rc);
     else
       printf("Successfully set BPF filter '%s'\n", bpfFilter);
+  }
+
+  if(clusterId > 0) {
+    rc = pfring_set_cluster(pd, clusterId, cluster_per_flow_2_tuple);
+    printf("pfring_set_cluster returned %d\n", rc);
   }
 
   if((rc = pfring_set_direction(pd, direction)) != 0)
