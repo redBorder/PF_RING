@@ -4118,6 +4118,8 @@ static int hash_pkt_cluster(ring_cluster_element *cluster_ptr,
       break;
     }
 
+    if (idx < 0) idx = -idx; /* idx must be positive */
+
     if(first_fragment) {
       add_fragment_app_id(hdr->extended_hdr.parsed_pkt.ipv4_src,
 			  hdr->extended_hdr.parsed_pkt.ipv4_dst,
