@@ -16,6 +16,9 @@
    - Added support for mobile networks (2G/3G/LTE) so that we can dump traffic of specific GTP tunnels
  - pfdump: added cluster id support (courtesy of Doug Burks <doug.burks@gmail.com>)
 
+* Snort (PF_RING DAQ)
+ - Added microcloud support for notifying into the microcloud those hosts that are victims/attackers
+	
 ---------------------------------------
 2013-05-22 PF_RING 5.5.3
 
