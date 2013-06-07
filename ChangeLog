@@ -1,4 +1,22 @@
 ---------------------------------------
+2013-06-07 PF_RING 5.6.0
+
+* PF_RING Kernel module
+ - Fixed bug that prevented the PF_RING cluster to work properly with specific traffic
+
+* Documentation
+ - User's guide translated to russian (courtesy of ridervka@yandex.ru)
+
+* Libzero
+ - Fixed bug that caused the DNA bouncer to process the correct packet
+
+* Examples 
+ - pfwrite
+   - Added support for the microcloud so that for GTP traffic it is possible to dump traffic of specific IMSI phone
+   - Added support for mobile networks (2G/3G/LTE) so that we can dump traffic of specific GTP tunnels
+ - pfdump: added cluster id support (courtesy of Doug Burks <doug.burks@gmail.com>)
+
+---------------------------------------
 2013-05-22 PF_RING 5.5.3
 
 * PF_RING Kernel module
@@ -32,7 +50,7 @@
 2013-01-09 PF_RING 5.5.2
 
 * PF_RING library
- - New pfring_open() flag PF_RING_DNA_FIXED_RSS_Q_0 to send all traffic to queue 0. 
+ - New pfring_open() flag PF_RING_DNA_FIXED_RSS_Q_0 to send all traffic to queue 0.
    Other queues can be selected using hw filters (DNA cards with hw filtering only).
  - Added ability to create a stats file under /proc/net/pf_ring/stats so that
    applications can report stats via the /proc filesystem.
@@ -48,7 +66,7 @@
  - pfcount.c and pfsend.c update to report stats using pfring_set_application_stats()
 
 * Libzero
- - New experimental pfring_register_zerocopy_tx_ring() 
+ - New experimental pfring_register_zerocopy_tx_ring()
  - New pfdnacluster_mt_rss_frwd sample app (packet forwarding using Libzero
  DNA Cluster for rx/balancing and standard DNA with zero-copy on RSS queues for tx)
 
@@ -89,7 +107,7 @@
 * New PF_RING-aware libpcap features:
   - added PF_RING_ACTIVE_POLL environmental variable to enable active polling when defined to 1
   - enable rehash rss setting env var PF_RING_RSS_REHASH=1
-  - cluster type selectable via env vars: 
+  - cluster type selectable via env vars:
     - PCAP_PF_RING_USE_CLUSTER_PER_FLOW
     - PCAP_PF_RING_USE_CLUSTER_PER_FLOW_2_TUPLE
     - PCAP_PF_RING_USE_CLUSTER_PER_FLOW_4_TUPLE
@@ -102,7 +120,7 @@
 * New PF_RING library features:
   - new pfring_open() flag PF_RING_HW_TIMESTAMP for enabling hw timestamp
 
-* New PF_RING kernel module features: 
+* New PF_RING kernel module features:
   - handle_user_msg hook for sending msg to plugins
   - SO_SEND_MSG_TO_PLUGIN setsockopt for sending msgs from userspace
   - pf_ring_inject_packet_to_ring for inserting packets in a ring identified by <if_index, channel_id>)
@@ -135,4 +153,4 @@
 
 * Misc changes
   - Initial work on changelog maintenance
-	
+
