@@ -201,7 +201,7 @@ static u_int8_t num_any_rings = 0;
    As in a cluster packet fragments cannot be hashed, we have a cache where we can keep
    the association between the IP packet identifier and the balanced application.
 */
-static u_int16_t num_cluster_fragments = 0;
+static u_int32_t num_cluster_fragments = 0;
 static u_int32_t num_cluster_discarded_fragments = 0;
 static unsigned long next_fragment_purge_jiffies = 0;
 static struct hash_fragment_node *cluster_fragment_hash[NUM_FRAGMENTS_HASH_SLOTS] = { NULL };
@@ -361,6 +361,7 @@ ip_defrag(struct sk_buff *skb, u32 user);
 static unsigned int min_num_slots = 4096;
 static unsigned int perfect_rules_hash_size = DEFAULT_RING_HASH_SIZE;
 static unsigned int enable_tx_capture = 1;
+static unsigned int enable_frag_coherence = 1;
 static unsigned int enable_ip_defrag = 0;
 static unsigned int quick_mode = 0;
 static unsigned int enable_debug = 0;
@@ -382,6 +383,7 @@ module_param(perfect_rules_hash_size, uint, 0644);
 module_param(transparent_mode, uint, 0644);
 module_param(enable_debug, uint, 0644);
 module_param(enable_tx_capture, uint, 0644);
+module_param(enable_frag_coherence, uint, 0644);
 module_param(enable_ip_defrag, uint, 0644);
 module_param(quick_mode, uint, 0644);
 #ifdef REDBORDER_PATCH
@@ -393,6 +395,7 @@ MODULE_PARM(perfect_rules_hash_size, "i");
 MODULE_PARM(transparent_mode, "i");
 MODULE_PARM(enable_debug, "i");
 MODULE_PARM(enable_tx_capture, "i");
+MODULE_PARM(enable_frag_coherence, "i");
 MODULE_PARM(enable_ip_defrag, "i");
 MODULE_PARM(quick_mode, "i");
 #endif
@@ -404,6 +407,7 @@ MODULE_PARM_DESC(transparent_mode,
 		 "For 1 and 2 you need to use a PF_RING aware driver");
 MODULE_PARM_DESC(enable_debug, "Set to 1 to enable PF_RING debug tracing into the syslog");
 MODULE_PARM_DESC(enable_tx_capture, "Set to 1 to capture outgoing packets");
+MODULE_PARM_DESC(enable_frag_coherence, "Set to 1 to handle fragments (flow coherence) in clusters");
 MODULE_PARM_DESC(enable_ip_defrag,
 		 "Set to 1 to enable IP defragmentation"
 		 "(only rx traffic is defragmentead)");
@@ -1438,9 +1442,11 @@ static int ring_proc_get_info(char *buf, char **start, off_t offset,
 		     (transparent_mode == driver2pf_ring_transparent ? "Yes [mode 1]" : "No [mode 2]")));
     rlen += sprintf(buf + rlen, "Total plugins            : %d\n", plugin_registration_size);
 
-    purge_idle_fragment_cache();
-    rlen += sprintf(buf + rlen, "Cluster Fragment Queue   : %u\n", num_cluster_fragments);
-    rlen += sprintf(buf + rlen, "Cluster Fragment Discard : %u\n", num_cluster_discarded_fragments);
+    if(enable_frag_coherence) {
+      purge_idle_fragment_cache();
+      rlen += sprintf(buf + rlen, "Cluster Fragment Queue   : %u\n", num_cluster_fragments);
+      rlen += sprintf(buf + rlen, "Cluster Fragment Discard : %u\n", num_cluster_discarded_fragments);
+    }
   } else {
     /* Detailed statistics about a PF_RING */
     struct pf_ring_socket *pfr = (struct pf_ring_socket *)data;
@@ -4079,7 +4085,7 @@ static int hash_pkt_cluster(ring_cluster_element *cluster_ptr,
     printk("[PF_RING] %s(ip_id=%02X, first_fragment=%d, second_fragment=%d)\n",
 	   __FUNCTION__, ip_id, first_fragment, second_fragment);
 
-  if(second_fragment) {
+  if(enable_frag_coherence && second_fragment) {
     if((idx = get_fragment_app_id(hdr->extended_hdr.parsed_pkt.ipv4_src,
 				  hdr->extended_hdr.parsed_pkt.ipv4_dst,
 				  ip_id)) < 0)
@@ -4120,7 +4126,7 @@ static int hash_pkt_cluster(ring_cluster_element *cluster_ptr,
 
     if (idx < 0) idx = -idx; /* idx must be positive */
 
-    if(first_fragment) {
+    if(enable_frag_coherence && first_fragment) {
       add_fragment_app_id(hdr->extended_hdr.parsed_pkt.ipv4_src,
 			  hdr->extended_hdr.parsed_pkt.ipv4_dst,
 			  ip_id, idx);
@@ -9490,7 +9496,7 @@ static void __exit ring_exit(void)
     kfree(dev_ptr);
   }
 
-  if(num_cluster_fragments > 0) {
+  if(enable_frag_coherence && num_cluster_fragments > 0) {
     int i;
 
     for(i=0; i<NUM_FRAGMENTS_HASH_SLOTS; i++) {
