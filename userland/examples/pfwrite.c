@@ -68,12 +68,12 @@ void sigproc(int sig) {
 /* *************************************** */
 
 void printHelp(void) {
-
   printf("pwrite - (C) 2003-13 Deri Luca <deri@ntop.org>\n");
   printf("-h              [Print help]\n");
   printf("-i <device>     [Device name]\n");
   printf("-w <dump file>  [Dump file path]\n");
   printf("-f <BPF filter> [Ingress BPF filter]\n");
+  printf("-c <cluster id> [Cluster id]\n");
 #ifdef HAVE_REDIS
   printf("-m <imsi>       [Dump only the specified IMSI traffic (Example: -m 284031122831060)]\n");
 #endif
@@ -177,7 +177,7 @@ inline char* in6toa(struct in6_addr addr6) {
 
 int main(int argc, char* argv[]) {
   char *device = NULL, c, *out_dump = NULL;
-  u_int flags = 0, dont_strip_hw_ts = 0, dump_digest = 0;
+  u_int flags = 0, dont_strip_hw_ts = 0, dump_digest = 0, cluster_id = 0;
   int32_t thiszone;
   u_char *p;
   char *bpfFilter = NULL;
@@ -186,12 +186,16 @@ int main(int argc, char* argv[]) {
   u_int32_t gtp_tunnels[MAX_NUM_GTP_TUNNELS];
   char *imsi = NULL;
 
-  while((c = getopt(argc,argv,"hi:w:Sdg:f:"
+  while((c = getopt(argc,argv,"hi:w:Sdg:f:c:"
 #ifdef HAVE_REDIS
 		    "m:"
 #endif
 		    )) != -1) {
     switch(c) {
+    case 'c':
+      cluster_id = atoi(optarg);
+      break;
+
     case 'd':
       dump_digest = 1;
       break;
@@ -305,6 +309,15 @@ int main(int argc, char* argv[]) {
   thiszone = gmt2local(0);
   printf("Capture device: %s\n", device);
   printf("Dump file path: %s\n", out_dump);
+
+  if(cluster_id > 0) {
+    int rc;
+
+    if((rc = pfring_set_cluster(pd, cluster_id, cluster_per_flow_2_tuple)) != 0)
+      printf("pfring_set_cluster returned %d\n", rc);
+    else
+      printf("Bound to clusterId %d\n", cluster_id);
+  }
 
   if(bpfFilter != NULL) {
     int rc = pfring_set_bpf_filter(pd, bpfFilter);
