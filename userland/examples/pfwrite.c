@@ -3,6 +3,8 @@
 #include <sched.h>
 #include <stdlib.h>
 
+// #define DEBUG
+
 #define HAVE_PCAP
 
 #include "config.h"
@@ -231,9 +233,10 @@ int main(int argc, char* argv[]) {
 
 	      for(i=0; i<2; i++)
 		if((tunnel = strtok(NULL, ";")) != NULL) {
-		  gtp_tunnels[num_gtp_tunnels] = atoi(tunnel);
-		  printf("Added GTP tunnel to filter %u/%08X\n",
-			 gtp_tunnels[num_gtp_tunnels], gtp_tunnels[num_gtp_tunnels]);
+		  gtp_tunnels[num_gtp_tunnels] = atoll(tunnel);
+		  printf("Added GTP tunnel to filter %u/%08X [%s]\n",
+			 gtp_tunnels[num_gtp_tunnels], gtp_tunnels[num_gtp_tunnels],
+			 tunnel);
 		  num_gtp_tunnels++;
 		}
 
@@ -254,10 +257,10 @@ int main(int argc, char* argv[]) {
 	if(strlen(optarg) == 8)
 	  sscanf(optarg, "%08X", &v);
 	else
-	  v = atoi(optarg);
+	  v = atoll(optarg);
 
 	gtp_tunnels[num_gtp_tunnels++]=v;
-	printf("Added GTP tunnel to filter %u/%08X\n", v, v);
+	printf("Added GTP tunnel to filter %u/%08X [%s]\n", v, v, optarg);
       } else
 	printf("Too many GTP tunnels defined (-g): ignored\n");
       break;
