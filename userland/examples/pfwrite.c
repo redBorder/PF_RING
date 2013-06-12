@@ -307,7 +307,7 @@ int main(int argc, char* argv[]) {
     printf("pfring_open error [%s]\n", strerror(errno));
     return(-1);
   } else
-    pfring_set_application_name(pd, "pwrite");
+    pfring_set_application_name(pd, "pfwrite");
 
   thiszone = gmt2local(0);
   printf("Capture device: %s\n", device);
@@ -340,6 +340,8 @@ int main(int argc, char* argv[]) {
   while(1) {
     if(pfring_recv(pd, &p, 0, &hdr, 1 /* wait_for_packet */) > 0) {
       if(dumper) {
+	u_int8_t to_dump = 0;
+
 	if((num_gtp_tunnels > 0) || (imsi != NULL)) {
 	  memset(&hdr.extended_hdr, 0, sizeof(hdr.extended_hdr));
 
@@ -383,9 +385,9 @@ int main(int argc, char* argv[]) {
 		  u_imsi[j] = '\0';
 
 		  if(strcmp(imsi, u_imsi) == 0) {
-		    ; /* Ok we can dump the packet */
+		    to_dump = 1; /* Ok we can dump the packet */
 		  } else
-		    continue;
+		    break;
 
 		  displ += 9;
 		  break;
@@ -437,7 +439,7 @@ int main(int argc, char* argv[]) {
 #endif
 	      for(i=0; i<num_gtp_tunnels; i++)
 		if(gtp_tunnels[i] == hdr.extended_hdr.parsed_pkt.tunnel.tunnel_id) {
-		  found = 1;
+		  to_dump = 1, found = 1;
 		  break;
 		}
 
@@ -452,7 +454,13 @@ int main(int argc, char* argv[]) {
 	printf("Dump \n");
 #endif
 
-	pcap_dump((u_char*)dumper, (struct pcap_pkthdr*)&hdr, p);
+	if(to_dump) {
+	  pcap_dump((u_char*)dumper, (struct pcap_pkthdr*)&hdr, p);
+	  fprintf(stdout, ".");
+	  fflush(stdout);
+	  num_pkts++;
+	}
+
       } else {
 	u_int32_t s, usec, nsec;
 
@@ -491,8 +499,6 @@ int main(int argc, char* argv[]) {
 	} else
 	  fprintf(dumper_fd, "\n");
       }
-
-      num_pkts++;
     }
   }
 
