@@ -21,7 +21,15 @@ start_pf_ring() {
     if [ -f $PFRING_CONFIG ]; then
         PARAM="$(cat $PFRING_CONFIG)"
     fi
-    /sbin/insmod /lib/modules/$KERNEL_VERSION/kernel/net/pf_ring/pf_ring.ko $PARAM
+
+    PF_RING_MOD="/lib/modules/$KERNEL_VERSION/kernel/net/pf_ring/pf_ring.ko"
+    PF_RING_MOD_LOCAL="/usr/local/pfring/kernel/pf_ring.ko"
+
+    if [ -f $PF_RING_MOD ]; then
+        /sbin/insmod $PF_RING_MOD $PARAM
+    else
+        /sbin/insmod $PF_RING_MOD_LOCAL $PARAM
+    fi
 
     DNA_DRIVERS="$(/bin/ls /usr/local/pfring/drivers/DNA/|cut -d '.' -f 1)"
 
