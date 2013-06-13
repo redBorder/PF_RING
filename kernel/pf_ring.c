@@ -184,6 +184,13 @@ static rwlock_t virtual_filtering_lock =
 
 /* List of all clusters */
 static lockless_list ring_cluster_list;
+static rwlock_t ring_cluster_lock =
+#if(LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39))
+  RW_LOCK_UNLOCKED
+#else
+  (rwlock_t)__RW_LOCK_UNLOCKED(virtual_filtering_lock)
+#endif
+;
 
 /* List of all devices on which PF_RING has been registered */
 static struct list_head ring_aware_device_list; /* List of ring_device_element */
@@ -6888,6 +6895,8 @@ static int remove_from_cluster(struct sock *sock, struct pf_ring_socket *pfr)
   if(pfr->cluster_id == 0 /* 0 = No Cluster */ )
     return(0);	/* Nothing to do */
 
+  write_lock(&ring_cluster_lock);
+
   cluster_ptr = (ring_cluster_element*)lockless_list_get_first(&ring_cluster_list, &last_list_idx);
 
   while(cluster_ptr != NULL) {
@@ -6899,12 +6908,14 @@ static int remove_from_cluster(struct sock *sock, struct pf_ring_socket *pfr)
 	lockless_list_add(&delayed_memory_table, cluster_ptr); /* Free later */
       }
 
+      write_unlock(&ring_cluster_lock);
       return ret;
     }
 
     cluster_ptr = (ring_cluster_element*)lockless_list_get_next(&ring_cluster_list, &last_list_idx);
   }
 
+  write_unlock(&ring_cluster_lock);
   return(-EINVAL);	/* Not found */
 }
 
@@ -6966,6 +6977,7 @@ static int add_sock_to_cluster(struct sock *sock,
 {
   ring_cluster_element *cluster_ptr;
   u_int32_t last_list_idx;
+  int rc;
 
   if(unlikely(enable_debug))
     printk("[PF_RING] --> add_sock_to_cluster(%d)\n", cluster->clusterId);
@@ -6976,19 +6988,25 @@ static int add_sock_to_cluster(struct sock *sock,
   if(pfr->cluster_id != 0)
     remove_from_cluster(sock, pfr);
 
+  write_lock(&ring_cluster_lock);
+
   cluster_ptr = (ring_cluster_element*)lockless_list_get_first(&ring_cluster_list, &last_list_idx);
 
   while(cluster_ptr != NULL) {
     if(cluster_ptr->cluster.cluster_id == cluster->clusterId) {
-      return(add_sock_to_cluster_list(cluster_ptr, sock));
+      rc = add_sock_to_cluster_list(cluster_ptr, sock);
+      write_unlock(&ring_cluster_lock);
+      return(rc);
     }
 
     cluster_ptr = (ring_cluster_element*)lockless_list_get_next(&ring_cluster_list, &last_list_idx);
   }
 
   /* There's no existing cluster. We need to create one */
-  if((cluster_ptr = kmalloc(sizeof(ring_cluster_element), GFP_KERNEL)) == NULL)
+  if((cluster_ptr = kmalloc(sizeof(ring_cluster_element), GFP_KERNEL)) == NULL) {
+    write_unlock(&ring_cluster_lock);
     return(-ENOMEM);
+  }
 
   INIT_LIST_HEAD(&cluster_ptr->list);
 
@@ -7001,6 +7019,8 @@ static int add_sock_to_cluster(struct sock *sock,
   cluster_ptr->cluster.sk[0] = sock;
   pfr->cluster_id = cluster->clusterId;
   lockless_list_add(&ring_cluster_list, cluster_ptr);
+
+  write_unlock(&ring_cluster_lock);
 
   return(0); /* 0 = OK */
 }
