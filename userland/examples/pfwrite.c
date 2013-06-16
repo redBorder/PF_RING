@@ -31,6 +31,10 @@
 #include <netinet/ip6.h>
 #include <net/ethernet.h>     /* the L2 protocols */
 
+#define MAX_NUM_GTP_TUNNELS 8
+u_int num_gtp_tunnels = 0;
+u_int32_t gtp_tunnels[MAX_NUM_GTP_TUNNELS];
+
 unsigned long long numPkts = 0, numBytes = 0;
 
 struct gtpv1_header {
@@ -173,9 +177,25 @@ inline char* in6toa(struct in6_addr addr6) {
   return(buf);
 }
 
-/* *************************************** */
+/* ************************************ */
 
-#define MAX_NUM_GTP_TUNNELS 8
+void handleImsi(char *rsp) {
+  if(strtok(rsp, ";") != NULL) {
+    char *tunnel;
+    int i;
+
+    for(i=0; i<2; i++)
+      if((tunnel = strtok(NULL, ";")) != NULL) {
+	gtp_tunnels[num_gtp_tunnels] = atoll(tunnel);
+	printf("Added GTP tunnel to filter %u/%08X [%s]\n",
+	       gtp_tunnels[num_gtp_tunnels], gtp_tunnels[num_gtp_tunnels],
+	       tunnel);
+	num_gtp_tunnels++;
+      }
+  }
+}
+
+/* *************************************** */
 
 int main(int argc, char* argv[]) {
   char *device = NULL, c, *out_dump = NULL;
@@ -184,8 +204,6 @@ int main(int argc, char* argv[]) {
   u_char *p;
   char *bpfFilter = NULL;
   struct pfring_pkthdr hdr;
-  u_int num_gtp_tunnels = 0;
-  u_int32_t gtp_tunnels[MAX_NUM_GTP_TUNNELS];
   char *imsi = NULL;
 
   while((c = getopt(argc,argv,"hi:w:Sdg:f:c:"
@@ -224,27 +242,35 @@ int main(int argc, char* argv[]) {
 	  // return(-1);
 	} else {
 	  if(((r = redisCommand(redis, "GET imsi.%s", optarg)) == NULL) || (r->str == NULL)) {
-	    printf("WARNING: Unable to retrieve redis key imsi.%s\n", optarg);
-	    // return(-1);
-	  } else {
-	    if(strtok(r->str, ";") != NULL) {
-	      char *tunnel;
-	      int i;
+	    printf("WARNING: Unable to retrieve redis key imsi.%s: listening for events\n", optarg);
 
-	      for(i=0; i<2; i++)
-		if((tunnel = strtok(NULL, ";")) != NULL) {
-		  gtp_tunnels[num_gtp_tunnels] = atoll(tunnel);
-		  printf("Added GTP tunnel to filter %u/%08X [%s]\n",
-			 gtp_tunnels[num_gtp_tunnels], gtp_tunnels[num_gtp_tunnels],
-			 tunnel);
-		  num_gtp_tunnels++;
+	    r = redisCommand(redis, "SUBSCRIBE imsi.create"); freeReplyObject(r);
+
+	    while(redisGetReply(redis, (void**)&r) == REDIS_OK) {
+	      if((r->elements == 3) && (r->element[2]->str != NULL)) {
+		char *semicolumn = strchr(r->element[2]->str, ';');
+
+		/* IMSI;IP;Upstream_Tunnel;Downstream_Tunnel */
+		if(semicolumn) {
+		  u_int len = strlen(r->element[2]->str)-strlen(semicolumn);
+
+		  if(strncmp(r->element[2]->str, optarg, len) == 0) {
+		    printf("Found matching IMSI %s\n", r->element[2]->str);
+		    handleImsi(&semicolumn[1]);
+		    break;
+		  }
 		}
 
-	      free(r->str);
+		// consume message
+		freeReplyObject(r);
+	      }
 	    }
-	  }
 
-	  redisFree(redis);
+	    // return(-1);
+	  } else {
+	    handleImsi(r->str);
+	    redisFree(redis);
+	  }
 	}
       }
 #endif
@@ -310,7 +336,7 @@ int main(int argc, char* argv[]) {
     pfring_set_application_name(pd, "pfwrite");
 
   thiszone = gmt2local(0);
-  printf("Capture device: %s\n", device);
+  if(device) printf("Capture device: %s\n", device);
   printf("Dump file path: %s\n", out_dump);
 
   if(cluster_id > 0) {
