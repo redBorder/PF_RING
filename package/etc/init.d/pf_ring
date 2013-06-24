@@ -31,24 +31,30 @@ start_pf_ring() {
         /sbin/insmod $PF_RING_MOD_LOCAL $PARAM
     fi
 
-    DNA_DRIVERS="$(/bin/ls /usr/local/pfring/drivers/DNA/|cut -d '.' -f 1)"
+    DNA_DRIVERS_DIR="/usr/local/pfring/drivers/DNA"
 
-    for D in $DNA_DRIVERS ; do
-	DRIVER_CONFIG="/etc/pf_ring/dna-$D.conf"
-	if [ -f $DRIVER_CONFIG ]; then
-	    if [ "$D" == "$MGMG_INTERFACE_DRIVER" ]; then
-		echo "Unable to replace $D as it is used by the management interface"
-	    else
-		PARAM="$(cat $DRIVER_CONFIG)"
- 	        # Remove the driver first as the original vanilla driver might be the one we want to overwrite	    
-		NUM="$(grep $D /proc/modules|wc -l)"
-		if [ $NUM -gt 0 ]; then
-		    /sbin/rmmod $D
-		fi
-		/sbin/insmod /usr/local/pfring/drivers/DNA/$D.ko $PARAM
+    if [ -d $DNA_DRIVERS_DIR ]; then
+        DNA_DRIVERS="$(/bin/ls $DNA_DRIVERS_DIR|cut -d '.' -f 1)"
+
+        for D in $DNA_DRIVERS ; do
+	    DRIVER_CONFIG="/etc/pf_ring/dna-$D.conf"
+	    if [ -f $DRIVER_CONFIG ]; then
+	        if [ "$D" == "$MGMG_INTERFACE_DRIVER" ]; then
+		    echo "Unable to replace $D as it is used by the management interface"
+	        else
+		    PARAM="$(cat $DRIVER_CONFIG)"
+ 	            # Remove the driver first as the original vanilla driver might be the one we want to overwrite	    
+		    NUM="$(grep $D /proc/modules|wc -l)"
+		    if [ $NUM -gt 0 ]; then
+		        /sbin/rmmod $D
+		    fi
+		    /sbin/insmod $DNA_DRIVERS_DIR/$D.ko $PARAM
+	        fi
 	    fi
-	fi
-    done
+        done
+    else
+        echo "DNA drivers not found in the expected path"
+    fi
 
     sleep 1
 
