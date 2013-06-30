@@ -42,7 +42,7 @@ VPATH = @srcdir@
 CC = @CC@
 PROG = tcpdump
 CCOPT = @V_CCOPT@
-INCLS = -I. @V_INCLS@
+INCLS = -I. @V_INCLS@ -I../libpcap
 DEFS = @DEFS@ @CPPFLAGS@ @V_DEFS@ -DHAVE_PF_RING
 
 # Standard CFLAGS
