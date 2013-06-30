@@ -74,7 +74,7 @@ void sigproc(int sig) {
 /* *************************************** */
 
 void printHelp(void) {
-  printf("pwrite - (C) 2003-13 Deri Luca <deri@ntop.org>\n");
+  printf("pfwrite - (C) 2003-13 Deri Luca <deri@ntop.org>\n");
   printf("-h              [Print help]\n");
   printf("-i <device>     [Device name]\n");
   printf("-w <dump file>  [Dump file path]\n");
@@ -86,9 +86,52 @@ void printHelp(void) {
   printf("-g <GTP TEID>   [Dump only the specified tunnel (example -g 94148 [dec] or -g 381CE8C0 [hex])]\n");
   printf("-d              [Save packet digest instead of pcap packets]\n");
   printf("-S              [Do not strip hw timestamps (if present)]\n");
+  printf("-b              [Daemonize this application]\n");
   printf("\n"
 	 "Please consider using n2disk for dumping\n"
 	 "traces at high speed (http://www.ntop.org/products/n2disk/)\n");
+}
+
+/* *************************************** */
+
+void daemonize(void) {
+  int childpid;
+
+  signal(SIGHUP, SIG_IGN);
+  signal(SIGCHLD, SIG_IGN);
+  signal(SIGQUIT, SIG_IGN);
+
+  if((childpid = fork()) < 0)
+    printf("Occurred while daemonizing (errno=%d)", errno);
+  else {
+    if(!childpid) { /* child */
+      int rc;
+
+      rc = chdir("/");
+      if(rc != 0)
+	printf("Error while moving to / directory");
+
+      setsid();  /* detach from the terminal */
+
+      fclose(stdin);
+      fclose(stdout);
+      /* fclose(stderr); */
+
+      /*
+       * clear any inherited file mode creation mask
+       */
+      umask(0);
+
+      /*
+       * Use line buffered stdout
+       */
+      /* setlinebuf (stdout); */
+      setvbuf(stdout, (char *)NULL, _IOLBF, 0);
+    } else { /* father */
+      printf("Parent process is exiting (this is normal). Bye bye...");
+      exit(0);
+    }
+  }
 }
 
 /* *************************************** */
@@ -205,13 +248,18 @@ int main(int argc, char* argv[]) {
   char *bpfFilter = NULL;
   struct pfring_pkthdr hdr;
   char *imsi = NULL;
+  u_int8_t be_a_daemon = 0;
 
-  while((c = getopt(argc,argv,"hi:w:Sdg:f:c:"
+  while((c = getopt(argc,argv,"hi:w:Sdg:f:c:b"
 #ifdef HAVE_REDIS
 		    "m:"
 #endif
 		    )) != -1) {
     switch(c) {
+    case 'b':
+      be_a_daemon = 1;
+      break;
+
     case 'c':
       cluster_id = atoi(optarg);
       break;
@@ -362,6 +410,8 @@ int main(int argc, char* argv[]) {
   pfring_enable_ring(pd);
 
   if(dumper_fd) fprintf(dumper_fd, "# Time\tLen\tEth Type\tVLAN\tL3 Proto\tSrc IP:Port\tDst IP:Port\n");
+
+  if(be_a_daemon) daemonize();
 
   while(1) {
     if(pfring_recv(pd, &p, 0, &hdr, 1 /* wait_for_packet */) > 0) {
