@@ -63,12 +63,19 @@ static struct timeval startTime;
 
 /* ******************************** */
 
-void daemonize() {
+void daemonize(char *pidFile) {
   pid_t pid, sid;
 
   pid = fork();
   if (pid < 0) exit(EXIT_FAILURE);
-  if (pid > 0) exit(EXIT_SUCCESS);
+  if (pid > 0) {
+    if (pidFile != NULL) {
+      FILE *fp = fopen(pidFile, "w");
+      fprintf(fp, "%d", pid);
+      fclose(fp);
+    }
+    exit(EXIT_SUCCESS);
+  }
 
   sid = setsid();
   if (sid < 0) exit(EXIT_FAILURE);
@@ -220,6 +227,7 @@ void printHelp(void) {
   printf("-u <mountpoint> Use hugepages for packet memory allocation\n");
   printf("-p              Print per-interface absolute stats\n");
   printf("-d              Daemon mode\n");
+  printf("-P <pid file>   Write pid to the specified file (daemon mode only)\n");
   exit(0);
 }
 
@@ -334,12 +342,13 @@ int main(int argc, char* argv[]) {
   int off, i, j, cluster_id = -1;
   char *device = NULL, *dev, *dev_pos = NULL;
   char *applications = NULL, *app, *app_pos = NULL;
+  char *pidFileName = NULL;
   char *hugepages_mountpoint = NULL;
   int daemon_mode = 0;
 
   startTime.tv_sec = 0;
 
-  while((c = getopt(argc,argv,"ac:r:st:hi:n:m:du:p")) != -1) {
+  while((c = getopt(argc,argv,"ac:r:st:hi:n:m:du:pP:")) != -1) {
     switch(c) {
     case 'a':
       wait_for_packet = 0;
@@ -373,6 +382,9 @@ int main(int argc, char* argv[]) {
       break;
     case 'p':
       print_interface_stats = 1;
+      break;
+    case 'P':
+      pidFileName = strdup(optarg);
       break;
     case 'u':
       use_hugepages = 1;
@@ -412,7 +424,7 @@ int main(int argc, char* argv[]) {
   if (device == NULL) device = strdup(DEFAULT_DEVICE);
 
   if (daemon_mode)
-    daemonize();
+    daemonize(pidFileName);
 
   printf("Capturing from %s\n", device);
   
