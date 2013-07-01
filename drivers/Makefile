@@ -1,6 +1,6 @@
-all: PF_RING_aware dna
+all: pf_ring_aware dna
 
-PF_RING_aware:
+pf_ring_aware:
 	cd PF_RING_aware; make
 
 dna:
