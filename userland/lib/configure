@@ -626,7 +626,6 @@ SILICOM_LIBS
 INSTALL_PREFIX
 SYSLIBS
 REDIS_LIB
-BPF_LIB
 BPF_INCLUDE
 HAVE_BPF
 DAG_OBJS
@@ -3648,7 +3647,6 @@ if test ".${prefix}" = ".NONE"; then
 else
    INSTALL_PREFIX=${prefix};
 fi
-
 
 
 

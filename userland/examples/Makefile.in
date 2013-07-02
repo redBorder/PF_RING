@@ -46,7 +46,7 @@ CFLAGS     = @CFLAGS@ ${O_FLAG} -Wall ${INCLUDE} ${DNA_DEFINE} @HAVE_ZERO@ @HAVE
 #
 # User and System libraries
 #
-LIBS       = ${LIBPFRING} @DAG_LIB@ -lpthread @SYSLIBS@ @BPF_LIB@  @SILICOM_LIBS@ @REDIS_LIB@ -lrt
+LIBS       = ${LIBPCAP} ${LIBPFRING} @DAG_LIB@ -lpthread @SYSLIBS@ ${LIBPCAP} @SILICOM_LIBS@ @REDIS_LIB@ -lrt
 
 # How to make an object file
 %.o: %.c pfutils.c
@@ -85,7 +85,7 @@ ringm: ${RMOBJS} ${LIBPFRING}
 	${CC} ${CFLAGS} ${RMOBJS} ${LIBS} -o $@
 
 pcaps: ${RPOBJS}
-	${CC} ${CFLAGS} ${RPOBJS} ${LIBPCAP} ${LIBS} -o $@
+	${CC} ${CFLAGS} ${RPOBJS} ${LIBS} -o $@
 
 pfcount: pfcount.o ${LIBPFRING}
 	${CC} ${CFLAGS} pfcount.o ${LIBS} -o $@
@@ -97,7 +97,7 @@ pffilter_test: pffilter_test.o ${LIBPFRING}
 	${CC} ${CFLAGS} pffilter_test.o ${LIBS} -o $@
 
 pcap2nspcap: pcap2nspcap.o ${LIBPFRING}
-	${CC} ${CFLAGS} pcap2nspcap.o ${LIBPCAP} ${LIBS} -o $@
+	${CC} ${CFLAGS} pcap2nspcap.o ${LIBS} -o $@
 
 pfcount_multichannel: pfcount_multichannel.o ${LIBPFRING}
 	${CC} ${CFLAGS} pfcount_multichannel.o ${LIBS} -o $@
@@ -115,25 +115,25 @@ pfcount_aggregator: pfcount_aggregator.o ${LIBPFRING}
 	${CC} ${CFLAGS} pfcount_aggregator.o ${LIBS} -o $@
 
 preflect: preflect.o ${LIBPFRING}
-	${CC} ${CFLAGS} preflect.o ${LIBPCAP} ${LIBS} -o $@
+	${CC} ${CFLAGS} preflect.o ${LIBS} -o $@
 
 pfbounce: pfbounce.o ${LIBPFRING}
-	${CC} ${CFLAGS} pfbounce.o ${LIBPCAP} ${LIBS} -o $@
+	${CC} ${CFLAGS} pfbounce.o ${LIBS} -o $@
 
 pfdnabounce: pfdnabounce.o ${LIBPFRING}
-	${CC} ${CFLAGS} pfdnabounce.o ${LIBPCAP} ${LIBS} -o $@
+	${CC} ${CFLAGS} pfdnabounce.o ${LIBS} -o $@
 
 pfsend: pfsend.o ${LIBPFRING}
-	${CC} ${CFLAGS} pfsend.o ${LIBPCAP} ${LIBS} -o $@
+	${CC} ${CFLAGS} pfsend.o ${LIBS} -o $@
 
 pflatency: pflatency.o ${LIBPFRING}
-	${CC} ${CFLAGS} pflatency.o ${LIBPCAP} ${LIBS} -o $@
+	${CC} ${CFLAGS} pflatency.o ${LIBS} -o $@
 
 pftwin: pftwin.o ${LIBPFRING}
 	${CC} ${CFLAGS} pftwin.o ${LIBS} -o $@
 
 ptwin: ptwin.o ${LIBPFRING}
-	${CC} ${CFLAGS} ptwin.o ${LIBPCAP} ${LIBS} -o $@
+	${CC} ${CFLAGS} ptwin.o ${LIBS} -o $@
 
 pfmap: pfmap.o ${LIBPFRING}
 	${CC} ${CFLAGS} pfmap.o ${LIBS} -o $@
@@ -141,14 +141,14 @@ pfmap: pfmap.o ${LIBPFRING}
 pfbridge: pfbridge.o ${LIBPFRING}
 	${CC} ${CFLAGS} pfbridge.o ${LIBS} -o $@
 
-pcount: pcount.o ${LIBPCAP} ${LIBPFRING}
-	${CC} ${CFLAGS} pcount.o ${LIBPCAP} ${LIBS} -o $@
+pcount: pcount.o ${LIBPFRING}
+	${CC} ${CFLAGS} pcount.o ${LIBS} -o $@
 
-alldevs: alldevs.o ${LIBPCAP} ${LIBPFRING}
-	${CC} ${CFLAGS} alldevs.o ${LIBPCAP} ${LIBS} -o $@
+alldevs: alldevs.o ${LIBPFRING}
+	${CC} ${CFLAGS} alldevs.o ${LIBS} -o $@
 
-pfwrite: pfwrite.o ${LIBPCAP} ${LIBPFRING}
-	${CC} ${CFLAGS} pfwrite.o ${LIBPCAP} ${LIBS} -o $@
+pfwrite: pfwrite.o ${LIBPFRING}
+	${CC} ${CFLAGS} pfwrite.o ${LIBS} -o $@
 
 pfsystest: pfsystest.o ${LIBPFRING}
 	${CC} ${CFLAGS} pfsystest.o ${LIBS} -o $@
