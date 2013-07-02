@@ -96,6 +96,7 @@
 #define SO_GET_BOUND_DEVICE_IFINDEX      184
 #define SO_GET_DEVICE_IFINDEX            185
 #define SO_GET_APPL_STATS_FILE_NAME      186
+#define SO_GET_LINK_STATUS               187
 
 /* Map */
 #define SO_MAP_DNA_DEVICE                190

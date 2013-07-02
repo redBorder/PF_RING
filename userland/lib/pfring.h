@@ -391,6 +391,7 @@ extern "C" {
   int pfring_adjust_device_clock(pfring *ring, struct timespec *offset, int8_t sign);
   void pfring_sync_indexes_with_kernel(pfring *ring);
   int pfring_send_last_rx_packet(pfring *ring, int tx_interface_id);
+  int pfring_get_link_status(pfring *ring);
 
   u_int pfring_get_num_tx_slots(pfring* ring);
   u_int pfring_get_num_rx_slots(pfring* ring);

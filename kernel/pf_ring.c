@@ -8921,6 +8921,20 @@ static int ring_getsockopt(struct socket *sock,
     }
     break;
 
+  case SO_GET_LINK_STATUS:
+    {
+      int link_up;
+
+      if(len < sizeof(int) || pfr->ring_netdev == NULL)
+        return(-EINVAL);
+
+      link_up = netif_carrier_ok(pfr->ring_netdev->dev);
+
+      if(copy_to_user(optval, &link_up, sizeof(int)))
+        return(-EFAULT);
+    }
+    break;
+
   default:
     return -ENOPROTOOPT;
   }

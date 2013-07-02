@@ -217,8 +217,6 @@ void printHelp(void) {
 	 "                3 - Fan-Out\n");
   printf("-x <if index>   Forward all packets to the selected interface (Enable TX)\n");
   printf("-b              Bridge the interfaces listed in -i in pairs (Enable TX)\n");
-  printf("-z <tx device>  Send packets received from the cluster directly to <tx device>\n"
-         "                in zero-copy using a per-thread RSS channel (experimental)\n");
   printf("-a              Active packet wait\n");
   printf("-u <mountpoint> Use hugepages for packet memory allocation\n");
   printf("-p              Print per-interface absolute stats\n");
@@ -409,7 +407,7 @@ int main(int argc, char* argv[]) {
   numCPU = sysconf( _SC_NPROCESSORS_ONLN );
   startTime.tv_sec = 0;
 
-  while ((c = getopt(argc,argv,"ahi:bc:n:m:r:t:g:x:pu:z:")) != -1) {
+  while ((c = getopt(argc,argv,"ahi:bc:n:m:r:t:g:x:pu:")) != -1) {
     switch (c) {
     case 'a':
       wait_for_packet = 0;

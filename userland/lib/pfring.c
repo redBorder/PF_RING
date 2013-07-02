@@ -1051,6 +1051,12 @@ int pfring_get_device_ifindex(pfring *ring, char *device_name, int *if_index) {
 
 /* **************************************************** */
 
+int pfring_get_link_status(pfring *ring) {
+  return(pfring_mod_get_link_status(ring));
+}
+
+/* **************************************************** */
+
 u_int16_t pfring_get_slot_header_len(pfring *ring) {
   if(ring && ring->get_slot_header_len)
     return ring->get_slot_header_len(ring);

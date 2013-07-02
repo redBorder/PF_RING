@@ -911,6 +911,15 @@ int pfring_mod_get_device_ifindex(pfring *ring, char *device_name, int *if_index
 
 /* **************************************************** */
 
+int pfring_mod_get_link_status(pfring *ring) {
+  int link_up = 1;
+  socklen_t len = sizeof(link_up);
+  getsockopt(ring->fd, 0, SO_GET_LINK_STATUS, &link_up, &len);
+  return link_up;
+}
+
+/* **************************************************** */
+
 u_int16_t pfring_mod_get_slot_header_len(pfring *ring) {
   u_int16_t hlen;
   socklen_t len = sizeof(hlen);
