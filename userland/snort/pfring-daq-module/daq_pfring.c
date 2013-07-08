@@ -633,7 +633,7 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
 #endif
 			      void *user) {
   Pfring_Context_t *context =(Pfring_Context_t *) handle;
-  int ret = 0, i, current_ring_idx = context->num_devices - 1, rx_ring_idx;
+  int ret = 0, i, current_ring_idx = context->num_devices - 1, rx_ring_idx, c = 0;
   struct pollfd pfd[DAQ_PF_RING_MAX_NUM_DEVICES];
   hash_filtering_rule hash_rule;
 
@@ -645,10 +645,15 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
   for (i = 0; i < context->num_devices; i++)
     pfring_enable_ring(context->ring_handles[i]);
 
-  while((!context->breakloop) && ((cnt == -1) || (cnt > 0))) {
+  while((cnt <= 0) || (c < cnt)) {
     struct pfring_pkthdr phdr;
     DAQ_PktHdr_t hdr;
     DAQ_Verdict verdict;
+
+    if(context->breakloop) {
+      context->breakloop = 0;
+      return 0;
+    }
 
     memset(&phdr, 0, sizeof(phdr));
 
@@ -809,7 +814,7 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
       }
 
       context->stats.verdicts[verdict]++;
-      if(cnt > 0) cnt--;
+      c++;
     }
   }
 
