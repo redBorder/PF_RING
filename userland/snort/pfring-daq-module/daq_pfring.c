@@ -87,8 +87,8 @@ typedef struct _pfring_context
   u_int8_t use_fast_tx;
   cluster_type cluster_mode;
   u_int bindcpu;
-  uint32_t base_recv[DAQ_PF_RING_MAX_NUM_DEVICES];
-  uint32_t base_drop[DAQ_PF_RING_MAX_NUM_DEVICES];
+  uint64_t base_recv[DAQ_PF_RING_MAX_NUM_DEVICES];
+  uint64_t base_drop[DAQ_PF_RING_MAX_NUM_DEVICES];
   DAQ_State state;
 #ifdef HAVE_REDIS
   redisContext *redis_ctx;
