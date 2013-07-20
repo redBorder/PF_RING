@@ -1421,12 +1421,12 @@ pcap_read_packet(pcap_t *handle, pcap_handler callback, u_char *userdata)
 
 	    pcap_header.ts.tv_sec = 0;
 
-	    if(pfring_poll(handle->ring, handle->md.timeout) > 0)
+	    //if(pfring_poll(handle->ring, handle->md.timeout) > 0)
 	      ret = pfring_recv(handle->ring, (u_char**)&packet,
 				0, &pcap_header,
 				wait_for_incoming_packet);
-	    else
-	      return(0);
+	    //else
+	    //  return(0);
 
 	    if(ret == 0) {
 	      if (errno == EINTR)
