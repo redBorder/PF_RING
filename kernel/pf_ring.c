@@ -7033,9 +7033,8 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
   struct list_head *ptr, *tmp_ptr;
 
   if(unlikely(enable_debug))
-    printk("[PF_RING] ring_map_dna_device(%s@%d): %s\n",
-	   mapping->device_name,
-	   mapping->channel_id,
+    printk("[PF_RING] %s(%s@%d): %s\n", __FUNCTION__,
+	   mapping->device_name, mapping->channel_id,
 	   (mapping->operation == remove_device_mapping) ? "remove" : "add");
 
   if(mapping->operation == remove_device_mapping) {
@@ -7059,8 +7058,8 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 
 	if(!found) {
 	  if(unlikely(enable_debug))
-	    printk("[PF_RING] ring_map_dna_device(remove_device_mapping, %s, %u): something got wrong\n",
-		   mapping->device_name, mapping->channel_id);
+	    printk("[PF_RING] %s(remove_device_mapping, %s, %u): something got wrong\n",
+	           __FUNCTION__, mapping->device_name, mapping->channel_id);
 	  return(-1); /* Something got wrong */
 	}
 
@@ -7068,10 +7067,10 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 
 	if(pfr->dna_device != NULL) {
 	  if(unlikely(enable_debug))
-	    printk("[PF_RING] ring_map_dna_device(%s): removed mapping [num_bound_sockets=%u]\n",
-		   mapping->device_name, entry->num_bound_sockets);
-	  pfr->dna_device->usage_notification(pfr->dna_device->rx_adapter_ptr,
-					      pfr->dna_device->tx_adapter_ptr,
+	    printk("[PF_RING] %s(%s): removed mapping [num_bound_sockets=%u]\n",
+		   __FUNCTION__, mapping->device_name, entry->num_bound_sockets);
+	  pfr->dna_device->usage_notification(pfr->mode != send_only_mode ? pfr->dna_device->rx_adapter_ptr : NULL,
+					      pfr->mode != recv_only_mode ? pfr->dna_device->tx_adapter_ptr : NULL,
 					      0 /* unlock */);
 	  // pfr->dna_device = NULL;
 	}
@@ -7080,7 +7079,7 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
     }
 
     if(unlikely(enable_debug))
-      printk("[PF_RING] ring_map_dna_device(%s): removed mapping\n", mapping->device_name);
+      printk("[PF_RING] %s(%s): removed mapping\n", __FUNCTION__, mapping->device_name);
 
     return(0);
   } else {
@@ -7119,7 +7118,7 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 	pfr->dna_device = &entry->dev;
 
 	if(unlikely(enable_debug))
-	  printk("[PF_RING] ring_map_dna_device(%s, %u): added mapping\n",
+	  printk("[PF_RING] %s(%s, %u): added mapping\n", __FUNCTION__,
 		 mapping->device_name, mapping->channel_id);
 
 	/* Now let's set the read ring_netdev device */
@@ -7143,13 +7142,15 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 	  return(-1); /* Something got wrong */
 	}
 
-	/* Lock driver */
 	if(unlikely(enable_debug))
-	  printk("[PF_RING] ===> ring_map_dna_device(%s): added mapping [num_bound_sockets=%u]\n",
-		 mapping->device_name, entry->num_bound_sockets);
-	pfr->dna_device->usage_notification(pfr->dna_device->rx_adapter_ptr,
-					    pfr->dna_device->tx_adapter_ptr,
-					    1 /* lock */);
+	  printk("[PF_RING] ===> %s(%s): added mapping [num_bound_sockets=%u]\n",
+		 __FUNCTION__, mapping->device_name, entry->num_bound_sockets);
+
+	/* Moved to SO_ACTIVATE_RING because we need to know the socket mode
+	pfr->dna_device->usage_notification(pfr->dna_device->rx_adapter_ptr, // pfr->mode != send_only_mode ? pfr->dna_device->rx_adapter_ptr : NULL,
+					    pfr->dna_device->rx_adapter_ptr, // pfr->mode != recv_only_mode ? pfr->dna_device->tx_adapter_ptr : NULL,
+					    1);
+	*/
 
 	ring_proc_add(pfr);
 	return(0);
@@ -7158,8 +7159,8 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
   }
 
   if(unlikely(enable_debug))
-    printk("[PF_RING] ring_map_dna_device(%s, %u): mapping failed or not a dna device\n",
-	   mapping->device_name, mapping->channel_id);
+    printk("[PF_RING] %s(%s, %u): mapping failed or not a dna device\n",
+	   __FUNCTION__, mapping->device_name, mapping->channel_id);
 
   return(-1);
 }
@@ -7902,6 +7903,13 @@ static int ring_setsockopt(struct socket *sock,
 	  }
 	} /* if */
       } /* for */
+
+      if (pfr->dna_device != NULL) {
+        /* Lock driver */
+        pfr->dna_device->usage_notification(pfr->mode != send_only_mode ? pfr->dna_device->rx_adapter_ptr : NULL,
+				 	    pfr->mode != recv_only_mode ? pfr->dna_device->tx_adapter_ptr : NULL,
+					    1 /* lock */);
+      }
     }
 
     found = 1, pfr->ring_active = 1;
