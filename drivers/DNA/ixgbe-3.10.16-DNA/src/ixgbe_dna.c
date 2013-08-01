@@ -212,44 +212,54 @@ dna_device_model dna_model(struct ixgbe_hw *hw){
 /* ********************************** */
 
 void notify_function_ptr(void *rx_data, void *tx_data, u_int8_t device_in_use) {
-  struct ixgbe_ring	*rx_ring = (struct ixgbe_ring*)rx_data;
-  struct ixgbe_adapter	*adapter = netdev_priv(rx_ring->netdev);
-  //struct ixgbe_ring     *tx_ring = adapter->tx_ring[rx_ring->queue_index];
+  struct ixgbe_ring    *rx_ring = (struct ixgbe_ring *) rx_data;
+  struct ixgbe_ring    *tx_ring = (struct ixgbe_ring *) tx_data;
+  struct ixgbe_ring    *xx_ring = (rx_ring != NULL) ? rx_ring : tx_ring;
+  struct ixgbe_adapter *adapter = netdev_priv(xx_ring->netdev);
 
   if(unlikely(enable_debug))
     printk("%s(): device_in_use = %d\n",__FUNCTION__, device_in_use);
 
-  /* I need interrupts for purging buckets when queues are not in use */
-  ixgbe_irq_enable_queues(adapter, ((u64)1 << rx_ring->q_vector->v_idx));
+  if (rx_ring != NULL) {
+    /* I need interrupts for purging buckets when queues are not in use */
+    ixgbe_irq_enable_queues(adapter, ((u64)1 << rx_ring->q_vector->v_idx));
+  }
 
   if(likely(device_in_use)) {
     /* We start using this device */
+
     try_module_get(THIS_MODULE); /* ++ */
-    rx_ring->dna.queue_in_use = 1;
+
+    if (rx_ring != NULL) {
+      rx_ring->dna.queue_in_use = 1;
+
+      if(adapter->hw.mac.type != ixgbe_mac_82598EB)
+        ixgbe_irq_disable_queues(adapter, ((u64)1 << rx_ring->q_vector->v_idx));
+    }
 
     if(unlikely(enable_debug))
       printk("[DNA] %s(): %s@%d is IN use\n", __FUNCTION__,
-	     rx_ring->netdev->name, rx_ring->queue_index);
+	     xx_ring->netdev->name, xx_ring->queue_index);
 
-    if(adapter->hw.mac.type != ixgbe_mac_82598EB)
-      ixgbe_irq_disable_queues(adapter, ((u64)1 << rx_ring->q_vector->v_idx));
   } else {
     /* We're done using this device */
 
-    /* resetting the ring */
-    /* we *must* reset the right direction only (doing this in userspace)
-    dna_cleanup_rx_ring(rx_ring);
-    dna_cleanup_tx_ring(tx_ring);
-    */
+    if (rx_ring != NULL) {
+      /* resetting the ring */
+      /* we *must* reset the right direction only (doing this in userspace)
+      dna_cleanup_rx_ring(rx_ring);
+      dna_cleanup_tx_ring(tx_ring);
+      */
+
+      rx_ring->dna.queue_in_use = 0;
+
+      if(adapter->hw.mac.type != ixgbe_mac_82598EB)
+        /* TODO Check this*/
+        //ixgbe_irq_enable_queues(adapter, ((u64)1 << rx_ring->q_vector->v_idx));
+        ixgbe_irq_disable_queues(adapter, ((u64)1 << rx_ring->q_vector->v_idx));
+    }
 
     module_put(THIS_MODULE);  /* -- */
-
-    rx_ring->dna.queue_in_use = 0;
-
-    if(adapter->hw.mac.type != ixgbe_mac_82598EB)
-      /* TODO Check this*/
-      //ixgbe_irq_enable_queues(adapter, ((u64)1 << rx_ring->q_vector->v_idx));
-      ixgbe_irq_disable_queues(adapter, ((u64)1 << rx_ring->q_vector->v_idx));
 
     if(unlikely(enable_debug))
       printk("[DNA] %s(): %s@%d is NOT IN use\n", __FUNCTION__,
