@@ -4276,6 +4276,14 @@ bool igb_has_link(struct igb_adapter *adapter)
 	 * false until the e1000_check_for_link establishes link
 	 * for copper adapters ONLY
 	 */
+
+#ifdef ENABLE_DNA
+	if(adapter->dna.dna_enabled) {
+		/* forcing link-state reading because LSC interrupts are disabled */
+		hw->mac.get_link_status = 1;
+	}
+#endif
+
 	switch (hw->phy.media_type) {
 	case e1000_media_type_copper:
 		if (!hw->mac.get_link_status)
