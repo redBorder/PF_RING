@@ -7069,10 +7069,9 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 	  if(unlikely(enable_debug))
 	    printk("[PF_RING] %s(%s): removed mapping [num_bound_sockets=%u]\n",
 		   __FUNCTION__, mapping->device_name, entry->num_bound_sockets);
-	  pfr->dna_device->usage_notification(pfr->mode != send_only_mode ? pfr->dna_device->rx_adapter_ptr : NULL,
-					      pfr->mode != recv_only_mode ? pfr->dna_device->tx_adapter_ptr : NULL,
-					      0 /* unlock */);
-	  pfr->dna_device->in_use = 0;
+	  pfr->dna_device->usage_notification(pfr->dna_device->rx_adapter_ptr,
+					      pfr->dna_device->tx_adapter_ptr,
+					      (pfr->dna_device->in_use = 0) /* unlock */);
 	  // pfr->dna_device = NULL;
 	}
 	/* Continue for all devices: no break */
@@ -7147,13 +7146,9 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 	  printk("[PF_RING] ===> %s(%s): added mapping [num_bound_sockets=%u]\n",
 		 __FUNCTION__, mapping->device_name, entry->num_bound_sockets);
 
-	/* Moved to SO_ACTIVATE_RING because we need to know the socket mode
-	pfr->dna_device->usage_notification(pfr->dna_device->rx_adapter_ptr, // pfr->mode != send_only_mode ? pfr->dna_device->rx_adapter_ptr : NULL,
-					    pfr->dna_device->rx_adapter_ptr, // pfr->mode != recv_only_mode ? pfr->dna_device->tx_adapter_ptr : NULL,
-					    1);
-
-	pfr->dna_device->in_use = 1;
-	*/
+	pfr->dna_device->usage_notification(pfr->dna_device->rx_adapter_ptr,
+					    pfr->dna_device->tx_adapter_ptr,
+					    (pfr->dna_device->in_use = 1) /* lock */);
 
 	ring_proc_add(pfr);
 	return(0);
@@ -7906,14 +7901,6 @@ static int ring_setsockopt(struct socket *sock,
 	  }
 	} /* if */
       } /* for */
-
-      if (pfr->dna_device != NULL && !pfr->dna_device->in_use) {
-        /* Lock driver */
-        pfr->dna_device->usage_notification(pfr->mode != send_only_mode ? pfr->dna_device->rx_adapter_ptr : NULL,
-				 	    pfr->mode != recv_only_mode ? pfr->dna_device->tx_adapter_ptr : NULL,
-					    1 /* lock */);
-	pfr->dna_device->in_use = 1;
-      }
     }
 
     found = 1, pfr->ring_active = 1;

@@ -283,50 +283,28 @@ void notify_function_ptr(void *rx_data, void *tx_data, u_int8_t device_in_use) {
   struct igb_ring	*xx_ring = (rx_ring != NULL) ? rx_ring : tx_ring;
   struct igb_adapter	*adapter = netdev_priv(xx_ring->netdev);
 
-  if(unlikely(enable_debug))
-    printk("%s(): device_in_use = %d\n",__FUNCTION__, device_in_use);
-
-  if (rx_ring != NULL) { 
-    /* I need interrupts for purging buckets when queues are not in use */
-    igb_irq_enable_queues(adapter, rx_ring->queue_index);
-  }
-
-  if(likely(device_in_use)) {
-    /* We start using this device */
+  if(likely(device_in_use)) { /* We start using this device */
 
     try_module_get(THIS_MODULE); /* ++ */
 
-    if (rx_ring != NULL) {
-      rx_ring->dna.queue_in_use = 1;
-
+    if (rx_ring != NULL)
       igb_irq_disable_queues(adapter, ((u64)1 << rx_ring->queue_index));
-    }
 
-    if(unlikely(enable_debug))
-      printk("[DNA] %s(): %s@%d is IN use\n", __FUNCTION__,
-	     xx_ring->netdev->name, xx_ring->queue_index);
-
-  } else {
-    /* We're done using this device */
+  } else { /* We're done using this device */
     
-    if (rx_ring != NULL) { 
-      /* resetting the ring */
-      /* we *must* reset the right direction only (doing this in userspace)
-      dna_cleanup_rx_ring(rx_ring);
-      dna_cleanup_tx_ring(tx_ring);
-      */
-
-      rx_ring->dna.queue_in_use = 0;
-
+    if (rx_ring != NULL)
+      /* I need interrupts for purging buckets when queues are not in use */
       igb_irq_enable_queues(adapter, rx_ring->queue_index);
-    }
 
     module_put(THIS_MODULE);  /* -- */
-
-    if(unlikely(enable_debug))
-      printk("[DNA] %s(): %s@%d is NOT IN use\n", __FUNCTION__,
-	     rx_ring->netdev->name, rx_ring->queue_index);
   }
+
+  if (rx_ring != NULL) rx_ring->dna.queue_in_use = device_in_use;
+  if (tx_ring != NULL) tx_ring->dna.queue_in_use = device_in_use;
+
+  if(unlikely(enable_debug))
+    printk("[DNA] %s(): %s@%d is %sIN use\n", __FUNCTION__,
+	   xx_ring->netdev->name, xx_ring->queue_index, device_in_use ? "" : "NOT ");
 }
 
 /* ********************************** */
