@@ -7065,13 +7065,13 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 
 	entry->num_bound_sockets--;
 
-	if(pfr->dna_device != NULL && pfr->dna_device->in_use) {
+	if(pfr->dna_device != NULL) {
 	  if(unlikely(enable_debug))
 	    printk("[PF_RING] %s(%s): removed mapping [num_bound_sockets=%u]\n",
 		   __FUNCTION__, mapping->device_name, entry->num_bound_sockets);
 	  pfr->dna_device->usage_notification(pfr->dna_device->rx_adapter_ptr,
 					      pfr->dna_device->tx_adapter_ptr,
-					      (pfr->dna_device->in_use = 0) /* unlock */);
+					      0 /* unlock */);
 	  // pfr->dna_device = NULL;
 	}
 	/* Continue for all devices: no break */
@@ -7148,7 +7148,7 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 
 	pfr->dna_device->usage_notification(pfr->dna_device->rx_adapter_ptr,
 					    pfr->dna_device->tx_adapter_ptr,
-					    (pfr->dna_device->in_use = 1) /* lock */);
+					    1 /* lock */);
 
 	ring_proc_add(pfr);
 	return(0);
