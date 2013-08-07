@@ -52,6 +52,7 @@ pcap_dumper_t *dumper = NULL;
 FILE *dumper_fd = NULL;
 int verbose = 0;
 u_int32_t num_pkts=0;
+char *imsi = NULL;
 
 /* ******************************** */
 
@@ -227,6 +228,7 @@ void handleImsi(char *rsp) {
     char *tunnel;
     int i;
 
+    num_gtp_tunnels = 0;
     for(i=0; i<2; i++)
       if((tunnel = strtok(NULL, ";")) != NULL) {
 	gtp_tunnels[num_gtp_tunnels] = atoll(tunnel);
@@ -235,7 +237,76 @@ void handleImsi(char *rsp) {
 	       tunnel);
 	num_gtp_tunnels++;
       }
+
+    printf("Total GTP tunnels: %d\n", num_gtp_tunnels);
   }
+}
+
+/* *************************************** */
+
+void deleteImsi() {
+  num_gtp_tunnels = 0;
+  printf("Total GTP tunnels: %d\n", num_gtp_tunnels);
+}
+
+/* *************************************** */
+
+static void* imsi_publisher_thread(void* _id) {
+#ifdef HAVE_REDIS
+  redisContext *redis = redisConnect("127.0.0.1", 6379);
+  redisReply* r;
+  
+  if(redis == NULL) {
+    printf("WARNING: Unable to connect to local redis 127.0.0.1:6379\n");
+    // return(-1);
+  } else {
+    /* Read initial IMSI tunnel Info */
+    if(((r = redisCommand(redis, "GET imsi.%s", imsi)) == NULL) || (r->str == NULL)) {
+      handleImsi(r->str);
+    }
+    
+    while(1) {
+      printf("Listening for ucloud events...\n");
+      
+      r = redisCommand(redis, "SUBSCRIBE imsi.create");
+      freeReplyObject(r);
+
+      r = redisCommand(redis, "SUBSCRIBE imsi.delete");
+      freeReplyObject(r);
+
+      while(redisGetReply(redis, (void**)&r) == REDIS_OK) {
+	if(r->elements == 3) {
+	  if((strcmp(r->element[1]->str, "imsi.create") == 0) && (r->element[2]->str != NULL)) {
+	    char *semicolumn = strchr(r->element[2]->str, ';');
+
+	    /* IMSI;IP;Upstream_Tunnel;Downstream_Tunnel */
+	    if(semicolumn) {
+	      u_int len = strlen(r->element[2]->str)-strlen(semicolumn);
+
+	      if(strncmp(r->element[2]->str, imsi, len) == 0) {
+		printf("Found matching IMSI %s\n", r->element[2]->str);
+		handleImsi(&semicolumn[1]);
+	      }
+	    }
+	  } else if(strcmp(r->element[1]->str, "imsi.delete") == 0) {
+	    /* imsi.delete */
+
+	    if(strcmp(r->element[2]->str, imsi) == 0) {
+	      printf("Found matching IMSI %s\n", r->element[2]->str);
+	      deleteImsi();
+	    }
+	  }
+	}	
+
+	freeReplyObject(r);
+      } /* while */
+
+      redisFree(redis);
+    } /* while */
+  }
+#endif
+
+  return(NULL);
 }
 
 /* *************************************** */
@@ -247,8 +318,8 @@ int main(int argc, char* argv[]) {
   u_char *p;
   char *bpfFilter = NULL;
   struct pfring_pkthdr hdr;
-  char *imsi = NULL;
   u_int8_t be_a_daemon = 0;
+  pthread_t my_thread;
 
   while((c = getopt(argc,argv,"hi:w:Sdg:f:c:b"
 #ifdef HAVE_REDIS
@@ -279,49 +350,7 @@ int main(int argc, char* argv[]) {
 
     case 'm':
       imsi = strdup(optarg);
-
-#ifdef HAVE_REDIS
-      {
-	redisContext *redis = redisConnect("127.0.0.1", 6379);
-	redisReply* r;
-
-	if(redis == NULL) {
-	  printf("WARNING: Unable to connect to local redis 127.0.0.1:6379\n");
-	  // return(-1);
-	} else {
-	  if(((r = redisCommand(redis, "GET imsi.%s", optarg)) == NULL) || (r->str == NULL)) {
-	    printf("WARNING: Unable to retrieve redis key imsi.%s: listening for events\n", optarg);
-
-	    r = redisCommand(redis, "SUBSCRIBE imsi.create"); freeReplyObject(r);
-
-	    while(redisGetReply(redis, (void**)&r) == REDIS_OK) {
-	      if((r->elements == 3) && (r->element[2]->str != NULL)) {
-		char *semicolumn = strchr(r->element[2]->str, ';');
-
-		/* IMSI;IP;Upstream_Tunnel;Downstream_Tunnel */
-		if(semicolumn) {
-		  u_int len = strlen(r->element[2]->str)-strlen(semicolumn);
-
-		  if(strncmp(r->element[2]->str, optarg, len) == 0) {
-		    printf("Found matching IMSI %s\n", r->element[2]->str);
-		    handleImsi(&semicolumn[1]);
-		    break;
-		  }
-		}
-
-		// consume message
-		freeReplyObject(r);
-	      }
-	    }
-
-	    // return(-1);
-	  } else {
-	    handleImsi(r->str);
-	    redisFree(redis);
-	  }
-	}
-      }
-#endif
+      pthread_create(&my_thread, NULL, imsi_publisher_thread, (void*)NULL);
       break;
 
     case 'g':
@@ -418,113 +447,116 @@ int main(int argc, char* argv[]) {
       if(dumper) {
 	u_int8_t to_dump = 0;
 
-	if((num_gtp_tunnels > 0) || (imsi != NULL)) {
-	  memset(&hdr.extended_hdr, 0, sizeof(hdr.extended_hdr));
+	if(imsi != NULL) {
+	  if(num_gtp_tunnels > 0) {
+	    memset(&hdr.extended_hdr, 0, sizeof(hdr.extended_hdr));
 
-	  pfring_parse_pkt((u_char*)p, (struct pfring_pkthdr*)&hdr, 5, 0, 0);
+	    pfring_parse_pkt((u_char*)p, (struct pfring_pkthdr*)&hdr, 5, 0, 0);
 
 #ifdef DEBUG
-	  if(hdr.extended_hdr.parsed_pkt.eth_type == 0x0800 /* IPv4*/ ) {
-	    printf("[IPv4][%s:%d ", intoa(hdr.extended_hdr.parsed_pkt.ipv4_src), hdr.extended_hdr.parsed_pkt.l4_src_port);
-	    printf("-> %s:%d] ", intoa(hdr.extended_hdr.parsed_pkt.ipv4_dst), hdr.extended_hdr.parsed_pkt.l4_dst_port);
-	  } else {
-	    printf("[IPv6][%s:%d ",    in6toa(hdr.extended_hdr.parsed_pkt.ipv6_src), hdr.extended_hdr.parsed_pkt.l4_src_port);
-	    printf("-> %s:%d] ", in6toa(hdr.extended_hdr.parsed_pkt.ipv6_dst), hdr.extended_hdr.parsed_pkt.l4_dst_port);
-	  }
-	  printf("[TEID: %08X]\n", hdr.extended_hdr.parsed_pkt.tunnel.tunnel_id);
+	    if(hdr.extended_hdr.parsed_pkt.eth_type == 0x0800 /* IPv4*/ ) {
+	      printf("[IPv4][%s:%d ", intoa(hdr.extended_hdr.parsed_pkt.ipv4_src), hdr.extended_hdr.parsed_pkt.l4_src_port);
+	      printf("-> %s:%d] ", intoa(hdr.extended_hdr.parsed_pkt.ipv4_dst), hdr.extended_hdr.parsed_pkt.l4_dst_port);
+	    } else {
+	      printf("[IPv6][%s:%d ",    in6toa(hdr.extended_hdr.parsed_pkt.ipv6_src), hdr.extended_hdr.parsed_pkt.l4_src_port);
+	      printf("-> %s:%d] ", in6toa(hdr.extended_hdr.parsed_pkt.ipv6_dst), hdr.extended_hdr.parsed_pkt.l4_dst_port);
+	    }
+	    printf("[TEID: %08X]\n", hdr.extended_hdr.parsed_pkt.tunnel.tunnel_id);
 #endif
 
-	  if((hdr.extended_hdr.parsed_pkt.tunnel.tunnel_id != 0xFFFFFFFF)
-	     && (hdr.extended_hdr.parsed_pkt.l3_proto == IPPROTO_UDP)
-	     && (((hdr.extended_hdr.parsed_pkt.l4_src_port == 2123) && (hdr.extended_hdr.parsed_pkt.l4_dst_port == 2123))
-		 || ((hdr.extended_hdr.parsed_pkt.l4_src_port == 2152) && (hdr.extended_hdr.parsed_pkt.l4_dst_port == 2152)))) {
-	    u_int8_t found = 0, i;
-	    struct gtpv1_header *g = (struct gtpv1_header*)&p[hdr.extended_hdr.parsed_pkt.offset.payload_offset];
+	    if((hdr.extended_hdr.parsed_pkt.tunnel.tunnel_id != 0xFFFFFFFF)
+	       && (hdr.extended_hdr.parsed_pkt.l3_proto == IPPROTO_UDP)
+	       && (((hdr.extended_hdr.parsed_pkt.l4_src_port == 2123) && (hdr.extended_hdr.parsed_pkt.l4_dst_port == 2123))
+		   || ((hdr.extended_hdr.parsed_pkt.l4_src_port == 2152) && (hdr.extended_hdr.parsed_pkt.l4_dst_port == 2152)))) {
+	      u_int8_t found = 0, i;
+	      struct gtpv1_header *g = (struct gtpv1_header*)&p[hdr.extended_hdr.parsed_pkt.offset.payload_offset];
 
-	    if((g->message_type == 0x10) /* Create Request */
-	       || (g->message_type == 0x12) /* Update Request */) {
-	      u_int16_t displ = 12+hdr.extended_hdr.parsed_pkt.offset.payload_offset;
+	      if((g->message_type == 0x10) /* Create Request */
+		 || (g->message_type == 0x12) /* Update Request */) {
+		u_int16_t displ = 12+hdr.extended_hdr.parsed_pkt.offset.payload_offset;
 
-	      while(displ < hdr.caplen) {
-		u_int8_t field_id = p[displ];
+		while(displ < hdr.caplen) {
+		  u_int8_t field_id = p[displ];
 
-		if(field_id == 0x02 /* IMSI */) {
-		  int i, j = 0;
-		  char *_imsi = (char*)&p[displ+1], u_imsi[24];
+		  if(field_id == 0x02 /* IMSI */) {
+		    int i, j = 0;
+		    char *_imsi = (char*)&p[displ+1], u_imsi[24];
 
-		  for(i = 0; i < 8; i++) {
-		    if((_imsi[i] & 0x0F) <= 9)
-		      u_imsi[j++] = (_imsi[i] & 0x0F) + 0x30;
-		    if(((_imsi[i] >> 4) & 0x0F) <= 9)
-		      u_imsi[j++] = ((_imsi[i] >> 4) & 0x0F) + 0x30;
+		    for(i = 0; i < 8; i++) {
+		      if((_imsi[i] & 0x0F) <= 9)
+			u_imsi[j++] = (_imsi[i] & 0x0F) + 0x30;
+		      if(((_imsi[i] >> 4) & 0x0F) <= 9)
+			u_imsi[j++] = ((_imsi[i] >> 4) & 0x0F) + 0x30;
+		    }
+		    u_imsi[j] = '\0';
+
+		    if(strcmp(imsi, u_imsi) == 0) {
+		      to_dump = 1; /* Ok we can dump the packet */
+		    } else
+		      break;
+
+		    displ += 9;
+		    break;
+		  } else {
+		    switch(field_id) {
+		    case 0x03: /* Routing Area Info */
+		      displ += 7;
+		      break;
+
+		    case 0x14: /* NSAPI */
+		      displ += 2;
+		      break;
+
+		    case 0x00: /* Ignore */
+		    case 0x01: /* Cause */
+		    case 0x08: /* Reordering Required */
+		    case 0x0E: /* Recovery */
+		    case 0x0F: /* Selection Mode */
+		    case 0x13: /* Teardown Indicator */
+		    case 0xB4: /* PS Handover XID Parameters 7.7.79 */
+		      displ += 2;
+		      break;
+
+		    case 0x10: /* TEID Data */
+		      displ += 5;
+		      break;
+
+		    case 0x11: /* TEID Control */
+		      displ += 5;
+		      break;
+
+		    case 0x1A: /* Charging Characteristics */
+		      displ += 3;
+		      break;
+
+		    case 0x7F: /* Charging ID */
+		      displ += 5;
+		      break;
+
+		    default:
+		      displ += ntohs(*(u_int16_t*)&p[displ+1]) + 3;
+		      break;
+		    }
 		  }
-		  u_imsi[j] = '\0';
-
-		  if(strcmp(imsi, u_imsi) == 0) {
-		    to_dump = 1; /* Ok we can dump the packet */
-		  } else
-		    break;
-
-		  displ += 9;
-		  break;
-		} else {
-		  switch(field_id) {
-		  case 0x03: /* Routing Area Info */
-		    displ += 7;
-		    break;
-
-		  case 0x14: /* NSAPI */
-		    displ += 2;
-		    break;
-
-		  case 0x00: /* Ignore */
-		  case 0x01: /* Cause */
-		  case 0x08: /* Reordering Required */
-		  case 0x0E: /* Recovery */
-		  case 0x0F: /* Selection Mode */
-		  case 0x13: /* Teardown Indicator */
-		  case 0xB4: /* PS Handover XID Parameters 7.7.79 */
-		    displ += 2;
-		    break;
-
-		  case 0x10: /* TEID Data */
-		    displ += 5;
-		    break;
-
-		  case 0x11: /* TEID Control */
-		    displ += 5;
-		    break;
-
-		  case 0x1A: /* Charging Characteristics */
-		    displ += 3;
-		    break;
-
-		  case 0x7F: /* Charging ID */
-		    displ += 5;
-		    break;
-
-		  default:
-		    displ += ntohs(*(u_int16_t*)&p[displ+1]) + 3;
-		    break;
-		  }
-		}
-	      } /* while */
-	    } else if(g->message_type == 0xFF /* Data */) {
+		} /* while */
+	      } else if(g->message_type == 0xFF /* Data */) {
 #ifdef DEBUG
-	      printf("%08X\n", hdr.extended_hdr.parsed_pkt.tunnel.tunnel_id);
+		printf("%08X\n", hdr.extended_hdr.parsed_pkt.tunnel.tunnel_id);
 #endif
-	      for(i=0; i<num_gtp_tunnels; i++)
-		if(gtp_tunnels[i] == hdr.extended_hdr.parsed_pkt.tunnel.tunnel_id) {
-		  to_dump = 1, found = 1;
-		  break;
-		}
+		for(i=0; i<num_gtp_tunnels; i++)
+		  if(gtp_tunnels[i] == hdr.extended_hdr.parsed_pkt.tunnel.tunnel_id) {
+		    to_dump = 1, found = 1;
+		    break;
+		  }
 
-	      if(!found) continue;
+		if(!found) continue;
+	      } else
+		continue;
 	    } else
 	      continue;
-	  } else
-	    continue;
-	}
+	  }
+	} else
+	  to_dump = 1;
 
 #ifdef DEBUG
 	printf("Dump \n");
@@ -536,7 +568,6 @@ int main(int argc, char* argv[]) {
 	  fflush(stdout);
 	  num_pkts++;
 	}
-
       } else {
 	u_int32_t s, usec, nsec;
 
