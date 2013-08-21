@@ -420,6 +420,7 @@ int pfring_mod_stats(pfring *ring, pfring_stat *stats) {
     rmb();
     stats->recv = ring->slots_info->tot_read;
     stats->drop = ring->slots_info->tot_lost;
+    stats->droppedbyfilter = 0;
     return(0);
   }
 
