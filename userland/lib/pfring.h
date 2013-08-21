@@ -120,7 +120,7 @@ extern "C" {
   /* ********************************* */
 
   typedef struct {
-    u_int64_t recv, drop, droppedbyfilter;
+    u_int64_t recv, drop;
   } pfring_stat;
 
   /* ********************************* */
