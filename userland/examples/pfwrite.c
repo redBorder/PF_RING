@@ -387,19 +387,6 @@ int main(int argc, char* argv[]) {
     return(-1);
   }
 
-  if(dump_digest) {
-    if((dumper_fd = fopen(out_dump, "w")) == NULL) {
-      printf("Unable to create dump file %s\n", out_dump);
-      return(-1);
-    }
-  } else {
-    dumper = pcap_dump_open(pcap_open_dead(DLT_EN10MB, 16384 /* MTU */), out_dump);
-    if(dumper == NULL) {
-      printf("Unable to create dump file %s\n", out_dump);
-      return(-1);
-    }
-  }
-
   memset(&hdr, 0, sizeof(hdr));
 
   flags = PF_RING_PROMISC;
@@ -438,9 +425,22 @@ int main(int argc, char* argv[]) {
 
   pfring_enable_ring(pd);
 
-  if(dumper_fd) fprintf(dumper_fd, "# Time\tLen\tEth Type\tVLAN\tL3 Proto\tSrc IP:Port\tDst IP:Port\n");
-
   if(be_a_daemon) daemonize();
+
+  if(dump_digest) {
+    if((dumper_fd = fopen(out_dump, "w")) == NULL) {
+      printf("Unable to create dump file %s\n", out_dump);
+      return(-1);
+    }
+  } else {
+    dumper = pcap_dump_open(pcap_open_dead(DLT_EN10MB, 16384 /* MTU */), out_dump);
+    if(dumper == NULL) {
+      printf("Unable to create dump file %s\n", out_dump);
+      return(-1);
+    }
+  }
+
+  if(dumper_fd) fprintf(dumper_fd, "# Time\tLen\tEth Type\tVLAN\tL3 Proto\tSrc IP:Port\tDst IP:Port\n");
 
   while(1) {
     if(pfring_recv(pd, &p, 0, &hdr, 1 /* wait_for_packet */) > 0) {
