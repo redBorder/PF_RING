@@ -461,14 +461,15 @@ int32_t gmt2local(time_t t) {
 
 void* packet_consumer_thread(void* _id)
 {
-   int s;
    long thread_id = (long)_id;
 
+#ifdef HAVE_PTHREAD_SETAFFINITY_NP
    if(numCPU > 1)
    {
       /* Bind this thread to a specific core */
       cpu_set_t cpuset;
       u_long core_id;
+      int s;
 
       if (thread_core_affinity[thread_id] != -1)
          core_id = thread_core_affinity[thread_id] % numCPU;
@@ -484,6 +485,7 @@ void* packet_consumer_thread(void* _id)
          printf("Set thread %lu on core %lu/%u\n", thread_id, core_id, numCPU);
       }
    }
+#endif
 
    while(!do_shutdown) {
       u_char *buffer = NULL;
