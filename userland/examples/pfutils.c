@@ -33,6 +33,32 @@
 
 typedef u_int64_t ticks;
 
+/* ******************************** */
+
+void daemonize(char *pidFile) {
+  pid_t pid, sid;
+
+  pid = fork();
+  if (pid < 0) exit(EXIT_FAILURE);
+  if (pid > 0) {
+    if (pidFile != NULL) {
+      FILE *fp = fopen(pidFile, "w");
+      fprintf(fp, "%d", pid);
+      fclose(fp);
+    }
+    exit(EXIT_SUCCESS);
+  }
+
+  sid = setsid();
+  if (sid < 0) exit(EXIT_FAILURE);
+
+  if ((chdir("/")) < 0) exit(EXIT_FAILURE);
+
+  close(STDIN_FILENO);
+  close(STDOUT_FILENO);
+  close(STDERR_FILENO);
+}
+
 /* *************************************** */
 /*
  * The time difference in millisecond

@@ -63,32 +63,6 @@ static struct timeval startTime;
 
 /* ******************************** */
 
-void daemonize(char *pidFile) {
-  pid_t pid, sid;
-
-  pid = fork();
-  if (pid < 0) exit(EXIT_FAILURE);
-  if (pid > 0) {
-    if (pidFile != NULL) {
-      FILE *fp = fopen(pidFile, "w");
-      fprintf(fp, "%d", pid);
-      fclose(fp);
-    }
-    exit(EXIT_SUCCESS);
-  }
-
-  sid = setsid();
-  if (sid < 0) exit(EXIT_FAILURE);
-
-  if ((chdir("/")) < 0) exit(EXIT_FAILURE);
-
-  close(STDIN_FILENO);
-  close(STDOUT_FILENO);
-  close(STDERR_FILENO);
-}
-
-/* ******************************** */
-
 void print_stats() {
   struct timeval endTime;
   double deltaMillisec;
