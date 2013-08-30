@@ -1,4 +1,35 @@
 ---------------------------------------
+2013-08-30 PF_RING 5.6.1
+
+* PF_RING Kernel module
+ - Added enable_frag_coherence param: handle fragments to keep flow coherence in clusters
+ - Cluster add/remove fix
+
+* PF_RING API
+ - New pfring_get_link_status() call to check link status up/down
+
+* Examples
+ - pfwrite
+   - Added cluster id (-c) support
+   - Added daemon mode (-b) support
+   - Added redis PUBLISH/SUBSCRIBE for IMSI registration/delete
+   - Enhanced IMSI tracking
+   - Performance fix for GTP tunnels
+   - Fixed buffer length issue
+ - pfsend
+   - Added daemon mode (-d) support
+   - Added pid file (-P) support
+ - pfdnacluster_master 
+   - Added pid file (-P) support
+
+* Libzero
+ - DNA Bouncer fix: sometimes the decision function was accessing the wrong buffer
+
+* Snort DAQ
+ - Fix for honouring cnt in pfring_daq_acquire()
+ - Stats fix
+
+---------------------------------------
 2013-06-07 PF_RING 5.6.0
 
 * PF_RING Kernel module
