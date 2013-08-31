@@ -246,6 +246,16 @@ int dummyProcessPacketZero(u_int32_t *pkt_len, u_char *pkt, const u_char *user_b
   }
 #endif
 
+#if 0 /* print the packet */
+  {
+    char bigbuf[4096];
+    int buflen = 0;
+    buflen += snprintf(&bigbuf[buflen], sizeof(bigbuf) - buflen, "[Dir %d]", direction);
+    pfring_print_pkt(&bigbuf[buflen], sizeof(bigbuf) - buflen, pkt, len, len);
+    fputs(bigbuf, stdout);
+  }
+#endif
+
   di->numPkts++;
   di->numBytes += len + 24 /* 8 Preamble + 4 CRC + 12 IFG */;
 
