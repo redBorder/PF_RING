@@ -356,8 +356,14 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h,
 
     if(use_extended_pkt_header) {
       char bigbuf[4096];
+    
+      printf("%s[if_index=%d]",
+        h->extended_hdr.rx_direction ? "[RX]" : "[TX]",
+        h->extended_hdr.if_index);
+
       pfring_print_parsed_pkt(bigbuf, sizeof(bigbuf), p, h);
       fputs(bigbuf, stdout);
+
     } else {
       char buf1[32], buf2[32];
       struct ether_header *ehdr = (struct ether_header *) p;

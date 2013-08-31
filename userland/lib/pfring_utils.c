@@ -546,11 +546,6 @@ int pfring_print_parsed_pkt(char *buff, u_int buff_len, const u_char *p, const s
   int buff_used = 0;
 
   buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
-    "%s[if_index=%d]",
-    h->extended_hdr.rx_direction ? "[RX]" : "[TX]",
-    h->extended_hdr.if_index);
-
-  buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
     "[%s -> %s] ",
     etheraddr2string(h->extended_hdr.parsed_pkt.smac, buf1),
     etheraddr2string(h->extended_hdr.parsed_pkt.dmac, buf2));    
