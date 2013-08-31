@@ -634,6 +634,7 @@ int pfring_print_pkt(char *buff, u_int buff_len, const u_char *p, u_int len, u_i
   struct pfring_pkthdr hdr;
   memset(&hdr, 0, sizeof(hdr));
   hdr.len = len, hdr.caplen = caplen;
+  pfring_parse_pkt((u_char *) p, &hdr, 5, 0, 1);
   return pfring_print_parsed_pkt(buff, buff_len, p, &hdr);
 }
 
