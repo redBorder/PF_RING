@@ -54,7 +54,7 @@ pfring_stat pfringStats;
 static struct timeval startTime;
 pfring  *ring[MAX_NUM_THREADS] = { NULL };
 unsigned long long numPkts[MAX_NUM_THREADS] = { 0 }, numBytes[MAX_NUM_THREADS] = { 0 };
-u_int8_t wait_for_packet = 1,  do_shutdown = 0;
+u_int8_t use_extended_pkt_header = 0, wait_for_packet = 1, do_shutdown = 0;
 pthread_t pd_thread[MAX_NUM_THREADS];
 int thread_core_affinity[MAX_NUM_THREADS];
 static u_int numCPU;
@@ -188,6 +188,7 @@ void printHelp(void) {
 
   printf("-e <direction>  0=RX+TX, 1=RX only, 2=TX only\n");
   printf("-l <len>        Capture length\n");
+  printf("-m              Long packet header (with PF_RING extensions)\n");
   printf("-w <watermark>  Watermark\n");
   printf("-p <poll wait>  Poll wait (msec)\n");
   printf("-b <cpu %%>      CPU pergentage priority (0-99)\n");
@@ -202,117 +203,6 @@ void printHelp(void) {
 
 /* ****************************************************** */
 
-static char hex[] = "0123456789ABCDEF";
-
-char* etheraddr_string(const u_char *ep, char *buf) {
-  u_int i, j;
-  char *cp;
-
-  cp = buf;
-  if ((j = *ep >> 4) != 0)
-    *cp++ = hex[j];
-  else
-    *cp++ = '0';
-
-  *cp++ = hex[*ep++ & 0xf];
-
-  for(i = 5; (int)--i >= 0;) {
-    *cp++ = ':';
-    if ((j = *ep >> 4) != 0)
-      *cp++ = hex[j];
-    else
-      *cp++ = '0';
-
-    *cp++ = hex[*ep++ & 0xf];
-  }
-
-  *cp = '\0';
-  return (buf);
-}
-
-/* ****************************************************** */
-
-/*
- * A faster replacement for inet_ntoa().
- */
-char* _intoa(unsigned int addr, char* buf, u_short bufLen) {
-  char *cp, *retStr;
-  u_int byte;
-  int n;
-
-  cp = &buf[bufLen];
-  *--cp = '\0';
-
-  n = 4;
-  do {
-    byte = addr & 0xff;
-    *--cp = byte % 10 + '0';
-    byte /= 10;
-    if (byte > 0) {
-      *--cp = byte % 10 + '0';
-      byte /= 10;
-      if (byte > 0)
-	*--cp = byte + '0';
-    }
-    *--cp = '.';
-    addr >>= 8;
-  } while (--n > 0);
-
-  /* Convert the string to lowercase */
-  retStr = (char*)(cp+1);
-
-  return(retStr);
-}
-
-/* ************************************ */
-
-const size_t INTOA_BUFSIZE = sizeof "ff:ff:ff:ff:ff:ff:255.255.255.255";
-
-#if 0
-char* bad_intoa(unsigned int addr) {
-  static char buf[INTOA_BUFSIZE];
-
-  return(_intoa(addr, buf, sizeof(buf)));
-}
-#endif
-
-char* intoa(unsigned int addr, char* b, u_short bl) {
-   return _intoa(addr, b, bl);
-}
-
-/* ************************************ */
-
-inline char* in6toa(struct in6_addr addr6) {
-  static char buf[sizeof "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"];
-
-  snprintf(buf, sizeof(buf),
-	   "%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x",
-	   addr6.s6_addr[0], addr6.s6_addr[1], addr6.s6_addr[2],
-	   addr6.s6_addr[3], addr6.s6_addr[4], addr6.s6_addr[5], addr6.s6_addr[6],
-	   addr6.s6_addr[7], addr6.s6_addr[8], addr6.s6_addr[9], addr6.s6_addr[10],
-	   addr6.s6_addr[11], addr6.s6_addr[12], addr6.s6_addr[13], addr6.s6_addr[14],
-	   addr6.s6_addr[15]);
-
-  return(buf);
-}
-
-/* ****************************************************** */
-
-char* proto2str(u_short proto) {
-   static char protoName[8];
-
-  switch(proto) {
-  case IPPROTO_TCP:  return("TCP");
-  case IPPROTO_UDP:  return("UDP");
-  case IPPROTO_ICMP: return("ICMP");
-  default:
-    snprintf(protoName, sizeof(protoName), "%d", proto);
-    return(protoName);
-  }
-}
-
-/* ****************************************************** */
-
 static int32_t thiszone;
 
 void dummyProcesssPacket(const struct pfring_pkthdr *h,
@@ -323,30 +213,26 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h,
    char bigbuf[BUFSIZE]; // buf into which we spew prints
    int  buflen = 0;
 
-   char addrbuf[INTOA_BUFSIZE];
-
    long threadId = (long)user_bytes;
 
    if(unlikely(do_shutdown)) return;
 
    if(verbose) {
-      struct ether_header ehdr;
-      u_short eth_type, vlan_id;
-      char buf1[32], buf2[32];
-      struct ip ip;
       int s;
       uint nsec;
 
-      if(h->ts.tv_sec == 0)
-         gettimeofday((struct timeval*)&h->ts, NULL);
+      if(h->ts.tv_sec == 0) {
+        memset((void*)&h->extended_hdr.parsed_pkt, 0, sizeof(struct pkt_parsing_info));
+	pfring_parse_pkt((u_char*)p, (struct pfring_pkthdr*)h, 5, 1, 1);
+      }
 
       s = (h->ts.tv_sec + thiszone) % 86400;
       nsec = h->extended_hdr.timestamp_ns % 1000;
     
       buflen += snprintf(&bigbuf[buflen], BUFSIZE - buflen,
-                         "%02d:%02d:%02d.%06u%03u ",
-                         s / 3600, (s % 3600) / 60, s % 60,
-                         (unsigned)h->ts.tv_usec, nsec);
+        "%02d:%02d:%02d.%06u%03u ",
+        s / 3600, (s % 3600) / 60, s % 60,
+        (unsigned)h->ts.tv_usec, nsec);
 
 #if 0
       for(i=0; i<32; i++) buflen += snprintf(&bigbuf[buflen], BUFSIZE - buflen, "%02X ", p[i]);
@@ -355,67 +241,15 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h,
 
       buflen += snprintf(&bigbuf[buflen], BUFSIZE - buflen, "[T%lu]", threadId);
 
-      if(h->extended_hdr.parsed_header_len > 0) {
-         buflen += snprintf(&bigbuf[buflen], BUFSIZE - buflen, "[eth_type=0x%04X]", h->extended_hdr.parsed_pkt.eth_type);
-         buflen += snprintf(&bigbuf[buflen], BUFSIZE - buflen, "[l3_proto=%u]", (unsigned int)h->extended_hdr.parsed_pkt.l3_proto);
-
-         buflen += snprintf(&bigbuf[buflen], BUFSIZE - buflen, "[%s:%d -> ",
-                            (h->extended_hdr.parsed_pkt.eth_type == 0x86DD) ?
-                            in6toa(h->extended_hdr.parsed_pkt.ipv6_src) :
-                            intoa(h->extended_hdr.parsed_pkt.ipv4_src, addrbuf, sizeof(addrbuf)),
-                h->extended_hdr.parsed_pkt.l4_src_port);
-         buflen += snprintf(&bigbuf[buflen], BUFSIZE - buflen, "%s:%d] ",
-                            (h->extended_hdr.parsed_pkt.eth_type == 0x86DD) ?
-                            in6toa(h->extended_hdr.parsed_pkt.ipv6_dst) :
-                            intoa(h->extended_hdr.parsed_pkt.ipv4_dst, addrbuf, sizeof(addrbuf)),
-                h->extended_hdr.parsed_pkt.l4_dst_port);
-
-         buflen += snprintf(&bigbuf[buflen], BUFSIZE - buflen, "[%s -> %s] ",
-                etheraddr_string(h->extended_hdr.parsed_pkt.smac, buf1),
-                etheraddr_string(h->extended_hdr.parsed_pkt.dmac, buf2));
-      }
-
-      memcpy(&ehdr, p+h->extended_hdr.parsed_header_len, sizeof(struct ether_header));
-      eth_type = ntohs(ehdr.ether_type);
-
-      buflen += snprintf(&bigbuf[buflen], BUFSIZE - buflen, "[%s -> %s][eth_type=0x%04X] ",
-             etheraddr_string(ehdr.ether_shost, buf1),
-             etheraddr_string(ehdr.ether_dhost, buf2), eth_type);
-
-
-      if(eth_type == 0x8100) {
-         vlan_id = (p[14] & 15)*256 + p[15];
-         eth_type = (p[16])*256 + p[17];
-         buflen += snprintf(&bigbuf[buflen], BUFSIZE - buflen, "[vlan %u] ", vlan_id);
-         p+=4;
-      }
-
-      if(eth_type == 0x0800) {
-         memcpy(&ip, p+h->extended_hdr.parsed_header_len+sizeof(ehdr), sizeof(struct ip));
-         buflen += snprintf(&bigbuf[buflen], BUFSIZE - buflen, "[%s]", proto2str(ip.ip_p));
-         buflen += snprintf(&bigbuf[buflen], BUFSIZE - buflen, "[%s:%d ",
-                            intoa(ntohl(ip.ip_src.s_addr), addrbuf, sizeof(addrbuf)),
-                            h->extended_hdr.parsed_pkt.l4_src_port);
-         buflen += snprintf(&bigbuf[buflen], BUFSIZE - buflen, "-> %s:%d] ",
-                            intoa(ntohl(ip.ip_dst.s_addr), addrbuf, sizeof(addrbuf)),
-                            h->extended_hdr.parsed_pkt.l4_dst_port);
-
-         buflen += snprintf(&bigbuf[buflen], BUFSIZE - buflen, "[tos=%d][tcp_seq_num=%u][caplen=%d][len=%d][parsed_header_len=%d]"
-                "[eth_offset=%d][l3_offset=%d][l4_offset=%d][payload_offset=%d]\n",
-                h->extended_hdr.parsed_pkt.ipv4_tos, h->extended_hdr.parsed_pkt.tcp.seq_num,
-                h->caplen, h->len, h->extended_hdr.parsed_header_len,
-                h->extended_hdr.parsed_pkt.offset.eth_offset,
-                h->extended_hdr.parsed_pkt.offset.l3_offset,
-                h->extended_hdr.parsed_pkt.offset.l4_offset,
-                h->extended_hdr.parsed_pkt.offset.payload_offset);
-
+      if(use_extended_pkt_header) {
+        buflen += pfring_print_parsed_pkt(&bigbuf[buflen], BUFSIZE - buflen, p, h);
       } else {
-         if(eth_type == 0x0806)
-            buflen += snprintf(&bigbuf[buflen], BUFSIZE - buflen, "[ARP]");
-         else
-            buflen += snprintf(&bigbuf[buflen], BUFSIZE - buflen, "[eth_type=0x%04X]", eth_type);
+        struct ether_header *ehdr = (struct ether_header *) p;
+        u_short eth_type = ntohs(ehdr->ether_type);
+        if(eth_type == 0x0806) buflen += snprintf(&bigbuf[buflen], BUFSIZE - buflen, "[ARP]");
+        else buflen += snprintf(&bigbuf[buflen], BUFSIZE - buflen, "[eth_type=0x%04X]", eth_type);
 
-         buflen += snprintf(&bigbuf[buflen], BUFSIZE - buflen, "[caplen=%d][len=%d][parsed_header_len=%d]"
+        buflen += snprintf(&bigbuf[buflen], BUFSIZE - buflen, "[caplen=%d][len=%d][parsed_header_len=%d]"
                 "[eth_offset=%d][l3_offset=%d][l4_offset=%d][payload_offset=%d]\n",
                 h->caplen, h->len, h->extended_hdr.parsed_header_len,
                 h->extended_hdr.parsed_pkt.offset.eth_offset,
@@ -577,7 +411,7 @@ int main(int argc, char* argv[]) {
   numCPU = sysconf( _SC_NPROCESSORS_ONLN );
   memset(thread_core_affinity, -1, sizeof(thread_core_affinity));
 
-  while((c = getopt(argc,argv,"hi:l:vae:w:b:rp:g:")) != -1) {
+  while((c = getopt(argc,argv,"hi:l:mvae:w:b:rp:g:")) != -1) {
     switch(c) {
     case 'h':
       printHelp();
@@ -600,6 +434,9 @@ int main(int argc, char* argv[]) {
       break;
     case 'i':
       device = strdup(optarg);
+      break;
+    case 'm':
+      use_extended_pkt_header = 1;
       break;
     case 'v':
       verbose = 1;
@@ -633,8 +470,8 @@ int main(int argc, char* argv[]) {
 #else
   flags |= PF_RING_DNA_SYMMETRIC_RSS;  /* Note that symmetric RSS is ignored by non-DNA drivers */
 #endif
-  flags |= PF_RING_LONG_HEADER;
-  
+  if(use_extended_pkt_header) flags |= PF_RING_LONG_HEADER;
+
   num_channels = pfring_open_multichannel(device, snaplen, flags, ring);
   
   if(num_channels <= 0) {

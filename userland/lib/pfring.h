@@ -427,6 +427,8 @@ extern "C" {
   char* pfring_format_numbers(double val, char *buf, u_int buf_len, u_int8_t add_decimals);
   int pfring_enable_hw_timestamp(pfring* ring, char *device_name, u_int8_t enable_rx, u_int8_t enable_tx);
   int pfring_get_mtu_size(pfring* ring);
+  int pfring_print_parsed_pkt(char *buff, u_int buff_len, const u_char *p, const struct pfring_pkthdr *h);
+  int pfring_print_pkt(char *buff, u_int buff_len, const u_char *p, u_int len, u_int caplen);
 
   /* ********************************* */
 

@@ -256,9 +256,29 @@ void my_sigalarm(int sig) {
 
 /* ****************************************************** */
 
-static char hex[] = "0123456789ABCDEF";
+#ifdef ENABLE_BPF
+int parse_bpf_filter(char *filter_buffer, u_int caplen) {
+  if(pcap_compile_nopcap(caplen,        /* snaplen_arg */
+                         DLT_EN10MB,    /* linktype_arg */
+                         &filter,       /* program */
+                         filter_buffer, /* const char *buf */
+                         0,             /* optimize */
+                         0              /* mask */
+                         ) == -1) {
+    return -1;
+  }
 
-char* etheraddr_string(const u_char *ep, char *buf) {
+  if(filter.bf_insns == NULL)
+    return -1;
+
+  return 0;
+}
+#endif
+
+/* ****************************************************** */
+
+static char *etheraddr_string(const u_char *ep, char *buf) {
+  char *hex = "0123456789ABCDEF";
   u_int i, j;
   char *cp;
 
@@ -286,99 +306,6 @@ char* etheraddr_string(const u_char *ep, char *buf) {
 
 /* ****************************************************** */
 
-/*
- * A faster replacement for inet_ntoa().
- */
-char* _intoa(unsigned int addr, char* buf, u_short bufLen) {
-  char *cp, *retStr;
-  u_int byte;
-  int n;
-
-  cp = &buf[bufLen];
-  *--cp = '\0';
-
-  n = 4;
-  do {
-    byte = addr & 0xff;
-    *--cp = byte % 10 + '0';
-    byte /= 10;
-    if(byte > 0) {
-      *--cp = byte % 10 + '0';
-      byte /= 10;
-      if(byte > 0)
-	*--cp = byte + '0';
-    }
-    *--cp = '.';
-    addr >>= 8;
-  } while (--n > 0);
-
-  /* Convert the string to lowercase */
-  retStr = (char*)(cp+1);
-
-  return(retStr);
-}
-
-/* ************************************ */
-
-char* intoa(unsigned int addr) {
-  static char buf[sizeof "ff:ff:ff:ff:ff:ff:255.255.255.255"];
-
-  return(_intoa(addr, buf, sizeof(buf)));
-}
-
-/* ************************************ */
-
-inline char* in6toa(struct in6_addr addr6) {
-  static char buf[sizeof "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"];
-  char *ret = (char*)inet_ntop(AF_INET6, &addr6, buf, sizeof(buf));
-  
-  if(ret == NULL) {
-    printf("Internal error (buffer too short)");
-    buf[0] = '\0';
-  }
-  
-  return(ret);
-}
-
-/* ****************************************************** */
-
-char* proto2str(u_short proto) {
-  static char protoName[8];
-
-  switch(proto) {
-  case IPPROTO_TCP:  return("TCP");
-  case IPPROTO_UDP:  return("UDP");
-  case IPPROTO_ICMP: return("ICMP");
-  case IPPROTO_GRE:  return("GRE");
-  default:
-    snprintf(protoName, sizeof(protoName), "%d", proto);
-    return(protoName);
-  }
-}
-
-/* ****************************************************** */
-
-#ifdef ENABLE_BPF
-int parse_bpf_filter(char *filter_buffer, u_int caplen) {
-  if(pcap_compile_nopcap(caplen,        /* snaplen_arg */
-                         DLT_EN10MB,    /* linktype_arg */
-                         &filter,       /* program */
-                         filter_buffer, /* const char *buf */
-                         0,             /* optimize */
-                         0              /* mask */
-                         ) == -1) {
-    return -1;
-  }
-
-  if(filter.bf_insns == NULL)
-    return -1;
-
-  return 0;
-}
-#endif
-
-/* ****************************************************** */
-
 static int32_t thiszone;
 
 void dummyProcesssPacket(const struct pfring_pkthdr *h, 
@@ -401,8 +328,6 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h,
   }
 
   if(verbose) {
-    struct ether_header *ehdr;
-    char buf1[32], buf2[32];
     int s;
     uint usec;
     uint nsec=0;
@@ -429,74 +354,14 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h,
 	   s / 3600, (s % 3600) / 60, s % 60,
 	   usec, nsec);
 
-    ehdr = (struct ether_header *) p;
-
     if(use_extended_pkt_header) {
-      printf("%s[if_index=%d]",
-        h->extended_hdr.rx_direction ? "[RX]" : "[TX]",
-        h->extended_hdr.if_index);
-
-      printf("[%s -> %s] ",
-	     etheraddr_string(h->extended_hdr.parsed_pkt.smac, buf1),
-	     etheraddr_string(h->extended_hdr.parsed_pkt.dmac, buf2));    
-
-      if(h->extended_hdr.parsed_pkt.offset.vlan_offset)
-	printf("[vlan %u] ", h->extended_hdr.parsed_pkt.vlan_id);
-
-      if (h->extended_hdr.parsed_pkt.eth_type == 0x0800 /* IPv4*/ || h->extended_hdr.parsed_pkt.eth_type == 0x86DD /* IPv6*/) {
-
-        if(h->extended_hdr.parsed_pkt.eth_type == 0x0800 /* IPv4*/ ) {
-	  printf("[IPv4][%s:%d ", intoa(h->extended_hdr.parsed_pkt.ipv4_src), h->extended_hdr.parsed_pkt.l4_src_port);
-	  printf("-> %s:%d] ", intoa(h->extended_hdr.parsed_pkt.ipv4_dst), h->extended_hdr.parsed_pkt.l4_dst_port);
-        } else {
-          printf("[IPv6][%s:%d ",    in6toa(h->extended_hdr.parsed_pkt.ipv6_src), h->extended_hdr.parsed_pkt.l4_src_port);
-          printf("-> %s:%d] ", in6toa(h->extended_hdr.parsed_pkt.ipv6_dst), h->extended_hdr.parsed_pkt.l4_dst_port);
-        }
-
-	printf("[l3_proto=%s]", proto2str(h->extended_hdr.parsed_pkt.l3_proto));
-
-	if(h->extended_hdr.parsed_pkt.tunnel.tunnel_id != NO_TUNNEL_ID) {
-	  printf("[TEID=0x%08X][tunneled_proto=%s]", 
-		 h->extended_hdr.parsed_pkt.tunnel.tunnel_id,
-		 proto2str(h->extended_hdr.parsed_pkt.tunnel.tunneled_proto));
-
-	  if(h->extended_hdr.parsed_pkt.eth_type == 0x0800 /* IPv4*/ ) {
-	    printf("[IPv4][%s:%d ",
-		   intoa(h->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src.v4),
-		   h->extended_hdr.parsed_pkt.tunnel.tunneled_l4_src_port);
-	    printf("-> %s:%d] ", 
-		   intoa(h->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst.v4),
-		   h->extended_hdr.parsed_pkt.tunnel.tunneled_l4_dst_port);
-	  } else {
-	    printf("[IPv6][%s:%d ", 
-		   in6toa(h->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src.v6),
-		   h->extended_hdr.parsed_pkt.tunnel.tunneled_l4_src_port);
-	    printf("-> %s:%d] ",
-		   in6toa(h->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst.v6),
-		   h->extended_hdr.parsed_pkt.tunnel.tunneled_l4_dst_port);
-	  }	  
-	}
-
-	printf("[hash=%u][tos=%d][tcp_seq_num=%u]",
-	  h->extended_hdr.pkt_hash,
-          h->extended_hdr.parsed_pkt.ipv4_tos, 
-	  h->extended_hdr.parsed_pkt.tcp.seq_num);
-	
-      } else {
-	if(h->extended_hdr.parsed_pkt.eth_type == 0x0806 /* ARP */)
-	  printf("[ARP]");
-	else
-	  printf("[eth_type=0x%04X]", h->extended_hdr.parsed_pkt.eth_type);
-      }
-
-      printf(" [caplen=%d][len=%d][parsed_header_len=%d][eth_offset=%d][l3_offset=%d][l4_offset=%d][payload_offset=%d]\n",
-        h->caplen, h->len, h->extended_hdr.parsed_header_len,
-        h->extended_hdr.parsed_pkt.offset.eth_offset,
-        h->extended_hdr.parsed_pkt.offset.l3_offset,
-        h->extended_hdr.parsed_pkt.offset.l4_offset,
-        h->extended_hdr.parsed_pkt.offset.payload_offset);
-
+      char bigbuf[4096];
+      pfring_print_parsed_pkt(bigbuf, sizeof(bigbuf), p, h);
+      fputs(bigbuf, stdout);
     } else {
+      char buf1[32], buf2[32];
+      struct ether_header *ehdr = (struct ether_header *) p;
+
       printf("[%s -> %s][eth_type=0x%04X][caplen=%d][len=%d] (use -m for details)\n",
 	     etheraddr_string(ehdr->ether_shost, buf1),
 	     etheraddr_string(ehdr->ether_dhost, buf2), 

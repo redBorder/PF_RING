@@ -443,6 +443,200 @@ TIMESTAMP:
   return analyzed;
 }
 
+/* ****************************************************** */
+
+static char *etheraddr2string(const u_char *ep, char *buf) {
+  char *hex = "0123456789ABCDEF";
+  u_int i, j;
+  char *cp;
+
+  cp = buf;
+  if((j = *ep >> 4) != 0)
+    *cp++ = hex[j];
+  else
+    *cp++ = '0';
+
+  *cp++ = hex[*ep++ & 0xf];
+
+  for(i = 5; (int)--i >= 0;) {
+    *cp++ = ':';
+    if((j = *ep >> 4) != 0)
+      *cp++ = hex[j];
+    else
+      *cp++ = '0';
+
+    *cp++ = hex[*ep++ & 0xf];
+  }
+
+  *cp = '\0';
+  return (buf);
+}
+
+/* ****************************************************** */
+
+static char *_intoa(unsigned int addr, char* buf, u_short bufLen) {
+  char *cp, *retStr;
+  u_int byte;
+  int n;
+
+  cp = &buf[bufLen];
+  *--cp = '\0';
+
+  n = 4;
+  do {
+    byte = addr & 0xff;
+    *--cp = byte % 10 + '0';
+    byte /= 10;
+    if(byte > 0) {
+      *--cp = byte % 10 + '0';
+      byte /= 10;
+      if(byte > 0)
+	*--cp = byte + '0';
+    }
+    *--cp = '.';
+    addr >>= 8;
+  } while (--n > 0);
+
+  retStr = (char*)(cp+1);
+
+  return(retStr);
+}
+
+/* ************************************ */
+
+static char *intoa(unsigned int addr) {
+  static char buf[sizeof "ff:ff:ff:ff:ff:ff:255.255.255.255"];
+  return(_intoa(addr, buf, sizeof(buf)));
+}
+
+/* ************************************ */
+
+static char *in6toa(struct in6_addr addr6) {
+  static char buf[sizeof "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"];
+  char *ret = (char*)inet_ntop(AF_INET6, &addr6, buf, sizeof(buf));
+  
+  if(ret == NULL) {
+    //printf("Internal error (&buff[buff_used]r too short)");
+    buf[0] = '\0';
+  }
+  
+  return(ret);
+}
+
+/* ****************************************************** */
+
+static char *proto2str(u_short proto) {
+  static char protoName[8];
+
+  switch(proto) {
+  case IPPROTO_TCP:  return("TCP");
+  case IPPROTO_UDP:  return("UDP");
+  case IPPROTO_ICMP: return("ICMP");
+  case IPPROTO_GRE:  return("GRE");
+  default:
+    snprintf(protoName, sizeof(protoName), "%d", proto);
+    return(protoName);
+  }
+}
+
+/* ******************************* */
+
+int pfring_print_parsed_pkt(char *buff, u_int buff_len, const u_char *p, const struct pfring_pkthdr *h) {
+  char buf1[32], buf2[32];
+  int buff_used = 0;
+
+  buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
+    "%s[if_index=%d]",
+    h->extended_hdr.rx_direction ? "[RX]" : "[TX]",
+    h->extended_hdr.if_index);
+
+  buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
+    "[%s -> %s] ",
+    etheraddr2string(h->extended_hdr.parsed_pkt.smac, buf1),
+    etheraddr2string(h->extended_hdr.parsed_pkt.dmac, buf2));    
+
+  if(h->extended_hdr.parsed_pkt.offset.vlan_offset)
+    buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
+      "[vlan %u] ", h->extended_hdr.parsed_pkt.vlan_id);
+
+  if (h->extended_hdr.parsed_pkt.eth_type == 0x0800 /* IPv4*/ || h->extended_hdr.parsed_pkt.eth_type == 0x86DD /* IPv6*/) {
+
+    if(h->extended_hdr.parsed_pkt.eth_type == 0x0800 /* IPv4*/ ) {
+      buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
+        "[IPv4][%s:%d ", intoa(h->extended_hdr.parsed_pkt.ipv4_src), h->extended_hdr.parsed_pkt.l4_src_port);
+      buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
+        "-> %s:%d] ", intoa(h->extended_hdr.parsed_pkt.ipv4_dst), h->extended_hdr.parsed_pkt.l4_dst_port);
+    } else {
+      buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
+        "[IPv6][%s:%d ",    in6toa(h->extended_hdr.parsed_pkt.ipv6_src), h->extended_hdr.parsed_pkt.l4_src_port);
+      buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
+        "-> %s:%d] ", in6toa(h->extended_hdr.parsed_pkt.ipv6_dst), h->extended_hdr.parsed_pkt.l4_dst_port);
+    }
+
+    buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
+      "[l3_proto=%s]", proto2str(h->extended_hdr.parsed_pkt.l3_proto));
+
+    if(h->extended_hdr.parsed_pkt.tunnel.tunnel_id != NO_TUNNEL_ID) {
+      buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
+        "[TEID=0x%08X][tunneled_proto=%s]", 
+        h->extended_hdr.parsed_pkt.tunnel.tunnel_id,
+        proto2str(h->extended_hdr.parsed_pkt.tunnel.tunneled_proto));
+
+      if(h->extended_hdr.parsed_pkt.eth_type == 0x0800 /* IPv4*/ ) {
+        buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
+	  "[IPv4][%s:%d ",
+          intoa(h->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src.v4),
+          h->extended_hdr.parsed_pkt.tunnel.tunneled_l4_src_port);
+        buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
+	  "-> %s:%d] ", 
+          intoa(h->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst.v4),
+          h->extended_hdr.parsed_pkt.tunnel.tunneled_l4_dst_port);
+      } else {
+        buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
+	  "[IPv6][%s:%d ", 
+          in6toa(h->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src.v6),
+          h->extended_hdr.parsed_pkt.tunnel.tunneled_l4_src_port);
+        buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
+	  "-> %s:%d] ",
+          in6toa(h->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst.v6),
+          h->extended_hdr.parsed_pkt.tunnel.tunneled_l4_dst_port);
+      }	  
+    }
+
+    buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
+      "[hash=%u][tos=%d][tcp_seq_num=%u]",
+      h->extended_hdr.pkt_hash,
+      h->extended_hdr.parsed_pkt.ipv4_tos, 
+      h->extended_hdr.parsed_pkt.tcp.seq_num);
+	
+  } else if(h->extended_hdr.parsed_pkt.eth_type == 0x0806 /* ARP */) {
+    buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
+      "[ARP]");
+  } else {
+    buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
+      "[eth_type=0x%04X]", h->extended_hdr.parsed_pkt.eth_type);
+  }
+
+  buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
+    " [caplen=%d][len=%d][parsed_header_len=%d][eth_offset=%d][l3_offset=%d][l4_offset=%d][payload_offset=%d]\n",
+    h->caplen, h->len, h->extended_hdr.parsed_header_len,
+    h->extended_hdr.parsed_pkt.offset.eth_offset,
+    h->extended_hdr.parsed_pkt.offset.l3_offset,
+    h->extended_hdr.parsed_pkt.offset.l4_offset,
+    h->extended_hdr.parsed_pkt.offset.payload_offset);
+
+  return buff_used;
+}
+
+/* ******************************* */
+
+int pfring_print_pkt(char *buff, u_int buff_len, const u_char *p, u_int len, u_int caplen) {
+  struct pfring_pkthdr hdr;
+  memset(&hdr, 0, sizeof(hdr));
+  hdr.len = len, hdr.caplen = caplen;
+  return pfring_print_parsed_pkt(buff, buff_len, p, &hdr);
+}
+
 /* ******************************* */
 
 static int pfring_promisc(const char *device, int set_promisc) {
