@@ -548,6 +548,9 @@ int pfring_recv(pfring *ring, u_char** buffer, u_int buffer_len,
     return rc;
   }
 
+  if(!ring->enabled)
+    return(PF_RING_ERROR_RING_NOT_ENABLED);
+
   return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
@@ -666,7 +669,7 @@ int pfring_bind(pfring *ring, char *device_name) {
 /* **************************************************** */
 
 int pfring_send(pfring *ring, char *pkt, u_int pkt_len, u_int8_t flush_packet) {
-  int rc = -1;
+  int rc;
 
   if(unlikely(pkt_len > ring->mtu_len))
     return(PF_RING_ERROR_INVALID_ARGUMENT); /* Packet too long */
@@ -684,15 +687,20 @@ int pfring_send(pfring *ring, char *pkt, u_int pkt_len, u_int8_t flush_packet) {
 
     if(unlikely(ring->reentrant))
       pthread_rwlock_unlock(&ring->tx_lock);
+
+    return rc;
   }
 
-  return rc;
+  if(!ring->enabled)
+    return(PF_RING_ERROR_RING_NOT_ENABLED);
+
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
 
 int pfring_send_ifindex(pfring *ring, char *pkt, u_int pkt_len, u_int8_t flush_packet, int if_index) {
-  int rc = -1;
+  int rc;
 
   if(unlikely(pkt_len > ring->mtu_len))
     return(PF_RING_ERROR_INVALID_ARGUMENT); /* Packet too long */
@@ -710,15 +718,20 @@ int pfring_send_ifindex(pfring *ring, char *pkt, u_int pkt_len, u_int8_t flush_p
 
     if(unlikely(ring->reentrant))
       pthread_rwlock_unlock(&ring->tx_lock);
+
+    return rc;
   }
 
-  return rc;
+  if(!ring->enabled)
+    return(PF_RING_ERROR_RING_NOT_ENABLED);
+
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
 
 int pfring_send_parsed(pfring *ring, char *pkt, struct pfring_pkthdr *hdr, u_int8_t flush_packet) {
-  int rc = -1;
+  int rc;
 
   if(likely(ring
 	    && ring->enabled
@@ -737,16 +750,16 @@ int pfring_send_parsed(pfring *ring, char *pkt, struct pfring_pkthdr *hdr, u_int
     return rc;
   }
 
-  if(ring && !ring->send_parsed)
-    rc = PF_RING_ERROR_NOT_SUPPORTED;
+  if(!ring->enabled)
+    return(PF_RING_ERROR_RING_NOT_ENABLED);
 
-  return rc;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
 
 int pfring_send_get_time(pfring *ring, char *pkt, u_int pkt_len, struct timespec *ts) {
-  int rc = -1;
+  int rc;
 
   if(likely(ring
 	    && ring->enabled
@@ -765,10 +778,10 @@ int pfring_send_get_time(pfring *ring, char *pkt, u_int pkt_len, struct timespec
     return rc;
   }
 
-  if(ring && !ring->send_get_time)
-    rc = PF_RING_ERROR_NOT_SUPPORTED;
+  if(!ring->enabled)
+    return(PF_RING_ERROR_RING_NOT_ENABLED);
 
-  return rc;
+  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */
