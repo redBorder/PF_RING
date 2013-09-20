@@ -119,6 +119,7 @@
 #define I82599_HW_FILTERING_SUPPORT
 #endif
 
+#define REDBORDER_PATCH
 #include <linux/pf_ring.h>
 
 #ifndef SVN_REV
