@@ -84,6 +84,11 @@ stop_pf_ring() {
 	sleep 2
     fi
 
+    if [ -f /etc/init.d/ntopng ]; then
+	/etc/init.d/ntopng stop
+	sleep 2
+    fi
+
     DNA_DRIVERS="$(/bin/ls /usr/local/pfring/drivers/DNA/|cut -d '.' -f 1)"
     for D in $DNA_DRIVERS ; do
 	DRIVER_CONFIG="/etc/pf_ring/dna-$D.conf"
