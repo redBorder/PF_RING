@@ -274,6 +274,9 @@ void pfring_close(pfring *ring) {
   if(!ring)
     return;
 
+  if(ring->one_copy_rx_pfring)
+    pfring_close(ring->one_copy_rx_pfring);
+
   pfring_shutdown(ring);
 
   if(ring->close)
@@ -376,6 +379,9 @@ void pfring_breakloop(pfring *ring) {
     return;
 
   ring->break_recv_loop = 1;
+
+  if(ring->one_copy_rx_pfring != NULL)
+    ring->one_copy_rx_pfring->break_recv_loop = 1;
 }
 
 /* **************************************************** */
@@ -515,8 +521,14 @@ void pfring_bundle_close(pfring_bundle *bundle) {
 /* **************************************************** */
 
 int pfring_stats(pfring *ring, pfring_stat *stats) {
-  if(ring && ring->stats)
-    return(ring->stats(ring, stats));
+  if(ring && ring->stats) {
+    if(ring->enabled)
+      return(ring->stats(ring, stats));
+    else {
+      memset(stats, 0, sizeof(pfring_stat));
+      return(0);
+    }
+  }
 
   return(PF_RING_ERROR_NOT_SUPPORTED);
 }

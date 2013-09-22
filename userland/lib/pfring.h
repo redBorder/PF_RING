@@ -288,6 +288,9 @@ extern "C" {
 
     /* Reflector socket (copy RX packets onto it) */
     pfring *reflector_socket;
+
+    /* Semi-DNA devices (1- copy) */
+    pfring *one_copy_rx_pfring;
   };
 
   /* ********************************* */
