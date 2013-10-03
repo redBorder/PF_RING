@@ -157,7 +157,7 @@ int wait_packet_function_ptr(void *data, int mode) {
 
   if(mode == 1) {
     struct e1000_rx_ring *rx_ring = adapter->rx_ring;
-    struct e1000_rx_desc *rx_desc;
+    struct e1000_rx_desc *rx_desc, *next_rx_desc;
     int ret;
 
     u16 i = E1000_READ_REG(&adapter->hw, E1000_RDT(0));
@@ -171,6 +171,14 @@ int wait_packet_function_ptr(void *data, int mode) {
 
     rx_desc = E1000_RX_DESC(*rx_ring, rx_ring->next_to_clean);
     ret = rx_desc->status & E1000_RXD_STAT_DD;
+
+    /* trick for appplications calling poll/select directly (indexes not in sync of one position at most) */
+    if (!ret) {
+      u16 next_i = i;
+      if(++next_i == rx_ring->count) next_i = 0;
+      next_rx_desc = E1000_RX_DESC(*rx_ring, next_i);
+      ret = next_rx_desc->status & E1000_RXD_STAT_DD;
+    }
 
     if(unlikely(enable_debug))
       printk("[wait_packet_function_ptr] Check if a packet is arrived [slotId=%u][status=%u][ret=%u]\n",

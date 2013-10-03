@@ -323,15 +323,14 @@ int wait_packet_function_ptr(void *data, int mode)
   if(!rx_ring->dna.memory_allocated) return(0);
 
   if(mode == 1 /* Enable interrupt */) {
-    union e1000_adv_rx_desc *rx_desc;
+    union e1000_adv_rx_desc *rx_desc, *next_rx_desc;
     u32	staterr;
     u8	reg_idx = rx_ring->reg_idx;
     u16	i = E1000_READ_REG(hw, E1000_RDT(reg_idx));
 
     /* Very important: update the value from the register set from userland
      * Here i is the last I've read (zero-copy implementation) */
-    if(++i == rx_ring->count)
-      i = 0;
+    if(++i == rx_ring->count) i = 0;
     /* Here i is the next I have to read */
 
     rx_ring->next_to_clean = i;
@@ -339,6 +338,14 @@ int wait_packet_function_ptr(void *data, int mode)
     rx_desc = IGB_RX_DESC(rx_ring, i);
     prefetch(rx_desc);
     staterr = le32_to_cpu(rx_desc->wb.upper.status_error);
+
+    /* trick for appplications calling poll/select directly (indexes not in sync of one position at most) */
+    if (!(staterr & E1000_RXD_STAT_DD)) {
+      u16 next_i = i;
+      if(++next_i == rx_ring->count) next_i = 0;
+      next_rx_desc = IGB_RX_DESC(rx_ring, next_i);
+      staterr = le32_to_cpu(next_rx_desc->wb.upper.status_error);
+    }
 
     if(unlikely(enable_debug)) {
       printk("%s(): Check if a packet is arrived [idx=%d][staterr=%d][len=%d]\n",
@@ -366,6 +373,7 @@ int wait_packet_function_ptr(void *data, int mode)
 
       /* Refresh the value */
       staterr = le32_to_cpu(rx_desc->wb.upper.status_error);
+      if (!(staterr & E1000_RXD_STAT_DD)) staterr = le32_to_cpu(next_rx_desc->wb.upper.status_error);
     } else {
       rx_ring->dna.rx_tx.rx.interrupt_received = 1; 
     }
