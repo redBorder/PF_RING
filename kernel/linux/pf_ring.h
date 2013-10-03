@@ -77,6 +77,7 @@
 #define SO_CREATE_CLUSTER_REFEREE        135
 #define SO_PUBLISH_CLUSTER_OBJECT        136
 #define SO_LOCK_CLUSTER_OBJECT           137
+#define SO_UNLOCK_CLUSTER_OBJECT         138
 
 /* Get */
 #define SO_GET_RING_VERSION              170
@@ -849,7 +850,6 @@ struct public_cluster_object_info {
   u_int32_t cluster_id;
   u_int32_t object_type;
   u_int32_t object_id;
-  u_int32_t references;
 };
 
 struct lock_cluster_object_info {
@@ -857,6 +857,7 @@ struct lock_cluster_object_info {
   u_int32_t object_type;
   u_int32_t object_id;
   u_int32_t lock_mask;
+  u_int32_t reserved;
 };
 
 /* ************************************************* */
@@ -1031,7 +1032,6 @@ struct dna_cluster {
 typedef struct {
   u_int32_t object_type;
   u_int32_t object_id;
-  u_int32_t references;
   u_int32_t lock_bitmap;
 
   struct list_head list;
@@ -1199,7 +1199,6 @@ struct pf_ring_socket {
 
   /* Generic cluster */
   struct cluster_referee *cluster_referee;
-  struct list_head locked_objects_list;
   cluster_client_type cluster_role;
 };
 

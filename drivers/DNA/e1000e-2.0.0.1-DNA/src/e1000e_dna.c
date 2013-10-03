@@ -198,19 +198,26 @@ static bool dna_e1000e_clean_rx_irq(struct e1000_adapter *adapter) {
   bool ret;
   int i, debug = 0;
   struct e1000_ring *rx_ring = adapter->rx_ring;
-  union e1000_rx_desc_extended *rx_desc;
+  union e1000_rx_desc_extended *rx_desc, *next_rx_desc;
   struct e1000_hw *hw = &adapter->hw;
   u32 staterr;
 
   /* The register contains the last packet that we have read */
   i = E1000_READ_REG(hw, E1000_RDT(0));
-  if(++i == rx_ring->count)
-    i = 0;
+  if(++i == rx_ring->count) i = 0;
 
   rx_ring->next_to_clean = i; 
   rx_desc = E1000_RX_DESC_EXT(*rx_ring, i);
   staterr = le32_to_cpu(rx_desc->wb.upper.status_error);
   
+  /* trick for appplications calling poll/select directly (indexes not in sync of one position at most) */
+  if (!(staterr & E1000_RXD_STAT_DD)) {
+    u16 next_i = i;
+    if(++next_i == rx_ring->count) next_i = 0;
+    next_rx_desc = E1000_RX_DESC_EXT(*rx_ring, next_i);
+    staterr = le32_to_cpu(next_rx_desc->wb.upper.status_error);
+  }
+
   if(unlikely(debug))
     printk(KERN_INFO
 	   "DNA: dna_e1000_clean_rx_irq(%s)[id=%d][status=%d][rx_reg=%u]\n",

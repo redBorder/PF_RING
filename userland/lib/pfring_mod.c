@@ -70,64 +70,10 @@ inline int pfring_there_is_pkt_available(pfring *ring) {
 
 /* **************************************************** */
 
-int pfring_mod_open(pfring *ring) {
+int pfring_mod_open_setup(pfring *ring) {
   int rc;
   u_int memSlotsLen;
 
-  /* Setting pointers, we need these functions soon */
-  ring->close = pfring_mod_close;
-  ring->stats = pfring_mod_stats;
-  ring->recv  = pfring_mod_recv;
-  ring->set_poll_watermark = pfring_mod_set_poll_watermark;
-  ring->set_poll_duration = pfring_mod_set_poll_duration;
-  ring->set_channel_id = pfring_mod_set_channel_id;
-  ring->set_channel_mask = pfring_mod_set_channel_mask;
-  ring->set_application_name  = pfring_mod_set_application_name;
-  ring->set_application_stats = pfring_mod_set_application_stats;
-  ring->get_appl_stats_file_name = pfring_mod_get_appl_stats_file_name;
-  ring->bind = pfring_mod_bind;
-  ring->send = pfring_mod_send;
-  ring->get_num_rx_channels = pfring_mod_get_num_rx_channels;
-  ring->set_sampling_rate = pfring_mod_set_sampling_rate;
-  ring->get_selectable_fd = pfring_mod_get_selectable_fd;
-  ring->set_direction = pfring_mod_set_direction;
-  ring->set_socket_mode = pfring_mod_set_socket_mode;
-  ring->set_cluster = pfring_mod_set_cluster;
-  ring->remove_from_cluster = pfring_mod_remove_from_cluster;
-  ring->set_master_id = pfring_mod_set_master_id;
-  ring->set_master = pfring_mod_set_master;
-  ring->get_ring_id = pfring_mod_get_ring_id;
-  ring->get_num_queued_pkts = pfring_mod_get_num_queued_pkts;
-  ring->get_packet_consumer_mode = pfring_mod_get_packet_consumer_mode;
-  ring->set_packet_consumer_mode = pfring_mod_set_packet_consumer_mode;
-  ring->get_hash_filtering_rule_stats = pfring_mod_get_hash_filtering_rule_stats;
-  ring->handle_hash_filtering_rule = pfring_mod_handle_hash_filtering_rule;
-  ring->purge_idle_hash_rules = pfring_mod_purge_idle_hash_rules;
-  ring->add_filtering_rule = pfring_mod_add_filtering_rule;
-  ring->remove_filtering_rule = pfring_mod_remove_filtering_rule;
-  ring->purge_idle_rules = pfring_mod_purge_idle_rules;
-  ring->get_filtering_rule_stats = pfring_mod_get_filtering_rule_stats;
-  ring->toggle_filtering_policy = pfring_mod_toggle_filtering_policy;
-  ring->enable_rss_rehash = pfring_mod_enable_rss_rehash;
-  ring->poll = pfring_mod_poll;
-  ring->version = pfring_mod_version;
-  ring->get_bound_device_address = pfring_mod_get_bound_device_address;
-  ring->get_bound_device_ifindex = pfring_mod_get_bound_device_ifindex;
-  ring->get_device_ifindex = pfring_mod_get_device_ifindex;
-  ring->get_slot_header_len = pfring_mod_get_slot_header_len;
-  ring->set_virtual_device = pfring_mod_set_virtual_device;
-  ring->add_hw_rule = pfring_hw_ft_add_hw_rule;
-  ring->remove_hw_rule = pfring_hw_ft_remove_hw_rule;
-  ring->loopback_test = pfring_mod_loopback_test;
-  ring->enable_ring = pfring_mod_enable_ring;
-  ring->disable_ring = pfring_mod_disable_ring;
-  ring->is_pkt_available = pfring_mod_is_pkt_available;
-  ring->set_bpf_filter = pfring_mod_set_bpf_filter;
-  ring->remove_bpf_filter = pfring_mod_remove_bpf_filter;
-  ring->shutdown = pfring_mod_shutdown;
-  ring->send_last_rx_packet = pfring_mod_send_last_rx_packet;
-
-  ring->poll_duration = DEFAULT_POLL_DURATION;
   ring->fd = socket(PF_RING, SOCK_RAW, htons(ETH_P_ALL));
 
   if(ring->fd < 0)
@@ -239,7 +185,68 @@ int pfring_mod_open(pfring *ring) {
     }
   }
 
-  return 0;
+  return(0);
+}
+
+/* **************************************************** */
+
+int pfring_mod_open(pfring *ring) {
+  /* Setting pointers, we need these functions soon */
+  ring->close = pfring_mod_close;
+  ring->stats = pfring_mod_stats;
+  ring->recv  = pfring_mod_recv;
+  ring->set_poll_watermark = pfring_mod_set_poll_watermark;
+  ring->set_poll_duration = pfring_mod_set_poll_duration;
+  ring->set_channel_id = pfring_mod_set_channel_id;
+  ring->set_channel_mask = pfring_mod_set_channel_mask;
+  ring->set_application_name  = pfring_mod_set_application_name;
+  ring->set_application_stats = pfring_mod_set_application_stats;
+  ring->get_appl_stats_file_name = pfring_mod_get_appl_stats_file_name;
+  ring->bind = pfring_mod_bind;
+  ring->send = pfring_mod_send;
+  ring->get_num_rx_channels = pfring_mod_get_num_rx_channels;
+  ring->set_sampling_rate = pfring_mod_set_sampling_rate;
+  ring->get_selectable_fd = pfring_mod_get_selectable_fd;
+  ring->set_direction = pfring_mod_set_direction;
+  ring->set_socket_mode = pfring_mod_set_socket_mode;
+  ring->set_cluster = pfring_mod_set_cluster;
+  ring->remove_from_cluster = pfring_mod_remove_from_cluster;
+  ring->set_master_id = pfring_mod_set_master_id;
+  ring->set_master = pfring_mod_set_master;
+  ring->get_ring_id = pfring_mod_get_ring_id;
+  ring->get_num_queued_pkts = pfring_mod_get_num_queued_pkts;
+  ring->get_packet_consumer_mode = pfring_mod_get_packet_consumer_mode;
+  ring->set_packet_consumer_mode = pfring_mod_set_packet_consumer_mode;
+  ring->get_hash_filtering_rule_stats = pfring_mod_get_hash_filtering_rule_stats;
+  ring->handle_hash_filtering_rule = pfring_mod_handle_hash_filtering_rule;
+  ring->purge_idle_hash_rules = pfring_mod_purge_idle_hash_rules;
+  ring->add_filtering_rule = pfring_mod_add_filtering_rule;
+  ring->remove_filtering_rule = pfring_mod_remove_filtering_rule;
+  ring->purge_idle_rules = pfring_mod_purge_idle_rules;
+  ring->get_filtering_rule_stats = pfring_mod_get_filtering_rule_stats;
+  ring->toggle_filtering_policy = pfring_mod_toggle_filtering_policy;
+  ring->enable_rss_rehash = pfring_mod_enable_rss_rehash;
+  ring->poll = pfring_mod_poll;
+  ring->version = pfring_mod_version;
+  ring->get_bound_device_address = pfring_mod_get_bound_device_address;
+  ring->get_bound_device_ifindex = pfring_mod_get_bound_device_ifindex;
+  ring->get_device_ifindex = pfring_mod_get_device_ifindex;
+  ring->get_slot_header_len = pfring_mod_get_slot_header_len;
+  ring->set_virtual_device = pfring_mod_set_virtual_device;
+  ring->add_hw_rule = pfring_hw_ft_add_hw_rule;
+  ring->remove_hw_rule = pfring_hw_ft_remove_hw_rule;
+  ring->loopback_test = pfring_mod_loopback_test;
+  ring->enable_ring = pfring_mod_enable_ring;
+  ring->disable_ring = pfring_mod_disable_ring;
+  ring->is_pkt_available = pfring_mod_is_pkt_available;
+  ring->set_bpf_filter = pfring_mod_set_bpf_filter;
+  ring->remove_bpf_filter = pfring_mod_remove_bpf_filter;
+  ring->shutdown = pfring_mod_shutdown;
+  ring->send_last_rx_packet = pfring_mod_send_last_rx_packet;
+
+  ring->poll_duration = DEFAULT_POLL_DURATION;
+
+  return(pfring_mod_open_setup(ring));
 }
 
 /* ******************************* */
