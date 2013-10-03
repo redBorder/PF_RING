@@ -263,15 +263,14 @@ int wait_packet_function_ptr(void *data, int mode)
   if(!rx_ring->dna.memory_allocated) return(0);
 
   if(mode == 1 /* Enable interrupt */) {
-    union ixgbe_adv_rx_desc *rx_desc;
+    union ixgbe_adv_rx_desc *rx_desc, *next_rx_desc;
     u32	staterr;
     u8	reg_idx = rx_ring->reg_idx;
     u16	i = IXGBE_READ_REG(hw, IXGBE_RDT(reg_idx));
 
     /* Very important: update the value from the register set from userland
      * Here i is the last I've read (zero-copy implementation) */
-    if(++i == rx_ring->count)
-      i = 0;
+    if(++i == rx_ring->count) i = 0;
     /* Here i is the next I have to read */
 
     rx_ring->next_to_clean = i;
@@ -279,6 +278,14 @@ int wait_packet_function_ptr(void *data, int mode)
     rx_desc = IXGBE_RX_DESC(rx_ring, i);
     prefetch(rx_desc);
     staterr = le32_to_cpu(rx_desc->wb.upper.status_error);
+
+    /* trick for appplications calling poll/select directly (indexes not in sync of one position at most) */
+    if (!(staterr & IXGBE_RXD_STAT_DD)) {
+      u16 next_i = i;
+      if(++next_i == rx_ring->count) next_i = 0;
+      next_rx_desc = IXGBE_RX_DESC(rx_ring, next_i);
+      staterr = le32_to_cpu(next_rx_desc->wb.upper.status_error);
+    }
 
     if(unlikely(enable_debug)) {
       printk("%s(): Check if a packet is arrived [idx=%d][staterr=%d][len=%d]\n",
@@ -290,22 +297,28 @@ int wait_packet_function_ptr(void *data, int mode)
     if(!(staterr & IXGBE_RXD_STAT_DD)) {
       rx_ring->dna.rx_tx.rx.interrupt_received = 0;
 
+      if(unlikely(enable_debug))
+        printk("%s(): Packet not arrived yet [slot=%d][queue=%d]\n",
+		__FUNCTION__, i, q_vector->v_idx);
+
       if(!rx_ring->dna.rx_tx.rx.interrupt_enabled) {
 	if(adapter->hw.mac.type != ixgbe_mac_82598EB)
 	  ixgbe_irq_enable_queues(adapter, ((u64)1 << q_vector->v_idx));
 
-	if(unlikely(enable_debug)) printk("%s(): Enabled interrupts, queue = %d\n", __FUNCTION__, q_vector->v_idx);
 	rx_ring->dna.rx_tx.rx.interrupt_enabled = 1;
 
 	if(unlikely(enable_debug))
-	  printk("%s(): Packet not arrived yet: enabling "
-		 "interrupts, queue=%d, i=%d\n",
-		 __FUNCTION__,q_vector->v_idx, i);
+	  printk("%s(): enabling interrupts [queue=%d]\n",
+		 __FUNCTION__, q_vector->v_idx);
       }
 
       /* Refresh the value */
-      staterr = le32_to_cpu(rx_desc->wb.upper.status_error);
+      staterr  = le32_to_cpu(rx_desc->wb.upper.status_error);
+      if (!(staterr & IXGBE_RXD_STAT_DD)) staterr = le32_to_cpu(next_rx_desc->wb.upper.status_error);
     } else {
+      if(unlikely(enable_debug))
+        printk("%s(): New packet arrived\n", __FUNCTION__);
+
       rx_ring->dna.rx_tx.rx.interrupt_received = 1;
     }
 
