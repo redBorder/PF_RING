@@ -25,7 +25,7 @@
 #define DEFAULT_BUCKET_LEN            128
 #define MAX_NUM_DEVICES               256
 
-// #define MAX_NUM_RING_SOCKETS          64 /* see MAX_NUM_LIST_ELEMENTS */
+#define MAX_NUM_RING_SOCKETS           64
 
 /* Watermark */
 #define DEFAULT_MIN_PKT_QUEUED        128
@@ -312,7 +312,7 @@ struct pfring_pkthdr {
 
 /* ************************************************* */
 
-#define MAX_NUM_LIST_ELEMENTS  64 /* sizeof(bits_set) [see below] */
+#define MAX_NUM_LIST_ELEMENTS MAX_NUM_RING_SOCKETS /* sizeof(bits_set) [see below] */
 
 #ifdef __KERNEL__
 
@@ -898,7 +898,7 @@ typedef struct {
   struct list_head list;
 } ring_cluster_element;
 
-#define MAX_NUM_DNA_BOUND_SOCKETS  8
+#define MAX_NUM_DNA_BOUND_SOCKETS MAX_NUM_RING_SOCKETS
 
 typedef struct {
   u8 num_bound_sockets;

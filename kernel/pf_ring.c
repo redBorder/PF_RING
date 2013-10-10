@@ -7050,9 +7050,8 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 	  }
 
 	if(!found) {
-	  if(unlikely(enable_debug))
-	    printk("[PF_RING] %s(remove_device_mapping, %s, %u): something got wrong\n",
-	           __FUNCTION__, mapping->device_name, mapping->channel_id);
+	  printk("[PF_RING] %s: something got wrong removing %s@%u\n",
+	         __FUNCTION__, mapping->device_name, mapping->channel_id);
 	  return(-1); /* Something got wrong */
 	}
 
@@ -7098,11 +7097,8 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 	  }
 
 	if(!found) {
-	  if(unlikely(enable_debug))
-	    printk("[PF_RING] %s(add_device_mapping, %s, %u, %s): "
-		   "something got wrong (too many DNA devices open)\n", __FUNCTION__,
-		   mapping->device_name, mapping->channel_id, direction2string(pfr->mode));
-
+	  printk("[PF_RING] %s: something got wrong adding %s@%u %s\n",
+	         __FUNCTION__, mapping->device_name, mapping->channel_id, direction2string(pfr->mode));
 	  return(-1); /* Something got wrong: too many mappings */
 	}
 
