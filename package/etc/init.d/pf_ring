@@ -39,7 +39,8 @@ start_pf_ring() {
         for D in $DNA_DRIVERS ; do
 	    DRIVER_CONFIG="/etc/pf_ring/dna-$D.conf"
 	    if [ -f $DRIVER_CONFIG ]; then
-	        if [ "$D" == "$MGMG_INTERFACE_DRIVER" ]; then
+	        ADAPTERS_LISTED="$(grep adapters_to_enable $DRIVER_CONFIG|wc -l)"
+	        if [ "$D" == "$MGMG_INTERFACE_DRIVER" ] && [ $ADAPTERS_LISTED -eq 0 ]; then
 		    echo "Unable to replace $D as it is used by the management interface"
 	        else
 		    PARAM="$(cat $DRIVER_CONFIG)"
@@ -95,7 +96,8 @@ stop_pf_ring() {
 	if [ -f $DRIVER_CONFIG ]; then
 	    NUM="$(grep $D /proc/modules |wc -l)"
 	    if [ $NUM -gt 0 ]; then
-		if [ "$D" == "$MGMG_INTERFACE_DRIVER" ]; then
+	        ADAPTERS_LISTED="$(grep adapters_to_enable $DRIVER_CONFIG|wc -l)"
+	        if [ "$D" == "$MGMG_INTERFACE_DRIVER" ] && [ $ADAPTERS_LISTED -eq 0 ]; then
 		    echo "Unable to replace $D as it is used by the management interface"
 		else
 		    /sbin/rmmod $D
