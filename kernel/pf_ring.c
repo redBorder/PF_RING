@@ -7024,6 +7024,7 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 			       dna_device_mapping *mapping)
 {
   struct list_head *ptr, *tmp_ptr;
+  int i, found;
 
   if(unlikely(enable_debug))
     printk("[PF_RING] %s(%s@%d): %s\n", __FUNCTION__,
@@ -7032,46 +7033,47 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 
   if(mapping->operation == remove_device_mapping) {
     /* Unlock driver */
-    u8 found = 0;
 
     list_for_each_safe(ptr, tmp_ptr, &ring_dna_devices_list) {
       dna_device_list *entry = list_entry(ptr, dna_device_list, list);
 
-      if((!strcmp(entry->dev.netdev->name, mapping->device_name))
-	 && (entry->dev.channel_id == mapping->channel_id)
-	 && entry->num_bound_sockets) {
-	int i;
+      if(!strcmp(entry->dev.netdev->name, mapping->device_name)
+	 && entry->dev.channel_id == mapping->channel_id) {
+        found = 0;
 
-	for(i=0; i<MAX_NUM_DNA_BOUND_SOCKETS; i++)
+        write_lock(&entry->lock);
+	
+	for(i=0; i<MAX_NUM_DNA_BOUND_SOCKETS; i++) {
 	  if(entry->bound_sockets[i] == pfr) {
 	    entry->bound_sockets[i] = NULL;
+	    entry->num_bound_sockets--;
 	    found = 1;
 	    break;
 	  }
+	}
+
+        write_unlock(&entry->lock);
 
 	if(!found) {
 	  printk("[PF_RING] %s: something got wrong removing %s@%u\n",
 	         __FUNCTION__, mapping->device_name, mapping->channel_id);
 	  return(-1); /* Something got wrong */
 	}
+	  
+	if(unlikely(enable_debug))
+	  printk("[PF_RING] %s(%s@%u): removed mapping [num_bound_sockets=%u]\n",
+		 __FUNCTION__, mapping->device_name, mapping->channel_id, entry->num_bound_sockets);
 
-	entry->num_bound_sockets--;
-
-	if(pfr->dna_device != NULL) {
-	  if(unlikely(enable_debug))
-	    printk("[PF_RING] %s(%s): removed mapping [num_bound_sockets=%u]\n",
-		   __FUNCTION__, mapping->device_name, entry->num_bound_sockets);
-	  pfr->dna_device->usage_notification(pfr->dna_device->rx_adapter_ptr,
+        if(pfr->dna_device != NULL) {
+          pfr->dna_device->usage_notification(pfr->dna_device->rx_adapter_ptr,
 					      pfr->dna_device->tx_adapter_ptr,
 					      0 /* unlock */);
-	  // pfr->dna_device = NULL;
-	}
-	/* Continue for all devices: no break */
+          // pfr->dna_device = NULL;
+        }
+
+        break;
       }
     }
-
-    if(unlikely(enable_debug))
-      printk("[PF_RING] %s(%s): removed mapping\n", __FUNCTION__, mapping->device_name);
 
     return(0);
   } else {
@@ -7079,22 +7081,28 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 
     list_for_each_safe(ptr, tmp_ptr, &ring_dna_devices_list) {
       dna_device_list *entry = list_entry(ptr, dna_device_list, list);
-
       if((!strcmp(entry->dev.netdev->name, mapping->device_name))
 	 && (entry->dev.channel_id == mapping->channel_id)) {
-	int i, found = 0;
+	int i;
 
 	if(unlikely(enable_debug))
 	  printk("[PF_RING] ==>> %s@%d [num_bound_sockets=%d][%p]\n",
 		 entry->dev.netdev->name, mapping->channel_id,
 		 entry->num_bound_sockets, entry);
 
-	for(i=0; i<MAX_NUM_DNA_BOUND_SOCKETS; i++)
+        write_lock(&entry->lock);
+
+        found = 0;
+	for(i=0; i<MAX_NUM_DNA_BOUND_SOCKETS; i++) {
 	  if(entry->bound_sockets[i] == NULL) {
 	    entry->bound_sockets[i] = pfr;
+	    entry->num_bound_sockets++;
 	    found = 1;
 	    break;
 	  }
+	}
+
+	write_unlock(&entry->lock);
 
 	if(!found) {
 	  printk("[PF_RING] %s: something got wrong adding %s@%u %s\n",
@@ -7102,13 +7110,8 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 	  return(-1); /* Something got wrong: too many mappings */
 	}
 
-	entry->num_bound_sockets++, pfr->dna_device_entry = entry;
-
+	pfr->dna_device_entry = entry;
 	pfr->dna_device = &entry->dev;
-
-	if(unlikely(enable_debug))
-	  printk("[PF_RING] %s(%s, %u): added mapping\n", __FUNCTION__,
-		 mapping->device_name, mapping->channel_id);
 
 	/* Now let's set the read ring_netdev device */
 	found = 0;
@@ -7125,15 +7128,15 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 	}
 
 	if(!found) {
-	  printk("[PF_RING] %s(add_device_mapping, %s, %u, %s): "
+	  printk("[PF_RING] %s(add_device_mapping, %s@%u, %s): "
 	  "something got wrong (device not found)\n", __FUNCTION__,
 	  mapping->device_name, mapping->channel_id, direction2string(pfr->mode));
 	  return(-1); /* Something got wrong */
 	}
 
 	if(unlikely(enable_debug))
-	  printk("[PF_RING] ===> %s(%s): added mapping [num_bound_sockets=%u]\n",
-		 __FUNCTION__, mapping->device_name, entry->num_bound_sockets);
+	  printk("[PF_RING] ===> %s(%s@%u): added mapping [num_bound_sockets=%u]\n",
+		 __FUNCTION__, mapping->device_name, mapping->channel_id, entry->num_bound_sockets);
 
 	pfr->dna_device->usage_notification(pfr->dna_device->rx_adapter_ptr,
 					    pfr->dna_device->tx_adapter_ptr,
@@ -7146,7 +7149,7 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
   }
 
   if(unlikely(enable_debug))
-    printk("[PF_RING] %s(%s, %u): mapping failed or not a dna device\n",
+    printk("[PF_RING] %s(%s@%u): mapping failed or not a dna device\n",
 	   __FUNCTION__, mapping->device_name, mapping->channel_id);
 
   return(-1);
@@ -7877,22 +7880,31 @@ static int ring_setsockopt(struct socket *sock,
     if(pfr->dna_device_entry != NULL && !pfr->ring_active /* already active, no check */) {
       int i;
 
+      write_lock(&pfr->dna_device_entry->lock);
+
       for(i=0; i<MAX_NUM_DNA_BOUND_SOCKETS; i++) {
 	if((pfr->dna_device_entry->bound_sockets[i] != NULL)
 	   && pfr->dna_device_entry->bound_sockets[i]->ring_active) {
-	  if(   pfr->dna_device_entry->bound_sockets[i]->mode == pfr->mode
-		|| pfr->dna_device_entry->bound_sockets[i]->mode == send_and_recv_mode
-		|| pfr->mode == send_and_recv_mode) {
+	  if(pfr->dna_device_entry->bound_sockets[i]->mode == pfr->mode
+	     || pfr->dna_device_entry->bound_sockets[i]->mode == send_and_recv_mode
+	     || pfr->mode == send_and_recv_mode) {
+            write_unlock(&pfr->dna_device_entry->lock);
 	    printk("[PF_RING] Unable to activate two or more DNA sockets on the same interface %s/link direction\n",
 		   pfr->ring_netdev->dev->name);
-
 	    return(-EFAULT); /* No way: we can't have two sockets that are doing the same thing with DNA */
 	  }
 	} /* if */
       } /* for */
+
+      pfr->ring_active = 1;
+
+      write_unlock(&pfr->dna_device_entry->lock);
+
+    } else {
+      pfr->ring_active = 1;
     }
 
-    found = 1, pfr->ring_active = 1;
+    found = 1;
     break;
 
   case SO_DEACTIVATE_RING:
@@ -8982,6 +8994,7 @@ void dna_device_handler(dna_device_operation operation,
     if(next != NULL) {
       memset(next, 0, sizeof(dna_device_list));
 
+      rwlock_init(&next->lock);
       next->num_bound_sockets = 0, next->dev.mem_info.version = version;
 
       //printk("[PF_RING] [rx_slots=%u/num_rx_pages=%u/memory_tot_len=%u]][tx_slots=%u/num_tx_pages=%u]\n",

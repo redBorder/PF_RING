@@ -911,6 +911,7 @@ typedef struct {
     the DNA socket
   */
   struct pf_ring_socket *bound_sockets[MAX_NUM_DNA_BOUND_SOCKETS];
+  rwlock_t lock;
 } dna_device_list;
 
 #define MAX_NUM_IFIDX                       1024
