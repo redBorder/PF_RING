@@ -905,10 +905,10 @@ typedef struct {
   dna_device dev;
   struct list_head list;
   /*
-    In the DNA world only one application can open the device@channel
-    per direction. The two variables below are used to keep
-    pointers to the max two sockets (one for RX and one for TX) that can open
-    the DNA socket
+    In the DNA world only one application can open and enable the 
+    device@channel per direction. The array below is used to keep
+    pointers to the sockets bound to device@channel in order to
+    enable no more than one socket for RX and one for TX.
   */
   struct pf_ring_socket *bound_sockets[MAX_NUM_DNA_BOUND_SOCKETS];
   rwlock_t lock;
