@@ -270,7 +270,7 @@ struct proc_dir_entry *ring_proc_dir = NULL, *ring_proc_dev_dir = NULL, *ring_pr
 struct proc_dir_entry *ring_proc = NULL;
 struct proc_dir_entry *ring_proc_plugins_info = NULL;
 	     
-static int ring_proc_get_plugin_info(char *, char **, off_t, int, int *, void *);
+static int ring_proc_get_plugin_info(struct seq_file *m, void *data_not_used);
 static void ring_proc_add(struct pf_ring_socket *pfr);
 static void ring_proc_remove(struct pf_ring_socket *pfr);
 static void ring_proc_init(void);
@@ -943,7 +943,7 @@ static void ring_sock_destruct(struct sock *sk)
 
 /* ********************************** */
 
-static int ring_proc_get_info(struct seq_file *m, void *data);
+static int ring_proc_get_info(struct seq_file *m, void *data_not_used);
 static int ring_proc_open(struct inode *inode, struct file *file) { return single_open(file, ring_proc_get_info, PDE(inode)->data); }
 
 static const struct file_operations ring_proc_fops = {
@@ -968,12 +968,8 @@ static void ring_proc_add(struct pf_ring_socket *pfr)
 	     "%d-%s.%d", pfr->ring_pid,
 	     pfr->ring_netdev->dev->name, pfr->ring_id);
 
-#if 0
-    create_proc_read_entry(pfr->sock_proc_name, 0 /* read-only */,
-			   ring_proc_dir, ring_proc_get_info, pfr);
-#endif
-
-    proc_create_data(pfr->sock_proc_name, 0, ring_proc_dir, &ring_proc_fops, pfr);
+    proc_create_data(pfr->sock_proc_name, 0, 
+		     ring_proc_dir, &ring_proc_fops, pfr);
 
     if(unlikely(enable_debug))
       printk("[PF_RING] Added /proc/net/pf_ring/%s\n", pfr->sock_proc_name);
@@ -1017,13 +1013,10 @@ static void ring_proc_remove(struct pf_ring_socket *pfr)
 
 /* ********************************** */
 
-static int ring_proc_dev_get_info(char *buf, char **start, off_t offset,
-				  int len, int *unused, void *data)
+static int ring_proc_dev_get_info(struct seq_file *m, void *data_not_used)
 {
-  int rlen = 0;
-
-  if(data != NULL) {
-    ring_device_element *dev_ptr = (ring_device_element*)data;
+  if(m->private != NULL) {
+    ring_device_element *dev_ptr = (ring_device_element*)m->private;
     struct net_device *dev = dev_ptr->dev;
     char dev_buf[16] = { 0 }, *dev_family = "???";
 
@@ -1059,13 +1052,13 @@ static int ring_proc_dev_get_info(char *buf, char **start, off_t offset,
       }
     }
 
-    rlen =  sprintf(buf,      "Name:              %s\n", dev->name);
-    rlen += sprintf(buf+rlen, "Index:             %d\n", dev->ifindex);
-    rlen += sprintf(buf+rlen, "Address:           %02X:%02X:%02X:%02X:%02X:%02X\n",
-		    dev->perm_addr[0], dev->perm_addr[1], dev->perm_addr[2],
-		    dev->perm_addr[3], dev->perm_addr[4], dev->perm_addr[5]);
-
-    rlen += sprintf(buf+rlen, "Polling Mode:      %s\n", dev_ptr->is_dna_device ? "DNA" : "NAPI/TNAPI");
+    seq_printf(m, "Name:              %s\n", dev->name);
+    seq_printf(m, "Index:             %d\n", dev->ifindex);
+    seq_printf(m, "Address:           %02X:%02X:%02X:%02X:%02X:%02X\n",
+	       dev->perm_addr[0], dev->perm_addr[1], dev->perm_addr[2],
+	       dev->perm_addr[3], dev->perm_addr[4], dev->perm_addr[5]);
+    
+    seq_printf(m, "Polling Mode:      %s\n", dev_ptr->is_dna_device ? "DNA" : "NAPI/TNAPI");
 
     switch(dev->type) {
     case 1:   strcpy(dev_buf, "Ethernet"); break;
@@ -1073,25 +1066,25 @@ static int ring_proc_dev_get_info(char *buf, char **start, off_t offset,
     default: sprintf(dev_buf, "%d", dev->type); break;
     }
 
-    rlen += sprintf(buf+rlen, "Type:              %s\n", dev_buf);
-    rlen += sprintf(buf+rlen, "Family:            %s\n", dev_family);
+    seq_printf(m, "Type:              %s\n", dev_buf);
+    seq_printf(m, "Family:            %s\n", dev_family);
 
     if(!dev_ptr->is_dna_device) {
       if(dev->ifindex < MAX_NUM_IFIDX) {
-	rlen += sprintf(buf+rlen, "# Bound Sockets:   %d\n",
-			num_rings_per_device[dev->ifindex]);
+	seq_printf(m, "# Bound Sockets:   %d\n",
+		   num_rings_per_device[dev->ifindex]);
       }
     }
 
 #if(LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,31))
-    rlen += sprintf(buf+rlen, "Max # TX Queues:   %d\n", dev->real_num_tx_queues);
+    seq_printf(m, "Max # TX Queues:   %d\n", dev->real_num_tx_queues);
 #endif
 
-    rlen += sprintf(buf+rlen, "# Used RX Queues:  %d\n",
-		    dev_ptr->is_dna_device ? dev_ptr->num_dna_rx_queues : get_num_rx_queues(dev));
+    seq_printf(m, "# Used RX Queues:  %d\n",
+	       dev_ptr->is_dna_device ? dev_ptr->num_dna_rx_queues : get_num_rx_queues(dev));
   }
 
-  return rlen;
+  return(0);
 }
 
 /* **************** 82599 ****************** */
@@ -1250,26 +1243,23 @@ static int handle_hw_filtering_rule(struct pf_ring_socket *pfr,
 
 #ifdef ENABLE_PROC_WRITE_RULE
 #if(LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,31))
-static int ring_proc_dev_rule_read(char *buf, char **start, off_t offset,
-				   int len, int *unused, void *data)
+static int ring_proc_dev_rule_read(struct seq_file *m, void *data_not_used)
 {
-  int rlen = 0;
-
-  if(data != NULL) {
-    ring_device_element *dev_ptr = (ring_device_element*)data;
+  if(m->private != NULL) {
+    ring_device_element *dev_ptr = (ring_device_element*)m->private;
     struct net_device *dev = dev_ptr->dev;
 
-    rlen =  sprintf(buf,      "Name:              %s\n", dev->name);
-    rlen += sprintf(buf+rlen, "# Filters:         %d\n", dev_ptr->hw_filters.num_filters);
-    rlen += sprintf(buf+rlen, "\nFiltering Rules:\n"
-		    "[perfect rule]  +|-(rule_id,queue_id,vlan,tcp|udp,src_ip/mask,src_port,dst_ip/mask,dst_port)\n"
-		    "Example:\t+(1,-1,0,tcp,192.168.0.10/32,25,10.6.0.0/16,0) (queue_id = -1 => drop)\n\n"
-		    "[5 tuple rule]  +|-(rule_id,queue_id,tcp|udp,src_ip,src_port,dst_ip,dst_port)\n"
-		    "Example:\t+(1,-1,tcp,192.168.0.10,25,0.0.0.0,0)\n\n"
-		    "Note:\n\t- queue_id = -1 => drop\n\t- 0 = ignore value\n");
+    seq_printf(m, "Name:              %s\n", dev->name);
+    seq_printf(m, "# Filters:         %d\n", dev_ptr->hw_filters.num_filters);
+    seq_printf(m, "\nFiltering Rules:\n"
+	       "[perfect rule]  +|-(rule_id,queue_id,vlan,tcp|udp,src_ip/mask,src_port,dst_ip/mask,dst_port)\n"
+	       "Example:\t+(1,-1,0,tcp,192.168.0.10/32,25,10.6.0.0/16,0) (queue_id = -1 => drop)\n\n"
+	       "[5 tuple rule]  +|-(rule_id,queue_id,tcp|udp,src_ip,src_port,dst_ip,dst_port)\n"
+	       "Example:\t+(1,-1,tcp,192.168.0.10,25,0.0.0.0,0)\n\n"
+	       "Note:\n\t- queue_id = -1 => drop\n\t- 0 = ignore value\n");
   }
-
-  return rlen;
+  
+  return(0);
 }
 #endif
 
@@ -1446,7 +1436,7 @@ static char* sockmode2string(socket_mode m) {
 
 /* ********************************** */
 
-static int ring_proc_get_info(struct seq_file *m, void *data)
+static int ring_proc_get_info(struct seq_file *m, void *data_not_used)
 {
   FlowSlotInfo *fsi;
 
@@ -1551,31 +1541,39 @@ static int ring_proc_get_info(struct seq_file *m, void *data)
 
 /* ********************************** */
 
-static int ring_proc_get_plugin_info(char *buf, char **start, off_t offset,
-				     int len, int *unused, void *data)
+static int ring_proc_get_plugin_info(struct seq_file *m, void *data_not_used)
 {
-  int rlen = 0, i = 0;
   struct pfring_plugin_registration *tmp = NULL;
+  int i;
 
   /* FIXME: I should now the number of plugins registered */
   if(!plugin_registration_size)
-    return rlen;
+    return(0);
 
   /* plugins_info */
-
-  rlen += sprintf(buf + rlen, "ID\tPlugin\n");
+  seq_printf(m, "ID\tPlugin\n");
 
   for(i = 0; i < MAX_PLUGIN_ID; i++) {
-    tmp = plugin_registration[i];
-    if(tmp) {
-      rlen += sprintf(buf + rlen, "%d\t%s [%s]\n",
-		      tmp->plugin_id, tmp->name,
-		      tmp->description);
-    }
+    if((tmp = plugin_registration[i]) != NULL)
+      seq_printf(m, "%d\t%s [%s]\n",
+		 tmp->plugin_id, tmp->name,
+		 tmp->description);    
   }
 
-  return rlen;
+  return(0);
 }
+
+/* ********************************** */
+
+static int ring_proc_plugins_open(struct inode *inode, struct file *file) { return single_open(file, ring_proc_get_plugin_info, PDE(inode)->data); }
+
+static const struct file_operations ring_proc_plugins_fops = {
+  .owner = THIS_MODULE,
+  .open = ring_proc_plugins_open,
+  .read = seq_read,
+  .llseek = seq_lseek,
+  .release = single_release,
+};
 
 /* ********************************** */
 
@@ -1601,9 +1599,9 @@ static void ring_proc_init(void)
 			    &ring_proc_fops /* file operations */);
 
     ring_proc_plugins_info =
-      create_proc_read_entry(PROC_PLUGINS_INFO, 0 /* read-only */,
-			     ring_proc_dir,
-			     ring_proc_get_plugin_info, NULL);
+      proc_create(PROC_PLUGINS_INFO, 0 /* read-only */,
+		  ring_proc_dir, &ring_proc_plugins_fops);
+
     if(!ring_proc || !ring_proc_plugins_info)
       printk("[PF_RING] unable to register proc file\n");
     else {
@@ -7458,19 +7456,30 @@ static void purge_idle_rules(struct pf_ring_socket *pfr,
 
 /* ************************************* */
 
-static int ring_proc_stats_read(char *buf, char **start, off_t offset,
-				int len, int *unused, void *data)
+static int ring_proc_stats_read(struct seq_file *m, void *data_not_used)
 {
-  int rlen = 0;
+  if(m->private != NULL) {
+    struct pf_ring_socket *s = (struct pf_ring_socket*)m->private;
 
-  if(data != NULL) {
-    struct pf_ring_socket *s = (struct pf_ring_socket*)data;
-
-    rlen = sprintf(buf, "%s\n", s->statsString);
+    seq_printf(m, "%s\n", s->statsString);
   }
 
-  return(rlen);
+  return(0);
 }
+
+/* ********************************** */
+
+static int ring_proc_stats_open(struct inode *inode, struct file *file) { 
+  return single_open(file, ring_proc_stats_read, PDE(inode)->data); 
+}
+
+static const struct file_operations ring_proc_stats_fops = {
+  .owner = THIS_MODULE,
+  .open = ring_proc_stats_open,
+  .read = seq_read,
+  .llseek = seq_lseek,
+  .release = single_release,
+};
 
 /* ************************************* */
 
@@ -7484,10 +7493,10 @@ int setSocketStats(struct pf_ring_socket *s, char *statsString) {
 	     "%d-%s.%d", s->ring_pid,
 	     s->ring_netdev->dev->name, s->ring_id);
 
-    if((entry = create_proc_read_entry(s->sock_proc_stats_name,
-				       0 /* ro */,
-				       ring_proc_stats_dir,
-				       ring_proc_stats_read, s)) == NULL) {
+    if((entry = proc_create_data(s->sock_proc_stats_name,
+				 0 /* ro */,
+				 ring_proc_stats_dir,
+				 &ring_proc_stats_fops, s)) == NULL) {
       s->sock_proc_stats_name[0] = '\0';
       return(-1);
     }
@@ -9272,6 +9281,18 @@ void remove_device_from_ring_list(struct net_device *dev) {
   }
 }
 
+/* ********************************** */
+
+static int ring_proc_dev_open(struct inode *inode, struct file *file) { return single_open(file, ring_proc_dev_get_info, PDE(inode)->data); }
+
+static const struct file_operations ring_proc_dev_fops = {
+  .owner = THIS_MODULE,
+  .open = ring_proc_dev_open,
+  .read = seq_read,
+  .llseek = seq_lseek,
+  .release = single_release,
+};
+
 /* ************************************ */
 
 int add_device_to_ring_list(struct net_device *dev) {
@@ -9286,10 +9307,10 @@ int add_device_to_ring_list(struct net_device *dev) {
   dev_ptr->proc_entry = proc_mkdir(dev_ptr->dev->name, ring_proc_dev_dir);
   dev_ptr->device_type = standard_nic_family; /* Default */
 
-  create_proc_read_entry(PROC_INFO, 0 /* read-only */,
-			 dev_ptr->proc_entry,
-			 ring_proc_dev_get_info /* read */,
-			 dev_ptr);
+  proc_create_data(PROC_INFO, 0 /* read-only */,
+		   dev_ptr->proc_entry,
+		   &ring_proc_dev_fops /* read */,
+		   dev_ptr);
 
 #if(LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,31))
   /* Dirty trick to fix at some point used to discover Intel 82599 interfaces: FIXME */
@@ -9379,6 +9400,22 @@ int pf_ring_inject_packet_to_ring(int if_index, int channel_id, char *data, int 
   return rc;
 }
 EXPORT_SYMBOL(pf_ring_inject_packet_to_ring);
+
+/* ********************************** */
+
+#ifdef ENABLE_PROC_WRITE_RULE
+static int ring_proc_dev_ruleopen(struct inode *inode, struct file *file) { 
+  return single_open(file, ring_proc_dev_rule_read, PDE(inode)->data); 
+}
+
+static const struct file_operations ring_proc_dev_rulefops = {
+  .owner = THIS_MODULE,
+  .open = ring_proc_dev_ruleopen,
+  .read = seq_read,
+  .llseek = seq_lseek,
+  .release = single_release,
+};
+#endif
 
 /* ************************************ */
 
@@ -9476,20 +9513,20 @@ static int ring_notifier(struct notifier_block *this, unsigned long msg, void *d
 	    remove_proc_entry(dev_ptr->proc_entry->name, ring_proc_dev_dir);
 	    /* Add new entry */
 	    dev_ptr->proc_entry = proc_mkdir(dev_ptr->dev->name, ring_proc_dev_dir);
-	    create_proc_read_entry(PROC_INFO, 0 /* read-only */,
-				   dev_ptr->proc_entry,
-				   ring_proc_dev_get_info /* read */,
-				   dev_ptr);
+	    proc_create_data(PROC_INFO, 0 /* read-only */,
+			     dev_ptr->proc_entry,
+			     &ring_proc_dev_fops /* read */,
+			     dev_ptr);
 
 #ifdef ENABLE_PROC_WRITE_RULE
 #if(LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,31))
 	    if(dev_ptr->device_type != standard_nic_family) {
 	      struct proc_dir_entry *entry;
 
-	      entry= create_proc_read_entry(PROC_RULES, 0666 /* rw */,
-					    dev_ptr->proc_entry,
-					    ring_proc_dev_rule_read,
-					    dev_ptr);
+	      entry = proc_create_data(PROC_RULES, 0666 /* rw */,
+				       dev_ptr->proc_entry,
+				       &ring_proc_dev_rulefops,
+				       dev_ptr);
 	      if(entry)
 		entry->write_proc = ring_proc_dev_rule_write;
 	    }
