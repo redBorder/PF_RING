@@ -127,6 +127,9 @@
 
 #if(LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0))
 #define PDE_DATA(a) PDE(a)->data
+#endif
+
+#if(LINUX_VERSION_CODE < KERNEL_VERSION(3,11,0))
 #define netdev_notifier_info_to_dev(a) ((struct net_device*)a)
 #endif
 
