@@ -125,6 +125,11 @@
 #define SVN_REV ""
 #endif
 
+#if(LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0))
+#define PDE_DATA(a) PDE(a)->data
+#define netdev_notifier_info_to_dev(a) ((struct net_device*)a)
+#endif
+
 /* ************************************************* */
 
 #define TH_FIN_MULTIPLIER	0x01
@@ -944,7 +949,9 @@ static void ring_sock_destruct(struct sock *sk)
 /* ********************************** */
 
 static int ring_proc_get_info(struct seq_file *m, void *data_not_used);
-static int ring_proc_open(struct inode *inode, struct file *file) { return single_open(file, ring_proc_get_info, PDE(inode)->data); }
+static int ring_proc_open(struct inode *inode, struct file *file) {
+  return single_open(file, ring_proc_get_info, PDE_DATA(inode)); 
+}
 
 static const struct file_operations ring_proc_fops = {
   .owner = THIS_MODULE,
@@ -1565,7 +1572,7 @@ static int ring_proc_get_plugin_info(struct seq_file *m, void *data_not_used)
 
 /* ********************************** */
 
-static int ring_proc_plugins_open(struct inode *inode, struct file *file) { return single_open(file, ring_proc_get_plugin_info, PDE(inode)->data); }
+static int ring_proc_plugins_open(struct inode *inode, struct file *file) { return single_open(file, ring_proc_get_plugin_info, PDE_DATA(inode)); }
 
 static const struct file_operations ring_proc_plugins_fops = {
   .owner = THIS_MODULE,
@@ -4396,9 +4403,10 @@ static struct sk_buff* defrag_skb(struct sk_buff *skb,
 static int skb_ring_handler(struct sk_buff *skb,
 			    u_int8_t recv_packet,
 			    u_int8_t real_skb /* 1=real skb, 0=faked skb */,
-			    u_int8_t *skb_reference_in_use, /* This return value is set to 1 in case
-							       the input skb is in use by PF_RING and thus
-							       the caller should NOT free it */
+			    u_int8_t *skb_reference_in_use, 
+			    /* This return value is set to 1 in case
+			       the input skb is in use by PF_RING and thus
+			       the caller should NOT free it */
 			    u_int32_t channel_id,
 			    u_int32_t num_rx_channels)
 {
@@ -4552,7 +4560,10 @@ static int skb_ring_handler(struct sk_buff *skb,
 	 && (
 	     test_bit(skb->dev->ifindex, pfr->netdev_mask)
 	     || (pfr->ring_netdev == &any_device_element) /* Socket bound to 'any' */
-	     || ((skb->dev->flags & IFF_SLAVE) && (pfr->ring_netdev->dev == skb->dev->master)))
+#if(LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
+	     || ((skb->dev->flags & IFF_SLAVE) && (pfr->ring_netdev->dev == skb->dev->master))
+#endif
+	     )
 	 && (pfr->ring_netdev != &none_device_element) /* Not a dummy socket bound to "none" */
 	 && (pfr->cluster_id == 0 /* No cluster */ )
 	 && (pfr->ring_slots != NULL)
@@ -4611,8 +4622,11 @@ static int skb_ring_handler(struct sk_buff *skb,
 	      if((pfr != NULL)
 		 && (pfr->ring_slots != NULL)
 		 && (test_bit(skb->dev->ifindex, pfr->netdev_mask)
+#if(LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 		     || ((skb->dev->flags & IFF_SLAVE)
-			 && (pfr->ring_netdev->dev == skb->dev->master)))
+			 && (pfr->ring_netdev->dev == skb->dev->master))
+#endif
+		 )
 		 && is_valid_skb_direction(pfr->direction, recv_packet)
 		 ) {
 		if(check_free_ring_slot(pfr) /* Not full */) {
@@ -4883,13 +4897,10 @@ out:
 
 /* ************************************* */
 
-static int ring_proc_virtual_filtering_dev_get_info(char *buf, char **start, off_t offset,
-						    int len, int *unused, void *data)
+static int ring_proc_virtual_filtering_dev_get_info(struct seq_file *m, void *data_not_used)
 {
-  int rlen = 0;
-
-  if(data != NULL) {
-    virtual_filtering_device_info *info = (virtual_filtering_device_info*)data;
+  if(m->private != NULL) {
+    virtual_filtering_device_info *info = (virtual_filtering_device_info*)m->private;
     char *dev_family = "???";
 
     switch(info->device_type) {
@@ -4897,17 +4908,32 @@ static int ring_proc_virtual_filtering_dev_get_info(char *buf, char **start, off
     case intel_82599_family:     dev_family = "Intel 82599"; break;
     }
 
-    rlen =  sprintf(buf,      "Name:              %s\n", info->device_name);
-    rlen += sprintf(buf+rlen, "Family:            %s\n", dev_family);
+    seq_printf(m, "Name:              %s\n", info->device_name);
+    seq_printf(m, "Family:            %s\n", dev_family);
   }
 
-  return rlen;
+  return (0);
 }
+
+/* ********************************** */
+
+static int ring_proc_virtual_filtering_open(struct inode *inode, struct file *file) {
+  return single_open(file, ring_proc_virtual_filtering_dev_get_info, PDE_DATA(inode)); 
+}
+
+static const struct file_operations ring_proc_virtual_filtering_fops = {
+  .owner = THIS_MODULE,
+  .open = ring_proc_virtual_filtering_open,
+  .read = seq_read,
+  .llseek = seq_lseek,
+  .release = single_release,
+};
 
 /* ************************************* */
 
-static virtual_filtering_device_element* add_virtual_filtering_device(struct sock *sock,
-								      virtual_filtering_device_info *info)
+static virtual_filtering_device_element* 
+add_virtual_filtering_device(struct sock *sock,
+			     virtual_filtering_device_info *info)
 {
   virtual_filtering_device_element *elem;
   struct list_head *ptr, *tmp_ptr;
@@ -4921,7 +4947,9 @@ static virtual_filtering_device_element* add_virtual_filtering_device(struct soc
   /* Check if the same entry is already present */
   write_lock(&virtual_filtering_lock);
   list_for_each_safe(ptr, tmp_ptr, &virtual_filtering_devices_list) {
-    virtual_filtering_device_element *filtering_ptr = list_entry(ptr, virtual_filtering_device_element, list);
+    virtual_filtering_device_element *filtering_ptr = list_entry(ptr, 
+								 virtual_filtering_device_element,
+								 list);
 
     if(strcmp(filtering_ptr->info.device_name, info->device_name) == 0) {
       write_unlock(&virtual_filtering_lock);
@@ -4943,10 +4971,10 @@ static virtual_filtering_device_element* add_virtual_filtering_device(struct soc
 
   /* Add /proc entry */
   elem->info.proc_entry = proc_mkdir(elem->info.device_name, ring_proc_dev_dir);
-  create_proc_read_entry(PROC_INFO, 0 /* read-only */,
-			 elem->info.proc_entry,
-			 ring_proc_virtual_filtering_dev_get_info /* read */,
-			 (void*)&elem->info);
+  proc_create_data(PROC_INFO, 0 /* read-only */,
+		   elem->info.proc_entry,
+		   &ring_proc_virtual_filtering_fops /* read */,
+		   (void*)&elem->info);
 
   return(elem);
 }
@@ -4985,7 +5013,8 @@ static int remove_virtual_filtering_device(struct sock *sock, char *device_name)
 
 /* ********************************** */
 
-static struct pf_userspace_ring* userspace_ring_create(char *u_dev_name, userspace_ring_client_type type,
+static struct pf_userspace_ring* userspace_ring_create(char *u_dev_name, 
+						       userspace_ring_client_type type,
                                                        wait_queue_head_t *consumer_ring_slots_waitqueue) {
   char *c_p;
   long id;
@@ -7470,7 +7499,7 @@ static int ring_proc_stats_read(struct seq_file *m, void *data_not_used)
 /* ********************************** */
 
 static int ring_proc_stats_open(struct inode *inode, struct file *file) { 
-  return single_open(file, ring_proc_stats_read, PDE(inode)->data); 
+  return single_open(file, ring_proc_stats_read, PDE_DATA(inode)); 
 }
 
 static const struct file_operations ring_proc_stats_fops = {
@@ -9283,7 +9312,7 @@ void remove_device_from_ring_list(struct net_device *dev) {
 
 /* ********************************** */
 
-static int ring_proc_dev_open(struct inode *inode, struct file *file) { return single_open(file, ring_proc_dev_get_info, PDE(inode)->data); }
+static int ring_proc_dev_open(struct inode *inode, struct file *file) { return single_open(file, ring_proc_dev_get_info, PDE_DATA(inode)); }
 
 static const struct file_operations ring_proc_dev_fops = {
   .owner = THIS_MODULE,
@@ -9405,7 +9434,7 @@ EXPORT_SYMBOL(pf_ring_inject_packet_to_ring);
 
 #ifdef ENABLE_PROC_WRITE_RULE
 static int ring_proc_dev_ruleopen(struct inode *inode, struct file *file) { 
-  return single_open(file, ring_proc_dev_rule_read, PDE(inode)->data); 
+  return single_open(file, ring_proc_dev_rule_read, PDE_DATA(inode)); 
 }
 
 static const struct file_operations ring_proc_dev_rulefops = {
@@ -9421,7 +9450,7 @@ static const struct file_operations ring_proc_dev_rulefops = {
 
 static int ring_notifier(struct notifier_block *this, unsigned long msg, void *data)
 {
-  struct net_device *dev = data;
+  struct net_device *dev = netdev_notifier_info_to_dev(data);
   struct pfring_hooks *hook;
 
   if(dev != NULL) {
@@ -9501,7 +9530,7 @@ static int ring_notifier(struct notifier_block *this, unsigned long msg, void *d
 	  if(dev_ptr->dev == dev) {
 	    if(unlikely(enable_debug))
 	      printk("[PF_RING] ==>> FOUND device change name %s -> %s\n",
-		     dev_ptr->proc_entry->name, dev->name);
+		     dev_ptr->dev->name, dev->name);
 
 	    /* Remove old entry */
 #ifdef ENABLE_PROC_WRITE_RULE
@@ -9510,7 +9539,7 @@ static int ring_notifier(struct notifier_block *this, unsigned long msg, void *d
 #endif
 
 	    remove_proc_entry(PROC_INFO, dev_ptr->proc_entry);
-	    remove_proc_entry(dev_ptr->proc_entry->name, ring_proc_dev_dir);
+	    remove_proc_entry(dev_ptr->dev->name, ring_proc_dev_dir);
 	    /* Add new entry */
 	    dev_ptr->proc_entry = proc_mkdir(dev_ptr->dev->name, ring_proc_dev_dir);
 	    proc_create_data(PROC_INFO, 0 /* read-only */,
@@ -9534,10 +9563,9 @@ static int ring_notifier(struct notifier_block *this, unsigned long msg, void *d
 #endif
 
 #if(LINUX_VERSION_CODE >= KERNEL_VERSION(3,1,0))
-	    strncpy(dev_ptr->proc_entry->name, dev->name, dev_ptr->proc_entry->namelen);
-	    dev_ptr->proc_entry->name[dev_ptr->proc_entry->namelen /* size is namelen+1 */] = '\0';
+	    strcpy(dev_ptr->dev->name, dev->name);
 #else
-	    dev_ptr->proc_entry->name = dev->name;
+	    dev_ptr->dev->name = dev->name;
 #endif
 	    break;
 	  }
