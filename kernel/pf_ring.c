@@ -9565,7 +9565,7 @@ static int ring_notifier(struct notifier_block *this, unsigned long msg, void *d
 #endif
 #endif
 
-#if(LINUX_VERSION_CODE >= KERNEL_VERSION(3,1,0))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,1,0)) || defined(REDHAT_PATCHED_KERNEL)
 	    strcpy(dev_ptr->dev->name, dev->name);
 #else
 	    dev_ptr->dev->name = dev->name;
