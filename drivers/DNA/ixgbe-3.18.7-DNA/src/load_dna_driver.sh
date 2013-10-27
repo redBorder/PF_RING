@@ -48,7 +48,7 @@ do
   printf "Configuring %s\n" "${IF[index]}"
   ifconfig ${IF[index]} up
   sleep 1
-  bash ../scripts/set_irq_affinity.sh ${IF[index]}
+  bash ../scripts/set_irq_affinity ${IF[index]}
 
   # Flow Control automatically disabled by the driver (no need to use the following commands)
   #ethtool -A ${IF[index]} autoneg off
