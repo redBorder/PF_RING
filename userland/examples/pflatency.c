@@ -43,6 +43,8 @@
 #include "pfring.h"
 #include "pfutils.c"
 
+#define MAX_PACKET_LEN 9000
+
 struct packet {
   u_int16_t len;
   char      *data;
@@ -172,7 +174,7 @@ static void forge_udp_packet(char *buffer, u_int idx) {
   u_int16_t src_port = 2012, dst_port = 3000;
 
   /* Reset packet */
-  memset(buffer, 0, sizeof(buffer));
+  memset(buffer, 0, send_len);
 
   for(i=0; i<12; i++) buffer[i] = i;
   buffer[12] = 0x08, buffer[13] = 0x00; /* IP */
@@ -220,7 +222,7 @@ int main(int argc, char* argv[]) {
   int disable_zero_copy = 0;
   int use_zero_copy_tx = 0;
   u_int mac_a, mac_b, mac_c, mac_d, mac_e, mac_f;
-  char buffer[9000];
+  char buffer[MAX_PACKET_LEN];
   int bind_core = -1;
   ticks tick_start = 0, tick_delta = 0;
   ticks hz = 0;
