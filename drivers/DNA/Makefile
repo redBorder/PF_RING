@@ -13,7 +13,7 @@ IXGBE=ixgbe-3.18.7
 all: igb ixgbe e1000e e1000
 
 e1000:
-	#cd $(E1000)-DNA/src; make
+#	cd $(E1000)-DNA/src; make
 
 e1000e:
 	cd $(E1000E)-DNA/src; make
@@ -25,7 +25,7 @@ ixgbe:
 	cd $(IXGBE)-DNA/src; make
 
 clean:
-	#cd $(E1000)-DNA/src; make clean
+#	cd $(E1000)-DNA/src; make clean
 	cd $(E1000E)-DNA/src; make clean
 	cd $(IGB)-DNA/src; make clean
 	cd $(IXGBE)-DNA/src; make clean
