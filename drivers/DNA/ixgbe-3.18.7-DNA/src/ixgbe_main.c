@@ -6226,14 +6226,23 @@ static int __devinit ixgbe_sw_init(struct ixgbe_adapter *adapter)
 		hw->mbx.ops.init_params(hw);
 
 	/* default flow control settings */
+#ifdef ENABLE_DNA
+	hw->fc.requested_mode = ixgbe_fc_none;
+	hw->fc.current_mode = ixgbe_fc_none;	/* init for ethtool output */
+#else
 	hw->fc.requested_mode = ixgbe_fc_full;
 	hw->fc.current_mode = ixgbe_fc_full;	/* init for ethtool output */
+#endif
 
 	adapter->last_lfc_mode = hw->fc.current_mode;
 	ixgbe_pbthresh_setup(adapter);
 	hw->fc.pause_time = IXGBE_DEFAULT_FCPAUSE;
 	hw->fc.send_xon = true;
+#ifdef ENABLE_DNA
+	hw->fc.disable_fc_autoneg = true;
+#else
 	hw->fc.disable_fc_autoneg = false;
+#endif
 
 #ifdef ENABLE_DNA
 	adapter->tx_ring_count = max(num_tx_slots, (u32)IXGBE_MIN_TXD);
@@ -7850,7 +7859,7 @@ static void ixgbe_service_task(struct work_struct *work)
 	struct ixgbe_adapter *adapter = container_of(work,
 						     struct ixgbe_adapter,
 						     service_task);
-#ifdef enable_dna
+#if 0 /* ifdef ENABLE_DNA */
 	struct ixgbe_hw *hw = &adapter->hw;
 	struct ethtool_pauseparam pause;
 	if (hw->fc.requested_mode != ixgbe_fc_none || hw->fc.disable_fc_autoneg == false) {
