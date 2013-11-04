@@ -2773,12 +2773,21 @@ static int __devinit igb_probe(struct pci_dev *pdev,
 		INIT_WORK(&adapter->dma_err_task, igb_dma_err_task);
 
 	/* Initialize link properties that are user-changeable */
+#ifdef ENABLE_DNA
+	adapter->fc_autoneg = false;
+#else
 	adapter->fc_autoneg = true;
+#endif
 	hw->mac.autoneg = true;
 	hw->phy.autoneg_advertised = 0x2f;
 
+#ifdef ENABLE_DNA
+	hw->fc.requested_mode = e1000_fc_none;
+	hw->fc.current_mode = e1000_fc_none;
+#else
 	hw->fc.requested_mode = e1000_fc_default;
 	hw->fc.current_mode = e1000_fc_default;
+#endif
 
 	e1000_validate_mdi_setting(hw);
 

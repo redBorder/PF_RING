@@ -19,11 +19,11 @@ rmmod pf_ring
 # We assume that you have compiled PF_RING
 insmod ../../../../kernel/pf_ring.ko
 
-# Default
-#insmod ./igb.ko
-
 # Disable multiqueue
 insmod ./igb.ko RSS=1,1,1,1,1,1,1,1
+
+# Enable multiqueue (auto)
+#insmod ./igb.ko RSS=0,0,0,0,0,0,0,0
 
 # Enable 8 queues (you need 8 or more CPU cores)
 #insmod ./igb.ko RSS=8,8,8,8,8,8,8,8
