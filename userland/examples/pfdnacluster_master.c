@@ -51,8 +51,10 @@
 #define MAX_NUM_DEV            DNA_CLUSTER_MAX_NUM_SOCKETS
 #define DEFAULT_DEVICE         "dna0"
 
+int caplen = 1536;
 int num_dev = 0, num_apps = 0, tot_num_slaves = 0;
 int instances_per_app[MAX_NUM_APP];
+u_int32_t frwd_mask = 0;
 pfring *pd[MAX_NUM_DEV];
 pfring_dna_cluster *dna_cluster_handle;
 
@@ -60,6 +62,16 @@ u_int8_t wait_for_packet = 1, print_interface_stats = 0, do_shutdown = 0, hashin
 socket_mode mode = recv_only_mode;
 
 static struct timeval startTime;
+
+int cluster_id = -1;
+
+char *device = NULL;
+char *frwd_device = NULL;
+pfring *frwd_in_ring, *frwd_out_ring;
+int frwd_buffers = 0;
+int frwd_low_latency = 0;
+int rx_bind_core = 0, tx_bind_core = 1, time_pulse_bind_core = 2, frwd_bind_core = 3;
+u_int numCPU;
 
 /* ******************************** */
 
@@ -176,6 +188,9 @@ void sigproc(int sig) {
   
   dna_cluster_disable(dna_cluster_handle);
   
+  if (frwd_device) 
+    pfring_shutdown(frwd_in_ring);
+
   do_shutdown = 1;
 }
 
@@ -189,21 +204,130 @@ void printHelp(void) {
   printf("-i <device>     Device name (comma-separated list)\n");
   printf("-c <cluster>    Cluster ID\n");
   printf("-n <num>        Number of app instances (comma-separated list for multiple apps)\n");
-  printf("-r <core id>    Bind the RX thread to a core\n");
-  printf("-t <core id>    Bind the TX thread to a core\n");
   printf("-m <hash mode>  Hashing modes:\n"
 	 "                0 - IP hash (default)\n"
 	 "                1 - MAC Address hash\n"
 	 "                2 - IP protocol hash\n"
 	 "                3 - Fan-Out\n");
-  printf("-s              Enable TX\n");
-  printf("-S <core id>    Enable Time Pulse thread and bind it to a core\n");
+  printf("-s              Enable TX thread\n");
+  printf("-r <core id>    Bind the RX thread to a core\n");
+  printf("-t <core id>    Bind the TX thread to a core (-s only)\n");
   printf("-a              Active packet wait\n");
+  printf("-S <core id>    Enable Time Pulse thread and bind it to a core\n");
+  printf("-o <device>     Forward both to applications and an egress device\n");
+  printf("-f <core id>    Bind the forwarder thread to a core (-o only)\n");
   printf("-u <mountpoint> Use hugepages for packet memory allocation\n");
   printf("-p              Print per-interface absolute stats\n");
   printf("-d              Daemon mode\n");
   printf("-P <pid file>   Write pid to the specified file (daemon mode only)\n");
   exit(0);
+}
+
+/* *************************************** */
+
+int init_frwd_socket() {
+  int rc; 
+  char buf[32];
+
+  frwd_out_ring = pfring_open(frwd_device, caplen, PF_RING_PROMISC);
+
+  if (frwd_out_ring == NULL) {
+    printf("pfring_open %s error [%s]\n", frwd_device, strerror(errno));
+    return -1;
+  }
+
+  snprintf(buf, sizeof(buf), "dna-cluster-%d-frwd-out", cluster_id);
+  pfring_set_application_name(frwd_out_ring, buf);
+
+  if ((rc = pfring_set_socket_mode(frwd_out_ring, send_only_mode)) != 0)
+    fprintf(stderr, "pfring_set_socket_mode returned [rc=%d]\n", rc);
+
+  frwd_buffers = frwd_out_ring->dna.dna_dev.mem_info.tx.packet_memory_num_slots + 1;
+
+  return 0;
+}
+
+/* *************************************** */
+
+int register_frwd_socket() {
+  int rc;
+  char buf[32];
+
+  snprintf(buf, sizeof(buf), "dnacluster:%d@%d", cluster_id, tot_num_slaves);
+  frwd_in_ring = pfring_open(buf, caplen, PF_RING_PROMISC);
+  if (frwd_in_ring == NULL) {
+    printf("pfring_open %s error [%s]\n", buf, strerror(errno));
+    return -1;
+  }
+
+  snprintf(buf, sizeof(buf), "dna-cluster-%d-frwd-in", cluster_id);
+  pfring_set_application_name(frwd_in_ring, buf);
+
+  if ((rc = pfring_set_socket_mode(frwd_in_ring, recv_only_mode)) != 0)
+    fprintf(stderr, "pfring_set_socket_mode returned [rc=%d]\n", rc);
+
+  /* this call will do the magic making frwd_out_ring a zero-copy ring */
+  if ((rc = pfring_register_zerocopy_tx_ring(frwd_in_ring, frwd_out_ring)) != 0) {
+    printf("pfring_register_zerocopy_tx_ring error: %d\n", rc);
+    return -1;
+  }
+
+  if (pfring_enable_ring(frwd_in_ring) < 0) {
+    printf("pfring_enable_ring(dnacluster:%d@%d) error: %d\n", cluster_id, tot_num_slaves, rc);
+    return -1;
+  }
+
+  frwd_mask = 1 << tot_num_slaves;
+
+  return 0;
+}
+
+/* *************************************** */
+
+void* frwd_thread(void *user) {
+  int rc;
+  pfring_pkt_buff *pkt_handle = NULL;
+  struct pfring_pkthdr hdr;
+ 
+#ifdef HAVE_PTHREAD_SETAFFINITY_NP
+  if (numCPU > 1 && frwd_bind_core != -1) {
+    cpu_set_t cpuset;
+    u_long core_id = frwd_bind_core % numCPU;
+
+    CPU_ZERO(&cpuset);
+    CPU_SET(core_id, &cpuset);
+    if (pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset) != 0)
+      fprintf(stderr, "Error while binding forwarder thread to core %ld\n", core_id);
+    else
+      printf("Set forwarder thread on core %lu/%u\n", core_id, numCPU);
+  }
+#endif
+
+  memset(&hdr, 0, sizeof(hdr));
+
+  if ((pkt_handle = pfring_alloc_pkt_buff(frwd_in_ring)) == NULL) {
+    printf("Error allocating pkt buff\n");
+    sigproc(0);
+    return NULL;
+  }
+
+  while (!do_shutdown) {
+    /* tx is not enabled in the cluster, we will send received packets to the out ring using zero-copy */
+    rc = pfring_recv_pkt_buff(frwd_in_ring, pkt_handle, &hdr, wait_for_packet);
+
+    if (rc > 0) {
+      pfring_send_pkt_buff(frwd_out_ring, pkt_handle, frwd_low_latency /* flush */);
+
+      /* ignoring return value: best effort */
+
+      //frwd_num_pkts++;
+      //frwd_num_bytes += hdr.len + 24 /* 8 Preamble + 4 CRC + 12 IFG */;
+    } else { /* active wait */
+      //if (!wait_for_packet) usleep(1);
+    }
+  }
+
+  return NULL;
 }
 
 /* *************************************** */
@@ -272,9 +396,9 @@ static int master_distribution_function(const u_char *buffer, const u_int16_t bu
 	   
   /* balancing on hash */
   slave_idx = (*hash) % slaves_info->num_slaves;
-  *id_mask = (1 << slave_idx);
+  *id_mask = (1 << slave_idx) | frwd_mask;
 
-  return DNA_CLUSTER_PASS;
+  return DNA_CLUSTER_PASS; /* DNA_CLUSTER_DROP, DNA_CLUSTER_PASS, DNA_CLUSTER_FRWD */
 }
 
 /* ******************************* */
@@ -292,8 +416,8 @@ static int multi_app_distribution_function(const u_char *buffer, const u_int16_t
     offset += instances_per_app[i];
   }
 
-  *id_mask = slaves_mask;
-  return DNA_CLUSTER_PASS;
+  *id_mask = slaves_mask | frwd_mask;
+  return DNA_CLUSTER_PASS; /* DNA_CLUSTER_DROP, DNA_CLUSTER_PASS, DNA_CLUSTER_FRWD */
 }
 
 /* ******************************** */
@@ -302,9 +426,9 @@ static int fanout_distribution_function(const u_char *buffer, const u_int16_t bu
   u_int32_t n_zero_bits = 32 - slaves_info->num_slaves;
 
   /* returning slave id bitmap */
-  *id_mask = ((0xFFFFFFFF << n_zero_bits) >> n_zero_bits);
+  *id_mask = ((0xFFFFFFFF << n_zero_bits) >> n_zero_bits) | frwd_mask;
 
-  return DNA_CLUSTER_PASS;
+  return DNA_CLUSTER_PASS; /* DNA_CLUSTER_DROP, DNA_CLUSTER_PASS, DNA_CLUSTER_FRWD */
 }
 
 /* *************************************** */
@@ -313,17 +437,17 @@ int main(int argc, char* argv[]) {
   char c;
   char buf[32];
   u_int32_t version;
-  int rx_bind_core = 0, tx_bind_core = 1, time_pulse_bind_core = 2;
-  int off, i, j, cluster_id = -1;
-  char *device = NULL, *dev, *dev_pos = NULL;
+  int off, i, j;
+  char *dev, *dev_pos = NULL;
   char *applications = NULL, *app, *app_pos = NULL;
   char *pidFileName = NULL;
   char *hugepages_mountpoint = NULL;
   int daemon_mode = 0;
 
+  numCPU = sysconf( _SC_NPROCESSORS_ONLN );
   startTime.tv_sec = 0;
 
-  while((c = getopt(argc,argv,"ac:r:st:hi:n:m:du:pP:S:")) != -1) {
+  while((c = getopt(argc,argv,"ac:r:st:hi:n:m:du:pP:S:o:f:")) != -1) {
     switch(c) {
     case 'a':
       wait_for_packet = 0;
@@ -334,6 +458,9 @@ int main(int argc, char* argv[]) {
     case 't':
       tx_bind_core = atoi(optarg);
       break;
+    case 'f':
+      frwd_bind_core = atoi(optarg);
+      break;
     case 'h':
       printHelp();      
       break;
@@ -342,6 +469,9 @@ int main(int argc, char* argv[]) {
       break;
     case 'i':
       device = strdup(optarg);
+      break;
+    case 'o':
+      frwd_device = strdup(optarg);
       break;
     case 'c':
       cluster_id = atoi(optarg);
@@ -387,7 +517,7 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  if (tot_num_slaves > MAX_NUM_APP) {
+  if (tot_num_slaves + (frwd_device ? 1 : 0) > MAX_NUM_APP) {
     printf("WARNING: You cannot instantiate more than %u slave applications\n", MAX_NUM_APP);
     printHelp();
   }
@@ -407,9 +537,14 @@ int main(int argc, char* argv[]) {
 
   printf("Capturing from %s\n", device);
   
+  if (frwd_device) {
+    if (init_frwd_socket() < 0)
+      return -1;
+  }
+
   /* Create the DNA cluster */
   if ((dna_cluster_handle = dna_cluster_create(cluster_id, 
-                                               tot_num_slaves, 
+                                               tot_num_slaves + (frwd_device ? 1 : 0), 
 					       0 
 					       /* | DNA_CLUSTER_DIRECT_FORWARDING */
                                                /* | DNA_CLUSTER_NO_ADDITIONAL_BUFFERS */
@@ -421,13 +556,12 @@ int main(int argc, char* argv[]) {
     return(-1);
   }
 
-  /* Changing the default settings (experts only)
+  /* Changing the default settings (experts only) */
   dna_cluster_low_level_settings(dna_cluster_handle, 
-                                 8192, // slave rx queue slots
-                                 8192, // slave tx queue slots
-				 4096  // slave additional buffers (available with  alloc/release)
-				 );
-  */
+    8192,                              /* slave rx queue slots */
+    mode != recv_only_mode ? 8192 : 0, /* slave tx queue slots */
+    frwd_device ? frwd_buffers : 0   /* slave additional buffers (available with  alloc/release) */
+  );
 
   if (use_hugepages) {
     if (dna_cluster_set_hugepages_mountpoint(dna_cluster_handle, hugepages_mountpoint) < 0) {
@@ -441,7 +575,7 @@ int main(int argc, char* argv[]) {
 
   dev = strtok_r(device, ",", &dev_pos);
   while(dev != NULL) {
-    pd[num_dev] = pfring_open(dev, 1500 /* snaplen */, PF_RING_PROMISC);
+    pd[num_dev] = pfring_open(dev, caplen, PF_RING_PROMISC);
     if(pd[num_dev] == NULL) {
       printf("pfring_open %s error [%s]\n", dev, strerror(errno));
       return(-1);
@@ -453,7 +587,7 @@ int main(int argc, char* argv[]) {
 	     (version & 0x0000FF00) >> 8, version & 0x000000FF);
     }
 
-    snprintf(buf, sizeof(buf), "pfdnacluster_master-cluster-%d-socket-%d", cluster_id, num_dev);
+    snprintf(buf, sizeof(buf), "dna-cluster-%d-socket-%d", cluster_id, num_dev);
     pfring_set_application_name(pd[num_dev], buf);
 
     /* Add the ring we created to the cluster */
@@ -514,7 +648,7 @@ int main(int argc, char* argv[]) {
 
   printf("The DNA cluster [id: %u][num slave apps: %u] is now running...\n", 
 	 cluster_id, tot_num_slaves);
-  printf("You can now attach to DNA cluster up to %d slaves as follows:\n", 
+  printf("You can now attach to the cluster up to %d slaves as follows:\n", 
          tot_num_slaves);
   if (num_apps == 1) {
     printf("\tpfcount -i dnacluster:%d\n", cluster_id);
@@ -536,9 +670,23 @@ int main(int argc, char* argv[]) {
     alarm(ALARM_SLEEP);
   }
 
+  if (frwd_device) {
+    pthread_t fwdrthread;
+    if (register_frwd_socket() < 0) {
+      sigproc(0);
+    } else {
+      pthread_create(&fwdrthread, NULL, frwd_thread, NULL);
+      printf("Forwarder thread is running...\n");
+      pthread_join(fwdrthread, NULL);
+    }
+  }
+
   while (!do_shutdown) sleep(1); /* do something in the main */
  
   dna_cluster_destroy(dna_cluster_handle);
+
+  if (frwd_device)
+    pfring_close(frwd_out_ring);
 
   sleep(2);
   return(0);
