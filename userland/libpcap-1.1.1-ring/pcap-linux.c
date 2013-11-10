@@ -1325,7 +1325,13 @@ pcap_activate_linux(pcap_t *handle)
 	 * "handle->fd" is a socket, so "select()" and "poll()"
 	 * should work on it.
 	 */
+#ifdef HAVE_PF_RING
+	if(handle->ring != NULL)
+		handle->selectable_fd = pfring_get_selectable_fd(handle->ring);
+	else
+#else
 	handle->selectable_fd = handle->fd;
+#endif
 
 	return status;
 
