@@ -1329,9 +1329,8 @@ pcap_activate_linux(pcap_t *handle)
 	if(handle->ring != NULL)
 		handle->selectable_fd = pfring_get_selectable_fd(handle->ring);
 	else
-#else
-	handle->selectable_fd = handle->fd;
 #endif
+	handle->selectable_fd = handle->fd;
 
 	return status;
 
