@@ -828,7 +828,7 @@ int pfring_get_selectable_fd(pfring *ring) {
   if(ring && ring->get_selectable_fd)
     return ring->get_selectable_fd(ring);
 
-  return(PF_RING_ERROR_NOT_SUPPORTED);
+  return(-1);
 }
 
 /* **************************************************** */
