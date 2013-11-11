@@ -6,8 +6,8 @@ This document describes how to enable them into your system.
 
 For the impatient
 -----------------
-$ echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
-$ mount -t hugetlbfs nodev /mnt/huge
+  $ echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
+  $ mount -t hugetlbfs nodev /mnt/huge
 
 The whole story
 ---------------
@@ -49,11 +49,11 @@ amounts of memory at boot time using the following kernel options:
 
 If this commands returns a non-empty string, 2MB pages are supported:
 
-$ cat /proc/cpuinfo | grep pse
+  $ cat /proc/cpuinfo | grep pse
 
 If this commands returns a non-empty string, 1GB pages are supported:
 
-$ cat /proc/cpuinfo | grep pdpe1gb
+  $ cat /proc/cpuinfo | grep pdpe1gb
 
 In order to make the hugepages available for use, Linux provides a 
 RAM-based filesystem called "hugetlbfs" that have to be mount'ed with:
@@ -72,9 +72,26 @@ Example:
 It is possible to see what pages are currently in use using the
 following command:
 
-$ cat /sys/devices/system/node/node*/meminfo | grep Huge
-Node 0 HugePages_Total:  1024
-Node 0 HugePages_Free:   1024
-Node 0 HugePages_Surp:      0
+  $ cat /sys/devices/system/node/node*/meminfo | grep Huge
+  Node 0 HugePages_Total:  1024
+  Node 0 HugePages_Free:   1024
+  Node 0 HugePages_Surp:      0
 
+Possible errors:
+----------------
+1. "error mmap'ing hugepage xxx: Resource temporarily unavailable"
+
+Causes:
+- You might not have permissions to mmap hugepages.
+
+- Increase the "max locked memory" ulimit (see ulimit -l) to accomodate 
+  the memory needed for buffers and metadata. You can manually increase 
+  the ulimit value:
+
+  $ ulimit -l 4194304
+
+- Increase the value in /proc/sys/kernel/shmmax. Please note that on 
+  32bit sytems it will wrap around 4 GBytes.
+
+  $ echo 2147483648 > /proc/sys/kernel/shmmax
 
