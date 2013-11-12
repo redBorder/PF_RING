@@ -31,7 +31,6 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <errno.h>
-#include <sys/poll.h>
 #include <netinet/in_systm.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
@@ -683,14 +682,7 @@ int main(int argc, char* argv[]) {
     } else if(rc < 0) {
       /* Not enough space in buffer */
       if(!active_poll) {
-#if 1
 	usleep(1);
-#else
-        if(bind_core >= 0)
-	  usleep(1);
-	else
-	  pfring_poll(pd, 0); //sched_yield();
-#endif
       }
       goto redo;
     }

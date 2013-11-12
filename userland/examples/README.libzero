@@ -4,7 +4,7 @@ This file contains some examples that introduce you to libzero.
 We suppose that you have installed the DNA drivers and loaded them up in single RX queue. I also assume that there are two ports, dna0 and dna1, that are connected directly (loopback).
 
 PF_RING/kernel# insmod ./pf_ring.ko 
-PF_RING/drivers/DNA/ixgbe-3.7.17-DNA/src# rmmod ixgbe; insmod ./ixgbe.ko MQ=0,0; ifconfig dna1 up; ifconfig dna0 up
+PF_RING/drivers/DNA/ixgbe-XXX-DNA/src# rmmod ixgbe; insmod ./ixgbe.ko RSS=1,1; ifconfig dna1 up; ifconfig dna0 up
 
 We use single-RX queues to demonstrate the packet distributing capabilities of libzero and to show that in all our tests we have never used Intel's RSS.
 
@@ -230,6 +230,20 @@ Test 9. Aggregate traffic from multiple interfaces, hash packets, read them on 2
 Goal: Receive packets from multiple interfaces on one thread in a Round-Robin manner, hash them based on the IPs, and distribute them to consumer threads. In this example one thread will receive and hash packets, and two (-n) consumer thread will count and transmit them to an egress interface using per-thread RSS queues with standard DNA in zero-copy.
 
 Command: ./pfdnacluster_mt_rss_frwd -i dna0 -o dna1 -c 1 -n 2 -r 1 -g 2:3 
+
+*******************************************************************************
+*******************************************************************************
+
+Test 10. Aggregate traffic from multiple interfaces, hash packets, balance them across 2 instances on one application, send a full copy to another application, forward all the traffic to an egress interface using a slave thread
+
+Goal: Same as test 4 with the difference that here we distribute packets in zero copy to several applications and an egress interface (dna1) at the same time. The master application (pfdnacluster_master) will read packets via DNA, hash them and distribute them to applications in zero copy (every application receives a full copy of the traffic, packets are distributed across the instances of each application). The consumer applications (slaves) will read them via a special PF_RING socket. As the master application is responsible for setting up the cluster, it must be started before any slave; furthermore, slaves will live as long as the cluster is active (i.e. the master application is running).
+
+Commands:
+- Master:  pfdnacluster_master -i dna0 -c 10 -n 2,1 -o dna1 -r 0 -f 1
+- Slave 1 Instance 1: pfcount -i dnacluster:10@0 -g 2
+- Slave 1 Instance 2: pfcount -i dnacluster:10@1 -g 3
+- Slave 2 Instance 1: tcpdump -i dnacluster:10@2
+
 
 *******************************************************************************
 *******************************************************************************
