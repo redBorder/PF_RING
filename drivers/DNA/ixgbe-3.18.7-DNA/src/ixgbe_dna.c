@@ -647,7 +647,7 @@ static int dna_ixgbe_rx_dump(struct ixgbe_ring *rx_ring) {
 
 static bool dna_ixgbe_clean_rx_irq(struct ixgbe_q_vector *q_vector,
 				  struct ixgbe_ring *rx_ring, int budget) {
-  union ixgbe_adv_rx_desc	*rx_desc, *shadow_rx_desc;
+  union ixgbe_adv_rx_desc	*rx_desc, *shadow_rx_desc, *next_rx_desc;
   u32				staterr;
   u16				i, num_laps = 0, last_cleaned_idx;
   struct ixgbe_adapter	        *adapter = q_vector->adapter;
@@ -669,6 +669,14 @@ static bool dna_ixgbe_clean_rx_irq(struct ixgbe_q_vector *q_vector,
       A userland application is using the queue so it's not time to
       mess up with indexes but just to wakeup apps (if waiting)
     */
+
+    /* trick for appplications calling poll/select directly (indexes not in sync of one position at most) */
+    if (!(staterr & IXGBE_RXD_STAT_DD)) {
+      u16 next_i = i;
+      if(++next_i == rx_ring->count) next_i = 0;
+      next_rx_desc = IXGBE_RX_DESC(rx_ring, next_i);
+      staterr = le32_to_cpu(next_rx_desc->wb.upper.status_error);
+    }
 
     if(staterr & IXGBE_RXD_STAT_DD) {
       if(unlikely(enable_debug))
@@ -696,11 +704,10 @@ static bool dna_ixgbe_clean_rx_irq(struct ixgbe_q_vector *q_vector,
     return(!!budget);
 
   if( /* staterr || */ enable_debug) {
-    if(strcmp(rx_ring->netdev->name, "eth7") == 0)
-      printk("[DNA] %s(): %s@%d [used=%d][idx=%d][next_to_use=%u][#unused=%d][staterr=%d][full=%d][pkt_ptr=%llu]\n", __FUNCTION__,
-	     rx_ring->netdev->name, rx_ring->queue_index,
-	     rx_ring->dna.queue_in_use, i, rx_ring->next_to_use,
-	     ixgbe_desc_unused(rx_ring), staterr, dna_ixgbe_rx_dump(rx_ring), rx_desc->read.pkt_addr);
+    printk("[DNA] %s(): %s@%d [used=%d][idx=%d][next_to_use=%u][#unused=%d][staterr=%d][full=%d][pkt_ptr=%llu]\n", __FUNCTION__,
+	   rx_ring->netdev->name, rx_ring->queue_index,
+	   rx_ring->dna.queue_in_use, i, rx_ring->next_to_use,
+	   ixgbe_desc_unused(rx_ring), staterr, dna_ixgbe_rx_dump(rx_ring), rx_desc->read.pkt_addr);
   }
 
   /*

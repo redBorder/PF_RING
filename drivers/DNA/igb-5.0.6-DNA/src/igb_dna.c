@@ -678,7 +678,7 @@ void dna_igb_alloc_rx_buffers(struct igb_ring *rx_ring, struct pfring_hooks *hoo
 
 static int dna_igb_clean_rx_irq(struct igb_q_vector *q_vector,
 				  struct igb_ring *rx_ring, int budget) {
-  union e1000_adv_rx_desc	*rx_desc;
+  union e1000_adv_rx_desc	*rx_desc, *next_rx_desc;
   u32				staterr;
   u16				i;
   struct igb_adapter	        *adapter = q_vector->adapter;
@@ -699,6 +699,14 @@ static int dna_igb_clean_rx_irq(struct igb_q_vector *q_vector,
       A userland application is using the queue so it's not time to
       mess up with indexes but just to wakeup apps (if waiting)
     */
+
+    /* trick for appplications calling poll/select directly (indexes not in sync of one position at most) */
+    if (!(staterr & E1000_RXD_STAT_DD)) {
+      u16 next_i = i;
+      if(++next_i == rx_ring->count) next_i = 0;
+      next_rx_desc = IGB_RX_DESC(rx_ring, next_i);
+      staterr = le32_to_cpu(next_rx_desc->wb.upper.status_error);
+    }
 
     if(staterr & E1000_RXD_STAT_DD) {
       if(unlikely(enable_debug))
