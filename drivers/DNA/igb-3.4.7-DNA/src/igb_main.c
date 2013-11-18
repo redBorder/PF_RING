@@ -457,6 +457,10 @@ static int igb_alloc_queues(struct igb_adapter *adapter)
 #ifdef HAVE_DEVICE_NUMA_NODE
 	int orig_node = adapter->node;
 #endif /* HAVE_DEVICE_NUMA_NODE */
+#ifdef ENABLE_DNA
+	struct net_device *netdev = adapter->netdev;
+	int max_frame = netdev->mtu + ETH_HLEN + ETH_FCS_LEN + VLAN_HLEN;
+#endif
 
 	for (i = 0; i < adapter->num_tx_queues; i++) {
 #ifdef HAVE_DEVICE_NUMA_NODE
@@ -509,7 +513,14 @@ static int igb_alloc_queues(struct igb_adapter *adapter)
 		ring->netdev = adapter->netdev;
 		ring->numa_node = adapter->node;
 #ifdef CONFIG_IGB_DISABLE_PACKET_SPLIT
+#ifdef ENABLE_DNA
+		if (max_frame <= MAXIMUM_ETHERNET_VLAN_SIZE)
+			ring->rx_buffer_len = MAXIMUM_ETHERNET_VLAN_SIZE;
+		else
+			ring->rx_buffer_len = max_frame;
+#else
 		ring->rx_buffer_len = MAXIMUM_ETHERNET_VLAN_SIZE;
+#endif
 #endif
 #ifndef HAVE_NDO_SET_FEATURES
 		/* enable rx checksum */
@@ -2733,7 +2744,7 @@ static int __devinit igb_sw_init(struct igb_adapter *adapter)
 #ifdef ENABLE_DNA
 	if(    mtu != netdev->mtu
 	   &&  mtu >= 68 
-	   && (mtu + ETH_HLEN + ETH_FCS_LEN + VLAN_TAG_SIZE) <= MAX_JUMBO_FRAME_SIZE) {
+	   && (mtu + ETH_HLEN + ETH_FCS_LEN + VLAN_HLEN) <= MAX_JUMBO_FRAME_SIZE) {
 		netdev->mtu = mtu;
 	}
 #endif

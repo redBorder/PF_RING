@@ -126,6 +126,14 @@
 #define SVN_REV ""
 #endif
 
+#if(LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0))
+#define PDE_DATA(a) PDE(a)->data
+#endif
+
+#if(LINUX_VERSION_CODE < KERNEL_VERSION(3,11,0))
+#define netdev_notifier_info_to_dev(a) ((struct net_device*)a)
+#endif
+
 /* ************************************************* */
 
 #define TH_FIN_MULTIPLIER	0x01
@@ -270,10 +278,8 @@ u_char *loobpack_test_buffer = NULL;
 struct proc_dir_entry *ring_proc_dir = NULL, *ring_proc_dev_dir = NULL, *ring_proc_stats_dir = NULL;
 struct proc_dir_entry *ring_proc = NULL;
 struct proc_dir_entry *ring_proc_plugins_info = NULL;
-
-static int ring_proc_get_info(char *, char **, off_t, int, int *, void *);
-static int ring_proc_get_plugin_info(char *, char **, off_t, int, int *,
-				     void *);
+	     
+static int ring_proc_get_plugin_info(struct seq_file *m, void *data_not_used);
 static void ring_proc_add(struct pf_ring_socket *pfr);
 static void ring_proc_remove(struct pf_ring_socket *pfr);
 static void ring_proc_init(void);
@@ -946,6 +952,25 @@ static void ring_sock_destruct(struct sock *sk)
 
 /* ********************************** */
 
+static int ring_proc_get_info(struct seq_file *m, void *data_not_used);
+static int ring_proc_open(struct inode *inode, struct file *file) {
+  return single_open(file, ring_proc_get_info, PDE_DATA(inode)); 
+}
+
+static const struct file_operations ring_proc_fops = {
+  .owner = THIS_MODULE,
+  .open = ring_proc_open,
+  .read = seq_read,
+  .llseek = seq_lseek,
+  .release = single_release,
+};
+
+/* ********************************** */
+
+/*
+  http://stackoverflow.com/questions/8516021/proc-create-example-for-kernel-module
+  http://pointer-overloading.blogspot.in/2013/09/linux-creating-entry-in-proc-file.html 
+*/
 static void ring_proc_add(struct pf_ring_socket *pfr)
 {
   if((ring_proc_dir != NULL)
@@ -954,9 +979,8 @@ static void ring_proc_add(struct pf_ring_socket *pfr)
 	     "%d-%s.%d", pfr->ring_pid,
 	     pfr->ring_netdev->dev->name, pfr->ring_id);
 
-    create_proc_read_entry(pfr->sock_proc_name, 0 /* read-only */,
-			   ring_proc_dir,
-			   ring_proc_get_info, pfr);
+    proc_create_data(pfr->sock_proc_name, 0, 
+		     ring_proc_dir, &ring_proc_fops, pfr);
 
     if(unlikely(enable_debug))
       printk("[PF_RING] Added /proc/net/pf_ring/%s\n", pfr->sock_proc_name);
@@ -1000,13 +1024,10 @@ static void ring_proc_remove(struct pf_ring_socket *pfr)
 
 /* ********************************** */
 
-static int ring_proc_dev_get_info(char *buf, char **start, off_t offset,
-				  int len, int *unused, void *data)
+static int ring_proc_dev_get_info(struct seq_file *m, void *data_not_used)
 {
-  int rlen = 0;
-
-  if(data != NULL) {
-    ring_device_element *dev_ptr = (ring_device_element*)data;
+  if(m->private != NULL) {
+    ring_device_element *dev_ptr = (ring_device_element*)m->private;
     struct net_device *dev = dev_ptr->dev;
     char dev_buf[16] = { 0 }, *dev_family = "???";
 
@@ -1042,13 +1063,13 @@ static int ring_proc_dev_get_info(char *buf, char **start, off_t offset,
       }
     }
 
-    rlen =  sprintf(buf,      "Name:              %s\n", dev->name);
-    rlen += sprintf(buf+rlen, "Index:             %d\n", dev->ifindex);
-    rlen += sprintf(buf+rlen, "Address:           %02X:%02X:%02X:%02X:%02X:%02X\n",
-		    dev->perm_addr[0], dev->perm_addr[1], dev->perm_addr[2],
-		    dev->perm_addr[3], dev->perm_addr[4], dev->perm_addr[5]);
-
-    rlen += sprintf(buf+rlen, "Polling Mode:      %s\n", dev_ptr->is_dna_device ? "DNA" : "NAPI/TNAPI");
+    seq_printf(m, "Name:              %s\n", dev->name);
+    seq_printf(m, "Index:             %d\n", dev->ifindex);
+    seq_printf(m, "Address:           %02X:%02X:%02X:%02X:%02X:%02X\n",
+	       dev->perm_addr[0], dev->perm_addr[1], dev->perm_addr[2],
+	       dev->perm_addr[3], dev->perm_addr[4], dev->perm_addr[5]);
+    
+    seq_printf(m, "Polling Mode:      %s\n", dev_ptr->is_dna_device ? "DNA" : "NAPI/TNAPI");
 
     switch(dev->type) {
     case 1:   strcpy(dev_buf, "Ethernet"); break;
@@ -1056,25 +1077,25 @@ static int ring_proc_dev_get_info(char *buf, char **start, off_t offset,
     default: sprintf(dev_buf, "%d", dev->type); break;
     }
 
-    rlen += sprintf(buf+rlen, "Type:              %s\n", dev_buf);
-    rlen += sprintf(buf+rlen, "Family:            %s\n", dev_family);
+    seq_printf(m, "Type:              %s\n", dev_buf);
+    seq_printf(m, "Family:            %s\n", dev_family);
 
     if(!dev_ptr->is_dna_device) {
       if(dev->ifindex < MAX_NUM_IFIDX) {
-	rlen += sprintf(buf+rlen, "# Bound Sockets:   %d\n",
-			num_rings_per_device[dev->ifindex]);
+	seq_printf(m, "# Bound Sockets:   %d\n",
+		   num_rings_per_device[dev->ifindex]);
       }
     }
 
 #if(LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,31))
-    rlen += sprintf(buf+rlen, "Max # TX Queues:   %d\n", dev->real_num_tx_queues);
+    seq_printf(m, "Max # TX Queues:   %d\n", dev->real_num_tx_queues);
 #endif
 
-    rlen += sprintf(buf+rlen, "# Used RX Queues:  %d\n",
-		    dev_ptr->is_dna_device ? dev_ptr->num_dna_rx_queues : get_num_rx_queues(dev));
+    seq_printf(m, "# Used RX Queues:  %d\n",
+	       dev_ptr->is_dna_device ? dev_ptr->num_dna_rx_queues : get_num_rx_queues(dev));
   }
 
-  return rlen;
+  return(0);
 }
 
 /* **************** 82599 ****************** */
@@ -1233,26 +1254,23 @@ static int handle_hw_filtering_rule(struct pf_ring_socket *pfr,
 
 #ifdef ENABLE_PROC_WRITE_RULE
 #if(LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,31))
-static int ring_proc_dev_rule_read(char *buf, char **start, off_t offset,
-				   int len, int *unused, void *data)
+static int ring_proc_dev_rule_read(struct seq_file *m, void *data_not_used)
 {
-  int rlen = 0;
-
-  if(data != NULL) {
-    ring_device_element *dev_ptr = (ring_device_element*)data;
+  if(m->private != NULL) {
+    ring_device_element *dev_ptr = (ring_device_element*)m->private;
     struct net_device *dev = dev_ptr->dev;
 
-    rlen =  sprintf(buf,      "Name:              %s\n", dev->name);
-    rlen += sprintf(buf+rlen, "# Filters:         %d\n", dev_ptr->hw_filters.num_filters);
-    rlen += sprintf(buf+rlen, "\nFiltering Rules:\n"
-		    "[perfect rule]  +|-(rule_id,queue_id,vlan,tcp|udp,src_ip/mask,src_port,dst_ip/mask,dst_port)\n"
-		    "Example:\t+(1,-1,0,tcp,192.168.0.10/32,25,10.6.0.0/16,0) (queue_id = -1 => drop)\n\n"
-		    "[5 tuple rule]  +|-(rule_id,queue_id,tcp|udp,src_ip,src_port,dst_ip,dst_port)\n"
-		    "Example:\t+(1,-1,tcp,192.168.0.10,25,0.0.0.0,0)\n\n"
-		    "Note:\n\t- queue_id = -1 => drop\n\t- 0 = ignore value\n");
+    seq_printf(m, "Name:              %s\n", dev->name);
+    seq_printf(m, "# Filters:         %d\n", dev_ptr->hw_filters.num_filters);
+    seq_printf(m, "\nFiltering Rules:\n"
+	       "[perfect rule]  +|-(rule_id,queue_id,vlan,tcp|udp,src_ip/mask,src_port,dst_ip/mask,dst_port)\n"
+	       "Example:\t+(1,-1,0,tcp,192.168.0.10/32,25,10.6.0.0/16,0) (queue_id = -1 => drop)\n\n"
+	       "[5 tuple rule]  +|-(rule_id,queue_id,tcp|udp,src_ip,src_port,dst_ip,dst_port)\n"
+	       "Example:\t+(1,-1,tcp,192.168.0.10,25,0.0.0.0,0)\n\n"
+	       "Note:\n\t- queue_id = -1 => drop\n\t- 0 = ignore value\n");
   }
-
-  return rlen;
+  
+  return(0);
 }
 #endif
 
@@ -1429,73 +1447,71 @@ static char* sockmode2string(socket_mode m) {
 
 /* ********************************** */
 
-static int ring_proc_get_info(char *buf, char **start, off_t offset,
-			      int len, int *unused, void *data)
+static int ring_proc_get_info(struct seq_file *m, void *data_not_used)
 {
-  int rlen = 0;
   FlowSlotInfo *fsi;
 
-  if(data == NULL) {
+  if(m->private == NULL) {
     /* /proc/net/pf_ring/info */
-    rlen = sprintf(buf,         "PF_RING Version          : %s ($Revision: %s$)\n", RING_VERSION, SVN_REV);
-    rlen += sprintf(buf + rlen, "Total rings              : %d\n", ring_table_size);
-    rlen += sprintf(buf + rlen, "\nStandard (non DNA) Options\n");
-    rlen += sprintf(buf + rlen, "Ring slots               : %d\n", min_num_slots);
-    rlen += sprintf(buf + rlen, "Slot version             : %d\n", RING_FLOWSLOT_VERSION);
-    rlen += sprintf(buf + rlen, "Capture TX               : %s\n", enable_tx_capture ? "Yes [RX+TX]" : "No [RX only]");
-    rlen += sprintf(buf + rlen, "IP Defragment            : %s\n", enable_ip_defrag ? "Yes" : "No");
-    rlen += sprintf(buf + rlen, "Socket Mode              : %s\n", quick_mode ? "Quick" : "Standard");
-    rlen += sprintf(buf + rlen, "Transparent mode         : %s\n",
+    seq_printf(m, "PF_RING Version          : %s ($Revision: %s$)\n", RING_VERSION, SVN_REV);
+    seq_printf(m, "Total rings              : %d\n", ring_table_size);
+    seq_printf(m, "\nStandard (non DNA) Options\n");
+    seq_printf(m, "Ring slots               : %d\n", min_num_slots);
+    seq_printf(m, "Slot version             : %d\n", RING_FLOWSLOT_VERSION);
+    seq_printf(m, "Capture TX               : %s\n", enable_tx_capture ? "Yes [RX+TX]" : "No [RX only]");
+    seq_printf(m, "IP Defragment            : %s\n", enable_ip_defrag ? "Yes" : "No");
+    seq_printf(m, "Socket Mode              : %s\n", quick_mode ? "Quick" : "Standard");
+    seq_printf(m, "Transparent mode         : %s\n",
 		    (transparent_mode == standard_linux_path ? "Yes [mode 0]" :
 		     (transparent_mode == driver2pf_ring_transparent ? "Yes [mode 1]" : "No [mode 2]")));
-    rlen += sprintf(buf + rlen, "Total plugins            : %d\n", plugin_registration_size);
+    seq_printf(m, "Total plugins            : %d\n", plugin_registration_size);
 
     if(enable_frag_coherence) {
       purge_idle_fragment_cache();
-      rlen += sprintf(buf + rlen, "Cluster Fragment Queue   : %u\n", num_cluster_fragments);
-      rlen += sprintf(buf + rlen, "Cluster Fragment Discard : %u\n", num_cluster_discarded_fragments);
+      seq_printf(m, "Cluster Fragment Queue   : %u\n", num_cluster_fragments);
+      seq_printf(m, "Cluster Fragment Discard : %u\n", num_cluster_discarded_fragments);
     }
   } else {
     /* Detailed statistics about a PF_RING */
-    struct pf_ring_socket *pfr = (struct pf_ring_socket *)data;
+    struct pf_ring_socket *pfr = (struct pf_ring_socket *)m->private;
 
     if(pfr) {
       int num = 0;
       struct list_head *ptr, *tmp_ptr;
       fsi = pfr->slots_info;
 
-      rlen = sprintf(buf,         "Bound Device(s)    : ");
+      seq_printf(m, "Bound Device(s)    : ");
 
       list_for_each_safe(ptr, tmp_ptr, &ring_aware_device_list) {
         ring_device_element *dev_ptr = list_entry(ptr, ring_device_element, device_list);
 
         if(test_bit(dev_ptr->dev->ifindex, pfr->netdev_mask)) {
-          rlen += sprintf(buf + rlen, "%s%s", (num > 0) ? "," : "", dev_ptr->dev->name);
+          seq_printf(m, "%s%s", (num > 0) ? "," : "", dev_ptr->dev->name);
           num++;
         }
       }
 
-      rlen += sprintf(buf + rlen, "\n");
+      seq_printf(m, "\n");
 
-      rlen += sprintf(buf + rlen, "Active             : %d\n", pfr->ring_active || pfr->dna_cluster);
-      rlen += sprintf(buf + rlen, "Breed              : %s\n", (pfr->dna_device_entry != NULL) ? "DNA" : "Non-DNA");
-      rlen += sprintf(buf + rlen, "Sampling Rate      : %d\n", pfr->sample_rate);
-      rlen += sprintf(buf + rlen, "Capture Direction  : %s\n", direction2string(pfr->direction));
-      rlen += sprintf(buf + rlen, "Socket Mode        : %s\n", sockmode2string(pfr->mode));
-      rlen += sprintf(buf + rlen, "Appl. Name         : %s\n", pfr->appl_name ? pfr->appl_name : "<unknown>");
-      rlen += sprintf(buf + rlen, "IP Defragment      : %s\n", enable_ip_defrag ? "Yes" : "No");
-      rlen += sprintf(buf + rlen, "BPF Filtering      : %s\n", pfr->bpfFilter ? "Enabled" : "Disabled");
-      rlen += sprintf(buf + rlen, "# Sw Filt. Rules   : %d\n", pfr->num_sw_filtering_rules);
-      rlen += sprintf(buf + rlen, "# Hw Filt. Rules   : %d\n", pfr->num_hw_filtering_rules);
-      rlen += sprintf(buf + rlen, "Poll Pkt Watermark : %d\n", pfr->poll_num_pkts_watermark);
-      rlen += sprintf(buf + rlen, "Num Poll Calls     : %u\n", pfr->num_poll_calls);
+      seq_printf(m, "Active             : %d\n", pfr->ring_active || pfr->dna_cluster);
+      seq_printf(m, "Breed              : %s\n", (pfr->dna_device_entry != NULL) ? "DNA" : "Non-DNA");
+      seq_printf(m, "Sampling Rate      : %d\n", pfr->sample_rate);
+      seq_printf(m, "Capture Direction  : %s\n", direction2string(pfr->direction));
+      seq_printf(m, "Socket Mode        : %s\n", sockmode2string(pfr->mode));
+      seq_printf(m, "Appl. Name         : %s\n", pfr->appl_name ? pfr->appl_name : "<unknown>");
+      seq_printf(m, "IP Defragment      : %s\n", enable_ip_defrag ? "Yes" : "No");
+      seq_printf(m, "BPF Filtering      : %s\n", pfr->bpfFilter ? "Enabled" : "Disabled");
+      seq_printf(m, "# Sw Filt. Rules   : %d\n", pfr->num_sw_filtering_rules);
+      seq_printf(m, "# Hw Filt. Rules   : %d\n", pfr->num_hw_filtering_rules);
+      seq_printf(m, "Poll Pkt Watermark : %d\n", pfr->poll_num_pkts_watermark);
+      seq_printf(m, "Num Poll Calls     : %u\n", pfr->num_poll_calls);
 
       if(pfr->dna_device_entry != NULL) {
         /* DNA */
-        rlen += sprintf(buf + rlen, "Channel Id         : %d\n", pfr->dna_device_entry->dev.channel_id);
-        rlen += sprintf(buf + rlen, "Num RX Slots       : %d\n", pfr->dna_device_entry->dev.mem_info.rx.packet_memory_num_slots);
-	rlen += sprintf(buf + rlen, "Num TX Slots       : %d\n", pfr->dna_device_entry->dev.mem_info.tx.packet_memory_num_slots);
-	rlen += sprintf(buf + rlen, "Tot Memory         : %u bytes\n",
+        seq_printf(m, "Channel Id         : %d\n", pfr->dna_device_entry->dev.channel_id);
+        seq_printf(m, "Num RX Slots       : %d\n", pfr->dna_device_entry->dev.mem_info.rx.packet_memory_num_slots);
+	seq_printf(m, "Num TX Slots       : %d\n", pfr->dna_device_entry->dev.mem_info.tx.packet_memory_num_slots);
+	seq_printf(m, "Tot Memory         : %u bytes\n",
 			( pfr->dna_device_entry->dev.mem_info.rx.packet_memory_num_chunks *
 			  pfr->dna_device_entry->dev.mem_info.rx.packet_memory_chunk_len   )
 			+(pfr->dna_device_entry->dev.mem_info.tx.packet_memory_num_chunks *
@@ -1503,64 +1519,72 @@ static int ring_proc_get_info(char *buf, char **start, off_t offset,
 			+ pfr->dna_device_entry->dev.mem_info.rx.descr_packet_memory_tot_len
 			+ pfr->dna_device_entry->dev.mem_info.tx.descr_packet_memory_tot_len);
 	if(pfr->dna_cluster && pfr->dna_cluster_type == cluster_master && pfr->dna_cluster->stats) {
-	  rlen += sprintf(buf + rlen, "Cluster: Tot Recvd : %lu\n", (unsigned long)pfr->dna_cluster->stats->tot_rx_packets);
-	  rlen += sprintf(buf + rlen, "Cluster: Tot Sent  : %lu\n", (unsigned long)pfr->dna_cluster->stats->tot_tx_packets);
+	  seq_printf(m, "Cluster: Tot Recvd : %lu\n", (unsigned long)pfr->dna_cluster->stats->tot_rx_packets);
+	  seq_printf(m, "Cluster: Tot Sent  : %lu\n", (unsigned long)pfr->dna_cluster->stats->tot_tx_packets);
 	}
       } else if(fsi != NULL) {
         /* Standard PF_RING */
-	rlen += sprintf(buf + rlen, "Channel Id Mask    : 0x%08X\n", pfr->channel_id_mask);
-	rlen += sprintf(buf + rlen, "Cluster Id         : %d\n", pfr->cluster_id);
-	rlen += sprintf(buf + rlen, "Slot Version       : %d [%s]\n", fsi->version, RING_VERSION);
-	rlen += sprintf(buf + rlen, "Min Num Slots      : %d\n", fsi->min_num_slots);
-	rlen += sprintf(buf + rlen, "Bucket Len         : %d\n", fsi->data_len);
-	rlen += sprintf(buf + rlen, "Slot Len           : %d [bucket+header]\n", fsi->slot_len);
-	rlen += sprintf(buf + rlen, "Tot Memory         : %d\n", fsi->tot_mem);
-	rlen += sprintf(buf + rlen, "Tot Packets        : %lu\n", (unsigned long)fsi->tot_pkts);
-	rlen += sprintf(buf + rlen, "Tot Pkt Lost       : %lu\n", (unsigned long)fsi->tot_lost);
-	rlen += sprintf(buf + rlen, "Tot Insert         : %lu\n", (unsigned long)fsi->tot_insert);
-	rlen += sprintf(buf + rlen, "Tot Read           : %lu\n", (unsigned long)fsi->tot_read);
-	rlen += sprintf(buf + rlen, "Insert Offset      : %lu\n", (unsigned long)fsi->insert_off);
-	rlen += sprintf(buf + rlen, "Remove Offset      : %lu\n", (unsigned long)fsi->remove_off);
-	rlen += sprintf(buf + rlen, "TX: Send Ok        : %lu\n", (unsigned long)fsi->good_pkt_sent);
-	rlen += sprintf(buf + rlen, "TX: Send Errors    : %lu\n", (unsigned long)fsi->pkt_send_error);
-	rlen += sprintf(buf + rlen, "Reflect: Fwd Ok    : %lu\n", (unsigned long)fsi->tot_fwd_ok);
-	rlen += sprintf(buf + rlen, "Reflect: Fwd Errors: %lu\n", (unsigned long)fsi->tot_fwd_notok);
-	rlen += sprintf(buf + rlen, "Num Free Slots     : %lu\n",  (unsigned long)get_num_ring_free_slots(pfr));
+	seq_printf(m, "Channel Id Mask    : 0x%08X\n", pfr->channel_id_mask);
+	seq_printf(m, "Cluster Id         : %d\n", pfr->cluster_id);
+	seq_printf(m, "Slot Version       : %d [%s]\n", fsi->version, RING_VERSION);
+	seq_printf(m, "Min Num Slots      : %d\n", fsi->min_num_slots);
+	seq_printf(m, "Bucket Len         : %d\n", fsi->data_len);
+	seq_printf(m, "Slot Len           : %d [bucket+header]\n", fsi->slot_len);
+	seq_printf(m, "Tot Memory         : %d\n", fsi->tot_mem);
+	seq_printf(m, "Tot Packets        : %lu\n", (unsigned long)fsi->tot_pkts);
+	seq_printf(m, "Tot Pkt Lost       : %lu\n", (unsigned long)fsi->tot_lost);
+	seq_printf(m, "Tot Insert         : %lu\n", (unsigned long)fsi->tot_insert);
+	seq_printf(m, "Tot Read           : %lu\n", (unsigned long)fsi->tot_read);
+	seq_printf(m, "Insert Offset      : %lu\n", (unsigned long)fsi->insert_off);
+	seq_printf(m, "Remove Offset      : %lu\n", (unsigned long)fsi->remove_off);
+	seq_printf(m, "TX: Send Ok        : %lu\n", (unsigned long)fsi->good_pkt_sent);
+	seq_printf(m, "TX: Send Errors    : %lu\n", (unsigned long)fsi->pkt_send_error);
+	seq_printf(m, "Reflect: Fwd Ok    : %lu\n", (unsigned long)fsi->tot_fwd_ok);
+	seq_printf(m, "Reflect: Fwd Errors: %lu\n", (unsigned long)fsi->tot_fwd_notok);
+	seq_printf(m, "Num Free Slots     : %lu\n",  (unsigned long)get_num_ring_free_slots(pfr));
       }
     } else
-      rlen = sprintf(buf, "WARNING data == NULL\n");
+      seq_printf(m, "WARNING m->private == NULL\n");
   }
 
-  return rlen;
+  return 0;
 }
 
 /* ********************************** */
 
-static int ring_proc_get_plugin_info(char *buf, char **start, off_t offset,
-				     int len, int *unused, void *data)
+static int ring_proc_get_plugin_info(struct seq_file *m, void *data_not_used)
 {
-  int rlen = 0, i = 0;
   struct pfring_plugin_registration *tmp = NULL;
+  int i;
 
   /* FIXME: I should now the number of plugins registered */
   if(!plugin_registration_size)
-    return rlen;
+    return(0);
 
   /* plugins_info */
-
-  rlen += sprintf(buf + rlen, "ID\tPlugin\n");
+  seq_printf(m, "ID\tPlugin\n");
 
   for(i = 0; i < MAX_PLUGIN_ID; i++) {
-    tmp = plugin_registration[i];
-    if(tmp) {
-      rlen += sprintf(buf + rlen, "%d\t%s [%s]\n",
-		      tmp->plugin_id, tmp->name,
-		      tmp->description);
-    }
+    if((tmp = plugin_registration[i]) != NULL)
+      seq_printf(m, "%d\t%s [%s]\n",
+		 tmp->plugin_id, tmp->name,
+		 tmp->description);    
   }
 
-  return rlen;
+  return(0);
 }
+
+/* ********************************** */
+
+static int ring_proc_plugins_open(struct inode *inode, struct file *file) { return single_open(file, ring_proc_get_plugin_info, PDE_DATA(inode)); }
+
+static const struct file_operations ring_proc_plugins_fops = {
+  .owner = THIS_MODULE,
+  .open = ring_proc_plugins_open,
+  .read = seq_read,
+  .llseek = seq_lseek,
+  .release = single_release,
+};
 
 /* ********************************** */
 
@@ -1580,13 +1604,15 @@ static void ring_proc_init(void)
     ring_proc_dev_dir   = proc_mkdir(PROC_DEV, ring_proc_dir);
     ring_proc_stats_dir = proc_mkdir(PROC_STATS, ring_proc_dir);
 
-    ring_proc = create_proc_read_entry(PROC_INFO, 0 /* read-only */,
-				       ring_proc_dir,
-				       ring_proc_get_info, NULL);
+    ring_proc = proc_create(PROC_INFO /* name */, 
+			    0 /* read-only */,
+			    ring_proc_dir /* parent */,
+			    &ring_proc_fops /* file operations */);
+
     ring_proc_plugins_info =
-      create_proc_read_entry(PROC_PLUGINS_INFO, 0 /* read-only */,
-			     ring_proc_dir,
-			     ring_proc_get_plugin_info, NULL);
+      proc_create(PROC_PLUGINS_INFO, 0 /* read-only */,
+		  ring_proc_dir, &ring_proc_plugins_fops);
+
     if(!ring_proc || !ring_proc_plugins_info)
       printk("[PF_RING] unable to register proc file\n");
     else {
@@ -4381,9 +4407,10 @@ static struct sk_buff* defrag_skb(struct sk_buff *skb,
 static int skb_ring_handler(struct sk_buff *skb,
 			    u_int8_t recv_packet,
 			    u_int8_t real_skb /* 1=real skb, 0=faked skb */,
-			    u_int8_t *skb_reference_in_use, /* This return value is set to 1 in case
-							       the input skb is in use by PF_RING and thus
-							       the caller should NOT free it */
+			    u_int8_t *skb_reference_in_use, 
+			    /* This return value is set to 1 in case
+			       the input skb is in use by PF_RING and thus
+			       the caller should NOT free it */
 			    u_int32_t channel_id,
 			    u_int32_t num_rx_channels)
 {
@@ -4537,7 +4564,10 @@ static int skb_ring_handler(struct sk_buff *skb,
 	 && (
 	     test_bit(skb->dev->ifindex, pfr->netdev_mask)
 	     || (pfr->ring_netdev == &any_device_element) /* Socket bound to 'any' */
-	     || ((skb->dev->flags & IFF_SLAVE) && (pfr->ring_netdev->dev == skb->dev->master)))
+#if(LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
+	     || ((skb->dev->flags & IFF_SLAVE) && (pfr->ring_netdev->dev == skb->dev->master))
+#endif
+	     )
 	 && (pfr->ring_netdev != &none_device_element) /* Not a dummy socket bound to "none" */
 	 && (pfr->cluster_id == 0 /* No cluster */ )
 	 && (pfr->ring_slots != NULL)
@@ -4596,8 +4626,11 @@ static int skb_ring_handler(struct sk_buff *skb,
 	      if((pfr != NULL)
 		 && (pfr->ring_slots != NULL)
 		 && (test_bit(skb->dev->ifindex, pfr->netdev_mask)
+#if(LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 		     || ((skb->dev->flags & IFF_SLAVE)
-			 && (pfr->ring_netdev->dev == skb->dev->master)))
+			 && (pfr->ring_netdev->dev == skb->dev->master))
+#endif
+		 )
 		 && is_valid_skb_direction(pfr->direction, recv_packet)
 		 ) {
 		if(check_free_ring_slot(pfr) /* Not full */) {
@@ -4868,13 +4901,10 @@ out:
 
 /* ************************************* */
 
-static int ring_proc_virtual_filtering_dev_get_info(char *buf, char **start, off_t offset,
-						    int len, int *unused, void *data)
+static int ring_proc_virtual_filtering_dev_get_info(struct seq_file *m, void *data_not_used)
 {
-  int rlen = 0;
-
-  if(data != NULL) {
-    virtual_filtering_device_info *info = (virtual_filtering_device_info*)data;
+  if(m->private != NULL) {
+    virtual_filtering_device_info *info = (virtual_filtering_device_info*)m->private;
     char *dev_family = "???";
 
     switch(info->device_type) {
@@ -4882,17 +4912,32 @@ static int ring_proc_virtual_filtering_dev_get_info(char *buf, char **start, off
     case intel_82599_family:     dev_family = "Intel 82599"; break;
     }
 
-    rlen =  sprintf(buf,      "Name:              %s\n", info->device_name);
-    rlen += sprintf(buf+rlen, "Family:            %s\n", dev_family);
+    seq_printf(m, "Name:              %s\n", info->device_name);
+    seq_printf(m, "Family:            %s\n", dev_family);
   }
 
-  return rlen;
+  return (0);
 }
+
+/* ********************************** */
+
+static int ring_proc_virtual_filtering_open(struct inode *inode, struct file *file) {
+  return single_open(file, ring_proc_virtual_filtering_dev_get_info, PDE_DATA(inode)); 
+}
+
+static const struct file_operations ring_proc_virtual_filtering_fops = {
+  .owner = THIS_MODULE,
+  .open = ring_proc_virtual_filtering_open,
+  .read = seq_read,
+  .llseek = seq_lseek,
+  .release = single_release,
+};
 
 /* ************************************* */
 
-static virtual_filtering_device_element* add_virtual_filtering_device(struct sock *sock,
-								      virtual_filtering_device_info *info)
+static virtual_filtering_device_element* 
+add_virtual_filtering_device(struct sock *sock,
+			     virtual_filtering_device_info *info)
 {
   virtual_filtering_device_element *elem;
   struct list_head *ptr, *tmp_ptr;
@@ -4906,7 +4951,9 @@ static virtual_filtering_device_element* add_virtual_filtering_device(struct soc
   /* Check if the same entry is already present */
   write_lock(&virtual_filtering_lock);
   list_for_each_safe(ptr, tmp_ptr, &virtual_filtering_devices_list) {
-    virtual_filtering_device_element *filtering_ptr = list_entry(ptr, virtual_filtering_device_element, list);
+    virtual_filtering_device_element *filtering_ptr = list_entry(ptr, 
+								 virtual_filtering_device_element,
+								 list);
 
     if(strcmp(filtering_ptr->info.device_name, info->device_name) == 0) {
       write_unlock(&virtual_filtering_lock);
@@ -4928,10 +4975,10 @@ static virtual_filtering_device_element* add_virtual_filtering_device(struct soc
 
   /* Add /proc entry */
   elem->info.proc_entry = proc_mkdir(elem->info.device_name, ring_proc_dev_dir);
-  create_proc_read_entry(PROC_INFO, 0 /* read-only */,
-			 elem->info.proc_entry,
-			 ring_proc_virtual_filtering_dev_get_info /* read */,
-			 (void*)&elem->info);
+  proc_create_data(PROC_INFO, 0 /* read-only */,
+		   elem->info.proc_entry,
+		   &ring_proc_virtual_filtering_fops /* read */,
+		   (void*)&elem->info);
 
   return(elem);
 }
@@ -4970,7 +5017,8 @@ static int remove_virtual_filtering_device(struct sock *sock, char *device_name)
 
 /* ********************************** */
 
-static struct pf_userspace_ring* userspace_ring_create(char *u_dev_name, userspace_ring_client_type type,
+static struct pf_userspace_ring* userspace_ring_create(char *u_dev_name, 
+						       userspace_ring_client_type type,
                                                        wait_queue_head_t *consumer_ring_slots_waitqueue) {
   char *c_p;
   long id;
@@ -7025,6 +7073,7 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 			       dna_device_mapping *mapping)
 {
   struct list_head *ptr, *tmp_ptr;
+  int i, found;
 
   if(unlikely(enable_debug))
     printk("[PF_RING] %s(%s@%d): %s\n", __FUNCTION__,
@@ -7033,47 +7082,47 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 
   if(mapping->operation == remove_device_mapping) {
     /* Unlock driver */
-    u8 found = 0;
 
     list_for_each_safe(ptr, tmp_ptr, &ring_dna_devices_list) {
       dna_device_list *entry = list_entry(ptr, dna_device_list, list);
 
-      if((!strcmp(entry->dev.netdev->name, mapping->device_name))
-	 && (entry->dev.channel_id == mapping->channel_id)
-	 && entry->num_bound_sockets) {
-	int i;
+      if(!strcmp(entry->dev.netdev->name, mapping->device_name)
+	 && entry->dev.channel_id == mapping->channel_id) {
+        found = 0;
 
-	for(i=0; i<MAX_NUM_DNA_BOUND_SOCKETS; i++)
+        write_lock(&entry->lock);
+	
+	for(i=0; i<MAX_NUM_DNA_BOUND_SOCKETS; i++) {
 	  if(entry->bound_sockets[i] == pfr) {
 	    entry->bound_sockets[i] = NULL;
+	    entry->num_bound_sockets--;
 	    found = 1;
 	    break;
 	  }
+	}
+
+        write_unlock(&entry->lock);
 
 	if(!found) {
-	  if(unlikely(enable_debug))
-	    printk("[PF_RING] %s(remove_device_mapping, %s, %u): something got wrong\n",
-	           __FUNCTION__, mapping->device_name, mapping->channel_id);
+	  printk("[PF_RING] %s: something got wrong removing %s@%u\n",
+	         __FUNCTION__, mapping->device_name, mapping->channel_id);
 	  return(-1); /* Something got wrong */
 	}
+	  
+	if(unlikely(enable_debug))
+	  printk("[PF_RING] %s(%s@%u): removed mapping [num_bound_sockets=%u]\n",
+		 __FUNCTION__, mapping->device_name, mapping->channel_id, entry->num_bound_sockets);
 
-	entry->num_bound_sockets--;
-
-	if(pfr->dna_device != NULL) {
-	  if(unlikely(enable_debug))
-	    printk("[PF_RING] %s(%s): removed mapping [num_bound_sockets=%u]\n",
-		   __FUNCTION__, mapping->device_name, entry->num_bound_sockets);
-	  pfr->dna_device->usage_notification(pfr->dna_device->rx_adapter_ptr,
+        if(pfr->dna_device != NULL) {
+          pfr->dna_device->usage_notification(pfr->dna_device->rx_adapter_ptr,
 					      pfr->dna_device->tx_adapter_ptr,
 					      0 /* unlock */);
-	  // pfr->dna_device = NULL;
-	}
-	/* Continue for all devices: no break */
+          // pfr->dna_device = NULL;
+        }
+
+        break;
       }
     }
-
-    if(unlikely(enable_debug))
-      printk("[PF_RING] %s(%s): removed mapping\n", __FUNCTION__, mapping->device_name);
 
     return(0);
   } else {
@@ -7081,39 +7130,37 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 
     list_for_each_safe(ptr, tmp_ptr, &ring_dna_devices_list) {
       dna_device_list *entry = list_entry(ptr, dna_device_list, list);
-
       if((!strcmp(entry->dev.netdev->name, mapping->device_name))
 	 && (entry->dev.channel_id == mapping->channel_id)) {
-	int i, found = 0;
+	int i;
 
 	if(unlikely(enable_debug))
 	  printk("[PF_RING] ==>> %s@%d [num_bound_sockets=%d][%p]\n",
 		 entry->dev.netdev->name, mapping->channel_id,
 		 entry->num_bound_sockets, entry);
 
-	for(i=0; i<MAX_NUM_DNA_BOUND_SOCKETS; i++)
+        write_lock(&entry->lock);
+
+        found = 0;
+	for(i=0; i<MAX_NUM_DNA_BOUND_SOCKETS; i++) {
 	  if(entry->bound_sockets[i] == NULL) {
 	    entry->bound_sockets[i] = pfr;
+	    entry->num_bound_sockets++;
 	    found = 1;
 	    break;
 	  }
+	}
+
+	write_unlock(&entry->lock);
 
 	if(!found) {
-	  if(unlikely(enable_debug))
-	    printk("[PF_RING] %s(add_device_mapping, %s, %u, %s): "
-		   "something got wrong (too many DNA devices open)\n", __FUNCTION__,
-		   mapping->device_name, mapping->channel_id, direction2string(pfr->mode));
-
+	  printk("[PF_RING] %s: something got wrong adding %s@%u %s\n",
+	         __FUNCTION__, mapping->device_name, mapping->channel_id, direction2string(pfr->mode));
 	  return(-1); /* Something got wrong: too many mappings */
 	}
 
-	entry->num_bound_sockets++, pfr->dna_device_entry = entry;
-
+	pfr->dna_device_entry = entry;
 	pfr->dna_device = &entry->dev;
-
-	if(unlikely(enable_debug))
-	  printk("[PF_RING] %s(%s, %u): added mapping\n", __FUNCTION__,
-		 mapping->device_name, mapping->channel_id);
 
 	/* Now let's set the read ring_netdev device */
 	found = 0;
@@ -7130,15 +7177,15 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 	}
 
 	if(!found) {
-	  printk("[PF_RING] %s(add_device_mapping, %s, %u, %s): "
+	  printk("[PF_RING] %s(add_device_mapping, %s@%u, %s): "
 	  "something got wrong (device not found)\n", __FUNCTION__,
 	  mapping->device_name, mapping->channel_id, direction2string(pfr->mode));
 	  return(-1); /* Something got wrong */
 	}
 
 	if(unlikely(enable_debug))
-	  printk("[PF_RING] ===> %s(%s): added mapping [num_bound_sockets=%u]\n",
-		 __FUNCTION__, mapping->device_name, entry->num_bound_sockets);
+	  printk("[PF_RING] ===> %s(%s@%u): added mapping [num_bound_sockets=%u]\n",
+		 __FUNCTION__, mapping->device_name, mapping->channel_id, entry->num_bound_sockets);
 
 	pfr->dna_device->usage_notification(pfr->dna_device->rx_adapter_ptr,
 					    pfr->dna_device->tx_adapter_ptr,
@@ -7151,7 +7198,7 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
   }
 
   if(unlikely(enable_debug))
-    printk("[PF_RING] %s(%s, %u): mapping failed or not a dna device\n",
+    printk("[PF_RING] %s(%s@%u): mapping failed or not a dna device\n",
 	   __FUNCTION__, mapping->device_name, mapping->channel_id);
 
   return(-1);
@@ -7442,19 +7489,30 @@ static void purge_idle_rules(struct pf_ring_socket *pfr,
 
 /* ************************************* */
 
-static int ring_proc_stats_read(char *buf, char **start, off_t offset,
-				int len, int *unused, void *data)
+static int ring_proc_stats_read(struct seq_file *m, void *data_not_used)
 {
-  int rlen = 0;
+  if(m->private != NULL) {
+    struct pf_ring_socket *s = (struct pf_ring_socket*)m->private;
 
-  if(data != NULL) {
-    struct pf_ring_socket *s = (struct pf_ring_socket*)data;
-
-    rlen = sprintf(buf, "%s\n", s->statsString);
+    seq_printf(m, "%s\n", s->statsString);
   }
 
-  return(rlen);
+  return(0);
 }
+
+/* ********************************** */
+
+static int ring_proc_stats_open(struct inode *inode, struct file *file) { 
+  return single_open(file, ring_proc_stats_read, PDE_DATA(inode)); 
+}
+
+static const struct file_operations ring_proc_stats_fops = {
+  .owner = THIS_MODULE,
+  .open = ring_proc_stats_open,
+  .read = seq_read,
+  .llseek = seq_lseek,
+  .release = single_release,
+};
 
 /* ************************************* */
 
@@ -7468,10 +7526,10 @@ int setSocketStats(struct pf_ring_socket *s, char *statsString) {
 	     "%d-%s.%d", s->ring_pid,
 	     s->ring_netdev->dev->name, s->ring_id);
 
-    if((entry = create_proc_read_entry(s->sock_proc_stats_name,
-				       0 /* ro */,
-				       ring_proc_stats_dir,
-				       ring_proc_stats_read, s)) == NULL) {
+    if((entry = proc_create_data(s->sock_proc_stats_name,
+				 0 /* ro */,
+				 ring_proc_stats_dir,
+				 &ring_proc_stats_fops, s)) == NULL) {
       s->sock_proc_stats_name[0] = '\0';
       return(-1);
     }
@@ -7882,22 +7940,31 @@ static int ring_setsockopt(struct socket *sock,
     if(pfr->dna_device_entry != NULL && !pfr->ring_active /* already active, no check */) {
       int i;
 
+      write_lock(&pfr->dna_device_entry->lock);
+
       for(i=0; i<MAX_NUM_DNA_BOUND_SOCKETS; i++) {
 	if((pfr->dna_device_entry->bound_sockets[i] != NULL)
 	   && pfr->dna_device_entry->bound_sockets[i]->ring_active) {
-	  if(   pfr->dna_device_entry->bound_sockets[i]->mode == pfr->mode
-		|| pfr->dna_device_entry->bound_sockets[i]->mode == send_and_recv_mode
-		|| pfr->mode == send_and_recv_mode) {
+	  if(pfr->dna_device_entry->bound_sockets[i]->mode == pfr->mode
+	     || pfr->dna_device_entry->bound_sockets[i]->mode == send_and_recv_mode
+	     || pfr->mode == send_and_recv_mode) {
+            write_unlock(&pfr->dna_device_entry->lock);
 	    printk("[PF_RING] Unable to activate two or more DNA sockets on the same interface %s/link direction\n",
 		   pfr->ring_netdev->dev->name);
-
 	    return(-EFAULT); /* No way: we can't have two sockets that are doing the same thing with DNA */
 	  }
 	} /* if */
       } /* for */
+
+      pfr->ring_active = 1;
+
+      write_unlock(&pfr->dna_device_entry->lock);
+
+    } else {
+      pfr->ring_active = 1;
     }
 
-    found = 1, pfr->ring_active = 1;
+    found = 1;
     break;
 
   case SO_DEACTIVATE_RING:
@@ -8987,6 +9054,7 @@ void dna_device_handler(dna_device_operation operation,
     if(next != NULL) {
       memset(next, 0, sizeof(dna_device_list));
 
+      rwlock_init(&next->lock);
       next->num_bound_sockets = 0, next->dev.mem_info.version = version;
 
       //printk("[PF_RING] [rx_slots=%u/num_rx_pages=%u/memory_tot_len=%u]][tx_slots=%u/num_tx_pages=%u]\n",
@@ -9246,6 +9314,18 @@ void remove_device_from_ring_list(struct net_device *dev) {
   }
 }
 
+/* ********************************** */
+
+static int ring_proc_dev_open(struct inode *inode, struct file *file) { return single_open(file, ring_proc_dev_get_info, PDE_DATA(inode)); }
+
+static const struct file_operations ring_proc_dev_fops = {
+  .owner = THIS_MODULE,
+  .open = ring_proc_dev_open,
+  .read = seq_read,
+  .llseek = seq_lseek,
+  .release = single_release,
+};
+
 /* ************************************ */
 
 int add_device_to_ring_list(struct net_device *dev) {
@@ -9260,10 +9340,10 @@ int add_device_to_ring_list(struct net_device *dev) {
   dev_ptr->proc_entry = proc_mkdir(dev_ptr->dev->name, ring_proc_dev_dir);
   dev_ptr->device_type = standard_nic_family; /* Default */
 
-  create_proc_read_entry(PROC_INFO, 0 /* read-only */,
-			 dev_ptr->proc_entry,
-			 ring_proc_dev_get_info /* read */,
-			 dev_ptr);
+  proc_create_data(PROC_INFO, 0 /* read-only */,
+		   dev_ptr->proc_entry,
+		   &ring_proc_dev_fops /* read */,
+		   dev_ptr);
 
 #if(LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,31))
   /* Dirty trick to fix at some point used to discover Intel 82599 interfaces: FIXME */
@@ -9354,11 +9434,27 @@ int pf_ring_inject_packet_to_ring(int if_index, int channel_id, char *data, int 
 }
 EXPORT_SYMBOL(pf_ring_inject_packet_to_ring);
 
+/* ********************************** */
+
+#ifdef ENABLE_PROC_WRITE_RULE
+static int ring_proc_dev_ruleopen(struct inode *inode, struct file *file) { 
+  return single_open(file, ring_proc_dev_rule_read, PDE_DATA(inode)); 
+}
+
+static const struct file_operations ring_proc_dev_rulefops = {
+  .owner = THIS_MODULE,
+  .open = ring_proc_dev_ruleopen,
+  .read = seq_read,
+  .llseek = seq_lseek,
+  .release = single_release,
+};
+#endif
+
 /* ************************************ */
 
 static int ring_notifier(struct notifier_block *this, unsigned long msg, void *data)
 {
-  struct net_device *dev = data;
+  struct net_device *dev = netdev_notifier_info_to_dev(data);
   struct pfring_hooks *hook;
 
   if(dev != NULL) {
@@ -9438,7 +9534,7 @@ static int ring_notifier(struct notifier_block *this, unsigned long msg, void *d
 	  if(dev_ptr->dev == dev) {
 	    if(unlikely(enable_debug))
 	      printk("[PF_RING] ==>> FOUND device change name %s -> %s\n",
-		     dev_ptr->proc_entry->name, dev->name);
+		     dev_ptr->dev->name, dev->name);
 
 	    /* Remove old entry */
 #ifdef ENABLE_PROC_WRITE_RULE
@@ -9447,34 +9543,33 @@ static int ring_notifier(struct notifier_block *this, unsigned long msg, void *d
 #endif
 
 	    remove_proc_entry(PROC_INFO, dev_ptr->proc_entry);
-	    remove_proc_entry(dev_ptr->proc_entry->name, ring_proc_dev_dir);
+	    remove_proc_entry(dev_ptr->dev->name, ring_proc_dev_dir);
 	    /* Add new entry */
 	    dev_ptr->proc_entry = proc_mkdir(dev_ptr->dev->name, ring_proc_dev_dir);
-	    create_proc_read_entry(PROC_INFO, 0 /* read-only */,
-				   dev_ptr->proc_entry,
-				   ring_proc_dev_get_info /* read */,
-				   dev_ptr);
+	    proc_create_data(PROC_INFO, 0 /* read-only */,
+			     dev_ptr->proc_entry,
+			     &ring_proc_dev_fops /* read */,
+			     dev_ptr);
 
 #ifdef ENABLE_PROC_WRITE_RULE
 #if(LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,31))
 	    if(dev_ptr->device_type != standard_nic_family) {
 	      struct proc_dir_entry *entry;
 
-	      entry= create_proc_read_entry(PROC_RULES, 0666 /* rw */,
-					    dev_ptr->proc_entry,
-					    ring_proc_dev_rule_read,
-					    dev_ptr);
+	      entry = proc_create_data(PROC_RULES, 0666 /* rw */,
+				       dev_ptr->proc_entry,
+				       &ring_proc_dev_rulefops,
+				       dev_ptr);
 	      if(entry)
 		entry->write_proc = ring_proc_dev_rule_write;
 	    }
 #endif
 #endif
 
-#if(LINUX_VERSION_CODE >= KERNEL_VERSION(3,1,0))
-	    strncpy(dev_ptr->proc_entry->name, dev->name, dev_ptr->proc_entry->namelen);
-	    dev_ptr->proc_entry->name[dev_ptr->proc_entry->namelen /* size is namelen+1 */] = '\0';
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,1,0)) || defined(REDHAT_PATCHED_KERNEL)
+	    strcpy(dev_ptr->dev->name, dev->name);
 #else
-	    dev_ptr->proc_entry->name = dev->name;
+	    dev_ptr->dev->name = dev->name;
 #endif
 	    break;
 	  }

@@ -314,9 +314,8 @@ void* packet_consumer_thread(void *_id) {
   struct pfring_pkthdr hdr;
   u_char *buffer = NULL;
  
-  if (numCPU > 1) {
 #ifdef HAVE_PTHREAD_SETAFFINITY_NP
-    /* Bind this thread to a specific core */
+  if (numCPU > 1) { /* bind this thread to a specific core */
     cpu_set_t cpuset;
     u_long core_id;
     int s;
@@ -334,8 +333,8 @@ void* packet_consumer_thread(void *_id) {
     else {
       printf("Set thread %lu on core %lu/%u\n", thread_id, core_id, numCPU);
     }
-#endif
   }
+#endif
 
   memset(&hdr, 0, sizeof(hdr));
 

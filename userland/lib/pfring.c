@@ -828,7 +828,7 @@ int pfring_get_selectable_fd(pfring *ring) {
   if(ring && ring->get_selectable_fd)
     return ring->get_selectable_fd(ring);
 
-  return(PF_RING_ERROR_NOT_SUPPORTED);
+  return(-1);
 }
 
 /* **************************************************** */
@@ -1279,7 +1279,7 @@ u_int pfring_get_num_rx_slots(pfring* ring) {
 int pfring_copy_tx_packet_into_slot(pfring* ring,
 				    u_int16_t tx_slot_id, char* buffer, u_int len) {
   if(ring && ring->dna_copy_tx_packet_into_slot)
-    return ring->dna_copy_tx_packet_into_slot(ring, tx_slot_id, buffer, len);
+    return (ring->dna_copy_tx_packet_into_slot(ring, tx_slot_id, buffer, len) != NULL ? 0 : -1);
 
   return(PF_RING_ERROR_NOT_SUPPORTED);
 }

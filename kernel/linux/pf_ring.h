@@ -25,7 +25,7 @@
 #define DEFAULT_BUCKET_LEN            128
 #define MAX_NUM_DEVICES               256
 
-// #define MAX_NUM_RING_SOCKETS          64 /* see MAX_NUM_LIST_ELEMENTS */
+#define MAX_NUM_RING_SOCKETS           64
 
 /* Watermark */
 #define DEFAULT_MIN_PKT_QUEUED        128
@@ -312,7 +312,7 @@ struct pfring_pkthdr {
 
 /* ************************************************* */
 
-#define MAX_NUM_LIST_ELEMENTS  64 /* sizeof(bits_set) [see below] */
+#define MAX_NUM_LIST_ELEMENTS MAX_NUM_RING_SOCKETS /* sizeof(bits_set) [see below] */
 
 #ifdef __KERNEL__
 
@@ -898,19 +898,20 @@ typedef struct {
   struct list_head list;
 } ring_cluster_element;
 
-#define MAX_NUM_DNA_BOUND_SOCKETS  8
+#define MAX_NUM_DNA_BOUND_SOCKETS MAX_NUM_RING_SOCKETS
 
 typedef struct {
   u8 num_bound_sockets;
   dna_device dev;
   struct list_head list;
   /*
-    In the DNA world only one application can open the device@channel
-    per direction. The two variables below are used to keep
-    pointers to the max two sockets (one for RX and one for TX) that can open
-    the DNA socket
+    In the DNA world only one application can open and enable the 
+    device@channel per direction. The array below is used to keep
+    pointers to the sockets bound to device@channel in order to
+    enable no more than one socket for RX and one for TX.
   */
   struct pf_ring_socket *bound_sockets[MAX_NUM_DNA_BOUND_SOCKETS];
+  rwlock_t lock;
 } dna_device_list;
 
 #define MAX_NUM_IFIDX                       1024

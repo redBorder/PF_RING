@@ -602,7 +602,7 @@ int main(int argc, char* argv[]) {
     snprintf(buf, sizeof(buf), "dnacluster:%d@%ld", cluster_id, i);
     thread_stats[i].ring = pfring_open(buf, 1500 /* snaplen */, PF_RING_PROMISC);
     if (thread_stats[i].ring == NULL) {
-      printf("pfring_open %s error [%s]\n", in_device, strerror(errno));
+      printf("pfring_open %s error [%s]\n", buf, strerror(errno));
       return(-1);
     }
 
