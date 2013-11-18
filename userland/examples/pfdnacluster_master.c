@@ -646,7 +646,8 @@ int main(int argc, char* argv[]) {
     return -1;
   }
 
-  snprintf(buf, sizeof(buf), "TotQueues:    %d\n", tot_num_slaves);
+  snprintf(buf, sizeof(buf), "ClusterId:    %d\n", cluster_id);
+  snprintf(&buf[strlen(buf)], sizeof(buf)-strlen(buf), "TotQueues:    %d\n", tot_num_slaves);
   snprintf(&buf[strlen(buf)], sizeof(buf)-strlen(buf), "Applications: %d\n", num_apps);
   for (i = 0; i < num_apps; i++)
     snprintf(&buf[strlen(buf)], sizeof(buf)-strlen(buf), "App%dQueues:   %d\n", i, instances_per_app[i]);
