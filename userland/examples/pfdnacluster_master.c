@@ -435,7 +435,7 @@ static int fanout_distribution_function(const u_char *buffer, const u_int16_t bu
 
 int main(int argc, char* argv[]) {
   char c;
-  char buf[32];
+  char buf[512];
   u_int32_t version;
   int off, i, j;
   char *dev, *dev_pos = NULL;
@@ -645,6 +645,13 @@ int main(int argc, char* argv[]) {
     dna_cluster_destroy(dna_cluster_handle);
     return -1;
   }
+
+  snprintf(buf, sizeof(buf), "TotQueues:    %d\n", tot_num_slaves);
+  snprintf(&buf[strlen(buf)], sizeof(buf)-strlen(buf), "Applications: %d\n", num_apps);
+  for (i = 0; i < num_apps; i++)
+    snprintf(&buf[strlen(buf)], sizeof(buf)-strlen(buf), "App%dQueues:   %d\n", i, instances_per_app[i]);
+
+  pfring_set_application_stats(pd[0], buf);
 
   printf("The DNA cluster [id: %u][num slave apps: %u] is now running...\n", 
 	 cluster_id, tot_num_slaves);
