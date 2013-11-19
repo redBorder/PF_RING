@@ -47,6 +47,7 @@
 #include "pfutils.c"
 
 #define ALARM_SLEEP            1
+#define MAX_NUM_OPTIONS        64
 #define MAX_NUM_APP            DNA_CLUSTER_MAX_NUM_SLAVES
 #define MAX_NUM_DEV            DNA_CLUSTER_MAX_NUM_SOCKETS
 #define DEFAULT_DEVICE         "dna0"
@@ -71,7 +72,9 @@ pfring *frwd_in_ring, *frwd_out_ring;
 int frwd_buffers = 0;
 int frwd_low_latency = 0;
 int rx_bind_core = 0, tx_bind_core = 1, time_pulse_bind_core = 2, frwd_bind_core = 3;
+#ifdef HAVE_PTHREAD_SETAFFINITY_NP
 u_int numCPU;
+#endif
 
 /* ******************************** */
 
@@ -443,11 +446,90 @@ int main(int argc, char* argv[]) {
   char *pidFileName = NULL;
   char *hugepages_mountpoint = NULL;
   int daemon_mode = 0;
+  int opt_argc;
+  char **opt_argv;
 
+#ifdef HAVE_PTHREAD_SETAFFINITY_NP
   numCPU = sysconf( _SC_NPROCESSORS_ONLN );
+#endif
   startTime.tv_sec = 0;
 
-  while((c = getopt(argc,argv,"ac:r:st:hi:n:m:du:pP:S:o:f:")) != -1) {
+  if((argc == 2) && (argv[1][0] != '-')) {
+    FILE *fd;
+    char *tok, cont = 1;
+    char line[2048];
+
+    opt_argc = 0;
+    opt_argv = (char **) malloc(sizeof(char *) * MAX_NUM_OPTIONS);
+
+    if(opt_argv == NULL)
+      exit(-1);
+
+    memset(opt_argv, 0, sizeof(char *) * MAX_NUM_OPTIONS);
+
+    fd = fopen(argv[1], "r");
+
+    if(fd == NULL) {
+      fprintf(stderr, "Unable to read config file %s", argv[1]);
+      exit(-1);
+    }
+
+    opt_argv[opt_argc++] = strdup(argv[0]);
+
+    while(cont && fgets(line, sizeof(line), fd)) {
+      i = 0;
+      while(line[i] != '\0') {
+	if(line[i] == '=')
+	  break;
+	else if(line[i] == ' ') {
+	  line[i] = '=';
+	  break;
+	}
+	i++;
+      }
+
+      tok = strtok(line, "=");
+
+      while(tok != NULL) {
+	int len;
+	char *argument;
+
+	if(opt_argc >= MAX_NUM_OPTIONS) {
+	  int i;
+
+	  fprintf(stderr, "Too many options (%u)", opt_argc);
+
+	  for(i=0; i<opt_argc; i++)
+	    fprintf(stderr, "[%d][%s]", i, opt_argv[i]);
+
+	  cont = 0;
+	  break;
+	}
+
+	len = strlen(tok)-1;
+	if(tok[len] == '\n')
+	  tok[len] = '\0';
+
+	if((tok[0] == '\"') && (tok[strlen(tok)-1] == '\"')) {
+	  tok[strlen(tok)-1] = '\0';
+	  argument = &tok[1];
+	} else
+	  argument = tok;
+
+	if(argument[0] != '\0')
+	  opt_argv[opt_argc++] = strdup(argument);
+
+	tok = strtok(NULL, "\n");
+      }
+    }
+
+    fclose(fd);
+  } else {
+    opt_argc = argc;
+    opt_argv = argv;
+  }
+
+  while((c = getopt(opt_argc, opt_argv, "ac:r:st:hi:n:m:du:pP:S:o:f:")) != -1) {
     switch(c) {
     case 'a':
       wait_for_packet = 0;
@@ -651,7 +733,7 @@ int main(int argc, char* argv[]) {
   snprintf(&buf[strlen(buf)], sizeof(buf)-strlen(buf), "Applications: %d\n", num_apps);
   for (i = 0; i < num_apps; i++)
     snprintf(&buf[strlen(buf)], sizeof(buf)-strlen(buf), "App%dQueues:   %d\n", i, instances_per_app[i]);
-
+ 
   pfring_set_application_stats(pd[0], buf);
 
   printf("The DNA cluster [id: %u][num slave apps: %u] is now running...\n", 
@@ -695,6 +777,9 @@ int main(int argc, char* argv[]) {
 
   if (frwd_device)
     pfring_close(frwd_out_ring);
+
+  if(daemon_mode && pidFileName != NULL)
+    unlink(pidFileName);
 
   sleep(2);
   return(0);
