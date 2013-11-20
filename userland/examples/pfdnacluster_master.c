@@ -53,6 +53,7 @@
 #define DEFAULT_DEVICE         "dna0"
 
 int caplen = 1536;
+int daemon_mode = 0;
 int num_dev = 0, num_apps = 0, tot_num_slaves = 0;
 int instances_per_app[MAX_NUM_APP];
 u_int32_t frwd_mask = 0;
@@ -82,12 +83,15 @@ void print_stats() {
   struct timeval endTime;
   double deltaMillisec;
   static u_int8_t print_all;
-  static struct timeval lastTime;
+  static struct timeval lastTime = { 0 };
   char buf0[64], buf1[64], buf2[64];
   u_int64_t RXdiff, TXdiff, RXProcdiff;
   static u_int64_t lastRXPkts = 0, lastTXPkts = 0, lastRXProcPkts = 0;
   unsigned long long nRXPkts = 0, nTXPkts = 0, nRXProcPkts = 0;
+  char timeBuffer[128];
+  char statsBuf[1024];
   pfring_dna_cluster_stat cluster_stats;
+  int i;
 
   if(startTime.tv_sec == 0) {
     gettimeofday(&startTime, NULL);
@@ -96,6 +100,7 @@ void print_stats() {
     print_all = 1;
 
   gettimeofday(&endTime, NULL);
+
   deltaMillisec = delta_time(&endTime, &startTime);
 
   if(dna_cluster_stats(dna_cluster_handle, &cluster_stats) == 0) {
@@ -103,70 +108,116 @@ void print_stats() {
     nTXPkts  = cluster_stats.tot_tx_packets;
     nRXProcPkts  = cluster_stats.tot_rx_processed;
 
-    fprintf(stderr, "---\nAbsolute Stats:");
+    if (!daemon_mode) {
+      fprintf(stderr, "---\nAbsolute Stats:");
  
-    if (mode != send_only_mode) {
-      fprintf(stderr, " RX %s pkts", pfring_format_numbers((double)nRXPkts, buf1, sizeof(buf1), 0));
-      if(print_all) fprintf(stderr, " [%s pkt/sec]", pfring_format_numbers((double)(nRXPkts*1000)/deltaMillisec, buf1, sizeof(buf1), 1));
-      
-      fprintf(stderr, " Processed %s pkts", pfring_format_numbers((double)nRXProcPkts, buf1, sizeof(buf1), 0));
-      if(print_all) fprintf(stderr, " [%s pkt/sec]", pfring_format_numbers((double)(nRXProcPkts*1000)/deltaMillisec, buf1, sizeof(buf1), 1));
-    }
-	   
-    if (mode != recv_only_mode) {
-      fprintf(stderr, " TX %s pkts", pfring_format_numbers((double)nTXPkts, buf1, sizeof(buf1), 0));
-      if(print_all) fprintf(stderr, " [%s pkt/sec]", pfring_format_numbers((double)(nTXPkts*1000)/deltaMillisec, buf1, sizeof(buf1), 1));
-    }
-	        
-    fprintf(stderr, "\n");
-
-    if (mode != send_only_mode && print_interface_stats) {
-      int i;
-      pfring_stat if_stats;
-      for (i = 0; i < num_dev; i++) {
-        if (pfring_stats(pd[i], &if_stats) >= 0)
-          fprintf(stderr, "                %s RX %" PRIu64 " pkts Dropped %" PRIu64 " pkts (%.1f %%)\n", 
-                  pd[i]->device_name, if_stats.recv, if_stats.drop, 
-		  if_stats.recv == 0 ? 0 : ((double)(if_stats.drop*100)/(double)(if_stats.recv + if_stats.drop)));
-      }
-    }
-
-    if(print_all && (lastTime.tv_sec > 0)) {
-      deltaMillisec = delta_time(&endTime, &lastTime);
-      RXdiff = nRXPkts - lastRXPkts;
-      TXdiff = nTXPkts - lastTXPkts;
-      RXProcdiff = nRXProcPkts - lastRXProcPkts;
-
-      fprintf(stderr, "Actual Stats:  ");
-
       if (mode != send_only_mode) {
-        fprintf(stderr, " RX %s pkts [%s ms][%s pps]",
-	        pfring_format_numbers((double)RXdiff, buf0, sizeof(buf0), 0),
-	        pfring_format_numbers(deltaMillisec, buf1, sizeof(buf1), 1),
-	        pfring_format_numbers(((double)RXdiff/(double)(deltaMillisec/1000)),  buf2, sizeof(buf2), 1));
-			   
-        fprintf(stderr, " Processed %s pkts [%s ms][%s pps]",
-	        pfring_format_numbers((double)RXProcdiff, buf0, sizeof(buf0), 0),
-                pfring_format_numbers(deltaMillisec, buf1, sizeof(buf1), 1),
-                pfring_format_numbers(((double)RXProcdiff/(double)(deltaMillisec/1000)),  buf2, sizeof(buf2), 1));
+        fprintf(stderr, " RX %s pkts", pfring_format_numbers((double)nRXPkts, buf1, sizeof(buf1), 0));
+        if(print_all) fprintf(stderr, " [%s pkt/sec]", pfring_format_numbers((double)(nRXPkts*1000)/deltaMillisec, buf1, sizeof(buf1), 1));
+      
+        fprintf(stderr, " Processed %s pkts", pfring_format_numbers((double)nRXProcPkts, buf1, sizeof(buf1), 0));
+        if(print_all) fprintf(stderr, " [%s pkt/sec]", pfring_format_numbers((double)(nRXProcPkts*1000)/deltaMillisec, buf1, sizeof(buf1), 1));
       }
-						    
+	   
       if (mode != recv_only_mode) {
-        fprintf(stderr, " TX %llu pkts [%s ms][%s pps]",
-	        (long long unsigned int)TXdiff,
-	        pfring_format_numbers(deltaMillisec, buf1, sizeof(buf1), 1),
-                pfring_format_numbers(((double)TXdiff/(double)(deltaMillisec/1000)),  buf2, sizeof(buf2), 1));
+        fprintf(stderr, " TX %s pkts", pfring_format_numbers((double)nTXPkts, buf1, sizeof(buf1), 0));
+        if(print_all) fprintf(stderr, " [%s pkt/sec]", pfring_format_numbers((double)(nTXPkts*1000)/deltaMillisec, buf1, sizeof(buf1), 1));
       }
-
+	        
       fprintf(stderr, "\n");
     }
 
-    lastRXPkts = nRXPkts;
-    lastTXPkts = nTXPkts;
-    lastRXProcPkts = nRXProcPkts;
-  }
+    snprintf(statsBuf, sizeof(statsBuf), 
+             "ClusterId:         %d\n"
+             "TotQueues:         %d\n"
+             "Applications:      %d\n", 
+             cluster_id,
+	     tot_num_slaves,
+	     num_apps);
 
-  lastTime.tv_sec = endTime.tv_sec, lastTime.tv_usec = endTime.tv_usec;
+    for (i = 0; i < num_apps; i++)
+      snprintf(&statsBuf[strlen(statsBuf)], sizeof(statsBuf)-strlen(statsBuf), 
+               "App%dQueues:        %d\n", 
+	       i, instances_per_app[i]);
+
+    snprintf(&statsBuf[strlen(statsBuf)], sizeof(statsBuf)-strlen(statsBuf),
+             "Duration:          %s\n",
+	     sec2dhms((deltaMillisec/1000), timeBuffer, sizeof(timeBuffer)));
+
+    if (mode != send_only_mode) {
+      snprintf(&statsBuf[strlen(statsBuf)], sizeof(statsBuf)-strlen(statsBuf),
+  	       "Packets:           %lu\n"
+	       "Processed:         %lu\n",
+	       (long unsigned int)nRXPkts,
+	       (long unsigned int)nRXProcPkts);
+    }
+
+    if (mode != recv_only_mode) {
+      snprintf(&statsBuf[strlen(statsBuf)], sizeof(statsBuf)-strlen(statsBuf),
+	       "SentPackets:       %lu\n",
+	       (long unsigned int)nTXPkts);
+    }
+
+    if (mode != send_only_mode && print_interface_stats) {
+      int i;
+      u_int64_t IFRX = 0, IFDrop = 0;
+      pfring_stat if_stats;
+      for (i = 0; i < num_dev; i++) {
+        if (pfring_stats(pd[i], &if_stats) >= 0) {
+	  IFRX += if_stats.recv;
+	  IFDrop += if_stats.drop;
+          if (!daemon_mode)
+            fprintf(stderr, "                %s RX %" PRIu64 " pkts Dropped %" PRIu64 " pkts (%.1f %%)\n", 
+                    pd[i]->device_name, if_stats.recv, if_stats.drop, 
+	            if_stats.recv == 0 ? 0 : ((double)(if_stats.drop*100)/(double)(if_stats.recv + if_stats.drop)));
+	}
+      }
+      snprintf(&statsBuf[strlen(statsBuf)], sizeof(statsBuf)-strlen(statsBuf),
+               "IFPackets:         %lu\n"
+  	       "IFDropped:         %lu\n",
+	       (long unsigned int)IFRX, 
+	       (long unsigned int)IFDrop);
+    }
+
+    pfring_set_application_stats(pd[0], statsBuf);
+
+    if (!daemon_mode) {
+      if(print_all && (lastTime.tv_sec > 0)) {
+        deltaMillisec = delta_time(&endTime, &lastTime);
+        RXdiff = nRXPkts - lastRXPkts;
+        TXdiff = nTXPkts - lastTXPkts;
+        RXProcdiff = nRXProcPkts - lastRXProcPkts;
+
+        fprintf(stderr, "Actual Stats:  ");
+
+        if (mode != send_only_mode) {
+          fprintf(stderr, " RX %s pkts [%s ms][%s pps]",
+	          pfring_format_numbers((double)RXdiff, buf0, sizeof(buf0), 0),
+	          pfring_format_numbers(deltaMillisec, buf1, sizeof(buf1), 1),
+	          pfring_format_numbers(((double)RXdiff/(double)(deltaMillisec/1000)),  buf2, sizeof(buf2), 1));
+			   
+          fprintf(stderr, " Processed %s pkts [%s ms][%s pps]",
+	          pfring_format_numbers((double)RXProcdiff, buf0, sizeof(buf0), 0),
+                  pfring_format_numbers(deltaMillisec, buf1, sizeof(buf1), 1),
+                  pfring_format_numbers(((double)RXProcdiff/(double)(deltaMillisec/1000)),  buf2, sizeof(buf2), 1));
+        }
+						    
+        if (mode != recv_only_mode) {
+          fprintf(stderr, " TX %llu pkts [%s ms][%s pps]",
+	          (long long unsigned int)TXdiff,
+	          pfring_format_numbers(deltaMillisec, buf1, sizeof(buf1), 1),
+                  pfring_format_numbers(((double)TXdiff/(double)(deltaMillisec/1000)),  buf2, sizeof(buf2), 1));
+        }
+
+        fprintf(stderr, "\n");
+      }
+
+      lastRXPkts = nRXPkts;
+      lastTXPkts = nTXPkts;
+      lastRXProcPkts = nRXProcPkts;
+      lastTime.tv_sec = endTime.tv_sec, lastTime.tv_usec = endTime.tv_usec;
+    }
+  }
 }
 
 /* ******************************** */
@@ -439,7 +490,7 @@ static int fanout_distribution_function(const u_char *buffer, const u_int16_t bu
 
 int main(int argc, char* argv[]) {
   char c;
-  char buf[512];
+  char buf[64];
   u_int32_t version;
   int off, i, j;
   char *dev, *dev_pos = NULL;
@@ -447,7 +498,6 @@ int main(int argc, char* argv[]) {
   char *pidFileName = NULL;
   char *username = NULL;
   char *hugepages_mountpoint = NULL;
-  int daemon_mode = 0;
   int opt_argc;
   char **opt_argv;
 
@@ -733,13 +783,15 @@ int main(int argc, char* argv[]) {
     return -1;
   }
 
+#if 0
   snprintf(buf, sizeof(buf), "ClusterId:    %d\n", cluster_id);
   snprintf(&buf[strlen(buf)], sizeof(buf)-strlen(buf), "TotQueues:    %d\n", tot_num_slaves);
   snprintf(&buf[strlen(buf)], sizeof(buf)-strlen(buf), "Applications: %d\n", num_apps);
   for (i = 0; i < num_apps; i++)
     snprintf(&buf[strlen(buf)], sizeof(buf)-strlen(buf), "App%dQueues:   %d\n", i, instances_per_app[i]);
- 
+
   pfring_set_application_stats(pd[0], buf);
+#endif
 
   printf("The DNA cluster [id: %u][num slave apps: %u] is now running...\n", 
 	 cluster_id, tot_num_slaves);
@@ -765,11 +817,8 @@ int main(int argc, char* argv[]) {
   signal(SIGINT, sigproc);
   signal(SIGTERM, sigproc);
   signal(SIGINT, sigproc);
-
-  if (!daemon_mode) {
-    signal(SIGALRM, my_sigalarm);
-    alarm(ALARM_SLEEP);
-  }
+  signal(SIGALRM, my_sigalarm);
+  alarm(ALARM_SLEEP);
 
   if (frwd_device) {
     pthread_t fwdrthread;
