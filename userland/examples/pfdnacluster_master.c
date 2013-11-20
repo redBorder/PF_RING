@@ -622,12 +622,6 @@ int main(int argc, char* argv[]) {
   if (daemon_mode)
     daemonize();
 
-  if (username && !use_hugepages)
-    drop_privileges(username);
-
-  if (pidFileName)
-    create_pid_file(pidFileName);
-
   printf("Capturing from %s\n", device);
   
   if (frwd_device) {
@@ -761,6 +755,12 @@ int main(int argc, char* argv[]) {
         printf("\tpfcount -i dnacluster:%d@%u\n", cluster_id, off++);
     }
   }
+
+  if (username && !use_hugepages)
+    drop_privileges(username);
+
+  if (pidFileName)
+    create_pid_file(pidFileName);
 
   signal(SIGINT, sigproc);
   signal(SIGTERM, sigproc);
