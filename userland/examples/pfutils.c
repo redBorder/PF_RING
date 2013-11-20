@@ -71,7 +71,7 @@ void drop_privileges(char *username) {
   struct passwd *pw = NULL;
 
   if (getgid() && getuid()) {
-    fprintf(stderr, "privileges are not dropped as we're not superuser");
+    fprintf(stderr, "privileges are not dropped as we're not superuser\n");
     return;
   }
 
@@ -84,11 +84,11 @@ void drop_privileges(char *username) {
 
   if(pw != NULL) {
     if(setgid(pw->pw_gid) != 0 || setuid(pw->pw_uid) != 0)
-      fprintf(stderr, "unable to drop privileges [%s]", strerror(errno));
+      fprintf(stderr, "unable to drop privileges [%s]\n", strerror(errno));
     else
-      fprintf(stderr, "user changed to %s", username);
+      fprintf(stderr, "user changed to %s\n", username);
   } else {
-    fprintf(stderr, "unable to locate user %s", username);
+    fprintf(stderr, "unable to locate user %s\n", username);
   }
 
   umask(0);
@@ -110,6 +110,8 @@ void create_pid_file(char *pidFile) {
 
 void remove_pid_file(char *pidFile) {
   if (pidFile == NULL) return;
+
+  unlink(pidFile);
 }
 
 /* *************************************** */
