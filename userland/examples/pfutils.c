@@ -31,6 +31,10 @@
 #include <pthread.h>
 #include <sched.h> /* for CPU_XXXX */
 
+#include <sys/types.h>
+#include <pwd.h>
+#include <sys/stat.h>
+
 typedef u_int64_t ticks;
 
 /* ******************************** */
@@ -60,6 +64,36 @@ void daemonize() {
   close(STDOUT_FILENO);
   close(STDERR_FILENO);
 }
+
+/* ******************************** */
+
+void drop_privileges(char *username) {
+  struct passwd *pw = NULL;
+
+  if (getgid() && getuid()) {
+    fprintf(stderr, "privileges are not dropped as we're not superuser");
+    return;
+  }
+
+  pw = getpwnam(username);
+
+  if(pw == NULL) {
+    username = "nobody";
+    pw = getpwnam(username);
+  }
+
+  if(pw != NULL) {
+    if(setgid(pw->pw_gid) != 0 || setuid(pw->pw_uid) != 0)
+      fprintf(stderr, "unable to drop privileges [%s]", strerror(errno));
+    else
+      fprintf(stderr, "user changed to %s", username);
+  } else {
+    fprintf(stderr, "unable to locate user %s", username);
+  }
+
+  umask(0);
+}
+
 /* ******************************** */
 
 void create_pid_file(char *pidFile) {

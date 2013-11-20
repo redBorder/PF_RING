@@ -222,6 +222,7 @@ void printHelp(void) {
   printf("-u <mountpoint> Use hugepages for packet memory allocation\n");
   printf("-p              Print per-interface absolute stats\n");
   printf("-d              Daemon mode\n");
+  printf("-D <username>   Drop privileges\n");
   printf("-P <pid file>   Write pid to the specified file (daemon mode only)\n");
   exit(0);
 }
@@ -444,6 +445,7 @@ int main(int argc, char* argv[]) {
   char *dev, *dev_pos = NULL;
   char *applications = NULL, *app, *app_pos = NULL;
   char *pidFileName = NULL;
+  char *username = NULL;
   char *hugepages_mountpoint = NULL;
   int daemon_mode = 0;
   int opt_argc;
@@ -529,7 +531,7 @@ int main(int argc, char* argv[]) {
     opt_argv = argv;
   }
 
-  while((c = getopt(opt_argc, opt_argv, "ac:r:st:hi:n:m:du:pP:S:o:f:")) != -1) {
+  while((c = getopt(opt_argc, opt_argv, "ac:r:st:hi:n:m:dD:u:pP:S:o:f:")) != -1) {
     switch(c) {
     case 'a':
       wait_for_packet = 0;
@@ -566,6 +568,9 @@ int main(int argc, char* argv[]) {
       break;
     case 'd':
       daemon_mode = 1;
+      break;
+    case 'D':
+      username = strdup(optarg);
       break;
     case 'p':
       print_interface_stats = 1;
@@ -616,6 +621,9 @@ int main(int argc, char* argv[]) {
 
   if (daemon_mode)
     daemonize();
+
+  if (username && !use_hugepages)
+    drop_privileges(username);
 
   if (pidFileName)
     create_pid_file(pidFileName);
