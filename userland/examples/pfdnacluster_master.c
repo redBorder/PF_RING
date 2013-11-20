@@ -615,7 +615,10 @@ int main(int argc, char* argv[]) {
   if (device == NULL) device = strdup(DEFAULT_DEVICE);
 
   if (daemon_mode)
-    daemonize(pidFileName);
+    daemonize();
+
+  if (pidFileName)
+    create_pid_file(pidFileName);
 
   printf("Capturing from %s\n", device);
   
@@ -778,8 +781,8 @@ int main(int argc, char* argv[]) {
   if (frwd_device)
     pfring_close(frwd_out_ring);
 
-  if(daemon_mode && pidFileName != NULL)
-    unlink(pidFileName);
+  if(pidFileName)
+    remove_pid_file(pidFileName);
 
   sleep(2);
   return(0);
