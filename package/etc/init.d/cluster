@@ -16,7 +16,7 @@ start_cluster_id() {
     FORCE=$2
 
     CLUSTER_MASTER_BINARY=/usr/local/bin/pfdnacluster_master
-    
+
     if [ -f /etc/cluster/cluster-${CLUSTER_ID}.start ] || [ $FORCE -eq 1 ]; then
 	echo "Starting cluster $CLUSTER_ID"
 
@@ -133,7 +133,7 @@ case "$1" in
 	start_cluster "$PARAM_CLUSTER_ID" 0;
 	;;
 
-  force-start)	
+  force-start)
 	if [ -z $PARAM_CLUSTER_ID ]; then
 	    echo "ERROR: no cluster id specified"
 	    exit 1
