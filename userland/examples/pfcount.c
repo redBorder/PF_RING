@@ -62,7 +62,6 @@
 pfring  *pd;
 int verbose = 0, num_threads = 1;
 pfring_stat pfringStats;
-pthread_rwlock_t statsLock;
 
 static struct timeval startTime;
 unsigned long long numPkts[MAX_NUM_THREADS] = { 0 }, numBytes[MAX_NUM_THREADS] = { 0 };
@@ -688,9 +687,6 @@ int main(int argc, char* argv[]) {
 
   /* hardcode: promisc=1, to_ms=500 */
   promisc = 1;
-
-  if(num_threads > 0)
-    pthread_rwlock_init(&statsLock, NULL);
 
   if(wait_for_packet && (cpu_percentage > 0)) {
     if(cpu_percentage > 99) cpu_percentage = 99;
