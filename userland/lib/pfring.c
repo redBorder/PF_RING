@@ -36,6 +36,10 @@
 #include "pfring_mod_dna.h"
 #endif
 
+#ifdef HAVE_PF_RING_ZC
+extern int pfring_zc_open(pfring *ring);
+#endif
+
 #ifdef HAVE_VIRTUAL
 #include "pfring_mod_virtual.h"
 #endif
@@ -71,6 +75,12 @@ static pfring_module_info pfring_module_list[] = {
   {
     .name = "dna",
     .open = pfring_dna_open,
+  },
+#endif
+#ifdef HAVE_PF_RING_ZC
+  {
+    .name = "zc",
+    .open = pfring_zc_open,
   },
 #endif
   {

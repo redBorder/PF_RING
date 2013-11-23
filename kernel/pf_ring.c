@@ -1068,7 +1068,7 @@ static int ring_proc_dev_get_info(struct seq_file *m, void *data_not_used)
 	       dev->perm_addr[0], dev->perm_addr[1], dev->perm_addr[2],
 	       dev->perm_addr[3], dev->perm_addr[4], dev->perm_addr[5]);
     
-    seq_printf(m, "Polling Mode:      %s\n", dev_ptr->is_dna_device ? "DNA" : "NAPI/TNAPI");
+    seq_printf(m, "Polling Mode:      %s\n", dev_ptr->is_dna_device == 1 ? "DNA" : "NAPI/TNAPI");
 
     switch(dev->type) {
     case 1:   strcpy(dev_buf, "Ethernet"); break;
@@ -9103,7 +9103,7 @@ void dna_device_handler(dna_device_operation operation,
 
 	  if(strcmp(dev_ptr->dev->name, netdev->name) == 0) {
 	    dev_ptr->num_dna_rx_queues = max_val(dev_ptr->num_dna_rx_queues, channel_id+1);
-	    dev_ptr->is_dna_device = 1, dev_ptr->dna_device_model = device_model;
+	    dev_ptr->is_dna_device = 1 + version, dev_ptr->dna_device_model = device_model;
 
 	    if(unlikely(enable_debug))
 	      printk("[PF_RING] ==>> Updating DNA %s [num_dna_rx_queues=%d][%p]\n",
