@@ -6152,7 +6152,7 @@ static int packet_ring_bind(struct sock *sk, char *dev_name)
     list_for_each_safe(ptr, tmp_ptr, &ring_aware_device_list) {
       ring_device_element *dev_ptr = list_entry(ptr, ring_device_element, device_list);
 
-      if(strcmp(dev_ptr->dev->name, dev_name) == 0) {
+      if(strcmp(dev_ptr->device_name, dev_name) == 0) {
         dev = dev_ptr;
         break;
       }
@@ -7166,9 +7166,9 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 	list_for_each_safe(ptr, tmp_ptr, &ring_aware_device_list) {
 	  ring_device_element *dev_ptr = list_entry(ptr, ring_device_element, device_list);
 
-	  if(!strcmp(dev_ptr->dev->name, mapping->device_name)) {
+	  if(!strcmp(dev_ptr->device_name, mapping->device_name)) {
 	    if(unlikely(enable_debug))
-	      printk("[PF_RING] ==>> %s [%p]\n", dev_ptr->dev->name, dev_ptr);
+	      printk("[PF_RING] ==>> %s [%p]\n", dev_ptr->device_name, dev_ptr);
 	    pfr->ring_netdev = dev_ptr;
 	    found = 1;
 	    break;
@@ -8960,7 +8960,7 @@ static int ring_getsockopt(struct socket *sock,
       list_for_each_safe(ptr, tmp_ptr, &ring_aware_device_list) {
         ring_device_element *dev_ptr = list_entry(ptr, ring_device_element, device_list);
 
-        if(strcmp(dev_ptr->dev->name, dev_name) == 0) {
+        if(strcmp(dev_ptr->device_name, dev_name) == 0) {
           ifindex_found = 1;
 
           if(copy_to_user(optval, &dev_ptr->dev->ifindex, sizeof(int)))
@@ -9101,13 +9101,13 @@ void dna_device_handler(dna_device_operation operation,
 	list_for_each_safe(ptr, tmp_ptr, &ring_aware_device_list) {
 	  ring_device_element *dev_ptr = list_entry(ptr, ring_device_element, device_list);
 
-	  if(strcmp(dev_ptr->dev->name, netdev->name) == 0) {
+	  if(strcmp(dev_ptr->device_name, netdev->name) == 0) {
 	    dev_ptr->num_dna_rx_queues = max_val(dev_ptr->num_dna_rx_queues, channel_id+1);
 	    dev_ptr->is_dna_device = 1 + version, dev_ptr->dna_device_model = device_model;
 
 	    if(unlikely(enable_debug))
 	      printk("[PF_RING] ==>> Updating DNA %s [num_dna_rx_queues=%d][%p]\n",
-		     dev_ptr->dev->name, dev_ptr->num_dna_rx_queues, dev_ptr);
+		     dev_ptr->device_name, dev_ptr->num_dna_rx_queues, dev_ptr);
 	    break;
 	  }
 	}
@@ -9151,7 +9151,7 @@ static void bpctl_notifier(char *if_name) {
       struct list_head *ptr, *tmp_ptr;
       list_for_each_safe(ptr, tmp_ptr, &ring_aware_device_list) {
         ring_device_element *dev_ptr = list_entry(ptr, ring_device_element, device_list);
-        if(strcmp(dev_ptr->dev->name, bypass_interfaces[i & ~0x1]) == 0) { /* master found */
+        if(strcmp(dev_ptr->device_name, bypass_interfaces[i & ~0x1]) == 0) { /* master found */
 
           memset(&bpctl_cmd, 0, sizeof(bpctl_cmd));
           bpctl_cmd.in_param[1] = dev_ptr->dev->ifindex;
@@ -9159,7 +9159,7 @@ static void bpctl_notifier(char *if_name) {
 
           if((rc = bpctl_kernel_ioctl(BPCTL_IOCTL_TX_MSG(SET_BYPASS), &bpctl_cmd)) < 0) {
             printk("[PF_RING][%s] %s interface is not a bypass device.\n",
-	           __FUNCTION__, dev_ptr->dev->name);
+	           __FUNCTION__, dev_ptr->device_name);
             return;
           }
 
@@ -9167,7 +9167,7 @@ static void bpctl_notifier(char *if_name) {
             printk("[PF_RING][%s] bypass enabled on %s.\n", __FUNCTION__, if_name);
           else
             printk("[PF_RING][%s] %s is a slave interface or doesn't support bypass.\n",
-                   __FUNCTION__, dev_ptr->dev->name);
+                   __FUNCTION__, dev_ptr->device_name);
         }
       }
       break;
@@ -9289,7 +9289,7 @@ void remove_device_from_ring_list(struct net_device *dev) {
 #endif
 
 	remove_proc_entry(PROC_INFO, dev_ptr->proc_entry);
-	remove_proc_entry(dev_ptr->dev->name, ring_proc_dev_dir);
+	remove_proc_entry(dev_ptr->device_name, ring_proc_dev_dir);
       }
 
       /* We now have to "un-bind" existing sockets */
@@ -9336,7 +9336,8 @@ int add_device_to_ring_list(struct net_device *dev) {
   memset(dev_ptr, 0, sizeof(ring_device_element));
   INIT_LIST_HEAD(&dev_ptr->device_list);
   dev_ptr->dev = dev;
-  dev_ptr->proc_entry = proc_mkdir(dev_ptr->dev->name, ring_proc_dev_dir);
+  strcpy(dev_ptr->device_name, dev->name);
+  dev_ptr->proc_entry = proc_mkdir(dev_ptr->device_name, ring_proc_dev_dir);
   dev_ptr->device_type = standard_nic_family; /* Default */
 
   proc_create_data(PROC_INFO, 0 /* read-only */,
@@ -9457,8 +9458,25 @@ static int ring_notifier(struct notifier_block *this, unsigned long msg, void *d
   struct pfring_hooks *hook;
 
   if(dev != NULL) {
-    if(unlikely(enable_debug))
-      printk("[PF_RING] packet_notifier(%lu) [%s][%d]\n", msg, dev->name, dev->type);
+    if(unlikely(enable_debug)) {
+      char _what[32], *what = _what;
+      
+      switch(msg) {
+      case NETDEV_PRE_UP:      what = "NETDEV_PRE_UP"; break;
+      case NETDEV_UP:          what = "NETDEV_UP"; break;
+      case NETDEV_DOWN:        what = "NETDEV_DOWN"; break;
+      case NETDEV_REGISTER:    what = "NETDEV_REGISTER"; break;
+      case NETDEV_UNREGISTER:  what = "NETDEV_UNREGISTER"; break;
+      case NETDEV_CHANGE:      what = "NETDEV_CHANGE"; break;
+      case NETDEV_CHANGEADDR:  what = "NETDEV_CHANGEADDR"; break;
+      case NETDEV_CHANGENAME:  what = "NETDEV_CHANGENAME"; break;
+      default:
+	snprintf(_what, sizeof(_what), "%lu", msg);
+	break;
+      }
+      
+      printk("[PF_RING] packet_notifier(%s) [%s][%d]\n", dev->name, what, dev->type);
+    }
 
     /* Skip non ethernet interfaces */
     if(
@@ -9468,7 +9486,8 @@ static int ring_notifier(struct notifier_block *this, unsigned long msg, void *d
        && (dev->type != ARPHRD_IEEE80211_PRISM)
        && (dev->type != ARPHRD_IEEE80211_RADIOTAP)
        && strncmp(dev->name, "bond", 4)) {
-      if(unlikely(enable_debug)) printk("[PF_RING] packet_notifier(%s): skipping non ethernet device\n", dev->name);
+      if(unlikely(enable_debug))
+	printk("[PF_RING] packet_notifier(%s): skipping non ethernet device\n", dev->name);
       return NOTIFY_DONE;
     }
 
@@ -9533,7 +9552,7 @@ static int ring_notifier(struct notifier_block *this, unsigned long msg, void *d
 	  if(dev_ptr->dev == dev) {
 	    if(unlikely(enable_debug))
 	      printk("[PF_RING] ==>> FOUND device change name %s -> %s\n",
-		     dev_ptr->dev->name, dev->name);
+		     dev_ptr->device_name, dev->name);
 
 	    /* Remove old entry */
 #ifdef ENABLE_PROC_WRITE_RULE
@@ -9542,9 +9561,11 @@ static int ring_notifier(struct notifier_block *this, unsigned long msg, void *d
 #endif
 
 	    remove_proc_entry(PROC_INFO, dev_ptr->proc_entry);
-	    remove_proc_entry(dev_ptr->dev->name, ring_proc_dev_dir);
+	    remove_proc_entry(dev_ptr->device_name, ring_proc_dev_dir);
+
 	    /* Add new entry */
-	    dev_ptr->proc_entry = proc_mkdir(dev_ptr->dev->name, ring_proc_dev_dir);
+	    strcpy(dev_ptr->device_name, dev->name);
+	    dev_ptr->proc_entry = proc_mkdir(dev_ptr->device_name, ring_proc_dev_dir);
 	    proc_create_data(PROC_INFO, 0 /* read-only */,
 			     dev_ptr->proc_entry,
 			     &ring_proc_dev_fops /* read */,
@@ -9563,12 +9584,6 @@ static int ring_notifier(struct notifier_block *this, unsigned long msg, void *d
 		entry->write_proc = ring_proc_dev_rule_write;
 	    }
 #endif
-#endif
-
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,1,0)) || defined(REDHAT_PATCHED_KERNEL)
-	    strcpy(dev_ptr->dev->name, dev->name);
-#else
-	    dev_ptr->dev->name = dev->name;
 #endif
 	    break;
 	  }
@@ -9618,10 +9633,10 @@ static void __exit ring_exit(void)
 #endif
 
     remove_proc_entry(PROC_INFO, dev_ptr->proc_entry);
-    remove_proc_entry(dev_ptr->dev->name, ring_proc_dev_dir);
+    remove_proc_entry(dev_ptr->device_name, ring_proc_dev_dir);
 
     if(hook->magic == PF_RING) {
-      if(unlikely(enable_debug)) printk("[PF_RING] Unregister hook for %s\n", dev_ptr->dev->name);
+      if(unlikely(enable_debug)) printk("[PF_RING] Unregister hook for %s\n", dev_ptr->device_name);
       dev_ptr->dev->pfring_ptr = NULL; /* Unhook PF_RING */
     }
 

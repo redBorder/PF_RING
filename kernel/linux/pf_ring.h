@@ -939,6 +939,7 @@ typedef struct {
     Some device types (e.g. redirector) might NOT
     have a net_device handler but a dummy pointer
   */
+  char device_name[IFNAMSIZ];
   struct net_device *dev;
 
   /* Entry in the /proc filesystem */
