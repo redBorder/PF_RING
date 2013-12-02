@@ -634,7 +634,7 @@ int main(int argc, char* argv[]) {
       break;
     case 'u':
       use_hugepages = 1;
-      hugepages_mountpoint = strdup(optarg);
+      if (optarg != NULL) hugepages_mountpoint = strdup(optarg);
       break;
     }
   }
