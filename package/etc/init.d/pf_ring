@@ -1,5 +1,9 @@
 #! /bin/bash
 #
+# pf_ring          Load the pfring driver
+#
+# chkconfig: 2345 30 60
+#
 # (C) 2003-13 - ntop.org
 #
 ### BEGIN INIT INFO
