@@ -18,7 +18,7 @@
 #include "dagapi.h"
 #include <limits.h>
 
-/* #define PFRING_DAG_PARSE_PKT */
+// #define PFRING_DAG_PARSE_PKT
 
 #define MAX_CARD_ERF_TYPES 255
 #define AVG_PACKET_SIZE    512
@@ -26,7 +26,7 @@
 typedef struct {
   char         *device_name;
 
-  int fd;
+  int		fd;
   int           stream_num;
 
   void         *bottom;
