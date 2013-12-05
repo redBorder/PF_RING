@@ -4,5 +4,6 @@
 
 echo "Adding the pf_ring startup script"
 update-rc.d pf_ring defaults 30 >/dev/null
+update-rc.d cluster defaults 40 >/dev/null
 
 exit 0
