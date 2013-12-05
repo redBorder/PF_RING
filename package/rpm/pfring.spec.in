@@ -97,6 +97,10 @@ rm -fr $RPM_BUILD_ROOT
 # itself.
 %defattr(-, root, root)
 
+%post
+/sbin/chkconfig pf_ring on > /dev/null 2>&1
+/sbin/chkconfig cluster on > /dev/null 2>&1
+ 
 %changelog
 * Wed Dec  5 2012  <deri@centos.ntop.org> - @VERS@-%{buildrev}
 - 

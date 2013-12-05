@@ -1,5 +1,8 @@
 #! /bin/bash
 #
+# cluster          Pfring clustering script
+#
+# chkconfig: 2345 40 60
 # (C) 2003-13 - ntop.org
 #
 ### BEGIN INIT INFO
