@@ -89,6 +89,7 @@ rm -fr $RPM_BUILD_ROOT
 /usr/local/pfring/README.FIRST
 /usr/local/pfring/README-DAQ.1st
 /etc/init.d/pf_ring
+/etc/init.d/cluster
 /etc/init/pf_ring.conf
 
 # Set the default attributes of all of the files specified to have an
