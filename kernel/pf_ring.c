@@ -63,9 +63,9 @@
 
 #include <linux/version.h>
 
-#if(LINUX_VERSION_CODE < KERNEL_VERSION(2,6,18))
+#if(LINUX_VERSION_CODE < KERNEL_VERSION(2,6,32))
 #error **********************************************************************
-#error * PF_RING works on kernel 2.6.18 or newer. Please update your kernel *
+#error * PF_RING works on kernel 2.6.32 or newer. Please update your kernel *
 #error **********************************************************************
 #endif
 
