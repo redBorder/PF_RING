@@ -107,6 +107,8 @@ pfring* pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags) 
   if(ring == NULL)
     return NULL;
 
+  if(caplen > MAX_CAPLEN) caplen = MAX_CAPLEN;
+
   memset(ring, 0, sizeof(pfring));
 
   ring->promisc             = (flags & PF_RING_PROMISC) ? 1 : 0;
