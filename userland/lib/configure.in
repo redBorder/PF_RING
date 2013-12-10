@@ -31,6 +31,7 @@ if test -n "$GCC_VERSION"; then
 fi
 
 MACHINE=`uname -m`
+PF_RING_ZC_LIB="libs/libpfring_zc_$MACHINE$LIBARCH.a"
 ZERO_LIB="libs/libpfring_zero_$MACHINE$LIBARCH.a"
 DNA_LIB="libs/libpfring_dna_$MACHINE$LIBARCH.a"
 VIRTUAL_LIB="libs/libpfring_mod_virtual_$MACHINE.a"
@@ -39,7 +40,22 @@ VIRTUAL_HDR="pfring_mod_virtual.h"
 dnl> Check for a modern pthread library
 AC_CHECK_LIB(pthread, pthread_setaffinity_np, AC_DEFINE_UNQUOTED(HAVE_PTHREAD_SETAFFINITY_NP, 1, [libc has pthread_setaffinity_np]))
 
-if test "x$ac_cv_lib_pthread_pthread_setaffinity_np" = xyes; then :
+if test "x$ac_cv_lib_pthread_pthread_setaffinity_np" = xyes; then
+
+AC_MSG_CHECKING([PF_RING ZC support])
+if test -f $PF_RING_ZC_LIB; then
+  HAVE_PF_RING_ZC="-D HAVE_PF_RING_ZC"
+  PF_RING_ZC_OBJS=`ar t $PF_RING_ZC_LIB | grep -F .o | tr '\n' ' '`
+  PF_RING_ZC_DEP="extract_pfring_zc_lib"
+  AC_MSG_RESULT(yes)
+else
+  PF_RING_ZC_LIB=""
+  HAVE_PF_RING_ZC=""
+  PF_RING_ZC_OBJS=""
+  PF_RING_ZC_DEP=""
+  AC_MSG_RESULT(no)
+fi
+
 AC_MSG_CHECKING([Zero support])
 if test -f $ZERO_LIB; then
   HAVE_ZERO="-D HAVE_ZERO"
@@ -154,6 +170,10 @@ else
 fi
 
 AC_SUBST(CFLAGS)
+AC_SUBST(HAVE_PF_RING_ZC)
+AC_SUBST(PF_RING_ZC_LIB)
+AC_SUBST(PF_RING_ZC_OBJS)
+AC_SUBST(PF_RING_ZC_DEP)
 AC_SUBST(HAVE_ZERO)
 AC_SUBST(ZERO_LIB)
 AC_SUBST(ZERO_OBJS)

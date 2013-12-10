@@ -31,21 +31,27 @@
 #include <pthread.h>
 #include <sched.h> /* for CPU_XXXX */
 
+#include <sys/types.h>
+#include <pwd.h>
+#include <sys/stat.h>
+
 typedef u_int64_t ticks;
 
 /* ******************************** */
 
-void daemonize(char *pidFile) {
+void daemonize() {
   pid_t pid, sid;
 
   pid = fork();
   if (pid < 0) exit(EXIT_FAILURE);
   if (pid > 0) {
+#if 0 /* moved out */
     if (pidFile != NULL) {
       FILE *fp = fopen(pidFile, "w");
       fprintf(fp, "%d", pid);
       fclose(fp);
     }
+#endif
     exit(EXIT_SUCCESS);
   }
 
@@ -57,6 +63,55 @@ void daemonize(char *pidFile) {
   close(STDIN_FILENO);
   close(STDOUT_FILENO);
   close(STDERR_FILENO);
+}
+
+/* ******************************** */
+
+void drop_privileges(char *username) {
+  struct passwd *pw = NULL;
+
+  if (getgid() && getuid()) {
+    fprintf(stderr, "privileges are not dropped as we're not superuser\n");
+    return;
+  }
+
+  pw = getpwnam(username);
+
+  if(pw == NULL) {
+    username = "nobody";
+    pw = getpwnam(username);
+  }
+
+  if(pw != NULL) {
+    if(setgid(pw->pw_gid) != 0 || setuid(pw->pw_uid) != 0)
+      fprintf(stderr, "unable to drop privileges [%s]\n", strerror(errno));
+    else
+      fprintf(stderr, "user changed to %s\n", username);
+  } else {
+    fprintf(stderr, "unable to locate user %s\n", username);
+  }
+
+  umask(0);
+}
+
+/* ******************************** */
+
+void create_pid_file(char *pidFile) {
+  FILE *fp;
+
+  if (pidFile == NULL) return;
+
+  fp = fopen(pidFile, "w");
+  fprintf(fp, "%d", getpid());
+  fclose(fp);
+}
+
+/* ******************************** */
+
+void remove_pid_file(char *pidFile) {
+  if (pidFile == NULL) return;
+
+  unlink(pidFile);
 }
 
 /* *************************************** */

@@ -36,6 +36,10 @@
 #include "pfring_mod_dna.h"
 #endif
 
+#ifdef HAVE_PF_RING_ZC
+extern int pfring_zc_open(pfring *ring);
+#endif
+
 #ifdef HAVE_VIRTUAL
 #include "pfring_mod_virtual.h"
 #endif
@@ -73,6 +77,12 @@ static pfring_module_info pfring_module_list[] = {
     .open = pfring_dna_open,
   },
 #endif
+#ifdef HAVE_PF_RING_ZC
+  {
+    .name = "zc",
+    .open = pfring_zc_open,
+  },
+#endif
   {
     .name = "userspace",
     .open = pfring_mod_usring_open,
@@ -96,6 +106,8 @@ pfring* pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags) 
   ring = (pfring*)malloc(sizeof(pfring));
   if(ring == NULL)
     return NULL;
+
+  if(caplen > MAX_CAPLEN) caplen = MAX_CAPLEN;
 
   memset(ring, 0, sizeof(pfring));
 
@@ -131,7 +143,12 @@ pfring* pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags) 
         /* DNA module: check proc for renamed interfaces */
         FILE *proc_net_pfr;
 	char line[256];
-        snprintf(line, sizeof(line), "/proc/net/pf_ring/dev/%s/info", device_name);
+	char tmp[32];
+	char *at;
+	snprintf(tmp, sizeof(tmp), "%s", device_name);
+	at = strchr(tmp, '@');
+	if (at != NULL) at[0] = '\0';
+        snprintf(line, sizeof(line), "/proc/net/pf_ring/dev/%s/info", tmp);
 	proc_net_pfr = fopen(line, "r");
 	if(proc_net_pfr != NULL) {
 	  const char *str_mode = "Polling Mode:";
@@ -144,9 +161,8 @@ pfring* pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags) 
 	    }
 	  }
 	}
-      }
-
-      if (!is_dna) /* if already recognized as dna do not check module prefix */
+        if (!is_dna) continue;
+      } else
 #endif
       if(!(str = strstr(device_name, pfring_module_list[i].name))) continue;
       if(!pfring_module_list[i].open)                              continue;

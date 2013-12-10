@@ -1871,10 +1871,16 @@ pcap_stats_linux(pcap_t *handle, struct pcap_stat *stats)
 
 	  if(pfring_stats(handle->ring, &ring_stats) == 0) {
 	    handle->md.stat.ps_recv = ring_stats.recv;
+#if 0
+	    /* tcpdump reports ps_drop as "packets dropped by kernel",
+	     * that is wrong with DNA, so we should set ps_ifdrop. 
+	     * But snort ignores ps_ifdrop, so it is best to set ps_drop in any case. */
 	    if (handle->ring->dna.dna_mapped_device)
 	      handle->md.stat.ps_ifdrop = ring_stats.drop;
 	    else
-	      handle->md.stat.ps_drop = ring_stats.drop;
+#else
+	    handle->md.stat.ps_drop = ring_stats.drop;
+#endif
 	    *stats = handle->md.stat;
 	    return 0;
 	  }

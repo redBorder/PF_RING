@@ -42,6 +42,7 @@ cp $HOME/PF_RING/userland/libpcap/libpcap.a    $RPM_BUILD_ROOT/usr/local/lib
 cp $HOME/PF_RING/userland/examples/pfcount     $RPM_BUILD_ROOT/usr/local/bin
 cp $HOME/PF_RING/userland/examples/pfsend      $RPM_BUILD_ROOT/usr/local/bin
 cp $HOME/PF_RING/package/etc/init.d/pf_ring    $RPM_BUILD_ROOT/etc/init.d
+cp $HOME/PF_RING/package/etc/init.d/cluster    $RPM_BUILD_ROOT/etc/init.d
 cp $HOME/PF_RING/package/etc/init/pf_ring.conf $RPM_BUILD_ROOT/etc/init
 # DNA
 mkdir -p $RPM_BUILD_ROOT/usr/local/lib/daq
@@ -88,6 +89,7 @@ rm -fr $RPM_BUILD_ROOT
 /usr/local/pfring/README.FIRST
 /usr/local/pfring/README-DAQ.1st
 /etc/init.d/pf_ring
+/etc/init.d/cluster
 /etc/init/pf_ring.conf
 
 # Set the default attributes of all of the files specified to have an
@@ -95,6 +97,10 @@ rm -fr $RPM_BUILD_ROOT
 # itself.
 %defattr(-, root, root)
 
+%post
+/sbin/chkconfig pf_ring on > /dev/null 2>&1
+/sbin/chkconfig cluster on > /dev/null 2>&1
+ 
 %changelog
 * Wed Dec  5 2012  <deri@centos.ntop.org> - @VERS@-%{buildrev}
 - 

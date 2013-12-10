@@ -9235,11 +9235,13 @@ static const struct net_device_ops ixgbe_netdev_ops = {
 #ifdef HAVE_VLAN_RX_REGISTER
 	.ndo_vlan_rx_register	= &ixgbe_vlan_mode,
 #endif
+#if !(RHEL_RELEASE_CODE && RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,5))
 #ifdef NTF_SELF
 	.ndo_fdb_add		= ixgbe_ndo_fdb_add,
 #ifndef USE_DEFAULT_FDB_DEL_DUMP
 	.ndo_fdb_del		= ixgbe_ndo_fdb_del,
 	.ndo_fdb_dump		= ixgbe_ndo_fdb_dump,
+#endif
 #endif
 #ifdef HAVE_BRIDGE_ATTRIBS
 	.ndo_bridge_setlink	= ixgbe_ndo_bridge_setlink,

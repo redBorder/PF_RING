@@ -420,6 +420,9 @@ int main(int argc, char* argv[]) {
   if (daemon_mode)
     daemonize(pidFileName);
 
+  if (pidFileName)
+    create_pid_file(pidFileName);
+
   printf("Sending packets on %s\n", in_dev);
 
   pd = pfring_open(in_dev, 1500, 0 /* PF_RING_PROMISC */);
@@ -711,6 +714,9 @@ int main(int argc, char* argv[]) {
 
   print_stats(0);
   pfring_close(pd);
+
+  if (pidFileName)
+    remove_pid_file(pidFileName);
 
   return(0);
 }
