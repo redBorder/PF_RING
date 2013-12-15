@@ -37,6 +37,7 @@ int pfring_dag_open(pfring *ring) {
   ring->set_poll_duration  = pfring_dag_set_poll_duration;
   ring->poll               = pfring_dag_poll;
   ring->set_direction      = pfring_dag_set_direction;
+  ring->set_socket_mode    = pfring_dag_set_socket_mode;
   ring->enable_ring        = pfring_dag_enable_ring;
 
   ring->priv_data = malloc(sizeof(pfring_dag)); 
@@ -434,6 +435,16 @@ int pfring_dag_set_direction(pfring *ring, packet_direction direction) {
   return -1;
 }
 
+/* **************************************************** */
+
+int pfring_dag_set_socket_mode(pfring *ring, socket_mode mode) {
+  if (mode == recv_only_mode)
+    return 0;
+
+  /* TODO send mode */
+
+  return -1;
+}
 
 /* **************************************************** */
 
