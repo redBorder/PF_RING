@@ -71,7 +71,7 @@ start_pf_ring() {
     for D in $INTERFACES ; do
         /sbin/ifconfig $D up
         if [ "$D" != "$MGMT_INTERFACE" ]; then
-            /sbin/ethtool -K $D sg off tso off ufo off gso off gro off lro off
+            /sbin/ethtool -K $D sg off tso off gso off gro off
         fi
     done
 }
