@@ -400,7 +400,7 @@ int pfring_mod_set_poll_watermark(pfring *ring, u_int16_t watermark) {
 int pfring_mod_set_poll_duration(pfring *ring, u_int duration) {
   ring->poll_duration = duration;
 
-  return duration;
+  return 0;
 }
 
 /* **************************************************** */

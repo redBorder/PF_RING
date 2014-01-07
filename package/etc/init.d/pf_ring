@@ -15,7 +15,8 @@
 # Short-Description: Start/stop pf_ring
 ### END INIT INFO
 
-MGMG_INTERFACE_DRIVER="$(/sbin/ethtool -i eth0 | grep driver | cut -d ' ' -f 2)"
+MGMT_INTERFACE="eth0"
+MGMT_INTERFACE_DRIVER="$(/sbin/ethtool -i $MGMT_INTERFACE | grep driver | cut -d ' ' -f 2)"
 
 start_pf_ring() {
     KERNEL_VERSION=$(uname -r)
@@ -44,7 +45,7 @@ start_pf_ring() {
 	    DRIVER_CONFIG="/etc/pf_ring/dna-$D.conf"
 	    if [ -f $DRIVER_CONFIG ]; then
 	        ADAPTERS_LISTED="$(grep adapters_to_enable $DRIVER_CONFIG|wc -l)"
-	        if [ "$D" == "$MGMG_INTERFACE_DRIVER" ] && [ $ADAPTERS_LISTED -eq 0 ]; then
+	        if [ "$D" == "$MGMT_INTERFACE_DRIVER" ] && [ $ADAPTERS_LISTED -eq 0 ]; then
 		    echo "Unable to replace $D as it is used by the management interface"
 	        else
 		    PARAM="$(cat $DRIVER_CONFIG)"
@@ -68,7 +69,10 @@ start_pf_ring() {
     # Enable all interfaces DNA and non DNA
     INTERFACES="$(cat /proc/net/dev | grep ':' | cut -d ':' -f 1|grep -v 'lo' | tr -d '\n' | sed 's/^  //'| sed 's/  / /')"
     for D in $INTERFACES ; do
-	/sbin/ifconfig $D up
+        /sbin/ifconfig $D up
+        if [ "$D" != "$MGMT_INTERFACE" ]; then
+            /sbin/ethtool -K $D sg off tso off gso off gro off
+        fi
     done
 }
 
@@ -101,7 +105,7 @@ stop_pf_ring() {
 	    NUM="$(grep $D /proc/modules |wc -l)"
 	    if [ $NUM -gt 0 ]; then
 	        ADAPTERS_LISTED="$(grep adapters_to_enable $DRIVER_CONFIG|wc -l)"
-	        if [ "$D" == "$MGMG_INTERFACE_DRIVER" ] && [ $ADAPTERS_LISTED -eq 0 ]; then
+	        if [ "$D" == "$MGMT_INTERFACE_DRIVER" ] && [ $ADAPTERS_LISTED -eq 0 ]; then
 		    echo "Unable to replace $D as it is used by the management interface"
 		else
 		    /sbin/rmmod $D

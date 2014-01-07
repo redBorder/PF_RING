@@ -456,7 +456,8 @@ static void e1000_configure(struct e1000_adapter *adapter)
 	e1000_init_manageability(adapter);
 
 #ifdef ENABLE_DNA
-	init_dna(adapter);
+	if (adapter->dna.dna_enabled)
+	  init_dna(adapter);
 #endif
 	e1000_configure_tx(adapter);
 	e1000_setup_rctl(adapter);
@@ -483,7 +484,6 @@ int e1000_up(struct e1000_adapter *adapter)
 	if(adapter->dna.dna_enabled)
 	  e1000_irq_disable(adapter);
 	else
-	  e1000_irq_enable(adapter);
 #else
 	e1000_irq_enable(adapter);
 #endif
@@ -1420,7 +1420,7 @@ static int e1000_setup_tx_resources(struct e1000_adapter *adapter,
 
 	tx_ring->desc = dma_alloc_coherent(pci_dev_to_dev(pdev), 
 #ifdef ENABLE_DNA
-					   2 * /* shadow descriptors */
+					   (adapter->dna.dna_enabled ? 2 /* shadow descriptors */ : 1) * 
 #endif
 					   tx_ring->size,
 	                                   &tx_ring->dma, GFP_KERNEL);
@@ -1607,14 +1607,12 @@ static int e1000_setup_rx_resources(struct e1000_adapter *adapter,
 	rx_ring->size = rx_ring->count * desc_len;
 	rx_ring->size = ALIGN(rx_ring->size, 4096);
 
+	rx_ring->desc = dma_alloc_coherent(pci_dev_to_dev(pdev), 
 #ifdef ENABLE_DNA
-        if(adapter->dna.dna_enabled) rx_ring->size *= 2; /* Alloc shadow descriptors */
+					   (adapter->dna.dna_enabled ? 2 /* shadow descriptors */ : 1) * 
 #endif
-	rx_ring->desc = dma_alloc_coherent(pci_dev_to_dev(pdev), rx_ring->size,
+					   rx_ring->size,
 	                                   &rx_ring->dma, GFP_KERNEL);
-#ifdef ENABLE_DNA
-        if(adapter->dna.dna_enabled) rx_ring->size /= 2;
-#endif
 
 	if (!rx_ring->desc) {
 		DPRINTK(PROBE, ERR,
@@ -1835,7 +1833,7 @@ static void e1000_free_tx_resources(struct e1000_adapter *adapter,
 
 	dma_free_coherent(pci_dev_to_dev(pdev), 
 #ifdef ENABLE_DNA
-			  2 *
+			  (adapter->dna.dna_enabled ? 2 /* shadow descriptors */ : 1) * 
 #endif
 			  tx_ring->size, tx_ring->desc,
 			  tx_ring->dma);
@@ -1971,7 +1969,7 @@ static void e1000_free_rx_resources(struct e1000_adapter *adapter,
 
 	dma_free_coherent(pci_dev_to_dev(pdev), 
 #ifdef ENABLE_DNA
-			  2 *
+			  (adapter->dna.dna_enabled ? 2 /* shadow descriptors */ : 1) * 
 #endif
 			  rx_ring->size, rx_ring->desc,
 			  rx_ring->dma);
@@ -2888,17 +2886,14 @@ static int e1000_tx_map(struct e1000_adapter *adapter,
 	struct e1000_buffer *buffer_info;
 	unsigned int len = skb->len;
 	unsigned int offset = 0, size, count = 0, i;
-#ifdef ENABLE_DNA
-	unsigned int f;
-
-	if(adapter->dna.dna_enabled) {
-	  return count; /* No legacy send in DNA mode */
-	}
-#else
 #ifdef MAX_SKB_FRAGS
 	unsigned int f;
 	len -= skb->data_len;
 #endif
+
+#ifdef ENABLE_DNA
+	if(adapter->dna.dna_enabled)
+	  return count; /* No legacy send in DNA mode */
 #endif
 
 	i = tx_ring->next_to_use;
@@ -3141,18 +3136,16 @@ static int e1000_xmit_frame(struct sk_buff *skb, struct net_device *netdev)
 	unsigned int mss = 0;
 	int count = 0;
 	int tso;
-#ifdef ENABLE_DNA
-	unsigned int f;
-
-	if(adapter->dna.dna_enabled) {
-	  dev_kfree_skb_any(skb);
-	  return NETDEV_TX_OK; /* No legacy send in DNA mode */
-	}
-#else
 #ifdef MAX_SKB_FRAGS
 	unsigned int f;
 	len -= skb->data_len;
 #endif
+
+#ifdef ENABLE_DNA
+	if(adapter->dna.dna_enabled) {
+	  dev_kfree_skb_any(skb);
+	  return NETDEV_TX_OK; /* No legacy send in DNA mode */
+	}
 #endif
 
 	if (test_bit(__E1000_DOWN, &adapter->state)) {

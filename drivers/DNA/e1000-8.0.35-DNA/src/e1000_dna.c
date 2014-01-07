@@ -132,8 +132,6 @@ static void free_contiguous_memory(unsigned long mem,
 /* ********************************** */
 
 void init_dna(struct e1000_adapter *adapter) {
-  if(!adapter->dna.dna_enabled) return;
-
   init_waitqueue_head(&adapter->dna.packet_waitqueue);
 }
 
