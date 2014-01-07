@@ -1,2 +1,12 @@
 drivers/PF_RING_aware/intel/igb/igb-4.1.2/src/igb.ko.unsigned
 userland/lib/pfring_e1000_dna.o
+
+*.o
+*.ko
+*.m4
+*.cmd
+*.ko.unsigned
+*.mod.c
+Module.symvers
+modules.order
+.tmp_versions
