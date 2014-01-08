@@ -185,6 +185,7 @@ void print_stats() {
 /* ******************************** */
 
 void my_sigalarm(int sig) {
+  if(do_shutdown) return;
   print_stats();
   alarm(1);
   signal(SIGALRM, my_sigalarm);
@@ -193,16 +194,9 @@ void my_sigalarm(int sig) {
 /* ******************************** */
 
 void sigproc(int sig) {
-  static int called = 0;
-
+  if(do_shutdown) return;
   fprintf(stdout, "Leaving...\n");
-  if(called) return; else called = 1;
   do_shutdown = 1;
-  print_stats();
-  printf("Sent %llu packets\n", (long long unsigned int)num_pkt_good_sent);
-  pfring_close(pd);
-
-  exit(0);
 }
 
 /* *************************************** */
@@ -667,6 +661,9 @@ int main(int argc, char* argv[]) {
 
   redo:
 
+    if (unlikely(do_shutdown)) 
+      break;
+
     if (if_index != -1)
       rc = pfring_send_ifindex(pd, tosend->pkt, tosend->len, gbit_s < 0 ? 1 : 0 /* Don't flush (it does PF_RING automatically) */, if_index);
     else if(use_zero_copy_tx)
@@ -675,7 +672,7 @@ int main(int argc, char* argv[]) {
     else
       rc = pfring_send(pd, tosend->pkt, tosend->len, gbit_s < 0 ? 1 : 0 /* Don't flush (it does PF_RING automatically) */);
 
-    if(verbose)
+    if(unlikely(verbose))
       printf("[%d] pfring_send(%d) returned %d\n", i, tosend->len, rc);
 
     if(rc == PF_RING_ERROR_INVALID_ARGUMENT) {
@@ -684,9 +681,8 @@ int main(int argc, char* argv[]) {
       	     if_index != -1 ? " or using a wrong interface id" : "");
     } else if(rc < 0) {
       /* Not enough space in buffer */
-      if(!active_poll) {
+      if(!active_poll)
 	usleep(1);
-      }
       goto redo;
     }
 
@@ -701,18 +697,22 @@ int main(int argc, char* argv[]) {
 
     if(gbit_s > 0) {
       /* rate set */
-      while((getticks() - tick_start) < (num_pkt_good_sent * tick_delta)) ;
+      while((getticks() - tick_start) < (num_pkt_good_sent * tick_delta))
+        if (unlikely(do_shutdown)) break;
     } else if (gbit_s < 0) {
       /* real pcap rate */
       if (tosend->ticks_from_beginning == 0)
         tick_start = getticks(); /* first packet, resetting time */
-      while((getticks() - tick_start) < tosend->ticks_from_beginning) ;
+      while((getticks() - tick_start) < tosend->ticks_from_beginning)
+        if (unlikely(do_shutdown)) break;
     }
 
     if(num_to_send > 0) i++;
   } /* for */
 
-  print_stats(0);
+  print_stats();
+  printf("Sent %llu packets\n", (long long unsigned int) num_pkt_good_sent);
+
   pfring_close(pd);
 
   if (pidFileName)
