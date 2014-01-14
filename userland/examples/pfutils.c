@@ -35,7 +35,43 @@
 #include <pwd.h>
 #include <sys/stat.h>
 
+#define TRACE_ERROR     0, __FILE__, __LINE__
+#define TRACE_WARNING   1, __FILE__, __LINE__
+#define TRACE_NORMAL    2, __FILE__, __LINE__
+#define TRACE_INFO      3, __FILE__, __LINE__
+
 typedef u_int64_t ticks;
+
+struct compact_eth_hdr {
+  unsigned char   h_dest[ETH_ALEN];
+  unsigned char   h_source[ETH_ALEN];
+  u_int16_t       h_proto;
+};
+
+struct compact_ip_hdr {
+  u_int8_t	ihl:4,
+                version:4;
+  u_int8_t	tos;
+  u_int16_t	tot_len;
+  u_int16_t	id;
+  u_int16_t	frag_off;
+  u_int8_t	ttl;
+  u_int8_t	protocol;
+  u_int16_t	check;
+  u_int32_t	saddr;
+  u_int32_t	daddr;
+};
+
+struct compact_ipv6_hdr {
+  u_int8_t		priority:4,
+		version:4;
+  u_int8_t		flow_lbl[3];
+  u_int16_t	payload_len;
+  u_int8_t		nexthdr;
+  u_int8_t		hop_limit;
+  struct in6_addr saddr;
+  struct in6_addr daddr;
+};
 
 /* ******************************** */
 
@@ -192,36 +228,32 @@ static __inline__ ticks getticks(void)
 
 /* *************************************** */
 
-struct compact_eth_hdr {
-  unsigned char   h_dest[ETH_ALEN];
-  unsigned char   h_source[ETH_ALEN];
-  u_int16_t       h_proto;
-};
+void trace(int trace_level, char* file, int line, char * format, ...) {
+  va_list va_ap;
+  char buf[2048], out_buf[640];
+  char theDate[32], *extra_msg = "";
+  time_t theTime = time(NULL);
 
-struct compact_ip_hdr {
-  u_int8_t	ihl:4,
-                version:4;
-  u_int8_t	tos;
-  u_int16_t	tot_len;
-  u_int16_t	id;
-  u_int16_t	frag_off;
-  u_int8_t	ttl;
-  u_int8_t	protocol;
-  u_int16_t	check;
-  u_int32_t	saddr;
-  u_int32_t	daddr;
-};
+  va_start(va_ap, format);
 
-struct compact_ipv6_hdr {
-  u_int8_t		priority:4,
-		version:4;
-  u_int8_t		flow_lbl[3];
-  u_int16_t	payload_len;
-  u_int8_t		nexthdr;
-  u_int8_t		hop_limit;
-  struct in6_addr saddr;
-  struct in6_addr daddr;
-};
+  memset(buf, 0, sizeof(buf));
+  strftime(theDate, 32, "%d/%b/%Y %H:%M:%S", localtime(&theTime));
+
+  vsnprintf(buf, sizeof(buf)-1, format, va_ap);
+
+  if(trace_level == 0)
+    extra_msg = "ERROR: ";
+  else if(trace_level == 1)
+    extra_msg = "WARNING: ";
+
+  while(buf[strlen(buf)-1] == '\n') buf[strlen(buf)-1] = '\0';
+
+  snprintf(out_buf, sizeof(out_buf), "%s [%s:%d] %s%s", theDate, file, line, extra_msg, buf);
+  fprintf(trace_level ? stdout : stderr, "%s\n", out_buf);
+
+  fflush(stdout);
+  va_end(va_ap);
+}
 
 /* *************************************** */
 

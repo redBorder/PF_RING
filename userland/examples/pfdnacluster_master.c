@@ -287,7 +287,7 @@ int init_frwd_socket() {
   frwd_out_ring = pfring_open(frwd_device, caplen, PF_RING_PROMISC);
 
   if (frwd_out_ring == NULL) {
-    printf("pfring_open %s error [%s]\n", frwd_device, strerror(errno));
+    trace(TRACE_ERROR, "pfring_open %s error [%s]\n", frwd_device, strerror(errno));
     return -1;
   }
 
@@ -295,7 +295,7 @@ int init_frwd_socket() {
   pfring_set_application_name(frwd_out_ring, buf);
 
   if ((rc = pfring_set_socket_mode(frwd_out_ring, send_only_mode)) != 0)
-    fprintf(stderr, "pfring_set_socket_mode returned [rc=%d]\n", rc);
+    trace(TRACE_ERROR, "pfring_set_socket_mode returned [rc=%d]\n", rc);
 
   frwd_buffers = frwd_out_ring->dna.dna_dev.mem_info.tx.packet_memory_num_slots + 1;
 
@@ -319,16 +319,16 @@ int register_frwd_socket() {
   pfring_set_application_name(frwd_in_ring, buf);
 
   if ((rc = pfring_set_socket_mode(frwd_in_ring, recv_only_mode)) != 0)
-    fprintf(stderr, "pfring_set_socket_mode returned [rc=%d]\n", rc);
+    trace(TRACE_ERROR, "pfring_set_socket_mode returned [rc=%d]\n", rc);
 
   /* this call will do the magic making frwd_out_ring a zero-copy ring */
   if ((rc = pfring_register_zerocopy_tx_ring(frwd_in_ring, frwd_out_ring)) != 0) {
-    printf("pfring_register_zerocopy_tx_ring error: %d\n", rc);
+    trace(TRACE_ERROR, "pfring_register_zerocopy_tx_ring error: %d\n", rc);
     return -1;
   }
 
   if (pfring_enable_ring(frwd_in_ring) < 0) {
-    printf("pfring_enable_ring(dnacluster:%d@%d) error: %d\n", cluster_id, tot_num_slaves, rc);
+    trace(TRACE_ERROR, "pfring_enable_ring(dnacluster:%d@%d) error: %d\n", cluster_id, tot_num_slaves, rc);
     return -1;
   }
 
@@ -352,16 +352,16 @@ void* frwd_thread(void *user) {
     CPU_ZERO(&cpuset);
     CPU_SET(core_id, &cpuset);
     if (pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset) != 0)
-      fprintf(stderr, "Error while binding forwarder thread to core %ld\n", core_id);
+      trace(TRACE_ERROR, "Error while binding forwarder thread to core %ld\n", core_id);
     else
-      printf("Set forwarder thread on core %lu/%u\n", core_id, numCPU);
+      trace(TRACE_NORMAL, "Set forwarder thread on core %lu/%u\n", core_id, numCPU);
   }
 #endif
 
   memset(&hdr, 0, sizeof(hdr));
 
   if ((pkt_handle = pfring_alloc_pkt_buff(frwd_in_ring)) == NULL) {
-    printf("Error allocating pkt buff\n");
+    trace(TRACE_ERROR, "Error allocating pkt buff\n");
     sigproc(0);
     return NULL;
   }
@@ -522,7 +522,7 @@ int main(int argc, char* argv[]) {
     fd = fopen(argv[1], "r");
 
     if(fd == NULL) {
-      fprintf(stderr, "Unable to read config file %s", argv[1]);
+      trace(TRACE_ERROR, "Unable to read config file %s", argv[1]);
       exit(-1);
     }
 
@@ -549,10 +549,10 @@ int main(int argc, char* argv[]) {
 	if(opt_argc >= MAX_NUM_OPTIONS) {
 	  int i;
 
-	  fprintf(stderr, "Too many options (%u)", opt_argc);
+	  trace(TRACE_ERROR, "Too many options (%u)", opt_argc);
 
 	  for(i=0; i<opt_argc; i++)
-	    fprintf(stderr, "[%d][%s]", i, opt_argv[i]);
+	    trace(TRACE_ERROR, "[%d][%s]", i, opt_argv[i]);
 
 	  cont = 0;
 	  break;
@@ -655,7 +655,7 @@ int main(int argc, char* argv[]) {
   }
 
   if (tot_num_slaves + (frwd_device ? 1 : 0) > MAX_NUM_APP) {
-    printf("WARNING: You cannot instantiate more than %u slave applications\n", MAX_NUM_APP);
+    trace(TRACE_WARNING, "WARNING: You cannot instantiate more than %u slave applications\n", MAX_NUM_APP);
     printHelp();
   }
 
@@ -672,7 +672,7 @@ int main(int argc, char* argv[]) {
   if (daemon_mode)
     daemonize();
 
-  printf("Capturing from %s\n", device);
+  trace(TRACE_NORMAL, "Capturing from %s\n", device);
   
   if (frwd_device) {
     if (init_frwd_socket() < 0)
@@ -689,7 +689,7 @@ int main(int argc, char* argv[]) {
 					       | (use_hugepages ? DNA_CLUSTER_HUGEPAGES : 0)
 					       | (time_pulse_thread ? DNA_CLUSTER_TIME_PULSE_THREAD : 0)
      )) == NULL) {
-    fprintf(stderr, "Error creating DNA Cluster\n");
+    trace(TRACE_ERROR, "Error creating DNA Cluster\n");
     return(-1);
   }
 
@@ -702,7 +702,7 @@ int main(int argc, char* argv[]) {
 
   if (use_hugepages) {
     if (dna_cluster_set_hugepages_mountpoint(dna_cluster_handle, hugepages_mountpoint) < 0) {
-      fprintf(stderr, "Error setting the hugepages mountpoint: did you mount it?\n");
+      trace(TRACE_ERROR, "Error setting the hugepages mountpoint: did you mount it?\n");
       return(-1);
     }
   }
@@ -714,13 +714,13 @@ int main(int argc, char* argv[]) {
   while(dev != NULL) {
     pd[num_dev] = pfring_open(dev, caplen, PF_RING_PROMISC);
     if(pd[num_dev] == NULL) {
-      printf("pfring_open %s error [%s]\n", dev, strerror(errno));
+      trace(TRACE_ERROR, "pfring_open %s error [%s]\n", dev, strerror(errno));
       return(-1);
     }
 
     if (num_dev == 0) {
       pfring_version(pd[num_dev], &version);
-      printf("Using PF_RING v.%d.%d.%d\n", (version & 0xFFFF0000) >> 16, 
+      trace(TRACE_NORMAL, "Using PF_RING v.%d.%d.%d\n", (version & 0xFFFF0000) >> 16, 
 	     (version & 0x0000FF00) >> 8, version & 0x000000FF);
     }
 
@@ -729,7 +729,7 @@ int main(int argc, char* argv[]) {
 
     /* Add the ring we created to the cluster */
     if (dna_cluster_register_ring(dna_cluster_handle, pd[num_dev]) < 0) {
-      fprintf(stderr, "Error registering rx socket\n");
+      trace(TRACE_ERROR, "Error registering rx socket\n");
       dna_cluster_destroy(dna_cluster_handle);
       return -1;
     }
@@ -739,7 +739,7 @@ int main(int argc, char* argv[]) {
     dev = strtok_r(NULL, ",", &dev_pos);
 
     if (num_dev == MAX_NUM_DEV && dev != NULL) {
-      printf("Too many devices\n");
+      trace(TRACE_ERROR, "Too many devices\n");
       break;
     }
   }
@@ -756,29 +756,29 @@ int main(int argc, char* argv[]) {
 
   switch(hashing_mode) {
   case 0:
-    printf("Hashing packets per-IP Address\n");
+    trace(TRACE_NORMAL, "Hashing packets per-IP Address\n");
     /* The default distribution function already balances per IP in a coherent mode */
     if (num_apps > 1) dna_cluster_set_distribution_function(dna_cluster_handle, multi_app_distribution_function);
     break;
   case 1:
-    printf("Hashing packets per-MAC Address\n");
+    trace(TRACE_NORMAL, "Hashing packets per-MAC Address\n");
     if (num_apps > 1) dna_cluster_set_distribution_function(dna_cluster_handle, multi_app_distribution_function);
     else dna_cluster_set_distribution_function(dna_cluster_handle, master_distribution_function);
     break;
   case 2:
-    printf("Hashing packets per-IP protocol (TCP, UDP, ICMP...)\n");
+    trace(TRACE_NORMAL, "Hashing packets per-IP protocol (TCP, UDP, ICMP...)\n");
     if (num_apps > 1) dna_cluster_set_distribution_function(dna_cluster_handle, multi_app_distribution_function);
     else dna_cluster_set_distribution_function(dna_cluster_handle, master_distribution_function);
     break;
   case 3:
-    printf("Replicating each packet on all applications (no copy)\n");
+    trace(TRACE_NORMAL, "Replicating each packet on all applications (no copy)\n");
     dna_cluster_set_distribution_function(dna_cluster_handle, fanout_distribution_function);
     break;
   }
 
   /* Now enable the cluster */
   if (dna_cluster_enable(dna_cluster_handle) < 0) {
-    fprintf(stderr, "Error enabling the engine; dna NICs already in use?\n");
+    trace(TRACE_ERROR, "Error enabling the engine; dna NICs already in use?\n");
     dna_cluster_destroy(dna_cluster_handle);
     return -1;
   }
@@ -793,18 +793,18 @@ int main(int argc, char* argv[]) {
   pfring_set_application_stats(pd[0], buf);
 #endif
 
-  printf("The DNA cluster [id: %u][num slave apps: %u] is now running...\n", 
+  trace(TRACE_NORMAL, "The DNA cluster [id: %u][num slave apps: %u] is now running...\n", 
 	 cluster_id, tot_num_slaves);
-  printf("You can now attach to the cluster up to %d slaves as follows:\n", 
+  trace(TRACE_NORMAL, "You can now attach to the cluster up to %d slaves as follows:\n", 
          tot_num_slaves);
   if (num_apps == 1) {
-    printf("\tpfcount -i dnacluster:%d\n", cluster_id);
+    trace(TRACE_NORMAL, "\tpfcount -i dnacluster:%d\n", cluster_id);
   } else {
     off = 0;
     for (i = 0; i < num_apps; i++) {
-      printf("Application %u\n", i);
+      trace(TRACE_NORMAL, "Application %u\n", i);
       for (j = 0; j < instances_per_app[i]; j++)
-        printf("\tpfcount -i dnacluster:%d@%u\n", cluster_id, off++);
+        trace(TRACE_NORMAL, "\tpfcount -i dnacluster:%d@%u\n", cluster_id, off++);
     }
   }
 
@@ -826,7 +826,7 @@ int main(int argc, char* argv[]) {
       sigproc(0);
     } else {
       pthread_create(&fwdrthread, NULL, frwd_thread, NULL);
-      printf("Forwarder thread is running...\n");
+      trace(TRACE_NORMAL, "Forwarder thread is running...\n");
       pthread_join(fwdrthread, NULL);
     }
   }
