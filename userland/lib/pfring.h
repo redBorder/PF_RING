@@ -369,13 +369,13 @@ u_int8_t pfring_open_multichannel(const char *device_name, u_int32_t caplen,
 void pfring_shutdown(pfring *ring);
 
 /**
- * Sets the scheduler priority for the current thread.
+ * Set the scheduler priority for the current thread.
  * @param cpu_percentage The priority. 
  */
 void pfring_config(u_short cpu_percentage);
 
 /**
- * processes ingress packets until pfring_breakloop() is called, or an error occurs.
+ * Process ingress packets until pfring_breakloop() is called, or an error occurs.
  * @param ring            The PF_RING handle.
  * @param looper          The user callback for packet processing. 
  * @param user_bytes      The user ptr passed to the callback.
@@ -1021,15 +1021,15 @@ u_int pfring_get_num_rx_slots(pfring* ring);
 int pfring_copy_tx_packet_into_slot(pfring* ring, u_int16_t tx_slot_id, char* buffer, u_int len);
 
 /**
- * Return the ptr to the buffer bound to a packet handle.
+ * Return the pointer to the buffer pointed by the packet buffer handle.
  * @param ring       The PF_RING handle.
  * @param pkt_handle The packet handle.
- * @return The buffer ptr. 
+ * @return The pointer to the packet buffer. 
  */
 u_char* pfring_get_pkt_buff_data(pfring *ring, pfring_pkt_buff *pkt_handle);
 
 /**
- * Set the length of a packet in a packet handle.
+ * Set the length of the packet. This function call is not necessary unless you want to custom set the packet length, instead of using the size from the received packet.
  * @param ring       The PF_RING handle.
  * @param pkt_handle The packet handle.
  * @param len        The packet length.
@@ -1038,7 +1038,7 @@ u_char* pfring_get_pkt_buff_data(pfring *ring, pfring_pkt_buff *pkt_handle);
 int pfring_set_pkt_buff_len(pfring *ring, pfring_pkt_buff *pkt_handle, u_int32_t len);
 
 /**
- * Set the interface index in a packet handle.
+ * Bind the buffer handle (handling a packet) to an interface id. This function call is useful to specify the egress interface index.
  * @param ring       The PF_RING handle.
  * @param pkt_handle The packet handle.
  * @param if_index   The interface index.
@@ -1047,7 +1047,7 @@ int pfring_set_pkt_buff_len(pfring *ring, pfring_pkt_buff *pkt_handle, u_int32_t
 int pfring_set_pkt_buff_ifindex(pfring *ring, pfring_pkt_buff *pkt_handle, int if_index);
 
 /**
- * Add an interface index to a packet handle.
+ * Add an interface index to the interface indexes bound to the buffer handle. This is used to specify the egress interfaces (fan-out) of a packet buffer.
  * @param ring The PF_RING handle.
  * @param pkt_handle The packet handle. 
  * @param if_index   The interface index.
@@ -1056,33 +1056,37 @@ int pfring_set_pkt_buff_ifindex(pfring *ring, pfring_pkt_buff *pkt_handle, int i
 int pfring_add_pkt_buff_ifindex(pfring *ring, pfring_pkt_buff *pkt_handle, int if_index);
 
 /**
- * Allocate a packet buffer.
+ * Allocate a packet buffer handle. 
+ * The memory is allocated by PF_RING into the kernel and it is managed by PF_RING (i.e. no free() on this memory) using the pfring_XXX_XXX calls.
  * @param ring The PF_RING handle.
- * @param  
- * @return 
+ * @return The buffer handle. 
  */
 pfring_pkt_buff* pfring_alloc_pkt_buff(pfring *ring);
 
 /**
- * Release a packet buffer.
- * @param ring The PF_RING handle.
- * @param  
+ * Release a packet buffer handle previously allocated by pfring_alloc_pkt_buff.
+ * @param ring       The PF_RING handle.
+ * @param pkt_handle The packet buffer handle.
  */
 void pfring_release_pkt_buff(pfring *ring, pfring_pkt_buff *pkt_handle);
 
 /**
- * Same as pfring_recv(), this function fills the buffer pointed by the provided packet handle.
- * @param ring The PF_RING handle.
- * @param  
- * @return 0 on success, a negative value otherwise.
+ * Same as pfring_recv(), this function receive a packet filling the buffer pointed by the provided packet handle instead of returning a new buffer. 
+ * In a nutshell, the returned packet is put on the passed function argument.
+ * @param ring       The PF_RING handle.
+ * @param pkt_handle The packet buffer handle.
+ * @param hdr        The PF_RING header.
+ * @param wait_for_incoming_packet If 0 we simply check the packet availability, otherwise the call is blocked until a packet is available. 
+ * @return 0 in case of no packet being received (non-blocking), 1 in case of success, -1 in case of error.
  */
 int pfring_recv_pkt_buff(pfring *ring, pfring_pkt_buff *pkt_handle, struct pfring_pkthdr *hdr, u_int8_t wait_for_incoming_packet);
 
 /**
- * Same as pfring_send(), this function send (and reset) the buffer pointed by pkt_handle.
+ * Same as pfring_send(), this function send the packet pointed by the provided packet buffer handle. 
+ * Note: this function resets the content of the buffer handle so if you need to keep its content, make sure you copy the data before you call it.
  * @param ring         The PF_RING handle.
- * @param pkt_handle   The packet handle.
- * @param flush_packet
+ * @param pkt_handle   The packet buffer handle.
+ * @param flush_packet Flush all packets in the transmission queues, if any.
  * @return The number of bytes sent if success, a negative value otherwise.
  */
 int pfring_send_pkt_buff(pfring *ring, pfring_pkt_buff *pkt_handle, u_int8_t flush_packet);
@@ -1104,9 +1108,9 @@ int pfring_flush_tx_packets(pfring *ring);
 int pfring_search_payload(pfring *ring, char *string_to_search);
 
 /**
- * Register a ring to a Libzero DNA Cluster slave ring for zero-copy tx.
+ * Attach a DNA socket to a DNA Cluster slave socket, allowing an application receiving packets from a cluster to send them in zero-copy to a DNA interface/queue.
  * @param ring The PF_RING DNA Cluster slave handle.
- * @param ring The PF_RING tx ring to register. 
+ * @param ring The PF_RING DNA tx socket that have to be attached to the cluster.
  * @return 0 on success, a negative value otherwise.
  */
 int pfring_register_zerocopy_tx_ring(pfring *ring, pfring *tx_ring);
