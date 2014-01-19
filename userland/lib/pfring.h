@@ -13,6 +13,19 @@
 #ifndef _PFRING_H_
 #define _PFRING_H_
 
+/**
+ * @mainpage  Main Page
+ *
+ *            PF_RING API documentation.
+ */
+
+/**
+ * @file pfring.h
+ *
+ * @brief      PF_RING library header file.
+ * @details    This header file must be included in any PF_RING-based applications.
+ */
+
 #include <sys/types.h>
 #include <stdio.h>
 #include <stdarg.h>

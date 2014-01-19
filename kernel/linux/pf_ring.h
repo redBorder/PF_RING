@@ -9,6 +9,13 @@
 #ifndef __RING_H
 #define __RING_H
 
+/**
+ * @file pf_ring.h
+ *
+ * @brief      PF_RING kernel module header file.
+ * @details    This header file should NOT be included in PF_RING-based applications directly.
+ */
+
 #ifdef __KERNEL__
 #include <linux/in6.h>
 #else
