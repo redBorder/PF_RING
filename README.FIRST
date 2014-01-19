@@ -52,6 +52,9 @@ Documentation
 -------------
 If you need an extensive documentation, you can refer to the manual that
 is stored in the doc/ directory.
+The API documentation is available via doxygen, running
+# make documentation
+it will be generated in doc/html.
 
 
 -------------------------------------
