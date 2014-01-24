@@ -73,6 +73,7 @@ pfring *frwd_in_ring, *frwd_out_ring;
 int frwd_buffers = 0;
 int frwd_low_latency = 0;
 int rx_bind_core = 0, tx_bind_core = 1, time_pulse_bind_core = 2, frwd_bind_core = 3;
+int queue_len = 8192;
 #ifdef HAVE_PTHREAD_SETAFFINITY_NP
 u_int numCPU;
 #endif
@@ -271,6 +272,7 @@ void printHelp(void) {
   printf("-o <device>     Forward both to applications and an egress device\n");
   printf("-f <core id>    Bind the forwarder thread to a core (-o only)\n");
   printf("-u <mountpoint> Use hugepages for packet memory allocation\n");
+  printf("-q <len>        Number of slots in each queue (default: %u)\n", queue_len);
   printf("-p              Print per-interface absolute stats\n");
   printf("-d              Daemon mode\n");
   printf("-D <username>   Drop privileges\n");
@@ -581,7 +583,7 @@ int main(int argc, char* argv[]) {
     opt_argv = argv;
   }
 
-  while((c = getopt(opt_argc, opt_argv, "ac:r:st:hi:n:m:dD:u:pP:S:o:f:")) != -1) {
+  while((c = getopt(opt_argc, opt_argv, "ac:r:st:hi:n:m:dD:u:pP:S:o:f:q:")) != -1) {
     switch(c) {
     case 'a':
       wait_for_packet = 0;
@@ -635,6 +637,9 @@ int main(int argc, char* argv[]) {
     case 'u':
       use_hugepages = 1;
       if (optarg != NULL) hugepages_mountpoint = strdup(optarg);
+      break;
+    case 'q':
+      queue_len = atoi(optarg);
       break;
     }
   }
@@ -695,8 +700,8 @@ int main(int argc, char* argv[]) {
 
   /* Changing the default settings (experts only) */
   dna_cluster_low_level_settings(dna_cluster_handle, 
-    8192,                              /* slave rx queue slots */
-    mode != recv_only_mode ? 8192 : 0, /* slave tx queue slots */
+    queue_len,                              /* slave rx queue slots */
+    mode != recv_only_mode ? queue_len : 0, /* slave tx queue slots */
     frwd_device ? frwd_buffers : 0   /* slave additional buffers (available with  alloc/release) */
   );
 
