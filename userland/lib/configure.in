@@ -147,6 +147,7 @@ if test "x$ac_cv_lib_numa_numa_available" = xyes; then :
 else
    AC_MSG_RESULT(no)
    echo "Please install libnuma-dev in order to use PF_RING"
+   exit 0
 fi
 
 AC_CHECK_LIB( [nl], [nl_handle_alloc], [SYSLIBS="$SYSLIBS -lnl"])
