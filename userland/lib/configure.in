@@ -138,6 +138,17 @@ else
 REDIS_LIB=""
 fi
 
+AC_CHECK_LIB([numa], [numa_available], HAVE_LIBNUMA="-D HAVE_LIBNUMA")
+AC_MSG_CHECKING([if libnuma is present])
+if test "x$ac_cv_lib_numa_numa_available" = xyes; then :
+   LIBNUMA="-lnuma"
+   HAVE_LIBNUMA="-D HAVE_LIBNUMA"
+   AC_MSG_RESULT([yes])
+else
+   AC_MSG_RESULT(no)
+   echo "Please install libnuma-dev in order to use PF_RING"
+fi
+
 AC_CHECK_LIB( [nl], [nl_handle_alloc], [SYSLIBS="$SYSLIBS -lnl"])
 
 AC_CHECK_LIB( [dag], 
@@ -193,6 +204,8 @@ AC_SUBST(HAVE_BPF)
 AC_SUBST(BPF_INCLUDE)
 dnl AC_SUBST(BPF_LIB)
 AC_SUBST(REDIS_LIB)
+AC_SUBST(HAVE_LIBNUMA)
+AC_SUBST(LIBNUMA)
 AC_SUBST(SYSLIBS)
 AC_SUBST(INSTALL_PREFIX)
 AC_SUBST(SILICOM_LIBS)
