@@ -171,7 +171,7 @@ void print_stats() {
            "SentBytes:         %lu\n"
            "CurrentSentPps:    %lu\n"
            "CurrentSentBitps:  %lu\n",
-           sec2dhms((deltaMillisecStart/1000), timebuf, sizeof(timebuf)),
+           msec2dhmsm(deltaMillisecStart, timebuf, sizeof(timebuf)),
            (long unsigned int) num_pkt_good_sent,
            (long unsigned int) num_bytes_good_sent,
 	   (long unsigned int) currentThpt,

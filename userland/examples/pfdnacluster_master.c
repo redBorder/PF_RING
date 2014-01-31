@@ -143,7 +143,7 @@ void print_stats() {
 
     snprintf(&statsBuf[strlen(statsBuf)], sizeof(statsBuf)-strlen(statsBuf),
              "Duration:          %s\n",
-	     sec2dhms((deltaMillisec/1000), timeBuffer, sizeof(timeBuffer)));
+	     msec2dhmsm(deltaMillisec, timeBuffer, sizeof(timeBuffer)));
 
     if (mode != send_only_mode) {
       snprintf(&statsBuf[strlen(statsBuf)], sizeof(statsBuf)-strlen(statsBuf),

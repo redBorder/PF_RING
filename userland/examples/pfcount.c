@@ -123,7 +123,7 @@ void print_stats() {
 	     "Filtered: %lu\n"
 #endif
              "Bytes:    %lu\n",
-             sec2dhms((deltaMillisecStart/1000), timebuf, sizeof(timebuf)),
+             msec2dhmsm(deltaMillisecStart, timebuf, sizeof(timebuf)),
              (long unsigned int) pfringStat.recv,
              (long unsigned int) pfringStat.drop,
 #ifdef ENABLE_BPF
