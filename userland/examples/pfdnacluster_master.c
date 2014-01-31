@@ -659,14 +659,14 @@ int main(int argc, char* argv[]) {
     }
   }
 
+  if (num_apps == 0) {
+    instances_per_app[0] = 1;
+    tot_num_slaves = num_apps = 1;
+  }
+
   if (tot_num_slaves + (frwd_device ? 1 : 0) > MAX_NUM_APP) {
     trace(TRACE_WARNING, "WARNING: You cannot instantiate more than %u slave applications\n", MAX_NUM_APP);
     printHelp();
-  }
-
-  if (num_apps == 0) {
-    instances_per_app[num_apps] = 1;
-    num_apps = 1;
   }
 
   if (cluster_id < 0 || hashing_mode < 0 || hashing_mode > 3)
