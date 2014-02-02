@@ -805,6 +805,12 @@ static void ixgbe_update_rx_dca(struct ixgbe_adapter *adapter,
 	u32 rxctrl = dca3_get_tag(rx_ring->dev, cpu);
 	u8 reg_idx = rx_ring->reg_idx;
 
+#ifdef ENABLE_DNA
+	//if(adapter->dna.dna_enabled)
+	//if(unlikely(enable_debug))
+	printk("[DNA] Setting DCA affinity for %s@%d to core %d\n", 
+	       adapter->netdev->name, reg_idx, cpu);
+#endif
 
 	switch (hw->mac.type) {
 	case ixgbe_mac_82599EB:
