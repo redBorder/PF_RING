@@ -838,6 +838,16 @@ static void ixgbe_update_dca(struct ixgbe_q_vector *q_vector)
 	struct ixgbe_adapter *adapter = q_vector->adapter;
 	struct ixgbe_ring *ring;
 	int cpu = get_cpu();
+#ifdef ENABLE_DNA
+	int selected_cpu;
+	
+	if(adapter->dna.dna_enabled) {
+		selected_cpu = numa_cpu_affinity[adapter->bd_number];
+		if (selected_cpu != -1)
+			if (cpu_online(selected_cpu))
+				cpu = selected_cpu;
+	}
+#endif
 
 	if (q_vector->cpu == cpu)
 		goto out_no_update;
