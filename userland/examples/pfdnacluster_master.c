@@ -1,7 +1,7 @@
 /*
  *
- * (C) 2012 - Luca Deri <deri@ntop.org>
- *            Alfredo Cardigliano <cardigliano@ntop.org>
+ * (C) 2012-14 - Luca Deri <deri@ntop.org>
+ *               Alfredo Cardigliano <cardigliano@ntop.org>
  *
  *
  * This program is free software; you can redistribute it and/or modify
@@ -252,7 +252,7 @@ void sigproc(int sig) {
 /* *************************************** */
 
 void printHelp(void) {
-  printf("pfdnacluster_master - (C) 2012 ntop.org\n\n");
+  printf("pfdnacluster_master - (C) 2012-14 ntop.org\n\n");
 
   printf("pfdnacluster_master [-a] -i dev\n");
   printf("-h              Print this help\n");
