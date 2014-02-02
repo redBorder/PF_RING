@@ -879,6 +879,9 @@ static int __ixgbe_notify_dca(struct device *dev, void *data)
 		if (dca_add_requester(dev) == 0) {
 			adapter->flags |= IXGBE_FLAG_DCA_ENABLED;
 			ixgbe_setup_dca(adapter);
+#ifdef ENABLE_DNA
+			printk("[DNA] DCA enabled on %s\n", adapter->netdev->name);
+#endif
 			break;
 		}
 		/* Fall Through since DCA is disabled. */
@@ -9843,6 +9846,9 @@ static int __devinit ixgbe_probe(struct pci_dev *pdev,
 		case 0:
 			adapter->flags |= IXGBE_FLAG_DCA_ENABLED;
 			ixgbe_setup_dca(adapter);
+#ifdef ENABLE_DNA
+			printk("[DNA] DCA enabled on %s\n", netdev->name);
+#endif
 			break;
 		/* -19 is returned from the kernel when no provider is found */
 		case -19:
