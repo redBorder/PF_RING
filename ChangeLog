@@ -1,4 +1,44 @@
 ---------------------------------------
+2014-02-01 PF_RING 5.6.2
+
+* PF_RING Kernel module
+ - Added compatibility for new kernels (post 3.10)
+ - Redhat compilation fixes
+
+* PF_RING library
+ - New pfring_print_pkt()/pfring_print_parsed_pkt()
+ - pfring_get_selectable_fd fix: returning -1 on error
+ - Doxygen documentation
+
+* Libzero
+ - Time-pulse thread support in DNA Cluster (sw nsec ts)
+ - Application stats fix for libzero DNA Cluster slave sockets
+ - Added libnuma support to DNA Cluster for memory binding
+
+* Libpcap
+ - Setting selectable fd via pfring_get_selectable_fd()
+
+* Examples
+ - pfdnacluster_master
+   - New -o <device> and -f <core id> options to forward packets both to applications and an egress interface
+   - Ability to drop privileges with -D <username>
+   - Stats under /proc/net/pf_ring/stats
+   - New option -q <queue len>
+ - Applications stats have duration with msec resolution now
+
+* Drivers
+ - New PF_RING-aware netxtreme2-7.8.37 driver (courtesy of Rob G <rgagnon24@gmail.com>)
+ - PF_RING-aware igb (5.1.2) and ixgbe (3.19.1) drivers update (courtesy of Pablo Nebrera <pablonebrera@eneotecnologia.com>)
+ - ixgbe DNA driver update (3.18.7)
+ - igb DNA driver update (5.0.6)
+ - e1000e DNA driver update (2.5.4)
+ - ixgbe DNA driver pause frames fix
+ - igb/ixgbe DNA drivers compilation fixes for Redhat 6.5
+ - igb DNA jumbo mtu fix
+ - igb DNA drop stats fix
+ - DNA drivers fixes for applications calling poll/select directly (e.g. tshark)
+
+---------------------------------------
 2013-08-30 PF_RING 5.6.1
 
 * PF_RING Kernel module
