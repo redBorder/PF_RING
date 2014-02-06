@@ -1116,7 +1116,7 @@ struct pf_ring_socket {
   /* /proc */
   char sock_proc_name[64];       /* /proc/net/pf_ring/<sock_proc_name>             */
   char sock_proc_stats_name[64]; /* /proc/net/pf_ring/stats/<sock_proc_stats_name> */
-  char statsString[256 + 1];
+  char statsString[512 + 1];
 
   /* Poll Watermark */
   u_int32_t num_poll_calls;

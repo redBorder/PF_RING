@@ -7556,7 +7556,7 @@ static int ring_setsockopt(struct socket *sock,
   struct add_to_cluster cluster;
   u_int32_t channel_id_mask;
   char applName[32 + 1] = { 0 };
-  char statsString[256 + 1] = { 0 };
+  char statsString[512 + 1] = { 0 };
   u_int16_t rule_id, rule_inactivity;
   packet_direction direction;
   socket_mode sockmode;
@@ -8510,8 +8510,9 @@ static int ring_setsockopt(struct socket *sock,
     break;
 
   case SO_SET_APPL_STATS:
-    if(optlen > sizeof(statsString) /* Names should not be too long */ )
-      return(-EINVAL);
+    if(optlen > (sizeof(statsString)-1) /* Names should not be too long */ ) {
+      optlen = sizeof(statsString)-1;
+    }
 
     if(copy_from_user(&statsString, optval, optlen))
       return(-EFAULT);
