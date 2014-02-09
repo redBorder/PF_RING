@@ -2509,7 +2509,8 @@ static int ixgbe_clean_rx_irq(struct ixgbe_q_vector *q_vector,
 
 #endif /* IXGBE_FCOE */
 #ifdef CONFIG_NET_RX_BUSY_POLL
-		skb_mark_ll(skb, &q_vector->napi);
+		// skb_mark_ll(skb, &q_vector->napi);
+		skb_mark_napi_id(skb, &q_vector->napi);
 #endif
 		ixgbe_rx_skb(q_vector, rx_ring, rx_desc, skb);
 
