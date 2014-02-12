@@ -152,7 +152,7 @@ typedef void pfring_pkt_buff;
 
 struct __pfring {
   u_int8_t initialized, enabled, long_header, rss_mode, force_timestamp, strip_hw_timestamp, 
-           disable_parsing, disable_timestamp;
+    disable_parsing, disable_timestamp, chunk_mode_enabled;
   packet_direction direction; /* Specify the capture direction for packets */
   socket_mode mode;
 
@@ -261,6 +261,9 @@ struct __pfring {
   int       (*send_pkt_buff)                (pfring *, pfring_pkt_buff *, u_int8_t);
   void      (*flush_tx_packets)             (pfring *);
   int       (*register_zerocopy_tx_ring)    (pfring *, pfring *);
+  /* RX in chunk mode (when supported) */
+  int       (*enable_chunk_mode)            (pfring *);
+  int       (*recv_chunk)                   (pfring *, void **chunk, u_int32_t *chunk_len, u_int8_t wait_for_incoming_chunk); 
 
   /* DNA only */
   int      (*dna_init)             (pfring *);
@@ -1235,6 +1238,25 @@ int pfring_print_parsed_pkt(char *buff, u_int buff_len, const u_char *p, const s
  * @return 0 on success, a negative value otherwise.
  */
 int pfring_print_pkt(char *buff, u_int buff_len, const u_char *p, u_int len, u_int caplen);
+
+
+/**
+ * Enable chunk mode operations. This mode is supported only by specific adapters and it's not for general purpose. Note that this function must be called before pfring_enable_ring().
+ * @param ring  The PF_RING handle.
+ * @return 0 on success, a negative value otherwise (e.g. if not supported by the adapter in use).
+ */
+int pfring_enable_chunk_mode(pfring *ring);
+ 
+ /**
+ * Receive a packet chunk, if previously enabled via pfring_enable_chunk_mode().
+ * @param ring                      The PF_RING handle.
+ * @param chunk                     A buffer that will point to the received chunk. Note that the chunk format is adapter specific.
+ * @param chunk_len                 Length of the received data chunk.
+ * @param wait_for_incoming_chunk   If 0 active wait is used to check the packet availability.
+ * @return 0 on success, a negative value otherwise.
+ */
+int pfring_recv_chunk(pfring *ring, void **chunk, u_int32_t *chunk_len, u_int8_t wait_for_incoming_chunk);
+
 
 /* ********************************* */
 

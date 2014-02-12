@@ -1,6 +1,6 @@
 /*
  *
- * (C) 2005-12 - Luca Deri <deri@ntop.org>
+ * (C) 2005-14 - ntop.org
  *
  *
  * This program is free software; you can redistribute it and/or modify
@@ -422,7 +422,7 @@ int32_t gmt2local(time_t t) {
 /* *************************************** */
 
 void printHelp(void) {
-  printf("pfcount - (C) 2005-13 ntop.org\n\n");
+  printf("pfcount - (C) 2005-14 ntop.org\n\n");
   printf("-h              Print this help\n");
   printf("-i <device>     Device name. Use:\n"
 	 "                - ethX@Y for channels\n"
@@ -448,6 +448,7 @@ void printHelp(void) {
   printf("-s              Enable hw timestamping\n");
   printf("-S              Do not strip hw timestamps (if present)\n");
   printf("-t              Touch payload (for force packet load on cache)\n");
+  printf("-C              Work in chunk mode (test only)\n");
 #ifdef ENABLE_QAT_PM
   printf("-x <string>     Search string on payload. You can specify this option multiple times.\n");
 #endif
@@ -529,6 +530,7 @@ int main(int argc, char* argv[]) {
   u_char mac_address[6] = { 0 };
   int promisc, snaplen = DEFAULT_SNAPLEN, rc;
   u_int clusterId = 0;
+  u_int8_t chunk_mode = 0;
   u_int32_t flags = 0;
   int bind_core = -1;
   packet_direction direction = rx_and_tx_direction;
@@ -576,7 +578,7 @@ int main(int argc, char* argv[]) {
   startTime.tv_sec = 0;
   thiszone = gmt2local(0);
 
-  while((c = getopt(argc,argv,"hi:c:d:l:v:ae:n:w:p:b:rg:u:mtsS"
+  while((c = getopt(argc,argv,"hi:c:Cd:l:v:ae:n:w:p:b:rg:u:mtsS"
 #ifdef ENABLE_QAT_PM
 		    "x:"
 #endif
@@ -605,6 +607,9 @@ int main(int argc, char* argv[]) {
       break;
     case 'c':
       clusterId = atoi(optarg);
+      break;
+    case 'C':
+      chunk_mode = 1;
       break;
     case 'd':
       reflector_device = strdup(optarg);
@@ -937,13 +942,21 @@ int main(int argc, char* argv[]) {
   if(pfring_get_appl_stats_file_name(pd, path, sizeof(path)) != NULL)
     fprintf(stderr, "Dumping statistics on %s\n", path);
 
+  if(chunk_mode) {
+    if(pfring_enable_chunk_mode(pd) != 0) {
+      printf("Unable to enable chunk mode :-(\n");
+      pfring_close(pd);
+      return(-1);
+    }
+  }
+
   if (pfring_enable_ring(pd) != 0) {
     printf("Unable to enable ring :-(\n");
     pfring_close(pd);
     return(-1);
   }
 
-  if (num_threads <= 1) {
+  if(num_threads <= 1) {
     if(bind_core >= 0)
       bind2core(bind_core);
 

@@ -368,7 +368,7 @@ int32_t gmt2local(time_t t) {
 /* *************************************** */
 
 void printHelp(void) {
-  printf("pfcount\n(C) 2005-13 ntop.org\n\n");
+  printf("pfcount\n(C) 2005-14 ntop.org\n\n");
   printf("-h              Print this help\n");
   printf("-i <device>     Device name. Use device@channel for channels\n");
 

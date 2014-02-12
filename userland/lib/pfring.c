@@ -1,6 +1,6 @@
 /*
  *
- * (C) 2005-13 - ntop.org
+ * (C) 2005-14 - ntop.org
  *
  *
  * This program is free software; you can redistribute it and/or modify
@@ -27,6 +27,10 @@
 #include "pfring_mod.h"
 #include "pfring_mod_stack.h"
 #include "pfring_mod_usring.h"
+
+#ifdef HAVE_NT
+#include "pfring_mod_nt.h"
+#endif
 
 #ifdef HAVE_DAG
 #include "pfring_mod_dag.h"
@@ -65,6 +69,14 @@ static pfring_module_info pfring_module_list[] = {
     .open = pfring_dag_open,
   },
 #endif
+
+#ifdef HAVE_NT
+  {
+    .name = "nt",
+    .open = pfring_nt_open,
+  },
+#endif
+
 #ifdef HAVE_DNA
 #ifdef HAVE_ZERO
   {
@@ -358,9 +370,8 @@ int pfring_set_reflector_device(pfring *ring, char *device_name) {
 
 int pfring_loop(pfring *ring, pfringProcesssPacket looper,
 		const u_char *user_bytes, u_int8_t wait_for_packet) {
-  u_char *buffer = NULL;
-  struct pfring_pkthdr hdr;
   int rc = 0;
+  struct pfring_pkthdr hdr;
 
   memset(&hdr, 0, sizeof(hdr));
   ring->break_recv_loop = 0;
@@ -371,17 +382,44 @@ int pfring_loop(pfring *ring, pfringProcesssPacket looper,
      || ring->mode == send_only_mode)
     return -1;
 
-  while(!ring->break_recv_loop) {
-    rc = ring->recv(ring, &buffer, 0, &hdr, wait_for_packet);
+  if(!ring->chunk_mode_enabled) {
+    /* Packet (non chunk) mode */
+    u_char *buffer = NULL;
 
-    if(rc < 0)
-      break;
-    else if(rc > 0) {
-      hdr.caplen = min_val(hdr.caplen, ring->caplen);
+    while(!ring->break_recv_loop) {
+      rc = ring->recv(ring, &buffer, 0, &hdr, wait_for_packet);
+      
+      if(rc < 0)
+	break;
+      else if(rc > 0) {
+	hdr.caplen = min_val(hdr.caplen, ring->caplen);
+	
+	looper(&hdr, buffer, user_bytes);
+      } else {
+	/* if(!wait_for_packet) usleep(1); */
+      }
+    }
+  } else {
+    /* Chunk mode */
+    void *chunk;
+    
+    if(!ring->recv_chunk) return(-2);
 
-      looper(&hdr, buffer, user_bytes);
-    } else {
-      /* if(!wait_for_packet) usleep(1); */
+    /* All set to zero as the header is meaningless */
+    memset(&hdr, 0, sizeof(hdr));
+
+    while(!ring->break_recv_loop) {
+      rc = ring->recv_chunk(ring, &chunk, &hdr.len, wait_for_packet);
+      
+      if(rc < 0)
+	break;
+      else if(rc > 0) {
+	hdr.caplen = min_val(hdr.len, ring->caplen);
+	
+	looper(&hdr, chunk, user_bytes);
+      } else {
+	/* if(!wait_for_packet) usleep(1); */
+      }
     }
   }
 
@@ -1403,3 +1441,25 @@ int pfring_search_payload(pfring *ring, char *string_to_search) {
   return(-2);
 }
 
+/* **************************************************** */
+
+int pfring_enable_chunk_mode(pfring *ring) {
+  if(ring && ring->enable_chunk_mode) {
+    int rc = ring->enable_chunk_mode(ring);
+
+    if(rc == 0) ring->chunk_mode_enabled = 1;
+
+    return(rc);
+  }
+
+  return(PF_RING_ERROR_NOT_SUPPORTED);
+}
+
+/* **************************************************** */
+
+int pfring_recv_chunk(pfring *ring, void **chunk, u_int32_t *chunk_len, u_int8_t wait_for_incoming_chunk) {
+  if(ring && ring->recv_chunk)
+    return(ring->recv_chunk(ring, chunk, chunk_len, wait_for_incoming_chunk));
+
+  return(PF_RING_ERROR_NOT_SUPPORTED);
+}
