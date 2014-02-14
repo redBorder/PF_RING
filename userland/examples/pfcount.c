@@ -703,6 +703,7 @@ int main(int argc, char* argv[]) {
   if(promisc)                 flags |= PF_RING_PROMISC;
   if(enable_hw_timestamp)     flags |= PF_RING_HW_TIMESTAMP;
   if(!dont_strip_timestamps)  flags |= PF_RING_STRIP_HW_TIMESTAMP;
+  if(chunk_mode)              flags |= PF_RING_CHUNK_MODE;
   flags |= PF_RING_DNA_SYMMETRIC_RSS;  /* Note that symmetric RSS is ignored by non-DNA drivers */
 
   //printf("flags: %d\n", flags);
@@ -941,14 +942,6 @@ int main(int argc, char* argv[]) {
   pfring_set_application_stats(pd, "Statistics not yet computed: please try again...");
   if(pfring_get_appl_stats_file_name(pd, path, sizeof(path)) != NULL)
     fprintf(stderr, "Dumping statistics on %s\n", path);
-
-  if(chunk_mode) {
-    if(pfring_enable_chunk_mode(pd) != 0) {
-      printf("Unable to enable chunk mode :-(\n");
-      pfring_close(pd);
-      return(-1);
-    }
-  }
 
   if (pfring_enable_ring(pd) != 0) {
     printf("Unable to enable ring :-(\n");
