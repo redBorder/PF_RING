@@ -123,20 +123,22 @@ pfring* pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags) 
 
   memset(ring, 0, sizeof(pfring));
 
-  ring->promisc             = (flags & PF_RING_PROMISC) ? 1 : 0;
   ring->caplen              = caplen;
-  ring->reentrant           = (flags & PF_RING_REENTRANT) ? 1 : 0;
   ring->direction           = rx_and_tx_direction;
   ring->mode                = send_and_recv_mode;
-  ring->long_header         = (flags & PF_RING_LONG_HEADER) ? 1 : 0;
+
+  ring->promisc             = !!(flags & PF_RING_PROMISC);
+  ring->reentrant           = !!(flags & PF_RING_REENTRANT);
+  ring->long_header         = !!(flags & PF_RING_LONG_HEADER);
   ring->rss_mode            = (flags & PF_RING_DNA_SYMMETRIC_RSS) ? PF_RING_DNA_SYMMETRIC_RSS : (
                               (flags & PF_RING_DNA_FIXED_RSS_Q_0) ? PF_RING_DNA_FIXED_RSS_Q_0 : 0);
-  ring->force_timestamp     = (flags & PF_RING_TIMESTAMP) ? 1 : 0;
-  ring->strip_hw_timestamp  = (flags & PF_RING_STRIP_HW_TIMESTAMP) ? 1 : 0;
-  ring->hw_ts.enable_hw_timestamp = (flags & PF_RING_HW_TIMESTAMP) ? 1 : 0;
-  ring->tx.enabled_rx_packet_send = (flags & PF_RING_RX_PACKET_BOUNCE) ? 1 : 0;
-  ring->disable_parsing     = (flags & PF_RING_DO_NOT_PARSE) ? 1 : 0;
-  ring->disable_timestamp   = (flags & PF_RING_DO_NOT_TIMESTAMP) ? 1 : 0;
+  ring->force_timestamp     = !!(flags & PF_RING_TIMESTAMP);
+  ring->strip_hw_timestamp  = !!(flags & PF_RING_STRIP_HW_TIMESTAMP);
+  ring->hw_ts.enable_hw_timestamp = !!(flags & PF_RING_HW_TIMESTAMP);
+  ring->tx.enabled_rx_packet_send = !!(flags & PF_RING_RX_PACKET_BOUNCE);
+  ring->disable_parsing     = !!(flags & PF_RING_DO_NOT_PARSE);
+  ring->disable_timestamp   = !!(flags & PF_RING_DO_NOT_TIMESTAMP);
+  ring->chunk_mode_enabled  = !!(flags & PF_RING_CHUNK_MODE);
 
 #ifdef RING_DEBUG
   printf("pfring_open: device_name=%s\n", device_name);
@@ -1439,20 +1441,6 @@ int pfring_search_payload(pfring *ring, char *string_to_search) {
     return(-1);
     
   return(-2);
-}
-
-/* **************************************************** */
-
-int pfring_enable_chunk_mode(pfring *ring) {
-  if(ring && ring->enable_chunk_mode) {
-    int rc = ring->enable_chunk_mode(ring);
-
-    if(rc == 0) ring->chunk_mode_enabled = 1;
-
-    return(rc);
-  }
-
-  return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
 /* **************************************************** */

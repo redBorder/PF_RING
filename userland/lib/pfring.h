@@ -261,8 +261,6 @@ struct __pfring {
   int       (*send_pkt_buff)                (pfring *, pfring_pkt_buff *, u_int8_t);
   void      (*flush_tx_packets)             (pfring *);
   int       (*register_zerocopy_tx_ring)    (pfring *, pfring *);
-  /* RX in chunk mode (when supported) */
-  int       (*enable_chunk_mode)            (pfring *);
   int       (*recv_chunk)                   (pfring *, void **chunk, u_int32_t *chunk_len, u_int8_t wait_for_incoming_chunk); 
 
   /* DNA only */
@@ -322,6 +320,7 @@ struct __pfring {
 #define PF_RING_STRIP_HW_TIMESTAMP   1 << 8  /**< pfring_open() flag: Strip hw timestamp from the packet. */
 #define PF_RING_DO_NOT_PARSE         1 << 9  /**< pfring_open() flag: Disable packet parsing also when 1-copy is used. (parsing already disabled in zero-copy) */
 #define PF_RING_DO_NOT_TIMESTAMP     1 << 10 /**< pfring_open() flag: Disable packet timestamping also when 1-copy is used. (sw timestamp already disabled in zero-copy) */
+#define PF_RING_CHUNK_MODE           1 << 11 /**< pfring_open() flag: Enable chunk mode operations. This mode is supported only by specific adapters and it's not for general purpose. */
 
 /* ********************************* */
 
@@ -1239,16 +1238,8 @@ int pfring_print_parsed_pkt(char *buff, u_int buff_len, const u_char *p, const s
  */
 int pfring_print_pkt(char *buff, u_int buff_len, const u_char *p, u_int len, u_int caplen);
 
-
-/**
- * Enable chunk mode operations. This mode is supported only by specific adapters and it's not for general purpose. Note that this function must be called before pfring_enable_ring().
- * @param ring  The PF_RING handle.
- * @return 0 on success, a negative value otherwise (e.g. if not supported by the adapter in use).
- */
-int pfring_enable_chunk_mode(pfring *ring);
- 
  /**
- * Receive a packet chunk, if previously enabled via pfring_enable_chunk_mode().
+ * Receive a packet chunk, if enabled via pfring_open() flag.
  * @param ring                      The PF_RING handle.
  * @param chunk                     A buffer that will point to the received chunk. Note that the chunk format is adapter specific.
  * @param chunk_len                 Length of the received data chunk.
@@ -1256,7 +1247,6 @@ int pfring_enable_chunk_mode(pfring *ring);
  * @return 0 on success, a negative value otherwise.
  */
 int pfring_recv_chunk(pfring *ring, void **chunk, u_int32_t *chunk_len, u_int8_t wait_for_incoming_chunk);
-
 
 /* ********************************* */
 
