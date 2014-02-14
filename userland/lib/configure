@@ -3692,9 +3692,12 @@ if test "x$ac_cv_lib_dag_dag_get_stream_erf_types" = xyes; then :
 fi
 
 
-OLD_LIBS=$LIBS
-LIBS="-L/opt/napatech3/lib $LIBS"
-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for NT_Init in -lntapi" >&5
+
+if test -f "pfring_mod_nt.h"; then
+   if test -f "pfring_mod_nt.c"; then
+   OLD_LIBS=$LIBS
+   LIBS="-L/opt/napatech3/lib $LIBS"
+   { $as_echo "$as_me:${as_lineno-$LINENO}: checking for NT_Init in -lntapi" >&5
 $as_echo_n "checking for NT_Init in -lntapi... " >&6; }
 if ${ac_cv_lib_ntapi_NT_Init+:} false; then :
   $as_echo_n "(cached) " >&6
@@ -3734,7 +3737,9 @@ if test "x$ac_cv_lib_ntapi_NT_Init" = xyes; then :
   NT_OBJS="pfring_mod_nt.o"; NT_INC="-I/opt/napatech3/include -D HAVE_NT"; NT_LIB="-L/opt/napatech3/lib -lntapi"
 fi
 
-LIBS=$OLD_LIBS
+	      LIBS=$OLD_LIBS
+   fi
+fi
 
 
 # Check whether --enable-bpf was given.
