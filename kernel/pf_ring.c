@@ -1,6 +1,6 @@
 /* ***************************************************************
  *
- * (C) 2004-13 - ntop.org
+ * (C) 2004-14 - ntop.org
  *
  * This code includes contributions courtesy of
  * - Amit D. Chaudhary <amit_ml@rajgad.com>
@@ -1481,13 +1481,17 @@ static int ring_proc_get_info(struct seq_file *m, void *data_not_used)
 
       seq_printf(m, "Bound Device(s)    : ");
 
-      list_for_each_safe(ptr, tmp_ptr, &ring_aware_device_list) {
-        ring_device_element *dev_ptr = list_entry(ptr, ring_device_element, device_list);
-
-        if(test_bit(dev_ptr->dev->ifindex, pfr->netdev_mask)) {
-          seq_printf(m, "%s%s", (num > 0) ? "," : "", dev_ptr->dev->name);
-          num++;
-        }
+      if(pfr->custom_bound_device_name[0] != '\0') {
+	seq_printf(m, pfr->custom_bound_device_name);
+      } else {
+	list_for_each_safe(ptr, tmp_ptr, &ring_aware_device_list) {
+	  ring_device_element *dev_ptr = list_entry(ptr, ring_device_element, device_list);
+	  
+	  if(test_bit(dev_ptr->dev->ifindex, pfr->netdev_mask)) {
+	    seq_printf(m, "%s%s", (num > 0) ? "," : "", dev_ptr->dev->name);
+	    num++;
+	  }
+	}
       }
 
       seq_printf(m, "\n");
@@ -8453,6 +8457,20 @@ static int ring_setsockopt(struct socket *sock,
     found = 1;
     break;
 
+  case SO_SET_CUSTOM_BOUND_DEV_NAME:
+    /* Names should not be too long */
+    if(optlen > (sizeof(pfr->custom_bound_device_name)-1))
+      optlen = sizeof(pfr->custom_bound_device_name)-1;    
+
+    if(copy_from_user(&pfr->custom_bound_device_name, optval, optlen)) {
+      pfr->custom_bound_device_name[0] = '\0';
+      return(-EFAULT);
+    } else
+      pfr->custom_bound_device_name[optlen] = '\0';
+
+    found = 1;
+    break;
+
   case SO_SHUTDOWN_RING:
     found = 1, pfr->ring_active = 0, pfr->ring_shutdown = 1;
     wake_up_interruptible(&pfr->ring_slots_waitqueue);
@@ -8507,9 +8525,9 @@ static int ring_setsockopt(struct socket *sock,
     break;
 
   case SO_SET_APPL_STATS:
-    if(optlen > (sizeof(pfr->statsString)-1) /* Names should not be too long */ ) {
-      optlen = sizeof(pfr->statsString)-1;
-    }
+    /* Names should not be too long */
+    if(optlen > (sizeof(pfr->statsString)-1))
+      optlen = sizeof(pfr->statsString)-1;    
 
     if(copy_from_user(&pfr->statsString, optval, optlen)) {
       pfr->statsString[0] = '\0';
@@ -9700,7 +9718,7 @@ static int __init ring_init(void)
 #endif
 
   printk("[PF_RING] Welcome to PF_RING %s ($Revision: %s$)\n"
-	 "(C) 2004-13 ntop.org\n",
+	 "(C) 2004-14 ntop.org\n",
 	 RING_VERSION, SVN_REV);
 
 #if(LINUX_VERSION_CODE > KERNEL_VERSION(2,6,11))

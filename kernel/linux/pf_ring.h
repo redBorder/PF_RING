@@ -2,7 +2,7 @@
  *
  * Definitions for packet ring
  *
- * 2004-13 ntop.org
+ * 2004-14 - ntop.org
  *
  */
 
@@ -26,7 +26,7 @@
 #define RING_MAGIC_VALUE             0x88
 #define RING_FLOWSLOT_VERSION          15 /*
 					    Increment whenever we change slot or packet header
-					    layout (e.g. we add/move a field
+					    layout (e.g. we add/move a field)
 					  */
 
 #define DEFAULT_BUCKET_LEN            128
@@ -85,6 +85,7 @@
 #define SO_PUBLISH_CLUSTER_OBJECT        136
 #define SO_LOCK_CLUSTER_OBJECT           137
 #define SO_UNLOCK_CLUSTER_OBJECT         138
+#define SO_SET_CUSTOM_BOUND_DEV_NAME     139
 
 /* Get */
 #define SO_GET_RING_VERSION              170
@@ -1117,6 +1118,7 @@ struct pf_ring_socket {
   char sock_proc_name[64];       /* /proc/net/pf_ring/<sock_proc_name>             */
   char sock_proc_stats_name[64]; /* /proc/net/pf_ring/stats/<sock_proc_stats_name> */
   char statsString[512 + 1];
+  char custom_bound_device_name[32];
 
   /* Poll Watermark */
   u_int32_t num_poll_calls;
