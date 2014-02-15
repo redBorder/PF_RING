@@ -731,12 +731,14 @@ char* pfring_format_numbers(double val, char *buf, u_int buf_len, u_int8_t add_d
 int pfring_get_mtu_size(pfring* ring) {
   struct ifreq ifr;
 
+  if(ring->device_name == NULL)
+    return(0); /* Unknown for this device */
+
   memset(&ifr, 0, sizeof(ifr));
   strncpy(ifr.ifr_name, ring->device_name, sizeof(ifr.ifr_name));
-
-  if(ioctl(ring->fd, SIOCGIFMTU, &ifr) == -1) {
-    return(0); /* Unknown for this device */
-  }
-
-  return(ifr.ifr_mtu);
+  
+  if(ioctl(ring->fd, SIOCGIFMTU, &ifr) == -1)
+    return(0); /* Unknown for this device */  
+  else
+    return(ifr.ifr_mtu);
 }

@@ -1451,3 +1451,12 @@ int pfring_recv_chunk(pfring *ring, void **chunk, u_int32_t *chunk_len, u_int8_t
 
   return(PF_RING_ERROR_NOT_SUPPORTED);
 }
+
+/* **************************************************** */
+
+int pfring_set_bound_dev_name(pfring *ring, char *custom_dev_name) {
+  if(ring && ring->set_bound_dev_name)
+    return(ring->set_bound_dev_name(ring, custom_dev_name));
+
+  return(PF_RING_ERROR_NOT_SUPPORTED);
+}

@@ -262,6 +262,7 @@ struct __pfring {
   void      (*flush_tx_packets)             (pfring *);
   int       (*register_zerocopy_tx_ring)    (pfring *, pfring *);
   int       (*recv_chunk)                   (pfring *, void **chunk, u_int32_t *chunk_len, u_int8_t wait_for_incoming_chunk); 
+  int       (*set_bound_dev_name)           (pfring *, char*);
 
   /* DNA only */
   int      (*dna_init)             (pfring *);
@@ -1247,6 +1248,14 @@ int pfring_print_pkt(char *buff, u_int buff_len, const u_char *p, u_int len, u_i
  * @return 0 on success, a negative value otherwise.
  */
 int pfring_recv_chunk(pfring *ring, void **chunk, u_int32_t *chunk_len, u_int8_t wait_for_incoming_chunk);
+
+ /**
+ * Set a custom device name to which the socket is bound. This function should be called for devices that are not visible via ifconfig
+ * @param ring            The PF_RING handle.
+ * @param custom_dev_name The custom device name to be used for this socket.
+ * @return 0 on success, a negative value otherwise.
+ */
+int pfring_set_bound_dev_name(pfring *ring, char *custom_dev_name);
 
 /* ********************************* */
 

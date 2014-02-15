@@ -243,6 +243,7 @@ int pfring_mod_open(pfring *ring) {
   ring->remove_bpf_filter = pfring_mod_remove_bpf_filter;
   ring->shutdown = pfring_mod_shutdown;
   ring->send_last_rx_packet = pfring_mod_send_last_rx_packet;
+  ring->set_bound_dev_name = pfring_mod_set_bound_dev_name;
 
   ring->poll_duration = DEFAULT_POLL_DURATION;
 
@@ -1023,5 +1024,12 @@ void pfring_mod_shutdown(pfring *ring) {
   int dummy = 0;
 
   setsockopt(ring->fd, 0, SO_SHUTDOWN_RING, &dummy, sizeof(dummy));
+}
+
+/* **************************************************** */
+
+int pfring_mod_set_bound_dev_name(pfring *ring, char *custom_dev_name) {
+   return(setsockopt(ring->fd, 0, SO_SET_CUSTOM_BOUND_DEV_NAME, 
+		     custom_dev_name, strlen(custom_dev_name)));
 }
 
