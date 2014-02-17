@@ -62,6 +62,7 @@ pfring_dna_cluster *dna_cluster_handle;
 
 u_int8_t wait_for_packet = 1, print_interface_stats = 0, do_shutdown = 0, hashing_mode = 0, use_hugepages = 0, time_pulse_thread = 0;
 socket_mode mode = recv_only_mode;
+int time_pulse_resolution = 0;
 
 static struct timeval startTime;
 
@@ -269,6 +270,7 @@ void printHelp(void) {
   printf("-t <core id>    Bind the TX thread to a core (-s only)\n");
   printf("-a              Active packet wait\n");
   printf("-S <core id>    Enable Time Pulse thread and bind it to a core\n");
+  printf("-R <nsec>       Time resolution (nsec) when using pulse thread\n");
   printf("-o <device>     Forward both to applications and an egress device\n");
   printf("-f <core id>    Bind the forwarder thread to a core (-o only)\n");
   printf("-u <mountpoint> Use hugepages for packet memory allocation\n");
@@ -583,7 +585,7 @@ int main(int argc, char* argv[]) {
     opt_argv = argv;
   }
 
-  while((c = getopt(opt_argc, opt_argv, "ac:r:st:hi:n:m:dD:u:pP:S:o:f:q:")) != -1) {
+  while((c = getopt(opt_argc, opt_argv, "ac:r:st:hi:n:m:dD:u:pP:S:o:f:q:R:")) != -1) {
     switch(c) {
     case 'a':
       wait_for_packet = 0;
@@ -634,6 +636,8 @@ int main(int argc, char* argv[]) {
       time_pulse_thread = 1;
       time_pulse_bind_core = atoi(optarg);
       break;
+    case 'R':
+      time_pulse_resolution = atoi(optarg);
     case 'u':
       use_hugepages = 1;
       if (optarg != NULL) hugepages_mountpoint = strdup(optarg);
@@ -757,7 +761,7 @@ int main(int argc, char* argv[]) {
   /* Setting up important details... */
   dna_cluster_set_wait_mode(dna_cluster_handle, !wait_for_packet /* active_wait */);
   dna_cluster_set_cpu_affinity(dna_cluster_handle, rx_bind_core, tx_bind_core);
-  if (time_pulse_thread) dna_cluster_set_time_pulse_thread_cpu_affinity(dna_cluster_handle, time_pulse_bind_core);
+  if (time_pulse_thread) dna_cluster_time_pulse_settings(dna_cluster_handle, time_pulse_bind_core, time_pulse_resolution);
 
   switch(hashing_mode) {
   case 0:
