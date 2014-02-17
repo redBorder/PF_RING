@@ -379,9 +379,9 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h,
     int i, len = h->caplen;
 
     if(show_crc) {
-      u_int32_t sec, nsec;
+      if(0) {
+	u_int32_t sec, nsec;
 
-      if(1) {
 	sec  = ntohl(*(u_int32_t*)(&p[h->caplen-4]));
 	nsec = ntohl(*(u_int32_t*)(&p[h->caplen]));
 	printf("%u.%u\n", sec, nsec);
