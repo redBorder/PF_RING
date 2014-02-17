@@ -72,7 +72,7 @@ struct bpf_program filter;
 u_int8_t userspace_bpf = 0;
 #endif
 
-u_int8_t wait_for_packet = 1, do_shutdown = 0, add_drop_rule = 0;
+u_int8_t wait_for_packet = 1, do_shutdown = 0, add_drop_rule = 0, show_crc = 0;
 u_int8_t use_extended_pkt_header = 0, touch_payload = 0, enable_hw_timestamp = 0, dont_strip_timestamps = 0;
 
 /* ******************************** */
@@ -376,11 +376,24 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h,
   }
   
   if(verbose == 2) {
-      int i;
+    int i, len = h->caplen;
 
-      for(i = 0; i < h->caplen; i++)
-        printf("%02X ", p[i]);
-      printf("\n");
+    if(show_crc) {
+      u_int32_t sec, nsec;
+
+      if(1) {
+	sec  = ntohl(*(u_int32_t*)(&p[h->caplen-4]));
+	nsec = ntohl(*(u_int32_t*)(&p[h->caplen]));
+	printf("%u.%u\n", sec, nsec);
+      }
+
+      len += 4;
+    }
+
+    for(i = 0; i < len; i++)
+      printf("%02X ", p[i]);
+
+    printf("\n");
   }
 
   if(unlikely(add_drop_rule)) {
@@ -448,6 +461,7 @@ void printHelp(void) {
   printf("-s              Enable hw timestamping\n");
   printf("-S              Do not strip hw timestamps (if present)\n");
   printf("-t              Touch payload (for force packet load on cache)\n");
+  printf("-T              Dump CRC (test and DNA only)\n");
   printf("-C              Work in chunk mode (test only)\n");
 #ifdef ENABLE_QAT_PM
   printf("-x <string>     Search string on payload. You can specify this option multiple times.\n");
@@ -578,7 +592,7 @@ int main(int argc, char* argv[]) {
   startTime.tv_sec = 0;
   thiszone = gmt2local(0);
 
-  while((c = getopt(argc,argv,"hi:c:Cd:l:v:ae:n:w:p:b:rg:u:mtsS"
+  while((c = getopt(argc,argv,"hi:c:Cd:l:v:ae:n:w:p:b:rg:u:mtsST"
 #ifdef ENABLE_QAT_PM
 		    "x:"
 #endif
@@ -660,6 +674,9 @@ int main(int argc, char* argv[]) {
     case 'S':
       dont_strip_timestamps = 1;
       break;
+    case 'T':
+      show_crc = 1;
+      break;
     case 'g':
       bind_core = atoi(optarg);
       break;
@@ -724,10 +741,15 @@ int main(int argc, char* argv[]) {
 	   (version & 0x0000FF00) >> 8,
 	   version & 0x000000FF);
   }
-  
+   
   if(strstr(device, "dnacluster:")) {
     printf("Capturing from %s\n", device);
   } else {
+    if(show_crc && strncmp(device, "dna", 3)) {
+      fprintf(stderr, "-T can be enabled only with DNA\n");
+      show_crc = 0;
+    }
+
     if(pfring_get_bound_device_address(pd, mac_address) != 0)
       fprintf(stderr, "Unable to read the device address\n");
     else {
