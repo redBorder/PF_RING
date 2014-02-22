@@ -5,6 +5,8 @@
 # that legacy pcap-based apps can use it
 # without *also* linking against libpfring
 
+\rm -f libpcap.a
+make
 \rm -rf fatpcap
 mkdir fatpcap
 cd fatpcap
