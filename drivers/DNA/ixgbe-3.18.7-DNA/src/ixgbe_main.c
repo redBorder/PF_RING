@@ -6315,7 +6315,7 @@ int ixgbe_setup_tx_resources(struct ixgbe_ring *tx_ring)
 			numa_node = cpu_to_node(selected_cpu);
 			if (node_online(numa_node)) {
 				tx_ring->q_vector->numa_node = numa_node;
-				e_dev_info("selected numa node %d for memory allocation\n", 
+				e_dev_info("selected numa node %d for tx memory allocation\n", 
 				           numa_node);
 			} else {
 				printk("[DNA] %s(): Warning: numa node %d is not available\n",
@@ -6436,7 +6436,7 @@ int ixgbe_setup_rx_resources(struct ixgbe_ring *rx_ring)
 			numa_node = cpu_to_node(selected_cpu);
 			if (node_online(numa_node)) {
 				rx_ring->q_vector->numa_node = numa_node;
-				e_dev_info("selected numa node %d for memory allocation\n", 
+				e_dev_info("selected numa node %d for rx memory allocation\n", 
 				           numa_node);
 			} else {
 				printk("[DNA] %s(): Warning: numa node %d is not available\n",
