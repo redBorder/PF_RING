@@ -1434,6 +1434,7 @@ struct pfring_hooks {
 
 /* *************************************************************** */
 
+#define REDBORDER_PATCH
 #ifdef REDBORDER_PATCH
 typedef enum {
   IF_SCAN,
