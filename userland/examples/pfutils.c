@@ -138,6 +138,12 @@ void create_pid_file(char *pidFile) {
   if (pidFile == NULL) return;
 
   fp = fopen(pidFile, "w");
+
+  if (fp == NULL) {
+    fprintf(stderr, "unable to create pid file %s: %s\n", pidFile, strerror(errno));
+    return;
+  }
+
   fprintf(fp, "%d", getpid());
   fclose(fp);
 }
