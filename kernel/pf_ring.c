@@ -172,14 +172,6 @@ static lockless_list delayed_memory_table;
 /* Protocol hook */
 static struct packet_type prot_hook;
 
-/*
-  For each device, pf_ring keeps a list of the number of
-  available ring socket slots. So that a caller knows in advance whether
-  there are slots available (for rings bound to such device)
-  that can potentially host the packet
-*/
-static struct list_head device_ring_list[MAX_NUM_DEVICES];
-
 /* List of virtual filtering devices */
 static struct list_head virtual_filtering_devices_list;
 static rwlock_t virtual_filtering_lock =
@@ -219,7 +211,7 @@ static u_int8_t num_any_rings = 0;
 static u_int32_t num_cluster_fragments = 0;
 static u_int32_t num_cluster_discarded_fragments = 0;
 static unsigned long next_fragment_purge_jiffies = 0;
-static struct hash_fragment_node *cluster_fragment_hash[NUM_FRAGMENTS_HASH_SLOTS] = { NULL };
+static struct list_head cluster_fragment_hash[NUM_FRAGMENTS_HASH_SLOTS];
 static rwlock_t cluster_fragments_lock =
 #if(LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39))
   RW_LOCK_UNLOCKED
@@ -7209,36 +7201,33 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 
 /* ************************************* */
 
-static int get_fragment_app_id(u_int32_t ipv4_src_host, u_int32_t ipv4_dst_host,
-			       u_int16_t fragment_id) {
+static int get_fragment_app_id(u_int32_t ipv4_src_host, u_int32_t ipv4_dst_host, u_int16_t fragment_id) 
+{
   u_int hash_id = fragment_id % NUM_FRAGMENTS_HASH_SLOTS;
-  struct hash_fragment_node *head, *prev, *next;
+  struct list_head *ptr, *tmp_ptr;
   u_int8_t app_id;
 
   if(unlikely(enable_debug))
     printk("[PF_RING] %s(fragment_id=%d) [num_cluster_fragments=%d]\n",
 	   __FUNCTION__, fragment_id, num_cluster_fragments);
 
-  if(cluster_fragment_hash[hash_id] == NULL)
-    return(-1); /* Not found */
+  if(num_cluster_fragments == 0)
+    return(-1); /* no fragment */
 
-  write_lock(&cluster_fragments_lock);
-  head = cluster_fragment_hash[hash_id], prev = NULL;
+  write_lock(&cluster_fragments_lock); /* TODO optimisation: lock per hash entry */
 
-  while(head != NULL) {
-    next = head->next;
-    if((head->ip_fragment_id == fragment_id)
-       && (head->ipv4_src_host == ipv4_src_host)
-       && (head->ipv4_dst_host == ipv4_dst_host)) {
+  list_for_each_safe(ptr, tmp_ptr, &cluster_fragment_hash[hash_id]) {
+    struct hash_fragment_node *frag = list_entry(ptr, struct hash_fragment_node, frag_list);
+
+    if(frag->ip_fragment_id == fragment_id
+       && frag->ipv4_src_host == ipv4_src_host
+       && frag->ipv4_dst_host == ipv4_dst_host) {
       /* Found: 1) return queue_id and 2) delete this entry */
-      app_id = head->cluster_app_id;
+      app_id = frag->cluster_app_id;
 
-      if(prev == NULL)
-	cluster_fragment_hash[hash_id] = next;
-      else
-	prev->next = next;
-
-      kfree(head), num_cluster_fragments--;
+      list_del(ptr);  
+      kfree(frag);
+      num_cluster_fragments--;
 
       if(unlikely(enable_debug))
 	printk("[PF_RING] %s(fragment_id=%d): found %d [num_cluster_fragments=%d]\n",
@@ -7247,10 +7236,7 @@ static int get_fragment_app_id(u_int32_t ipv4_src_host, u_int32_t ipv4_dst_host,
       write_unlock(&cluster_fragments_lock);
       return(app_id);
     }
-
-    prev = head;
-    head = next;
-  } /* while */
+  }
 
   write_unlock(&cluster_fragments_lock);
 
@@ -7261,35 +7247,27 @@ static int get_fragment_app_id(u_int32_t ipv4_src_host, u_int32_t ipv4_dst_host,
 
 static void purge_idle_fragment_cache(void)
 {
+  struct list_head *ptr, *tmp_ptr;
+
   if(likely(num_cluster_fragments == 0))
     return;
-  else if((next_fragment_purge_jiffies < jiffies)
-	  || (num_cluster_fragments > (5*NUM_FRAGMENTS_HASH_SLOTS))) {
+
+  if(next_fragment_purge_jiffies < jiffies || 
+     num_cluster_fragments > (5*NUM_FRAGMENTS_HASH_SLOTS)) {
     int i;
 
     if(unlikely(enable_debug))
       printk("[PF_RING] %s() [num_cluster_fragments=%d]\n", __FUNCTION__, num_cluster_fragments);
 
     for(i=0; i<NUM_FRAGMENTS_HASH_SLOTS; i++) {
-      if(cluster_fragment_hash[i] != NULL) {
-	struct hash_fragment_node *next, *head, *prev;
+      list_for_each_safe(ptr, tmp_ptr, &cluster_fragment_hash[i]) {
+        struct hash_fragment_node *frag = list_entry(ptr, struct hash_fragment_node, frag_list);
 
-	head = cluster_fragment_hash[i], prev = NULL;
-
-	while(head != NULL) {
-	  next = head->next;
-
-	  if(head->expire_jiffies < jiffies) {
-	    kfree(head), num_cluster_fragments--;
-
-	    if(prev == NULL)
-	      cluster_fragment_hash[i] = next;
-	    else
-	      prev->next = next;
-	  }
-
-	  head = next;
-	}
+	if(frag->expire_jiffies < jiffies) {
+          list_del(ptr);
+	  kfree(frag);
+          num_cluster_fragments--;
+	} else break; /* optimisation: since list is ordered (we are adding to tail) we can skip this collision list */
       }
     } /* for */
 
@@ -7300,14 +7278,14 @@ static void purge_idle_fragment_cache(void)
 /* ************************************* */
 
 static void add_fragment_app_id(u_int32_t ipv4_src_host, u_int32_t ipv4_dst_host,
-				u_int16_t fragment_id, u_int8_t app_id) {
+				u_int16_t fragment_id, u_int8_t app_id) 
+{
   u_int hash_id = fragment_id % NUM_FRAGMENTS_HASH_SLOTS;
-  struct hash_fragment_node *node;
+  struct list_head *ptr, *tmp_ptr;
+  struct hash_fragment_node *frag;
 
-  if(num_cluster_fragments > MAX_CLUSTER_FRAGMENTS_LEN) {
-    /* Avoid filling up all memory */
+  if(num_cluster_fragments > MAX_CLUSTER_FRAGMENTS_LEN) /* Avoid filling up all memory */
     return;
-  }
 
   if(unlikely(enable_debug))
     printk("[PF_RING] %s(fragment_id=%d, app_id=%d) [num_cluster_fragments=%d]\n",
@@ -7316,34 +7294,36 @@ static void add_fragment_app_id(u_int32_t ipv4_src_host, u_int32_t ipv4_dst_host
   write_lock(&cluster_fragments_lock);
 
   /* 1. Check if there is already the same entry on cache */
-  node = cluster_fragment_hash[hash_id];
+  list_for_each_safe(ptr, tmp_ptr, &cluster_fragment_hash[hash_id]) { 
+    frag = list_entry(ptr, struct hash_fragment_node, frag_list);
 
-  while(node != NULL) {
-    if((node->ip_fragment_id == fragment_id)
-       && (node->ipv4_src_host == ipv4_src_host)
-       && (node->ipv4_dst_host == ipv4_dst_host)) {
+    if(frag->ip_fragment_id == fragment_id
+       && frag->ipv4_src_host == ipv4_src_host
+       && frag->ipv4_dst_host == ipv4_dst_host) {
       /* Duplicate found */
-      node->cluster_app_id = app_id, node->expire_jiffies = jiffies + 5*HZ;
+      frag->cluster_app_id = app_id;
+      frag->expire_jiffies = jiffies + 5*HZ;
       write_unlock(&cluster_fragments_lock);
       return;
-    } else
-      node = node->next;
+    } 
   }
 
   /* 2. Not found, let's add it */
-  if((node = kmalloc(sizeof(struct hash_fragment_node), GFP_ATOMIC)) == NULL) {
+  if((frag = kmalloc(sizeof(struct hash_fragment_node), GFP_ATOMIC)) == NULL) {
     printk("[PF_RING] Out of memory\n");
     write_unlock(&cluster_fragments_lock);
     return;
   }
 
-  node->ip_fragment_id = fragment_id, node->ipv4_src_host = ipv4_src_host,
-    node->ipv4_dst_host = ipv4_dst_host, node->cluster_app_id = app_id,
-    node->expire_jiffies = jiffies + 5*HZ;
+  frag->ip_fragment_id = fragment_id;
+  frag->ipv4_src_host = ipv4_src_host;
+  frag->ipv4_dst_host = ipv4_dst_host;
+  frag->cluster_app_id = app_id;
+  frag->expire_jiffies = jiffies + 5*HZ;
 
-  node->next = cluster_fragment_hash[hash_id];
-  cluster_fragment_hash[hash_id] = node;
-  num_cluster_fragments++, next_fragment_purge_jiffies = node->expire_jiffies;
+  list_add_tail(&frag->frag_list, &cluster_fragment_hash[hash_id]);
+  num_cluster_fragments++;
+  next_fragment_purge_jiffies = frag->expire_jiffies;
   purge_idle_fragment_cache(); /* Just in case there are too many elements */
   write_unlock(&cluster_fragments_lock);
 }
@@ -9667,16 +9647,10 @@ static void __exit ring_exit(void)
     int i;
 
     for(i=0; i<NUM_FRAGMENTS_HASH_SLOTS; i++) {
-      if(cluster_fragment_hash[i] != NULL) {
-	struct hash_fragment_node *next, *head;
-
-	head = cluster_fragment_hash[i];
-
-	while(head != NULL) {
-	  next = head->next;
-	  kfree(head);
-	  head = next;
-	}
+      list_for_each_safe(ptr, tmp_ptr, &cluster_fragment_hash[i]) {
+        struct hash_fragment_node *frag = list_entry(ptr, struct hash_fragment_node, frag_list);
+	list_del(ptr);  
+	kfree(frag);
       }
     }
   }
@@ -9737,8 +9711,8 @@ static int __init ring_init(void)
   INIT_LIST_HEAD(&dna_cluster_list);
   INIT_LIST_HEAD(&cluster_referee_list);
 
-  for(i = 0; i < MAX_NUM_DEVICES; i++)
-    INIT_LIST_HEAD(&device_ring_list[i]);
+  for(i = 0; i < NUM_FRAGMENTS_HASH_SLOTS; i++)
+    INIT_LIST_HEAD(&cluster_fragment_hash[i]);
 
   init_ring_readers();
 

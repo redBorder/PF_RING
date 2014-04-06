@@ -1090,8 +1090,8 @@ struct hash_fragment_node {
   /* Expire */
   unsigned long expire_jiffies; /* Time at which this entry will be expired */
 
-  /* Next element of collision list */
-  struct hash_fragment_node *next;
+  /* collision list */
+  struct list_head frag_list;
 };
 
 /* ************************************************* */
@@ -1212,16 +1212,6 @@ struct pf_ring_socket {
   struct cluster_referee *cluster_referee;
   cluster_client_type cluster_role;
 };
-
-/* **************************************** */
-
-/*
- * Linked-list of device rings
- */
-typedef struct {
-  struct pf_ring_socket *the_ring;
-  struct list_head list;
-} device_ring_list_element;
 
 /* **************************************** */
 
