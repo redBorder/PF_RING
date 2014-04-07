@@ -37,6 +37,8 @@
 #include "pfring.h"
 #include "pfutils.c"
 
+#define MAX_PKT_LEN 1536
+
 u_int32_t num_sent = 0;
 
 /* ****************************************************** */
@@ -113,7 +115,7 @@ int main(int argc, char* argv[]) {
 
 
   /* Device A */
-  if((a_ring = pfring_open(a_dev, 1500, PF_RING_PROMISC | PF_RING_LONG_HEADER |
+  if((a_ring = pfring_open(a_dev, MAX_PKT_LEN, PF_RING_PROMISC | PF_RING_LONG_HEADER |
                            (use_pfring_send ? 0 : PF_RING_RX_PACKET_BOUNCE))
     ) == NULL) {
     printf("pfring_open error for %s [%s]\n", a_dev, strerror(errno));
@@ -128,7 +130,7 @@ int main(int argc, char* argv[]) {
 
   /* Device B */
 
-  if((b_ring = pfring_open(b_dev, 1500, PF_RING_PROMISC|PF_RING_LONG_HEADER)) == NULL) {
+  if((b_ring = pfring_open(b_dev, MAX_PKT_LEN, PF_RING_PROMISC|PF_RING_LONG_HEADER)) == NULL) {
     printf("pfring_open error for %s [%s]\n", b_dev, strerror(errno));
     pfring_close(a_ring);
     return(-1);
@@ -172,10 +174,11 @@ int main(int argc, char* argv[]) {
       int rc;
       
       if(use_pfring_send) {
-	rc = pfring_send(b_ring, (char*)buffer, hdr.caplen, 1);
+
+	rc = pfring_send(b_ring, (char *) buffer, hdr.caplen, 1);
 
 	if(rc < 0)
-	  printf("pfring_send() error %d\n", rc);
+	  printf("pfring_send(caplen=%u <= mtu=%u?) error %d\n", hdr.caplen, b_ring->mtu_len, rc);
 	else if(verbose)
 	  printf("Forwarded %d bytes packet\n", hdr.len);	
       } else {
