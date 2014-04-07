@@ -74,7 +74,7 @@ int main(int argc, char* argv[]) {
   int bind_core = -1;
   u_int16_t watermark = 1;
 
-  while((c = getopt(argc,argv, "ha:b:c:fvpg:")) != -1) {
+  while((c = getopt(argc,argv, "ha:b:c:fvpg:w:")) != -1) {
     switch(c) {
       case 'h':
 	printHelp();
@@ -111,31 +111,35 @@ int main(int argc, char* argv[]) {
     return -1;
   }
 
-  /* open devices */
+
+  /* Device A */
   if((a_ring = pfring_open(a_dev, 1500, PF_RING_PROMISC | PF_RING_LONG_HEADER |
                            (use_pfring_send ? 0 : PF_RING_RX_PACKET_BOUNCE))
     ) == NULL) {
     printf("pfring_open error for %s [%s]\n", a_dev, strerror(errno));
     return(-1);
-  } else {
-    pfring_set_application_name(a_ring, "pfbridge-a");
-    pfring_set_direction(a_ring, rx_only_direction);
-    pfring_set_socket_mode(a_ring, recv_only_mode);
-    pfring_set_poll_watermark(a_ring, watermark);
-    pfring_get_bound_device_ifindex(a_ring, &a_ifindex);
   }
+
+  pfring_set_application_name(a_ring, "pfbridge-a");
+  pfring_set_direction(a_ring, rx_only_direction);
+  pfring_set_socket_mode(a_ring, recv_only_mode);
+  pfring_set_poll_watermark(a_ring, watermark);
+  pfring_get_bound_device_ifindex(a_ring, &a_ifindex);
+
+  /* Device B */
 
   if((b_ring = pfring_open(b_dev, 1500, PF_RING_PROMISC|PF_RING_LONG_HEADER)) == NULL) {
     printf("pfring_open error for %s [%s]\n", b_dev, strerror(errno));
     pfring_close(a_ring);
     return(-1);
-  } else {
-    pfring_set_application_name(b_ring, "pfbridge-b");
-    pfring_set_socket_mode(b_ring, send_only_mode);
-    pfring_get_bound_device_ifindex(b_ring, &b_ifindex);
   }
+
+  pfring_set_application_name(b_ring, "pfbridge-b");
+  pfring_set_socket_mode(b_ring, send_only_mode);
+  pfring_get_bound_device_ifindex(b_ring, &b_ifindex);
   
-  /* Enable rings */
+  /* Enable Sockets */
+
   if (pfring_enable_ring(a_ring) != 0) {
     printf("Unable enabling ring 'a' :-(\n");
     pfring_close(a_ring);
