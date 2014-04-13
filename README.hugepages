@@ -1,7 +1,8 @@
 Using HUGEPAGES in libzero
 --------------------------
 
-Hugepages are used by libzero to improve how memory is used for packet handling.
+Hugepages are used by libzero to improve how memory is used for packet handling,
+they are mandatory with PF_RING ZC.
 This document describes how to enable them into your system. 
 
 For the impatient

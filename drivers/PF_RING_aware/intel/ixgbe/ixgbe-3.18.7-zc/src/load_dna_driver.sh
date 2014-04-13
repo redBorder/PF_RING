@@ -13,7 +13,7 @@ mkdir /mnt/huge
 mount -t hugetlbfs nodev /mnt/huge
 
 # We assume that you have compiled PF_RING
-insmod ../../../../PF_RING/kernel/pf_ring.ko
+insmod ../../../../../../kernel/pf_ring.ko
 
 # As many queues as the number of processors
 #insmod ./ixgbe.ko RSS=0,0,0,0

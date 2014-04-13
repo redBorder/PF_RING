@@ -1,0 +1,32 @@
+QEMU/KVM Support
+----------------
+
+0. Prerequisites
+
+- Qemu >= 1.5.1 (http://wiki.qemu.org/Download)
+- KVM support in Linux kernel
+
+In order to run a PF_RING ZC slave application on top of a QEMU/KVM Virtual Machine, follow these simple steps:
+
+1. Run the Virtual Machine specifying a monitor socket to QEMU:
+
+(H) $ qemu ... -chardev socket,path=/tmp/qmp0,server,nowait,id=qmp0 -mon chardev=qmp0,mode=control
+
+(there are some ready-to-use scripts under scripts/, run kvm-load.sh to load the needed modules and vm-boot.sh to start the VM)
+
+2. Load the hotplug module, the virtio_console module and the uio module in the guest.
+
+(G) $ modprobe acpiphp
+(G) $ modprobe virtio_console
+(G) $ modprobe uio
+(G) $ cd uio_kernel_module; make; insmod uio_ivshmem.ko
+
+3. Run the PF_RING ZC master application in the host, listing the monitor sockets of all the running Virtual Machines:
+
+(H) $ ./zbalance_ipc -i dna1 -c 99 -n 2 -m 0 -l /tmp/qmp0,/tmp/qmp1
+
+4. Run the PF_RING ZC slave application in the guest (both read packets from the specified queues):
+
+(G1) $ ./zcount_ipc -i 0 -c 99 -u
+(G2) $ ./zcount_ipc -i 1 -c 99 -u
+
