@@ -25,5 +25,9 @@ Quick Start Guide
  $ cd examples_zc
  $ ./zcount -i zc:eth1 -c 1
 
+If you have eth1 and eth2 cross connected, you can do
+ $ ./zcount -i zc:eth1 -c 1
+ $ ./zsend -i zc:eth2 -c 2
+
 Please refer to the application help (-h) for a description.
 

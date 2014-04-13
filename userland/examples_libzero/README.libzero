@@ -1,12 +1,15 @@
 This file contains some examples that introduce you to libzero. 
 
+PF_RING ZC is the successor of libzero, so we encourage you to migrate to it when possible.
 
-We suppose that you have installed the DNA drivers and loaded them up in single RX queue. I also assume that there are two ports, dna0 and dna1, that are connected directly (loopback).
+We suppose that you have installed the DNA drivers and loaded them up in single RX queue.
+I also assume that there are two ports, dna0 and dna1, that are connected directly (loopback).
 
 PF_RING/kernel# insmod ./pf_ring.ko 
 PF_RING/drivers/DNA/ixgbe-XXX-DNA/src# rmmod ixgbe; insmod ./ixgbe.ko RSS=1,1; ifconfig dna1 up; ifconfig dna0 up
 
-We use single-RX queues to demonstrate the packet distributing capabilities of libzero and to show that in all our tests we have never used Intel's RSS.
+We use single-RX queues to demonstrate the packet distributing capabilities of libzero and to show that in all
+our tests we have never used Intel's RSS.
 
 
 The hardware used for tests is:
@@ -20,14 +23,16 @@ Prerequisite (for all test):
 Start the traffic generator and leave it running as follows:
 	- pfsend -i dna1 -g 0 -b 4
 
-or (better) use a traffic generator and send traffic that can be balanced across cores (e.g. packets with rotating addresses). In order to test the code in the worst possible case, please send 60+4 bytes packets.
+or (better) use a traffic generator and send traffic that can be balanced across cores (e.g. packets with rotating addresses).
+In order to test the code in the worst possible case, please send 60+4 bytes packets.
 
 *******************************************************************************
 *******************************************************************************
 
 Test 1. Hash incoming packets and read them on 1 thread
 
-Goal: Receive packets on one thread, hash them based on the IPs, and distribute them to consumer threads. In this example one thread will receive and hash packets, and one consumer thread will count them.
+Goal: Receive packets on one thread, hash them based on the IPs, and distribute them to consumer threads. In this example one 
+thread will receive and hash packets, and one consumer thread will count them.
 
 Command: pfdnacluster_multithread -i dna0 -c 1 -n 1
 
@@ -46,7 +51,8 @@ Aggregate Actual stats: [Captured 14'881'605.27 pkt/sec][Processed 14'881'771.26
 
 Test 2. Hash incoming packets and read them on 2 threads
 
-Goal: Receive packets on one thread, hash them based on the IPs, and distribute them to consumer threads. In this example on thread will receive and hash packets, and two (-n) consumer thread will count them.
+Goal: Receive packets on one thread, hash them based on the IPs, and distribute them to consumer threads. In this example
+on thread will receive and hash packets, and two (-n) consumer thread will count them.
 
 Command: pfdnacluster_multithread -i dna0 -c 1 -n 2
 
