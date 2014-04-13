@@ -64,7 +64,7 @@ s32 ixgbe_init_shared_code(struct ixgbe_hw *hw)
 	else
 		hw->silicom.has_hw_ts_card = 0;
 
-	/* printk("[DNA] Silicom TS Card: %d\n", hw->silic_ts_card); */
+	/* printk("[PF_RING-ZC] Silicom TS Card: %d\n", hw->silic_ts_card); */
 #endif
 
 	/*

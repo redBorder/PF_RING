@@ -97,6 +97,16 @@
 #define IXGBE_MAX_RXD			4096
 #define IXGBE_MIN_RXD			64
 
+#ifdef HAVE_PF_RING
+#undef IXGBE_MAX_RXD
+#undef IXGBE_MAX_TXD
+#define IXGBE_MAX_RXD                32768
+#define IXGBE_MAX_TXD                32768
+#undef IXGBE_DEFAULT_RXD
+#undef IXGBE_DEFAULT_TXD
+#define IXGBE_DEFAULT_RXD             8192
+#define IXGBE_DEFAULT_TXD             8192
+#endif
 
 /* flow control */
 #define IXGBE_MIN_FCRTL			0x40
@@ -411,6 +421,20 @@ struct ixgbe_ring {
 		struct ixgbe_tx_queue_stats tx_stats;
 		struct ixgbe_rx_queue_stats rx_stats;
 	};
+
+#ifdef HAVE_PF_RING
+	struct {
+		atomic_t queue_in_use;
+    
+		union {
+			struct {
+				wait_queue_head_t packet_waitqueue;
+				u8 interrupt_received, interrupt_enabled;
+			} rx;
+		} rx_tx;
+	} pfring_zc;
+#endif
+
 } ____cacheline_internodealigned_in_smp;
 
 enum ixgbe_ring_f_enum {
@@ -953,6 +977,12 @@ struct ixgbe_adapter {
 	struct dentry *ixgbe_dbg_adapter;
 #endif /*HAVE_IXGBE_DEBUG_FS*/
 	u8 default_up;
+
+#ifdef HAVE_PF_RING
+	struct {
+		atomic_t usage_counter;
+	} pfring_zc;
+#endif
 };
 
 static inline u8 ixgbe_max_rss_indices(struct ixgbe_adapter *adapter)

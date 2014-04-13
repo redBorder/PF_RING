@@ -1,21 +1,16 @@
+Available PF_RING-aware drivers:
 
 e1000 drivers
-- e1000-7.3.21/ [Legacy kernels]
-- e1000-8.0.16/ [Modern kernels]
+- e1000-8.0.35/
 
 e1000e (PCI Express-only) driver
-- e1000e-1.0.15/
+- e1000e-2.5.4-zc/
 
-igb (1 Gbit) 82575/6 only
-- igb-2.0.6/ 
+igb (1 Gbit) 82575/6
+- igb-5.0.6-zc/
 
-ixgbe (10 Gbit) 82598/9 only
-- ixgbe-2.0.44.14-No-FlowDirector/   [2.0.x series without FlowDirector support]
-- ixgbe-2.1.4-FlowDirector-NoTNAPI/  [2.1.x series with FlowDirector support without TNAPI]
+ixgbe (10 Gbit) 82598/9
+- ixgbe-3.18.7-zc/
 
-Please see http://www.ntop.org/TNAPI.html for more information about TNAPI
+Drivers with the 'zc' suffix do support PF_RING ZC.
 
-----
-Luca Deri <deri@ntop.org>
-
-September 2010

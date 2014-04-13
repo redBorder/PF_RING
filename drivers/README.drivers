@@ -11,6 +11,11 @@ packets to PF_RING thus you will not be able to use the card for networking
 but only for packet capture. The advantage of this mode, is that with
 respect to "transparent_mode=1" the packet capture speed is increased.
 
+Some of these drivers (identified by the 'zc' suffix) support PF_RING ZC,
+they can be used as standard PF_RING-aware drivers, or in zero-copy mode
+(same as DNA) opening the device with the 'zc:' prefix (e.g. zc:eth1). 
+Please note that opening the device in zero-copy mode disconnects it from 
+the system.
 
 - DNA/
 DNA (Direct NIC Access) drivers that allow applications to completely
