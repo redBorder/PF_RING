@@ -2,6 +2,47 @@ PF_RING is a Linux kernel module and user-space framework that allows
 you to process packets at high-rates while providing you a consistent
 API for packet processing applications.
 
+
+PF_RING Drivers Models
+----------------------
+
+1. PF_RING-aware drivers
+These drivers are called "aware" as they are optimized for PF_RING. They
+can be used in two ways. As standard drivers they can fetch packets more
+efficiently that standard Linux drivers, but packets continue to pass
+inside the Linux stack. For exploiting their acceleration you need to
+play with the transparent mode as explained in
+http://www.ntop.org/blog/pf_ring/pf_ring-and-transparent_mode/
+Example: pfcount -i eth1
+
+Such drivers can now be used in zero copy, for completely bypassing the
+Linux stack in both RX and TX, and thus achieve line rate. As soon as
+one application opens the interface in zero copy (ZC), such interface
+(while still visible by ifconfig) cannot longer be used for standard
+networking (e.g. ping or SSH); this until the interface is open in ZC,
+and once it is closed it returns to be immediately available for standard
+Linux networking. In order to open it in ZC you must prepend 'zc:' to the
+interface name. Example: pfcount -i zc:eth1
+
+2. DNA drivers
+These drivers have been used to implement kernel bypass until PF_RING 5.x
+and since the ZC introduction they will be available for some more time
+but they are deprecated in favour of ZC that offer the same performance
+while featuring much better flexibility. In future PF_RING releases, we
+expect to discontinue thes drivers.
+
+PF_RING from Virtual Machines (KVM)
+-----------------------------------
+With the introduction of PF_RING ZC, you can finally exploit acceleration
+even from withing a KVM virtual machine without using techniques such as
+PCIe bypass. This means that a VM can dynamically open network interfaces
+in ZC, implement complex packet processing topologies, all at 10 Gbit
+line rate. Please refer to userland/examples_zc/README.kvm for more
+information on how to exploit PF_RING ZC from KVM.
+
+As future activity, we might evaluate to port it to other hypervisors,
+but at the moment we target only KVM.
+
 Compilation
 -----------
 You need to have installed the basic compilation tools and libraries.
@@ -16,14 +57,6 @@ Installation
 # sudo su
 # cd kernel; make install
 # cd ../userland/lib; make install
-
-PF_RING-aware drivers
----------------------
-In order to fully exploit PF_RING you need to use PF_RING aware drivers
-instead of vanilla ones. You can find these drivers in the drivers/
-directory. For exploiting their acceleration you need to play with
-the transparent mode as explained in
-http://www.ntop.org/blog/pf_ring/pf_ring-and-transparent_mode/
 
 Testing PF_RING
 ---------------
@@ -40,25 +73,17 @@ kernel modules:
 # sudo su
 # insmod ./kernel/pf_ring.ko
 
-DNA and PF_RING
----------------
-DNA allows you to manipulate packets at wire speed in both 1 and 10 Gbit
-networks. In order to exploit it you need to use a DNA-aware driver such
-as the Intel 10 Gbit driver (see drivers/intel/ixgbe/ixgbe-xxxx-DNA). Once
-you have loaded the driver (you need to load the PF_RING kernel module
-prior to load the DNA-ixgbe module), PF_RING allows you to exploit DNA.
-
 Documentation
 -------------
 If you need an extensive documentation, you can refer to the manual that
 is stored in the doc/ directory.
+
 The API documentation is available via doxygen, running
 # make documentation
 it will be generated in doc/html.
 
-
 -------------------------------------
-June 2011 - Luca Deri <deri@ntop.org>
+2011-14 - ntop.org
 
 
 

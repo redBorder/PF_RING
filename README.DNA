@@ -19,7 +19,6 @@ using the pfcount application, and TX using the pfsend application.
 
 IMPORTANT
 ---------
-
 Note that in case of TX, the transmission speed is limited by the RX performance. This is 
 because when the receiver cannot keep-up with the capture speed, the ethernet NIC sends
 ethernet PAUSE frames back to the sender to slow it down. If you want to ignore these frames
@@ -27,4 +26,4 @@ and thus send at full speed, you need to disable autonegotiation and ignore them
 (ethtool -A eth? autoneg off rx off tx off).
 
 -------------------------
-Luca Deri <deri@ntop.org>
+2003-14 - ntop.org
