@@ -1,5 +1,11 @@
+Introduction
+------------
+
 With DNA you can dramatically increase the packet capture and transmission speed as the 
 kernel layer is bypassed and applications can communicate directly with drivers.
+
+LibZero is a library that sits onto of DNA that implements several operations in zero
+copy over DNA.
 
 In order to exploit DNA, you need a DNA driver. Three driver families are currently 
 available:
@@ -16,6 +22,16 @@ for additional information about this matter.
 
 With these drivers you can achieve wire rate at any packet size. You can test RX
 using the pfcount application, and TX using the pfsend application.
+
+Migrating from DNA/LibZero to ZC
+------------------------
+PF_RING ZC is a technology that combines the former DNA+libzero into a single and
+comprehensive API. Please consider migrating to ZC as this offers several advantages
+with respect to DNA and libzero.
+
+At the moment both DNA/Libzero and ZC are supported, but we plan in the long run to
+discontinue DNA/Libzero in favour of ZC.
+
 
 IMPORTANT
 ---------
