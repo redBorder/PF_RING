@@ -61,10 +61,6 @@ PFPROGS   = pfcount pfcount_multichannel preflect pfbounce pfmap \
 	    pfcount_aggregator pfcount_bundle pfcount_82599 pfsystest pfsend pflatency \
 	    pfdump
 
-ifneq (@HAVE_ZERO@,)
-	PFPROGS += pfdnabounce pfdnacluster_master pfdnacluster_multithread pfdnacluster_mt_rss_frwd
-endif
-
 PCAPPROGS = pcount pfwrite
 TARGETS   = ${PFPROGS} ${PCAPPROGS}
 
@@ -120,9 +116,6 @@ preflect: preflect.o ${LIBPFRING}
 pfbounce: pfbounce.o ${LIBPFRING}
 	${CC} ${CFLAGS} pfbounce.o ${LIBS} -o $@
 
-pfdnabounce: pfdnabounce.o ${LIBPFRING}
-	${CC} ${CFLAGS} pfdnabounce.o ${LIBS} -o $@
-
 pfsend: pfsend.o ${LIBPFRING}
 	${CC} ${CFLAGS} pfsend.o ${LIBS} -o $@
 
@@ -152,15 +145,6 @@ pfwrite: pfwrite.o ${LIBPFRING}
 
 pfsystest: pfsystest.o ${LIBPFRING}
 	${CC} ${CFLAGS} pfsystest.o ${LIBS} -o $@
-
-pfdnacluster_master: pfdnacluster_master.o ${LIBPFRING}
-	${CC} ${CFLAGS} pfdnacluster_master.o ${LIBS} -o $@
-
-pfdnacluster_multithread: pfdnacluster_multithread.o ${LIBPFRING}
-	${CC} ${CFLAGS} pfdnacluster_multithread.o ${LIBS} -o $@
-
-pfdnacluster_mt_rss_frwd: pfdnacluster_mt_rss_frwd.o ${LIBPFRING}
-	${CC} ${CFLAGS} pfdnacluster_mt_rss_frwd.o ${LIBS} -o $@
 
 pfdump: pfdump.o ${LIBPFRING}
 	${CC} ${CFLAGS} pfdump.o ${LIBS} -o $@

@@ -1,4 +1,4 @@
-all: libpfring pcap ring_examples lib_c++ tcpdump
+all: libpfring pcap ring_examples libzero_examples lib_c++ tcpdump
 
 ###################
 
@@ -11,6 +11,9 @@ pcap:
 ring_examples:
 	cd examples; make
 
+libzero_examples:
+	cd examples_libzero; make
+
 lib_c++:
 	cd c++; make
 
@@ -19,7 +22,7 @@ tcpdump:
 
 ###################
 
-clean: libpfring_clean pcap_clean ring_examples_clean lib_c++_clean tcpdump_clean
+clean: libpfring_clean pcap_clean ring_examples_clean libzero_examples_clean lib_c++_clean tcpdump_clean
 
 libpfring_clean:
 	cd lib; make clean
@@ -29,6 +32,9 @@ pcap_clean:
 
 ring_examples_clean:
 	cd examples; make clean
+
+libzero_examples_clean:
+	cd examples_libzero; make clean
 
 lib_c++_clean:
 	cd c++; make clean
