@@ -641,8 +641,12 @@ int main(int argc, char* argv[]) {
       printf("NOT using zero-copy: TX ring size (%u) is not a multiple of the number of unique packets to send (%u)\n", num_tx_slots, pcap_in ? num_pcap_pkts : num_balanced_pkts);
     }
   } else {
-    if (!disable_zero_copy)
+    if (!disable_zero_copy) {
       printf("NOT using zero-copy: not supported by the driver\n");
+
+      if(strncmp(in_dev, "zc:", 3) == 0)
+	printf("Please use zsend for zero-copy operations\n");
+    }
   }
 
   tosend = pkt_head;
