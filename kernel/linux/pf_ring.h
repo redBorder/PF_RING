@@ -42,7 +42,7 @@
 
 /* Versioning */
 #define RING_VERSION                "6.0.0"
-#define RING_VERSION_NUM           0x050000
+#define RING_VERSION_NUM           0x060000
 
 /* Set */
 #define SO_ADD_TO_CLUSTER                 99
