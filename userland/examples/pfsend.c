@@ -642,10 +642,10 @@ int main(int argc, char* argv[]) {
     }
   } else {
     if (!disable_zero_copy) {
-      printf("NOT using zero-copy: not supported by the driver\n");
-
+      printf("NOT using zero-copy: not supported by this driver");
       if(strncmp(in_dev, "zc:", 3) == 0)
-	printf("Please use zsend for zero-copy operations\n");
+	printf(" (please use zsend for zero-copy)");
+      printf("\n");
     }
   }
 
