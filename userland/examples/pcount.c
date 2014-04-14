@@ -356,7 +356,7 @@ void printHelp(void) {
 int main(int argc, char* argv[]) {
   char *device = NULL, c, *bpfFilter = NULL;
   char errbuf[PCAP_ERRBUF_SIZE];
-  int promisc, snaplen = DEFAULT_SNAPLEN;;
+  int promisc, snaplen = DEFAULT_SNAPLEN;
   struct bpf_program fcode;
   u_int8_t dont_strip_hw_ts = 0;
 

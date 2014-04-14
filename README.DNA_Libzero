@@ -24,14 +24,8 @@ With these drivers you can achieve wire rate at any packet size. You can test RX
 using the pfcount application, and TX using the pfsend application.
 
 Migrating from DNA/LibZero to ZC
-------------------------
-PF_RING ZC is a technology that combines the former DNA+libzero into a single and
-comprehensive API. Please consider migrating to ZC as this offers several advantages
-with respect to DNA and libzero.
-
-At the moment both DNA/Libzero and ZC are supported, but we plan in the long run to
-discontinue DNA/Libzero in favour of ZC.
-
+--------------------------------
+Please refer to README.MIGRATE_DNA_to_ZC
 
 IMPORTANT
 ---------

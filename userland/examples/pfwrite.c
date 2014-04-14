@@ -148,7 +148,7 @@ int32_t gmt2local(time_t t) {
   *gmt = *gmtime(&t);
   loc = localtime(&t);
   dt = (loc->tm_hour - gmt->tm_hour) * 60 * 60 +
-        (loc->tm_min - gmt->tm_min) * 60;
+    (loc->tm_min - gmt->tm_min) * 60;
 
   /*
    * If the year or julian day is different, we span 00:00 GMT
@@ -255,7 +255,7 @@ static void* imsi_publisher_thread(void* _id) {
 #ifdef HAVE_REDIS
   redisContext *redis = redisConnect("127.0.0.1", 6379);
   redisReply* r;
-  
+
   if(redis == NULL) {
     printf("WARNING: Unable to connect to local redis 127.0.0.1:6379\n");
     // return(-1);
@@ -264,10 +264,10 @@ static void* imsi_publisher_thread(void* _id) {
     if(((r = redisCommand(redis, "GET imsi.%s", imsi)) == NULL) || (r->str == NULL)) {
       handleImsi(r->str);
     }
-    
+
     while(1) {
       printf("Listening for ucloud events...\n");
-      
+
       r = redisCommand(redis, "SUBSCRIBE imsi.create");
       freeReplyObject(r);
 
@@ -296,7 +296,7 @@ static void* imsi_publisher_thread(void* _id) {
 	      deleteImsi();
 	    }
 	  }
-	}	
+	}
 
 	freeReplyObject(r);
       } /* while */
