@@ -1,4 +1,28 @@
 ---------------------------------------
+2014-04-14 PF_RING 6.0.0
+
+* PF_RING ZC
+ - Say hello to the new PF_RING ZC library!
+
+* PF_RING API
+ - New chunk mode API (for supported cards only):
+   - Added PF_RING_CHUNK_MODE pfring_open() flag
+   - New pfring_recv_chunk()
+ - New pfring_set_bound_dev_name() for setting custom bound device name
+ - Added libnuma support for numa node affinity
+
+* Drivers
+ - New generation PF_RING-aware drivers with ZC support:
+   - e1000e-2.5.4-zc
+   - igb-5.0.6-zc
+   - ixgbe-3.18.7-zc
+ - PF_RING-aware e1000e driver update (v.3.0.4.1)
+
+* Examples
+ - New PF_RING ZC examples in userland/examples_zc
+ - Moved libzero examples to userland/examples_libzero
+
+---------------------------------------
 2014-02-01 PF_RING 5.6.2
 
 * PF_RING Kernel module
