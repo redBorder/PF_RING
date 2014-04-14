@@ -3,8 +3,8 @@ QEMU/KVM Support
 
 0. Prerequisites
 
-- Qemu >= 1.5.1 (http://wiki.qemu.org/Download)
-- KVM support in Linux kernel
+- Qemu >= 1.5.1 (latest stable from http://wiki.qemu.org/Download is supported)
+- KVM support in Linux kernel (kvm_intel module)
 
 In order to run a PF_RING ZC slave application on top of a QEMU/KVM Virtual Machine, follow these simple steps:
 
@@ -12,7 +12,7 @@ In order to run a PF_RING ZC slave application on top of a QEMU/KVM Virtual Mach
 
 (H) $ qemu ... -chardev socket,path=/tmp/qmp0,server,nowait,id=qmp0 -mon chardev=qmp0,mode=control
 
-(there are some ready-to-use scripts under scripts/, run kvm-load.sh to load the needed modules and vm-boot.sh to start the VM)
+(there are some ready-to-use scripts under scripts/, see next section for more informations)
 
 2. Load the hotplug module, the virtio_console module and the uio module in the guest.
 
@@ -29,4 +29,38 @@ In order to run a PF_RING ZC slave application on top of a QEMU/KVM Virtual Mach
 
 (G1) $ ./zcount_ipc -i 0 -c 99 -u
 (G2) $ ./zcount_ipc -i 1 -c 99 -u
+
+How to create/boot a Qemu VM
+----------------------------
+
+Download latest stable Qemu (1.7.1):
+
+$ wget http://wiki.qemu-project.org/download/qemu-1.7.1.tar.bz2
+$ tar xvjf qemu-1.7.1.tar.bz2 
+$ cd qemu-1.7.1
+
+Edit hw/misc/ivshmem.c commenting out line 303 (see http://patchwork.ozlabs.org/patch/316785/):
+
+    //qemu_chr_fe_claim_no_fail(chr);
+
+Configure/compile/install:
+
+# ./configure --prefix=/usr/local/kvm
+# make; make install
+
+Load the needed KVM and networking modules:
+
+$ cd PF_RING/userland/examples_zc/scripts
+$ ./kvm-load.sh
+
+Boot from a linux cdrom iso to install the OS:
+(the script looks for /root/ubuntu-12.04.2-server-amd64.iso, creating the virtual drive ubuntu-amd64.img, using eth1 for networking)
+
+$ ./vm-boot-cdrom.sh
+
+A VNC client should be used to connect to the VM and setup networking for ssh access.
+Bridge and TUN/TAP support are needed for networking (bridge module, brctl and tunctl tools).
+After installation, boot the VM with:
+
+$ ./vm-boot.sh
 

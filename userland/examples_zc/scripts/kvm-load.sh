@@ -5,6 +5,6 @@ modprobe tun
 modprobe bridge
 
 brctl addbr br0
-brctl addif br0 eth0
+brctl addif br0 eth1
 ifconfig br0 up
 
