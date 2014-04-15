@@ -352,7 +352,6 @@ void printHelp(void) {
   printf("-n <num>        Number of packets\n");
   printf("-b <num>        Number of different IPs\n");
   printf("-a              Active packet wait\n");
-  printf("-v              Verbose\n");
   exit(-1);
 }
 
