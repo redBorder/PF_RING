@@ -15,11 +15,11 @@ mount -t hugetlbfs nodev /mnt/huge
 # We assume that you have compiled PF_RING
 insmod ../../../../../../kernel/pf_ring.ko
 
-# As many queues as the number of processors
-insmod ./igb.ko RSS=0,0,0,0,0,0,0,0
-
 # Disable multiqueue
-#insmod ./igb.ko RSS=1,1,1,1,1,1,1,1 #enable_debug=1 
+insmod ./igb.ko RSS=1,1,1,1,1,1,1,1
+
+# As many queues as the number of processors
+#insmod ./igb.ko RSS=0,0,0,0,0,0,0,0
 
 sleep 1
 
@@ -33,5 +33,11 @@ for IF in $INTERFACES ; do
 		ifconfig $IF up
 		sleep 1
 		#bash ../scripts/set_irq_affinity.sh $IF
+		
+		# Max number of RX slots
+		ethtool -G $IF rx 4096
+
+		# Max number of TX slots
+		ethtool -G $IF tx 4096
 	fi
 done

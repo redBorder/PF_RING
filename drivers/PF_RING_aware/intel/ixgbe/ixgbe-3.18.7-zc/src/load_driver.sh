@@ -19,7 +19,7 @@ insmod ../../../../../../kernel/pf_ring.ko
 #insmod ./ixgbe.ko RSS=0,0,0,0
 
 # Disable multiqueue
-insmod ./ixgbe.ko RSS=1,1,1,1 
+insmod ./ixgbe.ko RSS=1,1,1,1
 
 # Configure the number of TX and RX slots
 #insmod ./ixgbe.ko RSS=1,1,1,1 num_rx_slots=32768 num_tx_slots=4096
@@ -48,6 +48,12 @@ for IF in $INTERFACES ; do
 		ifconfig $IF up
 		sleep 1
 		bash ../scripts/set_irq_affinity $IF
+
+		# Max number of RX slots
+		ethtool -G $IF rx 32768
+
+		# Max number of TX slots
+		ethtool -G $IF tx 32768
 
 		# Flow Control automatically disabled by the driver (no need to use the following commands)
 		#ethtool -A $IF autoneg off
