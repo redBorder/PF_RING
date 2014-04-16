@@ -222,6 +222,7 @@ int pfring_dna_open(pfring *ring) {
   ring->enable_ring = pfring_dna_enable_ring;
   ring->set_direction = pfring_dna_set_direction;
   ring->poll = pfring_dna_poll;
+  ring->set_tx_watermark = pfring_dna_set_tx_watermark;
 
   ring->set_poll_watermark = pfring_mod_set_poll_watermark;
   ring->set_poll_duration = pfring_mod_set_poll_duration;
@@ -418,6 +419,13 @@ int pfring_dna_open(pfring *ring) {
 
   pfring_hw_ft_init(ring);
 
+  return 0;
+}
+
+/* ******************************* */
+
+int pfring_dna_set_tx_watermark(pfring *ring, u_int16_t watermark) {
+  ring->dna.dna_tx_sync_watermark = watermark;
   return 0;
 }
 
