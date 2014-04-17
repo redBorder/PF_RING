@@ -31,7 +31,7 @@ LIBPCAP    = ${PCAPDIR}/libpcap.a  ${EXTRA_LIBS}
 # Search directories
 #
 PFRING_KERNEL=../../kernel
-INCLUDE    = -I${PFRING_KERNEL} -I${PFRING_KERNEL}/plugins -I${PFRINGDIR} -I${PCAPDIR}
+INCLUDE    = -I${PFRING_KERNEL} -I${PFRING_KERNEL}/plugins -I${PFRINGDIR} -I${PCAPDIR} -Ithird-party
 
 #
 # C compiler and flags

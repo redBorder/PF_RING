@@ -53,6 +53,10 @@
 #include "pfring.h"
 #include "pfutils.c"
 
+#include "third-party/sort.c"
+#include "third-party/node.c"
+#include "third-party/ahocorasick.c"
+
 #define ALARM_SLEEP             1
 #define DEFAULT_SNAPLEN       128
 #define MAX_NUM_THREADS        64
@@ -62,9 +66,9 @@
 pfring  *pd;
 int verbose = 0, num_threads = 1;
 pfring_stat pfringStats;
-
+void *automa = NULL;
 static struct timeval startTime;
-unsigned long long numPkts[MAX_NUM_THREADS] = { 0 }, numBytes[MAX_NUM_THREADS] = { 0 };
+unsigned long long numPkts[MAX_NUM_THREADS] = { 0 }, numBytes[MAX_NUM_THREADS] = { 0 }, numStringMatches[MAX_NUM_THREADS] = { 0 };
 
 #ifdef ENABLE_BPF
 unsigned long long numPktsFiltered[MAX_NUM_THREADS] = { 0 };
@@ -101,7 +105,7 @@ void print_stats() {
   if(pfring_stats(pd, &pfringStat) >= 0) {
     double thpt;
     int i;
-    unsigned long long nBytes = 0, nPkts = 0;
+    unsigned long long nBytes = 0, nPkts = 0, nMatches = 0;
 #ifdef ENABLE_BPF
     unsigned long long nPktsFiltered = 0;
 #endif
@@ -109,6 +113,7 @@ void print_stats() {
     for(i=0; i < num_threads; i++) {
       nBytes += numBytes[i];
       nPkts += numPkts[i];
+      nMatches += numStringMatches[i];
 #ifdef ENABLE_BPF
       nPktsFiltered += numPktsFiltered[i];
 #endif
@@ -159,6 +164,9 @@ void print_stats() {
 	      pfring_format_numbers(thpt, buf2, sizeof(buf2), 1));
     else
       fprintf(stderr, "\n");
+
+    if(automa != NULL)
+      fprintf(stderr, "String matched: %llu\n", nMatches);
 
     if(print_all && (lastTime.tv_sec > 0)) {
       deltaMillisec = delta_time(&endTime, &lastTime);
@@ -303,6 +311,19 @@ static char *etheraddr_string(const u_char *ep, char *buf) {
   return (buf);
 }
 
+/* *************************************** */
+
+static int search_string(char *string_to_match, u_int string_to_match_len) {
+  AC_TEXT_t ac_input_text;
+  int matching_protocol_id = 0;
+
+  ac_input_text.astring = string_to_match, ac_input_text.length = string_to_match_len;
+  ac_automata_search((AC_AUTOMATA_t*)automa, &ac_input_text, (void*)&matching_protocol_id);
+
+  ac_automata_reset((AC_AUTOMATA_t*)automa);
+  return(matching_protocol_id);
+}
+
 /* ****************************************************** */
 
 static int32_t thiszone;
@@ -324,6 +345,12 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h,
     volatile int __attribute__ ((unused)) i;
     
     i = p[12] + p[13];
+  }
+
+  if((automa != NULL) 
+     && (h->caplen > 42 /* FIX: do proper parsing */)
+     && (search_string((char*)&p[42], h->caplen-42) == 1)) {
+    numStringMatches[threadId]++;
   }
 
   if(verbose) {
@@ -463,9 +490,7 @@ void printHelp(void) {
   printf("-t              Touch payload (for force packet load on cache)\n");
   printf("-T              Dump CRC (test and DNA only)\n");
   printf("-C              Work in chunk mode (test only)\n");
-#ifdef ENABLE_QAT_PM
-  printf("-x <string>     Search string on payload. You can specify this option multiple times.\n");
-#endif
+  printf("-x <path>       File containing strings to search string on payload.\n");
   printf("-u <1|2>        For each incoming packet add a drop rule (1=hash, 2=wildcard rule)\n");
   printf("-v <mode>       Verbose [1: verbose, 2: very verbose (print packet payload)]\n");
   exit(0);
@@ -533,14 +558,58 @@ void* packet_consumer_thread(void* _id) {
 
 /* *************************************** */
 
+static int ac_match_handler(AC_MATCH_t *m, void *param) {
+  int *matching_protocol_id = (int*)param;
+
+  *matching_protocol_id = 1;
+
+  return 1; /* 0 to continue searching, !0 to stop */
+}
+
+/* *************************************** */
+
+static void add_string_to_automa(char *value) {
+  AC_PATTERN_t ac_pattern;
+
+  printf("Adding string '%s' to search list...\n", value);
+
+  ac_pattern.astring = value, ac_pattern.rep.number = 2;
+  ac_pattern.length = strlen(ac_pattern.astring);
+  ac_automata_add(((AC_AUTOMATA_t*)automa), &ac_pattern);
+}
+
+/* *************************************** */
+
+static void load_strings(char *path) {
+  FILE *f = fopen(path,"r");
+  char *s, buf[256] = { 0 };
+  
+  if(f == NULL) {
+    printf("Unable to open file %s\n", path);
+    exit(-1);
+  }
+  automa = ac_automata_init(ac_match_handler);
+
+  while((s = fgets(buf, sizeof(buf)-1, f)) != NULL) {
+    if((s[0] != '\0')
+       && (s[0] != '\n')
+       && (s[0] != '\r')) {
+      s[strlen(s)-1] = '\0';
+      add_string_to_automa(s);
+    }
+  }
+
+  ac_automata_finalize((AC_AUTOMATA_t*)automa);
+  
+  fclose(f);
+}
+
+/* *************************************** */
+
 #define MAX_NUM_STRINGS  32
 
 int main(int argc, char* argv[]) {
   char *device = NULL, c, buf[32], path[256] = { 0 }, *reflector_device = NULL;
-#ifdef ENABLE_QAT_PM
-  char *to_search[MAX_NUM_STRINGS] = { NULL };
-  u_int num_strings_to_search = 0;
-#endif
   u_char mac_address[6] = { 0 };
   int promisc, snaplen = DEFAULT_SNAPLEN, rc;
   u_int clusterId = 0;
@@ -592,10 +661,7 @@ int main(int argc, char* argv[]) {
   startTime.tv_sec = 0;
   thiszone = gmt2local(0);
 
-  while((c = getopt(argc,argv,"hi:c:Cd:l:v:ae:n:w:p:b:rg:u:mtsST"
-#ifdef ENABLE_QAT_PM
-		    "x:"
-#endif
+  while((c = getopt(argc,argv,"hi:c:Cd:l:v:ae:n:w:p:b:rg:u:mtsSTx:"
 #ifdef ENABLE_BPF
 		    "f:"
 #endif
@@ -692,14 +758,9 @@ int main(int argc, char* argv[]) {
 	break;
       }
 
-#ifdef ENABLE_QAT_PM
     case 'x':
-      if(num_strings_to_search >= MAX_NUM_STRINGS) {
-	printf("Too many strings specified (-x): maximum %u\n", MAX_NUM_STRINGS);
-      } else
-	to_search[num_strings_to_search++] = strdup(optarg);
+      load_strings(optarg);
       break;
-#endif
     }
   }
   
@@ -800,20 +861,6 @@ int main(int argc, char* argv[]) {
       else
         printf("Successfully removed BPF filter '%s'\n", bpfFilter);
 #endif
-    }
-  }
-#endif
-
-#ifdef ENABLE_QAT_PM
-  if(num_strings_to_search > 0) {
-    int i;
-
-    for(i=0; i<num_strings_to_search; i++) {
-      rc = pfring_search_payload(pd, to_search[i]);
-      if(rc < 0)
-	printf("pfring_search_payload() returned %d\n", rc);
-      else
-	printf("Successfully added string to search '%s'\n", to_search[i]);  
     }
   }
 #endif
