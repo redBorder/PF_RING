@@ -146,7 +146,7 @@ pfring_zc_recv_pkt(
  * Read a burst of packets from the queue.
  * @param queue                    The queue handle.
  * @param pkt_handles              The array with the buffer handles for the received buffers. The buffer handles must have been allocated earlier with get_packet_handle()/get_packet_handle_from_queue().
- * @param max_num_pkts             The maximum number of packets to read from the queue.
+ * @param max_num_packets          The maximum number of packets to read from the queue.
  * @param wait_for_incoming_packet The flag indicating whether this call is blocking or not.
  * @return                         The number of received packets on success, 0 on empty queue (non-blocking only), a negative value otherwise.
  */
@@ -154,7 +154,7 @@ int
 pfring_zc_recv_pkt_burst(
   pfring_zc_queue *queue, 
   pfring_zc_pkt_buff **pkt_handles,
-  u_int32_t max_num_pkts,
+  u_int32_t max_num_packets,
   u_int8_t wait_for_incoming_packet
 ); 
 
@@ -192,6 +192,22 @@ pfring_zc_send_pkt(
   pfring_zc_pkt_buff **pkt_handle,
   u_int8_t flush_packet
 );
+
+/**
+ * Send a burst of packets to the queue.
+ * @param queue        The queue handle.
+ * @param pkt_handles  The array with the buffer handles for the buffers to send.
+ * @param num_packets  The number of packets to send to the queue.
+ * @param flush_packet The flag indicating whether this call should flush the enqueued packets, and older packets if any.
+ * @return             The number of packets successfully sent, a negative value in case of error.
+ */
+int 
+pfring_zc_send_pkt_burst(
+  pfring_zc_queue *queue, 
+  pfring_zc_pkt_buff **pkt_handles,
+  u_int32_t num_packets,
+  u_int8_t flush_packets 
+); 
 
 /* **************************************************************************************** */
 

@@ -47,8 +47,11 @@
 #define QUEUE_LEN            8192
 #define POOL_SIZE              16
 
-#define NBUFF      256 /* pow */
+#define NBUFF      256 /* pow 2 */
 #define NBUFFMASK 0xFF /* 256-1 */
+
+#define BURST_API
+#define BURSTLEN    16 /* pow 2 */
 
 pfring_zc_cluster *zc;
 pfring_zc_queue *zq;
@@ -60,6 +63,9 @@ unsigned long long numPkts = 0, numBytes = 0;
 int cluster_id = -1, bind_core = -1, pps = -1, packet_len = 60, num_ips = 0;
 u_int64_t num_to_send = 0;
 u_int8_t active = 0, do_shutdown = 0, flush_packet = 0;
+#ifdef BURST_API
+u_int8_t use_pkt_burst_api = 0;
+#endif
 
 u_char stdin_packet[9000];
 int stdin_packet_len = 0;
@@ -351,6 +357,7 @@ void printHelp(void) {
   printf("-l <len>        Packet len (bytes)\n");
   printf("-n <num>        Number of packets\n");
   printf("-b <num>        Number of different IPs\n");
+  printf("-z              Use burst API\n");
   printf("-a              Active packet wait\n");
   exit(-1);
 }
@@ -361,6 +368,9 @@ void send_traffic() {
   ticks hz, tick_start = 0, tick_delta = 0;
   u_int32_t buffer_id = 0;
   int sent_bytes;
+#ifdef BURST_API
+  int i, sent_packets;
+#endif
 
   if (bind_core >= 0)
     bind2core(bind_core);
@@ -381,6 +391,45 @@ void send_traffic() {
     tick_start = getticks();
   }
 
+#ifdef BURST_API  
+  /****** Burst API ******/
+  if (use_pkt_burst_api) {
+  while (likely(!do_shutdown && (!num_to_send || numPkts < num_to_send))) {
+
+    if (numPkts < num_queue_buffers + NBUFF || num_ips > 1) { /* forge all buffers 1 time */
+      for (i = 0; i < BURSTLEN; i++) {
+        buffers[buffer_id + i]->len = packet_len;
+        if (stdin_packet_len > 0)
+          memcpy(buffers[buffer_id + i]->data, stdin_packet, stdin_packet_len);
+        else
+          forge_udp_packet(buffers[buffer_id + i]->data, numPkts + i);
+      }
+    }
+
+    /* TODO send unsent packets when a burst is partially sent */
+    while (unlikely((sent_packets = pfring_zc_send_pkt_burst(zq, &buffers[buffer_id], BURSTLEN, flush_packet)) <= 0)) {
+      if (unlikely(do_shutdown)) break;
+      if (!active) usleep(1);
+    }
+
+    numPkts += sent_packets;
+    numBytes += ((packet_len + 24 /* 8 Preamble + 4 CRC + 12 IFG */ ) * sent_packets);
+
+    buffer_id += BURSTLEN;
+    buffer_id &= NBUFFMASK;
+
+    if(pps > 0) {
+      u_int8_t synced = 0;
+      while((getticks() - tick_start) < (numPkts * tick_delta))
+        if (!synced) pfring_zc_sync_queue(zq, tx_only), synced = 1;
+    }
+
+  } 
+
+  } else {
+#endif
+
+  /****** Packet API ******/
   while (likely(!do_shutdown && (!num_to_send || numPkts < num_to_send))) {
 
     buffers[buffer_id]->len = packet_len;
@@ -418,8 +467,11 @@ void send_traffic() {
       while((getticks() - tick_start) < (numPkts * tick_delta))
         if (!synced) pfring_zc_sync_queue(zq, tx_only), synced = 1;
     }
-
   }
+
+#ifdef BURST_API  
+  }
+#endif
 
   if (!flush_packet) 
     pfring_zc_sync_queue(zq, tx_only);
@@ -433,7 +485,7 @@ int main(int argc, char* argv[]) {
 
   startTime.tv_sec = 0;
 
-  while((c = getopt(argc,argv,"ab:c:g:hi:n:p:l:")) != '?') {
+  while((c = getopt(argc,argv,"ab:c:g:hi:n:p:l:z")) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -464,6 +516,11 @@ int main(int argc, char* argv[]) {
     case 'g':
       bind_core = atoi(optarg);
       break;
+#ifdef BURST_API
+    case 'z':
+      use_pkt_burst_api = 1;
+      break;
+#endif
     }
   }
 
