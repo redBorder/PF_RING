@@ -144,7 +144,7 @@ void create_pid_file(char *pidFile) {
     return;
   }
 
-  fprintf(fp, "%d", getpid());
+  fprintf(fp, "%d\n", getpid());
   fclose(fp);
 }
 
