@@ -55,7 +55,7 @@
 #include "igb_vmdq.h"
 
 #ifdef HAVE_PF_RING
-#include "../../../../../../kernel/linux/pf_ring.h"
+#include "../../../../../../../kernel/linux/pf_ring.h"
 #endif
 
 #if defined(DEBUG) || defined (DEBUG_DUMP) || defined (DEBUG_ICR) || defined(DEBUG_ITR)

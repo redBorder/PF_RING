@@ -59,7 +59,7 @@
 #include "ixgbe_sriov.h"
 
 #ifdef HAVE_PF_RING
-#include "../../../../../../kernel/linux/pf_ring.h"
+#include "../../../../../../../kernel/linux/pf_ring.h"
 #endif
 
 char ixgbe_driver_name[] = "ixgbe";
