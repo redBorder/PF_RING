@@ -4085,7 +4085,8 @@ extern int __kc_pci_enable_msix_range(struct pci_dev *dev,
 #define pci_enable_msix_range __kc_pci_enable_msix_range
 #endif
 
-#else /* >= 3.14.0 */
+#endif //#else /* >= 3.14.0 */
+#if ( LINUX_VERSION_CODE >= KERNEL_VERSION(3,13,0) )  /* ENABLE_DNA patch */
 
 /* for ndo_dfwd_ ops add_station, del_station and _start_xmit */
 #ifndef HAVE_NDO_DFWD_OPS
