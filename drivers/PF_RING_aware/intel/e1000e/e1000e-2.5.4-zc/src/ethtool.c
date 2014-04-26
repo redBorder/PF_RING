@@ -848,6 +848,13 @@ static int e1000_set_ringparam(struct net_device *netdev,
 	bool set_tx = false, set_rx = false;
 	u16 new_rx_count, new_tx_count;
 
+#ifdef HAVE_PF_RING
+	if(atomic_read(&adapter->pfring_zc.usage_counter) > 0) {
+		printk("[PF_RING-ZC] Interface %s is in use, unable to set ring params!\n", netdev->name);
+		return -EBUSY;
+	}
+#endif
+
 	if ((ring->rx_mini_pending) || (ring->rx_jumbo_pending))
 		return -EINVAL;
 

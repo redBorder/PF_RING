@@ -1332,8 +1332,19 @@ void notify_function_ptr(void *rx_data, void *tx_data, u_int8_t device_in_use)
 	}
 
 	if(unlikely(enable_debug))
-		printk("[PF_RING-ZC][ixgbe] %s %s@%d is %sIN use\n", __FUNCTION__,
+		printk("[PF_RING-ZC] %s %s@%d is %sIN use\n", __FUNCTION__,
 		       xx_ring->netdev->name, xx_ring->queue_index, device_in_use ? "" : "NOT ");
+}
+
+/* ********************************** */
+
+dna_device_model pfring_zc_dev_model(struct ixgbe_hw *hw)
+{
+	switch (hw->mac.type) {
+		case ixgbe_mac_82598EB: return intel_ixgbe_82598;
+		case ixgbe_mac_82599EB: return (hw->silicom.has_hw_ts_card ? intel_ixgbe_82599_ts : intel_ixgbe_82599);
+		default:		return intel_ixgbe;
+	}
 }
 
 #endif
@@ -4088,9 +4099,8 @@ static void ixgbe_configure_srrctl(struct ixgbe_adapter *adapter,
 			rxctl |= ~IXGBE_RXCTRL_DMBYPS;
 			IXGBE_WRITE_REG(&adapter->hw, IXGBE_RXCTRL, rxctl);
 
-			if(0)
-				printk("[PF_RING-ZC] 82598 [# queues: %u][flag: %02X][RXCTRL: %02X]\n",
-				       adapter->num_rx_queues, flag, IXGBE_READ_REG(&adapter->hw, IXGBE_RXCTRL));
+			//printk("[PF_RING-ZC] 82598 [# queues: %u][flag: %02X][RXCTRL: %02X]\n",
+			//       adapter->num_rx_queues, flag, IXGBE_READ_REG(&adapter->hw, IXGBE_RXCTRL));
 			/* NOTE: this code does not seem to work as it should, thus we need to handle clean_rx_irq for 82598 */
 		}
 #endif
@@ -5730,17 +5740,6 @@ static void ixgbe_fdir_filter_restore(struct ixgbe_adapter *adapter)
 
 	spin_unlock(&adapter->fdir_perfect_lock);
 }
-
-#ifdef HAVE_PF_RING
-dna_device_model pfring_zc_dev_model(struct ixgbe_hw *hw)
-{
-	switch (hw->mac.type) {
-		case ixgbe_mac_82598EB: return intel_ixgbe_82598;
-		case ixgbe_mac_82599EB: return (hw->silicom.has_hw_ts_card ? intel_ixgbe_82599_ts : intel_ixgbe_82599);
-		default:		return intel_ixgbe;
-	}
-}
-#endif
 
 static void ixgbe_configure(struct ixgbe_adapter *adapter)
 {

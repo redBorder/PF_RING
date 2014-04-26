@@ -963,6 +963,13 @@ static int ixgbe_set_ringparam(struct net_device *netdev,
 	int i, err = 0;
 	u32 new_rx_count, new_tx_count;
 
+#ifdef HAVE_PF_RING
+	if(atomic_read(&adapter->pfring_zc.usage_counter) > 0) {
+		printk("[PF_RING-ZC] Interface %s is in use, unable to set ring params!\n", netdev->name);
+		return -EBUSY;
+	}
+#endif
+
 	if ((ring->rx_mini_pending) || (ring->rx_jumbo_pending))
 		return -EINVAL;
 
