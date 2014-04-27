@@ -115,6 +115,12 @@ pfring_zc_open_device(
 );
 
 /**
+ * Return the ZC version
+ * @return          The PF_RING ZC version.
+ */
+char* pfring_zc_version();
+
+/**
  * Create a SPSC queue.
  * @param cluster   The cluster handle.
  * @param queue_len The queue length.

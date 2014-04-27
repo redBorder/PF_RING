@@ -201,7 +201,8 @@ void my_sigalarm(int sig) {
 /* *************************************** */
 
 void printHelp(void) {
-  printf("zbalance - (C) 2014 ntop.org\n\n");
+  printf("zbalance - (C) 2014 ntop.org\n");
+  printf("Using PFRING_ZC v.%s\n", pfring_zc_version());
   printf("A master thread balancing packets to multiple consumer threads counting packets.\n\n");
   printf("-h              Print this help\n");
   printf("-i <device>     Device name (comma-separated list)\n");

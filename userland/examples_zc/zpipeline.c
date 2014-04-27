@@ -172,7 +172,8 @@ void my_sigalarm(int sig) {
 /* *************************************** */
 
 void printHelp(void) {
-  printf("zpipeline - (C) 2014 ntop.org\n\n");
+  printf("zpipeline - (C) 2014 ntop.org\n");
+  printf("Using PFRING_ZC v.%s\n", pfring_zc_version());
   printf("A pipeline of threads sending ingress packets to the next thread.\n\n");
   printf("-h              Print this help\n");
   printf("-i <device>     Device name\n");

@@ -235,7 +235,9 @@ void my_sigalarm(int sig) {
 /* *************************************** */
 
 void printHelp(void) {
-  printf("zbalance_ipc - (C) 2014 ntop.org\n\n");
+  printf("zbalance_ipc - (C) 2014 ntop.org\n");
+  printf("Using PFRING_ZC v.%s\n", pfring_zc_version());
+
   printf("A master process balancing packets to multiple consumer processes (e.g. zcount_ipc -c <cluster id> -i <consumer id>).\n\n");
   printf("-h              Print this help\n");
   printf("-i <device>     Device (comma-separated list)\n");

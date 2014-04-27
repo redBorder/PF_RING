@@ -347,7 +347,8 @@ void my_sigalarm(int sig) {
 /* *************************************** */
 
 void printHelp(void) {
-  printf("zsend - (C) 2014 ntop.org\n\n");
+  printf("zsend - (C) 2014 ntop.org\n");
+  printf("Using PFRING_ZC v.%s\n", pfring_zc_version());
   printf("A traffic generator able to replay synthetic udp packets or hex from standard input.\n"); 
   printf("-h              Print this help\n");
   printf("-i <device>     Device name\n");

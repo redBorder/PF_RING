@@ -166,7 +166,8 @@ void my_sigalarm(int sig) {
 /* *************************************** */
 
 void printHelp(void) {
-  printf("zbounce_ipc - (C) 2014 ntop.org\n\n");
+  printf("zbounce_ipc - (C) 2014 ntop.org\n");
+  printf("Using PFRING_ZC v.%s\n", pfring_zc_version());
   printf("A packet forwarder application between sw queue.\n\n");
   printf("-h              Print this help\n");
   printf("-i <queue id>   Ingress zero queue id\n");
