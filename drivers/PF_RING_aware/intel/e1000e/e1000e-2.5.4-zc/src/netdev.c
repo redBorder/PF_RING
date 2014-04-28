@@ -4316,23 +4316,17 @@ int wait_packet_function_ptr(void *data, int mode)
       return(0);
     }
 
-    if(unlikely(enable_debug)) printk("[wait_packet_function_ptr] 00\n");
     i = E1000_READ_REG(&adapter->hw, E1000_RDT(0));
-    if(unlikely(enable_debug)) printk("[wait_packet_function_ptr] 0 (%p)\n", adapter);
-    if(unlikely(enable_debug)) printk("[wait_packet_function_ptr] 1 (%p)\n", rx_ring);
     /* Very important: update the value from the register set from userland.
      * Here i is the last I've read (zero-copy implementation) */
     if(++i == rx_ring->count) i = 0;
     /* Here i is the next I have to read */
-
-    if(unlikely(enable_debug)) printk("[wait_packet_function_ptr] 2\n");
 
     rx_ring->next_to_clean = i;
 
     if(unlikely(enable_debug)) printk("[wait_packet_function_ptr] [next_to_clean=%d]\n", rx_ring->next_to_clean);
 
     rx_desc = E1000_RX_DESC_EXT(*rx_ring, rx_ring->next_to_clean);
-    if(unlikely(enable_debug)) printk("[wait_packet_function_ptr] Check if a packet is arrived\n");
 
     prefetch(rx_desc);
 
@@ -4474,17 +4468,12 @@ void notify_function_ptr(void *rx_data, void *tx_data, u_int8_t device_in_use) {
 	rx_desc->wb.upper.status_error = 0;
       }
 
-      if(debug_notify) printk(KERN_WARNING "[PF_RING] [-] %s(%d)\n", __FUNCTION__, 11);
       e1000_clean_rx_ring(rx_ring);
-      if(debug_notify) printk(KERN_WARNING "[PF_RING] [-] %s(%d)\n", __FUNCTION__, 111);
       e1000_configure_rx(adapter);
       adapter->alloc_rx_buf(rx_ring, e1000_desc_unused(rx_ring), GFP_KERNEL);
       rmb();
 
-      if(debug_notify) printk(KERN_WARNING "[PF_RING] [-] %s(%d)\n", __FUNCTION__, 12);
-
       e1000_irq_enable(adapter);
-      if(debug_notify) printk(KERN_WARNING "[PF_RING] [-] %s(%d)\n", __FUNCTION__, 2);
 
       enable_receives(adapter);
     }
@@ -4493,8 +4482,6 @@ void notify_function_ptr(void *rx_data, void *tx_data, u_int8_t device_in_use) {
     if((tx_ring != NULL)
 	&& (atomic_dec_return(&tx_ring->pfring_zc.queue_in_use) == 0) /* last user */) {
       /* Restore TX */
-
-      if(debug_notify) printk(KERN_WARNING "[PF_RING] [-] %s(%d)\n", __FUNCTION__, 3);
 
       for(i=0; i<tx_ring->count; i++) {
         struct e1000_buffer *tx_buffer = &tx_ring->buffer_info[i];
@@ -4509,13 +4496,10 @@ void notify_function_ptr(void *rx_data, void *tx_data, u_int8_t device_in_use) {
       tx_ring->next_to_clean = 0;
 
       rmb();
-      if(debug_notify) printk(KERN_WARNING "[PF_RING] [-] %s(%d)\n", __FUNCTION__, 4);
     }
 
     if(atomic_dec_return(&adapter->pfring_zc.usage_counter) == 0 /* last user */)
       module_put(THIS_MODULE);  /* -- */
-
-    if(debug_notify) printk(KERN_WARNING "[PF_RING] [-] %s(%d)\n", __FUNCTION__, 5);
 
     if(debug_notify) printk(KERN_WARNING "[PF_RING] [-] %s(%s, usage_counter=%d, rx=%p, tx=%p)\n",
 	   __FUNCTION__, adapter->netdev->name, atomic_read(&adapter->pfring_zc.usage_counter),
@@ -6309,7 +6293,8 @@ static int e1000_tx_map(struct e1000_ring *tx_ring, struct sk_buff *skb,
 #ifdef HAVE_PF_RING
 	if(atomic_read(&adapter->pfring_zc.usage_counter) > 0) {
 	  /* We don't allow apps to send data when in zc mode */
-	  printk(KERN_WARNING "[PF_RING] %s(%s, usage_counter=%d)\n", __FUNCTION__, adapter->netdev->name, atomic_read(&adapter->pfring_zc.usage_counter));
+	  if(unlikely(enable_debug))
+	    printk(KERN_WARNING "[PF_RING] %s(%s, usage_counter=%d)\n", __FUNCTION__, adapter->netdev->name, atomic_read(&adapter->pfring_zc.usage_counter));
 	  return(count);
 	}
 #endif
@@ -6572,7 +6557,8 @@ static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
 #ifdef HAVE_PF_RING
 	if(atomic_read(&adapter->pfring_zc.usage_counter) > 0) {
 	  /* We don't allow legacy send when in zc mode */
-	  printk(KERN_WARNING "[PF_RING] %s(%s, usage_counter=%d)\n", __FUNCTION__, adapter->netdev->name, atomic_read(&adapter->pfring_zc.usage_counter));
+	  if(unlikely(enable_debug)) 
+	    printk(KERN_WARNING "[PF_RING] %s(%s, usage_counter=%d)\n", __FUNCTION__, adapter->netdev->name, atomic_read(&adapter->pfring_zc.usage_counter));
 	  dev_kfree_skb_any(skb);
 	  return NETDEV_TX_OK;
 	}
