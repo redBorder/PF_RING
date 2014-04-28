@@ -6307,10 +6307,11 @@ static int e1000_tx_map(struct e1000_ring *tx_ring, struct sk_buff *skb,
 	unsigned int f, bytecount, segs;
 
 #ifdef HAVE_PF_RING
-	printk(KERN_WARNING "[PF_RING] %s(%s, usage_counter=%d)\n", __FUNCTION__, adapter->netdev->name, atomic_read(&adapter->pfring_zc.usage_counter));
-
-	if(atomic_read(&adapter->pfring_zc.usage_counter) > 0)
-	  return(count); /* We don't allow apps to send data */
+	if(atomic_read(&adapter->pfring_zc.usage_counter) > 0) {
+	  /* We don't allow apps to send data when in zc mode */
+	  printk(KERN_WARNING "[PF_RING] %s(%s, usage_counter=%d)\n", __FUNCTION__, adapter->netdev->name, atomic_read(&adapter->pfring_zc.usage_counter));
+	  return(count);
+	}
 #endif
 
 	i = tx_ring->next_to_use;
@@ -6569,11 +6570,9 @@ static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
 	unsigned int f;
 
 #ifdef HAVE_PF_RING
-	/* We don't allow legacy send when in zc mode */
-
-	printk(KERN_WARNING "[PF_RING] %s(%s, usage_counter=%d)\n", __FUNCTION__, adapter->netdev->name, atomic_read(&adapter->pfring_zc.usage_counter));
-
 	if(atomic_read(&adapter->pfring_zc.usage_counter) > 0) {
+	  /* We don't allow legacy send when in zc mode */
+	  printk(KERN_WARNING "[PF_RING] %s(%s, usage_counter=%d)\n", __FUNCTION__, adapter->netdev->name, atomic_read(&adapter->pfring_zc.usage_counter));
 	  dev_kfree_skb_any(skb);
 	  return NETDEV_TX_OK;
 	}
