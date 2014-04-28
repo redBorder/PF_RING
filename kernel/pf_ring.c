@@ -1731,7 +1731,7 @@ static int ring_alloc_mem(struct sock *sk)
    * ********************************************** */
 
   if(pfr->header_len == short_pkt_header)
-    pfr->slot_header_len = sizeof(struct timeval) + sizeof(u_int32_t) + sizeof(u_int32_t) + sizeof(u_int64_t) /* ts+caplen+len+timestamp_ns */;
+    pfr->slot_header_len = offsetof(struct pfring_pkthdr, extended_hdr.rx_direction); /* <ts,caplen,len,timestamp_ns,flags */
   else
     pfr->slot_header_len = sizeof(struct pfring_pkthdr);
 
@@ -2878,6 +2878,12 @@ static inline int copy_data_to_ring(struct sk_buff *skb,
 
     if(hdr->ts.tv_sec == 0)
       set_skb_time(skb, hdr);
+
+    if(skb->dev->features & NETIF_F_RXCSUM) {
+      hdr->extended_hdr.flags |= PKT_FLAGS_CHECKSUM_OFFLOAD;
+      if(skb_csum_unnecessary(skb))
+        hdr->extended_hdr.flags |= PKT_FLAGS_CHECKSUM_OK;
+    }
 
     if(pfr->header_len == long_pkt_header) {
       if((plugin_mem != NULL) && (offset > 0))

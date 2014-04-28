@@ -284,6 +284,10 @@ struct pkt_parsing_info {
 struct pfring_extended_pkthdr {
   u_int64_t timestamp_ns;  /* Packet timestamp at ns precision. Note that if your NIC supports
 			      hardware timestamp, this is the place to read timestamp from */
+#define PKT_FLAGS_CHECKSUM_OFFLOAD 1 << 0 /* IP/TCP checksum offload enabled */
+#define PKT_FLAGS_CHECKSUM_OK      1 << 1 /* valid with checksum offload enabled */
+  u_int32_t flags;
+  /* --- short header ends here --- */
   u_int8_t rx_direction;   /* 1=RX: packet received by the NIC, 0=TX: packet transmitted by the NIC */
   int32_t  if_index;       /* index of the interface on which the packet has been received.
 			      It can be also used to report other information */
@@ -299,16 +303,13 @@ struct pfring_extended_pkthdr {
   struct pkt_parsing_info parsed_pkt; /* packet parsing info */
 };
 
-/* NOTE
-
-   Keep 'struct pfring_pkthdr' in sync with 'struct pcap_pkthdr'
-*/
+/* NOTE: Keep 'struct pfring_pkthdr' in sync with 'struct pcap_pkthdr' */
 
 struct pfring_pkthdr {
   /* pcap header */
   struct timeval ts;    /* time stamp */
   u_int32_t caplen;     /* length of portion present */
-  u_int32_t len;        /* length this packet (off wire) */
+  u_int32_t len;        /* length of whole packet (off wire) */
   struct pfring_extended_pkthdr extended_hdr; /* PF_RING extended header */
 };
 
