@@ -69,7 +69,8 @@ pfring_stat pfringStats;
 void *automa = NULL;
 static struct timeval startTime;
 unsigned long long numPkts[MAX_NUM_THREADS] = { 0 }, numBytes[MAX_NUM_THREADS] = { 0 }, numStringMatches[MAX_NUM_THREADS] = { 0 };
-
+pcap_dumper_t *dumper = NULL;
+u_int string_id = 1;
 #ifdef ENABLE_BPF
 unsigned long long numPktsFiltered[MAX_NUM_THREADS] = { 0 };
 struct bpf_program filter;
@@ -350,6 +351,11 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h,
   if((automa != NULL) 
      && (h->caplen > 42 /* FIX: do proper parsing */)
      && (search_string((char*)&p[42], h->caplen-42) == 1)) {
+
+    if(dumper) {
+      pcap_dump((u_char*)dumper, (struct pcap_pkthdr*)h, p);
+    }
+
     numStringMatches[threadId]++;
   }
 
@@ -490,7 +496,8 @@ void printHelp(void) {
   printf("-t              Touch payload (for force packet load on cache)\n");
   printf("-T              Dump CRC (test and DNA only)\n");
   printf("-C              Work in chunk mode (test only)\n");
-  printf("-x <path>       File containing strings to search string on payload.\n");
+  printf("-x <path>       File containing strings to search string (case sensitive) on payload.\n");
+  printf("-o <path>       Dump matching packets onto the specified pcap (need -x).\n");
   printf("-u <1|2>        For each incoming packet add a drop rule (1=hash, 2=wildcard rule)\n");
   printf("-v <mode>       Verbose [1: verbose, 2: very verbose (print packet payload)]\n");
   exit(0);
@@ -571,9 +578,9 @@ static int ac_match_handler(AC_MATCH_t *m, void *param) {
 static void add_string_to_automa(char *value) {
   AC_PATTERN_t ac_pattern;
 
-  printf("Adding string '%s' to search list...\n", value);
+  printf("Adding string '%s' [id %u] to search list...\n", value, string_id);
 
-  ac_pattern.astring = value, ac_pattern.rep.number = 2;
+  ac_pattern.astring = value, ac_pattern.rep.number = string_id++;
   ac_pattern.length = strlen(ac_pattern.astring);
   ac_automata_add(((AC_AUTOMATA_t*)automa), &ac_pattern);
 }
@@ -609,7 +616,7 @@ static void load_strings(char *path) {
 #define MAX_NUM_STRINGS  32
 
 int main(int argc, char* argv[]) {
-  char *device = NULL, c, buf[32], path[256] = { 0 }, *reflector_device = NULL;
+  char *device = NULL, c, buf[32], path[256] = { 0 }, *reflector_device = NULL, *out_pcap_file = NULL;
   u_char mac_address[6] = { 0 };
   int promisc, snaplen = DEFAULT_SNAPLEN, rc;
   u_int clusterId = 0;
@@ -661,7 +668,7 @@ int main(int argc, char* argv[]) {
   startTime.tv_sec = 0;
   thiszone = gmt2local(0);
 
-  while((c = getopt(argc,argv,"hi:c:Cd:l:v:ae:n:w:p:b:rg:u:mtsSTx:"
+  while((c = getopt(argc,argv,"hi:c:Cd:l:v:ae:n:w:o:p:b:rg:u:mtsSTx:"
 #ifdef ENABLE_BPF
 		    "f:"
 #endif
@@ -757,9 +764,12 @@ int main(int argc, char* argv[]) {
 	add_drop_rule = 2;
 	break;
       }
-
     case 'x':
       load_strings(optarg);
+      break;
+
+    case 'o':
+      out_pcap_file = optarg;
       break;
     }
   }
@@ -774,6 +784,27 @@ int main(int argc, char* argv[]) {
   if(wait_for_packet && (cpu_percentage > 0)) {
     if(cpu_percentage > 99) cpu_percentage = 99;
     pfring_config(cpu_percentage);
+  }
+
+  if(automa) {
+    if(snaplen < 1500) {
+      printf("WARNING: Snaplen smaller than the MTU. Enlarging it to %u\n", snaplen);
+      snaplen = 1500;
+    }
+
+    if(out_pcap_file) {
+      dumper = pcap_dump_open(pcap_open_dead(DLT_EN10MB, 16384 /* MTU */), out_pcap_file);
+
+      if(dumper == NULL) {
+	printf("Unable to create dump file %s\n", out_pcap_file);
+	return(-1);
+      }
+    }
+
+    if(num_threads > 1) {
+      printf("WARNING: Disabling threads when using -x/-o\n");
+      num_threads = 1;
+    }
   }
 
   if(num_threads > 1)         flags |= PF_RING_REENTRANT;
@@ -1037,6 +1068,6 @@ int main(int argc, char* argv[]) {
 
   sleep(1);
   pfring_close(pd);
-
+  if(dumper) pcap_dump_close(dumper);
   return(0);
 }
