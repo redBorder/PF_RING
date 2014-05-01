@@ -54,7 +54,7 @@ cp -a $HOME/daq-2.0.0/sfbpf/.libs/libsfbpf.so.0 $HOME/daq-2.0.0/sfbpf/.libs/libs
 cp $HOME/PF_RING/userland/examples_libzero/pfdnabounce $RPM_BUILD_ROOT/usr/local/bin
 cp $HOME/PF_RING/userland/examples_libzero/pfdnacluster_master $RPM_BUILD_ROOT/usr/local/bin
 # DNA Drivers
-cp $HOME/PF_RING/drivers/DNA/ixgbe-3.18.7-DNA/src/ixgbe.ko $RPM_BUILD_ROOT/usr/local/pfring/drivers/DNA
+cp $HOME/PF_RING/drivers/DNA/ixgbe-3.21.2-DNA/src/ixgbe.ko $RPM_BUILD_ROOT/usr/local/pfring/drivers/DNA
 cp $HOME/PF_RING/drivers/DNA/igb-5.0.6-DNA/src/igb.ko $RPM_BUILD_ROOT/usr/local/pfring/drivers/DNA
 cp $HOME/PF_RING/drivers/DNA/e1000e-2.5.4-DNA/src/e1000e.ko $RPM_BUILD_ROOT/usr/local/pfring/drivers/DNA
 cp $HOME/PF_RING/drivers/DNA/README.DNA $RPM_BUILD_ROOT/usr/local/pfring/drivers/DNA
