@@ -398,10 +398,6 @@ int main(int argc, char* argv[]) {
   if (bidirectional && strcmp(in_dev, out_dev) == 0) printHelp();
   if (mode == 1 && cluster_id < 0) printHelp();
 
-  printf("Bouncing packets from %s to %s (%s)\n", in_dev, out_dev, bidirectional ? "two-way" : "one-way");
-
-  if(handle_ts_card) printf("Stripping timestamp before bouncing packets\n");
-
   if(bind_mask != NULL) {
     char *id;
     if ((id = strtok(bind_mask, ":")) != NULL)
@@ -409,6 +405,12 @@ int main(int argc, char* argv[]) {
     if ((id = strtok(NULL, ":")) != NULL)
       bind_core[1] = atoi(id) % numCPU;
   }
+
+  bind2node(bind_core[0]);
+
+  printf("Bouncing packets from %s to %s (%s)\n", in_dev, out_dev, bidirectional ? "two-way" : "one-way");
+
+  if(handle_ts_card) printf("Stripping timestamp before bouncing packets\n");
 
   switch (mode) {
   case 0:

@@ -44,6 +44,8 @@
 
 #include "pfring.h"
 
+#include "pfutils.c"
+
 #define ALARM_SLEEP             1
 #define DEFAULT_SNAPLEN       128
 #define MAX_NUM_THREADS        64
@@ -60,29 +62,6 @@ int thread_core_affinity[MAX_NUM_THREADS];
 static u_int numCPU;
 
 #define DEFAULT_DEVICE     "eth0"
-
-/* *************************************** */
-/*
- * The time difference in millisecond
- */
-double delta_time (struct timeval * now,
-		   struct timeval * before) {
-  time_t delta_seconds;
-  time_t delta_microseconds;
-
-  /*
-   * compute delta in second, 1/10's and 1/1000's second units
-   */
-  delta_seconds      = now -> tv_sec  - before -> tv_sec;
-  delta_microseconds = now -> tv_usec - before -> tv_usec;
-
-  if(delta_microseconds < 0) {
-    /* manually carry a one from the seconds field */
-    delta_microseconds += 1000000;  /* 1e6 */
-    -- delta_seconds;
-  }
-  return((double)(delta_seconds * 1000) + (double)delta_microseconds/1000);
-}
 
 /* ******************************** */
 
@@ -207,8 +186,7 @@ static int32_t thiszone;
 
 void dummyProcesssPacket(const struct pfring_pkthdr *h,
                          const u_char *p,
-                         const u_char *user_bytes)
-{
+                         const u_char *user_bytes) {
    const int BUFSIZE = 4096;
    char bigbuf[BUFSIZE]; // buf into which we spew prints
    int  buflen = 0;
@@ -293,13 +271,11 @@ int32_t gmt2local(time_t t) {
 
 /* *************************************** */
 
-void* packet_consumer_thread(void* _id)
-{
+void* packet_consumer_thread(void* _id) {
    long thread_id = (long)_id;
 
 #ifdef HAVE_PTHREAD_SETAFFINITY_NP
-   if(numCPU > 1)
-   {
+   if(numCPU > 1) {
       /* Bind this thread to a specific core */
       cpu_set_t cpuset;
       u_long core_id;
@@ -337,24 +313,19 @@ void* packet_consumer_thread(void* _id)
    return(NULL);
 }
 
-int
-ethtool_set_flowdirector(int on)
-{
+int ethtool_set_flowdirector(int on) {
    // @TODO: plop the ethtool ioctl code in here to set up flowdirector
    // perfect tuple filters.
    return 0;
 }
 
-int
-setup_steering(pfring* thering, const char* addr, int queue)
-{
+int setup_steering(pfring* thering, const char* addr, int queue) {
    int rc;
    static int rule_id = 0; // @HACK!
    hw_filtering_rule rule;
    intel_82599_perfect_filter_hw_rule *perfect_rule;
 
-   if (thering == 0 || addr == 0)
-   {
+   if (thering == 0 || addr == 0) {
       errno = EINVAL;
       return -1;
    }
@@ -462,6 +433,19 @@ int main(int argc, char* argv[]) {
   if(verbose) watermark = 1;
   if(device == NULL) device = DEFAULT_DEVICE;
 
+  if(bind_mask != NULL) {
+    char *id = strtok(bind_mask, ":");
+    int idx = 0;
+
+    while(id != NULL) {
+      thread_core_affinity[idx++] = atoi(id) % numCPU;
+      if(idx >= num_channels) break;
+      id = strtok(NULL, ":");
+    }
+  }
+
+  bind2node(thread_core_affinity[0]);
+
   printf("Capturing from %s\n", device);
 
   flags |= PF_RING_PROMISC; /* hardcode: promisc=1 */
@@ -479,32 +463,14 @@ int main(int argc, char* argv[]) {
     return(-1);
   }
 
-
-  if (num_channels > MAX_NUM_THREADS)
-  {
+  if (num_channels > MAX_NUM_THREADS) {
      printf("WARNING: Too many channels (%d), using %d channels\n", num_channels, MAX_NUM_THREADS);
      num_channels = MAX_NUM_THREADS;
-  }
-  else if (num_channels > numCPU)
-  {
+  } else if (num_channels > numCPU) {
      printf("WARNING: More channels (%d) than available cores (%d), using %d channels\n", num_channels, numCPU, numCPU);
      num_channels = numCPU;
-  }
-  else 
-  {
+  } else  {
     printf("Found %d channels\n", num_channels);
-  }
-
-  if(bind_mask != NULL)
-  {
-     char *id = strtok(bind_mask, ":");
-     int idx = 0;
-
-     while(id != NULL) {
-        thread_core_affinity[idx++] = atoi(id) % numCPU;
-        if(idx >= num_channels) break;
-        id = strtok(NULL, ":");
-     }
   }
 
   pfring_version(ring[0], &version);  

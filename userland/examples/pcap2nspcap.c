@@ -112,7 +112,7 @@ int run() {
 /* ************************************* */
 
 static void help() {
-  printf("nflite2pcap [-v] [-n] -i <device> -o <named pipe>\n");
+  printf("pcap2nspcap [-v] [-n] -i <device> -o <named pipe>\n");
   printf("Usage:\n");
   printf("-v                  | Verbose\n");
   printf("-n                  | Use nsec timestamps\n");
@@ -121,7 +121,7 @@ static void help() {
 
   printf("\n");
   printf("Example:\n");
-  printf("\t# ./nflite2pcap -i eth0 -o /tmp/mypipe\n");
+  printf("\t# ./pcap2nspcap -i eth0 -o /tmp/mypipe\n");
   printf("\t# tcpdump -n -r /tmp/mypipe\n");
 
   exit(0);

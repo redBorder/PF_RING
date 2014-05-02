@@ -678,6 +678,8 @@ int main(int argc, char* argv[]) {
 
   if (device == NULL) device = strdup(DEFAULT_DEVICE);
 
+  bind2node(rx_bind_core);
+
   if (daemon_mode)
     daemonize();
 

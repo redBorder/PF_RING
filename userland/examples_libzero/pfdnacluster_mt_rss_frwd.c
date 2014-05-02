@@ -513,6 +513,8 @@ int main(int argc, char* argv[]) {
     }
   }
 
+  bind2node(rx_bind_core);
+
   if (open_rss_rings(out_device, rss_rings[DIR_1]) < 0)
     return -1;
 

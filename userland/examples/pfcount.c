@@ -51,6 +51,7 @@
 #endif
 
 #include "pfring.h"
+
 #include "pfutils.c"
 
 #include "third-party/sort.c"
@@ -777,6 +778,8 @@ int main(int argc, char* argv[]) {
   if(verbose) watermark = 1;
   if(device == NULL) device = DEFAULT_DEVICE;
   if(num_threads > MAX_NUM_THREADS) num_threads = MAX_NUM_THREADS;
+
+  bind2node(bind_core);
 
   /* hardcode: promisc=1, to_ms=500 */
   promisc = 1;

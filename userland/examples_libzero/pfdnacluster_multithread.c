@@ -475,6 +475,8 @@ int main(int argc, char* argv[]) {
     }
   }
 
+  bind2node(rx_bind_core);
+
   /* Setting the cluster mode */
   if (forward_packets || bridge_interfaces)  {
     enable_tx = 1;

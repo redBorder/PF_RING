@@ -411,6 +411,8 @@ int main(int argc, char* argv[]) {
      || (optind < argc) /* Extra argument */)
     printHelp();
 
+  bind2node(bind_core);
+
   if (daemon_mode)
     daemonize(pidFileName);
 

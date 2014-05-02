@@ -35,6 +35,8 @@
 #include <pwd.h>
 #include <sys/stat.h>
 
+#include <numa.h>
+
 #define TRACE_ERROR     0, __FILE__, __LINE__
 #define TRACE_WARNING   1, __FILE__, __LINE__
 #define TRACE_NORMAL    2, __FILE__, __LINE__
@@ -195,6 +197,20 @@ char *msec2dhmsm(u_int64_t msec, char *buf, u_int buf_len) {
     (unsigned) (msec)                  % 1000
   );
   return(buf);
+}
+
+/* *************************************** */
+
+int bind2node(int core_id) {
+  char node_str[8];
+
+  if (core_id < 0 || numa_available() == -1)
+    return -1;
+
+  snprintf(node_str, sizeof(node_str), "%u", numa_node_of_cpu(core_id));
+  numa_bind(numa_parse_nodestring(node_str));
+
+  return 0;
 }
 
 /* *************************************** */

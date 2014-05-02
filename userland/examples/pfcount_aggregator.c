@@ -546,6 +546,8 @@ int main(int argc, char* argv[]) {
   if(devices == NULL) 
     devices = strdup(DEFAULT_DEVICE);
 
+  bind2node(bind_core);
+
   if(wait_for_packet && (cpu_percentage > 0)) {
     if(cpu_percentage > 99) cpu_percentage = 99;
     pfring_config(cpu_percentage);

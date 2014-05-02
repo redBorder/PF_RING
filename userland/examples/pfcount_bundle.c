@@ -458,6 +458,8 @@ int main(int argc, char* argv[]) {
 
   if(device == NULL) device = strdup(DEFAULT_DEVICE);
 
+  bind2node(bind_core);
+
   printf("Capturing from bundle %s\n", device);
   
   dev = strtok_r(device, separator, &pos);
