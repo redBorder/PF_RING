@@ -55,6 +55,16 @@
 #define IXGBE_PCI_DEVICE_CACHE_LINE_SIZE	0x0C
 #define PCI_DEVICE_CACHE_LINE_SIZE_BYTES	8
 
+#define IXGBE_MAX_NIC   32
+
+/* Note: currently numa cpu affinity is per-adapter, but this can be easily 
+ * changed to per-queue (IXGBE_MAX_NIC * MAX_RX_QUEUES items) */
+static int numa_cpu_affinity[IXGBE_MAX_NIC] = 
+  { [0 ... (IXGBE_MAX_NIC - 1)] = -1 };
+module_param_array(numa_cpu_affinity, int, NULL, 0444);
+MODULE_PARM_DESC(numa_cpu_affinity,
+                 "Comma separated list of core ids where per-adapter memory will be allocated");
+
 static unsigned int enable_debug = 0;
 module_param(enable_debug, uint, 0644);
 MODULE_PARM_DESC(enable_debug, "Set to 1 to enable debug tracing into the syslog");
@@ -869,6 +879,14 @@ static void ixgbe_update_dca(struct ixgbe_q_vector *q_vector)
 	struct ixgbe_adapter *adapter = q_vector->adapter;
 	struct ixgbe_ring *ring;
 	int cpu = get_cpu();
+#ifdef HAVE_PF_RING
+	int selected_cpu;
+	
+	selected_cpu = numa_cpu_affinity[adapter->bd_number];
+	if (selected_cpu != -1)
+		if (cpu_online(selected_cpu))
+			cpu = selected_cpu;
+#endif
 
 	if (q_vector->cpu == cpu)
 		goto out_no_update;
@@ -6644,12 +6662,40 @@ out:
 int ixgbe_setup_tx_resources(struct ixgbe_ring *tx_ring)
 {
 	struct device *dev = tx_ring->dev;
+#ifndef HAVE_PF_RING
 	int orig_node = dev_to_node(dev);
+#endif
 	int numa_node = -1;
 	int size;
+#ifdef HAVE_PF_RING
+	int selected_cpu;
+        struct ixgbe_adapter *adapter = netdev_priv(tx_ring->netdev);
+
+	selected_cpu = numa_cpu_affinity[adapter->bd_number];
+	if (selected_cpu != -1) {
+		if (cpu_online(selected_cpu)) {
+			numa_node = cpu_to_node(selected_cpu);
+			if (node_online(numa_node)) {
+				tx_ring->q_vector->numa_node = numa_node;
+				e_dev_info("selected numa node %d for tx memory allocation\n", 
+				           numa_node);
+			} else {
+				printk("[PF_RING-ZC] %s(): Warning: numa node %d is not available\n",
+				       __FUNCTION__, numa_node);
+				numa_node = -1;
+			}
+		} else {
+			printk("[PF_RING-ZC] %s(): Warning: cpu %d is not available\n",
+			       __FUNCTION__, selected_cpu);
+		}
+	}
+#endif
 
 	size = sizeof(struct ixgbe_tx_buffer) * tx_ring->count;
 
+#ifdef HAVE_PF_RING
+	if (numa_node == -1)
+#endif
 	if (tx_ring->q_vector)
 		numa_node = tx_ring->q_vector->numa_node;
 
@@ -6668,10 +6714,12 @@ int ixgbe_setup_tx_resources(struct ixgbe_ring *tx_ring)
 					   tx_ring->size,
 					   &tx_ring->dma,
 					   GFP_KERNEL);
+#ifndef HAVE_PF_RING
 	set_dev_node(dev, orig_node);
 	if (!tx_ring->desc)
 		tx_ring->desc = dma_alloc_coherent(dev, tx_ring->size,
 						   &tx_ring->dma, GFP_KERNEL);
+#endif
 	if (!tx_ring->desc)
 		goto err;
 
@@ -6724,12 +6772,40 @@ err_setup_tx:
 int ixgbe_setup_rx_resources(struct ixgbe_ring *rx_ring)
 {
 	struct device *dev = rx_ring->dev;
+#ifndef HAVE_PF_RING
 	int orig_node = dev_to_node(dev);
+#endif
 	int numa_node = -1;
 	int size;
+#ifdef HAVE_PF_RING
+	int selected_cpu;
+        struct ixgbe_adapter *adapter = netdev_priv(rx_ring->netdev);
+
+	selected_cpu = numa_cpu_affinity[adapter->bd_number];
+	if (selected_cpu != -1) {
+		if (cpu_online(selected_cpu)) {
+			numa_node = cpu_to_node(selected_cpu);
+			if (node_online(numa_node)) {
+				rx_ring->q_vector->numa_node = numa_node;
+				e_dev_info("selected numa node %d for rx memory allocation\n", 
+				           numa_node);
+			} else {
+				printk("[PF_RING-ZC] %s(): Warning: numa node %d is not available\n",
+				       __FUNCTION__, numa_node);
+				numa_node = -1;
+			}
+		} else {
+			printk("[PF_RING-ZC] %s(): Warning: cpu %d is not available\n",
+			       __FUNCTION__, selected_cpu);
+		}
+	}
+#endif
 
 	size = sizeof(struct ixgbe_rx_buffer) * rx_ring->count;
 
+#ifdef HAVE_PF_RING
+	if (numa_node == -1)
+#endif
 	if (rx_ring->q_vector)
 		numa_node = rx_ring->q_vector->numa_node;
 
@@ -6748,10 +6824,12 @@ int ixgbe_setup_rx_resources(struct ixgbe_ring *rx_ring)
 					   rx_ring->size,
 					   &rx_ring->dma,
 					   GFP_KERNEL);
+#ifndef HAVE_PF_RING
 	set_dev_node(dev, orig_node);
 	if (!rx_ring->desc)
 		rx_ring->desc = dma_alloc_coherent(dev, rx_ring->size,
 						   &rx_ring->dma, GFP_KERNEL);
+#endif
 	if (!rx_ring->desc)
 		goto err;
 
