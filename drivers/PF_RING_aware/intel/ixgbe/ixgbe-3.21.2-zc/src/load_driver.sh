@@ -21,17 +21,11 @@ insmod ../../../../../../kernel/pf_ring.ko
 # Disable multiqueue
 insmod ./ixgbe.ko RSS=1,1,1,1
 
-# Configure the number of TX and RX slots
-#insmod ./ixgbe.ko RSS=1,1,1,1 num_rx_slots=32768 num_tx_slots=4096
-
 # Enable 16 queues
 #insmod ./ixgbe.ko MQ=1,1,1,1 RSS=16,16,16,16
 
 # Enable max number of hw filters
 #insmod ./ixgbe.ko RSS=1,1,1,1 FdirPballoc=3,3,3,3
-
-# Set a large MTU (jumbo frame)
-#insmod ./ixgbe.ko RSS=1,1,1,1 mtu=9000
 
 # Select the CPU of the NUMA node where per-adapter memory will be allocated
 #insmod ./ixgbe.ko RSS=1,1,1,1 numa_cpu_affinity=0,0,0,0
