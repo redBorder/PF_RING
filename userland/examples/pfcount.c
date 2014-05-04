@@ -72,14 +72,26 @@ static struct timeval startTime;
 unsigned long long numPkts[MAX_NUM_THREADS] = { 0 }, numBytes[MAX_NUM_THREADS] = { 0 }, numStringMatches[MAX_NUM_THREADS] = { 0 };
 pcap_dumper_t *dumper = NULL;
 u_int string_id = 1;
+char *out_pcap_file = NULL;
+FILE *match_dumper = NULL;
 #ifdef ENABLE_BPF
 unsigned long long numPktsFiltered[MAX_NUM_THREADS] = { 0 };
 struct bpf_program filter;
-u_int8_t userspace_bpf = 0;
+u_int8_t userspace_bpf = 0, do_close_dump = 0;
 #endif
+
+struct strmatch {
+  char *str;
+  struct strmatch *next;
+};
+
+struct strmatch *matching_strings = NULL;
 
 u_int8_t wait_for_packet = 1, do_shutdown = 0, add_drop_rule = 0, show_crc = 0;
 u_int8_t use_extended_pkt_header = 0, touch_payload = 0, enable_hw_timestamp = 0, dont_strip_timestamps = 0;
+
+static void openDump();
+static void dumpMatch(char *str);
 
 /* ******************************** */
 
@@ -148,7 +160,7 @@ void print_stats() {
 #endif
 	    "[%u pkts dropped]\n"
 	    "Total Pkts=%u/Dropped=%.1f %%\n",
-	    (unsigned int)pfringStat.recv, 
+	    (unsigned int)pfringStat.recv,
 #ifdef ENABLE_BPF
 	    (unsigned int)nPktsFiltered,
 #endif
@@ -156,7 +168,7 @@ void print_stats() {
 	    (unsigned int)(pfringStat.recv+pfringStat.drop),
 	    pfringStat.recv == 0 ? 0 :
 	    (double)(pfringStat.drop*100)/(double)(pfringStat.recv+pfringStat.drop));
-    fprintf(stderr, "%s pkts - %s bytes", 
+    fprintf(stderr, "%s pkts - %s bytes",
 	    pfring_format_numbers((double)nPkts, buf1, sizeof(buf1), 0),
 	    pfring_format_numbers((double)nBytes, buf2, sizeof(buf2), 0));
 
@@ -205,13 +217,13 @@ void drop_packet_rule(const struct pfring_pkthdr *h) {
 
     memset(&rule, 0, sizeof(hash_filtering_rule));
 
-    rule.rule_id = rule_id++;    
+    rule.rule_id = rule_id++;
     rule.vlan_id = hdr->vlan_id;
     rule.proto = hdr->l3_proto;
     rule.rule_action = dont_forward_packet_and_stop_rule_evaluation;
     rule.host4_peer_a = hdr->ip_src.v4, rule.host4_peer_b = hdr->ip_dst.v4;
     rule.port_peer_a = hdr->l4_src_port, rule.port_peer_b = hdr->l4_dst_port;
-    
+
     if(pfring_handle_hash_filtering_rule(pd, &rule, 1 /* add_rule */) < 0)
       fprintf(stderr, "pfring_add_hash_filtering_rule(1) failed\n");
     else
@@ -221,16 +233,16 @@ void drop_packet_rule(const struct pfring_pkthdr *h) {
     int rc;
 
     memset(&rule, 0, sizeof(rule));
-    
+
     rule.rule_id = rule_id++;
     rule.rule_action = dont_forward_packet_and_stop_rule_evaluation;
     rule.core_fields.proto = hdr->l3_proto;
     rule.core_fields.shost.v4 = hdr->ip_src.v4, rule.core_fields.shost_mask.v4 = 0xFFFFFFFF;
     rule.core_fields.sport_low = rule.core_fields.sport_high = hdr->l4_src_port;
-    
+
     rule.core_fields.dhost.v4 = hdr->ip_dst.v4, rule.core_fields.dhost_mask.v4 = 0xFFFFFFFF;
     rule.core_fields.dport_low = rule.core_fields.dport_high = hdr->l4_dst_port;
-    
+
     if((rc = pfring_add_filtering_rule(pd, &rule)) < 0)
       fprintf(stderr, "pfring_add_hash_filtering_rule(2) failed\n");
     else
@@ -248,7 +260,7 @@ void sigproc(int sig) {
   do_shutdown = 1;
 
   print_stats();
-  
+
   pfring_breakloop(pd);
 }
 
@@ -318,6 +330,14 @@ static char *etheraddr_string(const u_char *ep, char *buf) {
 static int search_string(char *string_to_match, u_int string_to_match_len) {
   AC_TEXT_t ac_input_text;
   int matching_protocol_id = 0;
+#if 0
+  int i;
+
+  for(i=0; i<string_to_match_len; i++)
+    printf("%c", isprint(string_to_match[i]) ? string_to_match[i] : ' ');
+
+  printf("\n");
+#endif
 
   ac_input_text.astring = string_to_match, ac_input_text.length = string_to_match_len;
   ac_automata_search((AC_AUTOMATA_t*)automa, &ac_input_text, (void*)&matching_protocol_id);
@@ -330,40 +350,43 @@ static int search_string(char *string_to_match, u_int string_to_match_len) {
 
 static int32_t thiszone;
 
-void dummyProcesssPacket(const struct pfring_pkthdr *h, 
+void dummyProcesssPacket(const struct pfring_pkthdr *h,
 			 const u_char *p, const u_char *user_bytes) {
   long threadId = (long)user_bytes;
+  u_int8_t dump_match = 0;
 
   numPkts[threadId]++, numBytes[threadId] += h->len+24 /* 8 Preamble + 4 CRC + 12 IFG */;
 
 #ifdef ENABLE_BPF
   if (userspace_bpf && bpf_filter(filter.bf_insns, p, h->caplen, h->len) == 0)
     return; /* rejected */
-  
+
   numPktsFiltered[threadId]++;
 #endif
 
   if(touch_payload) {
     volatile int __attribute__ ((unused)) i;
-    
+
     i = p[12] + p[13];
   }
 
-  if((automa != NULL) 
-     && (h->caplen > 42 /* FIX: do proper parsing */)
-     && (search_string((char*)&p[42], h->caplen-42) == 1)) {
+  if(unlikely(automa != NULL)) {
+    if(unlikely(do_close_dump)) openDump();
 
-    if(dumper) {
-      pcap_dump((u_char*)dumper, (struct pcap_pkthdr*)h, p);
+    if((h->caplen > 42 /* FIX: do proper parsing */)
+       && (search_string((char*)&p[42], h->caplen-42) == 1)) {
+      if(dumper)
+	pcap_dump((u_char*)dumper, (struct pcap_pkthdr*)h, p);
+
+      numStringMatches[threadId]++;
+      dump_match = 1;
     }
-
-    numStringMatches[threadId]++;
   }
 
-  if(verbose) {
+  if(verbose || dump_match) {
     int s;
-    uint usec;
-    uint nsec=0;
+    u_int usec, nsec = 0;
+    char dump_str[512] = { 0 };
 
     if(h->ts.tv_sec == 0) {
       memset((void*)&h->extended_hdr.parsed_pkt, 0, sizeof(struct pkt_parsing_info));
@@ -383,32 +406,66 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h,
       usec = h->ts.tv_usec;
     }
 
-    printf("%02d:%02d:%02d.%06u%03u ",
-	   s / 3600, (s % 3600) / 60, s % 60,
-	   usec, nsec);
+    snprintf(dump_str, sizeof(dump_str), "%02d:%02d:%02d.%06u%03u ",
+	     s / 3600, (s % 3600) / 60, s % 60,
+	     usec, nsec);
 
     if(use_extended_pkt_header) {
       char bigbuf[4096];
-    
-      printf("%s[if_index=%d]",
+      u_int len;
+
+      snprintf(&dump_str[strlen(dump_str)], sizeof(dump_str)-strlen(dump_str), "%s[if_index=%d]",
         h->extended_hdr.rx_direction ? "[RX]" : "[TX]",
         h->extended_hdr.if_index);
 
       pfring_print_parsed_pkt(bigbuf, sizeof(bigbuf), p, h);
-      fputs(bigbuf, stdout);
+      len = strlen(bigbuf);
 
-    } else {
+      if(len > 0) bigbuf[len-1] = '\0';
+
+      snprintf(&dump_str[strlen(dump_str)], sizeof(dump_str)-strlen(dump_str), "%s", bigbuf);
+   } else {
       char buf1[32], buf2[32];
       struct ether_header *ehdr = (struct ether_header *) p;
 
-      printf("[%s -> %s][eth_type=0x%04X][caplen=%d][len=%d] (use -m for details)\n",
-	     etheraddr_string(ehdr->ether_shost, buf1),
-	     etheraddr_string(ehdr->ether_dhost, buf2), 
-	     ntohs(ehdr->ether_type),
-	     h->caplen, h->len);
+      snprintf(&dump_str[strlen(dump_str)], sizeof(dump_str)-strlen(dump_str), 
+	       "[%s -> %s][eth_type=0x%04X][caplen=%d][len=%d]",
+	       etheraddr_string(ehdr->ether_shost, buf1),
+	       etheraddr_string(ehdr->ether_dhost, buf2),
+	       ntohs(ehdr->ether_type),
+	       h->caplen, h->len);     
+    }
+
+    if(verbose) printf("%s\n", dump_str);
+    if(unlikely(dump_match)) {
+      /* I need to find out which string matched */
+      struct strmatch *m = matching_strings;
+      char *_payload = (char*)&p[42], payload[1500];
+      u_int payload_len = h->caplen-42, i;
+
+      if(payload_len > sizeof(payload)) payload_len = sizeof(payload);
+      
+      for(i=0; i<payload_len; i++)
+	payload[i] = isprint(_payload[i]) ? _payload[i] : ' ';
+
+      snprintf(&dump_str[strlen(dump_str)], sizeof(dump_str)-strlen(dump_str),
+	       "[matches:");
+      
+      while(m != NULL) {
+	if(strstr(payload, m->str)) {
+	  snprintf(&dump_str[strlen(dump_str)], sizeof(dump_str)-strlen(dump_str), " '%s'",
+		   m->str);
+	}
+
+	m = m->next;
+      }
+
+      snprintf(&dump_str[strlen(dump_str)], sizeof(dump_str)-strlen(dump_str), "]\n");
+
+      dumpMatch(dump_str);
     }
   }
-  
+
   if(verbose == 2) {
     int i, len = h->caplen;
 
@@ -480,7 +537,7 @@ void printHelp(void) {
 #endif
 	 );
   printf("-n <threads>    Number of polling threads (default %d)\n", num_threads);
-  printf("-f <filter>     [BPF filter]\n"); 
+  printf("-f <filter>     [BPF filter]\n");
   printf("-c <cluster id> cluster id\n");
   printf("-e <direction>  0=RX+TX, 1=RX only, 2=TX only\n");
   printf("-l <len>        Capture length\n");
@@ -529,7 +586,7 @@ void* packet_consumer_thread(void* _id) {
     u_int len;
 
     if(do_shutdown) break;
-      
+
     if((rc = pfring_recv(pd, &buffer_p, NO_ZC_BUFFER_LEN, &hdr, wait_for_packet)) > 0) {
       if(do_shutdown) break;
       dummyProcesssPacket(&hdr, buffer, (u_char*)thread_id);
@@ -541,7 +598,7 @@ void* packet_consumer_thread(void* _id) {
 #endif
     } else {
       if(wait_for_packet == 0) sched_yield();
-    } 
+    }
 
     if(0) {
       struct simple_stats {
@@ -591,7 +648,7 @@ static void add_string_to_automa(char *value) {
 static void load_strings(char *path) {
   FILE *f = fopen(path,"r");
   char *s, buf[256] = { 0 };
-  
+
   if(f == NULL) {
     printf("Unable to open file %s\n", path);
     exit(-1);
@@ -601,15 +658,73 @@ static void load_strings(char *path) {
   while((s = fgets(buf, sizeof(buf)-1, f)) != NULL) {
     if((s[0] != '\0')
        && (s[0] != '\n')
+       && (s[0] != '#')
        && (s[0] != '\r')) {
+      struct strmatch *m = (struct strmatch*)malloc(sizeof(struct strmatch));
+
       s[strlen(s)-1] = '\0';
       add_string_to_automa(s);
+      
+      if(m) {
+	m->next = matching_strings;
+	m->str  = strdup(s);
+	matching_strings = m;
+      }
     }
   }
 
   ac_automata_finalize((AC_AUTOMATA_t*)automa);
-  
+
   fclose(f);
+}
+
+/* *************************************** */
+
+void openDump() {
+  static u_int dump_id = 0;
+  char path[256];
+
+  dump_id++;
+
+  snprintf(path, sizeof(path), "%u_%s", dump_id, out_pcap_file);
+
+  if(dumper != NULL) {
+    pcap_dump_close(dumper);
+    dumper = NULL;
+  }
+
+  if(match_dumper != NULL) {
+    fclose(match_dumper);
+    match_dumper = NULL;
+  }
+
+  dumper = pcap_dump_open(pcap_open_dead(DLT_EN10MB, 16384 /* MTU */), path);
+
+  if(dumper == NULL)
+    printf("Unable to create dump file %s\n", path);
+  else {
+    snprintf(path, sizeof(path), "%u_%s.log", dump_id, out_pcap_file);
+
+    match_dumper = fopen(path, "w");
+
+    if(match_dumper == NULL)
+      printf("Unable to create dump log file %s\n", path);
+  }
+
+  do_close_dump = 0;
+}
+
+/* *************************************** */
+
+void dumpMatch(char *str) {
+  if(match_dumper != NULL)
+    fprintf(match_dumper, "%s", str);
+}
+
+/* *************************************** */
+
+void handleSigHup(int signalId) {
+  do_close_dump = 1;
 }
 
 /* *************************************** */
@@ -617,7 +732,7 @@ static void load_strings(char *path) {
 #define MAX_NUM_STRINGS  32
 
 int main(int argc, char* argv[]) {
-  char *device = NULL, c, buf[32], path[256] = { 0 }, *reflector_device = NULL, *out_pcap_file = NULL;
+  char *device = NULL, c, buf[32], path[256] = { 0 }, *reflector_device = NULL;
   u_char mac_address[6] = { 0 };
   int promisc, snaplen = DEFAULT_SNAPLEN, rc;
   u_int clusterId = 0;
@@ -625,7 +740,7 @@ int main(int argc, char* argv[]) {
   u_int32_t flags = 0;
   int bind_core = -1;
   packet_direction direction = rx_and_tx_direction;
-  u_int16_t watermark = 0, poll_duration = 0, 
+  u_int16_t watermark = 0, poll_duration = 0,
     cpu_percentage = 0, rehash_rss = 0;
 #ifdef ENABLE_BPF
   char *bpfFilter = NULL;
@@ -722,7 +837,7 @@ int main(int argc, char* argv[]) {
 #ifdef ENABLE_BPF
     case 'f':
       bpfFilter = strdup(optarg);
-      break;     
+      break;
 #endif
     case 'w':
       watermark = atoi(optarg);
@@ -766,15 +881,16 @@ int main(int argc, char* argv[]) {
 	break;
       }
     case 'x':
-      load_strings(optarg);
+      load_strings(optarg);      
       break;
 
     case 'o':
       out_pcap_file = optarg;
+      use_extended_pkt_header = 1;
       break;
     }
   }
-  
+
   if(verbose) watermark = 1;
   if(device == NULL) device = DEFAULT_DEVICE;
   if(num_threads > MAX_NUM_THREADS) num_threads = MAX_NUM_THREADS;
@@ -796,12 +912,11 @@ int main(int argc, char* argv[]) {
     }
 
     if(out_pcap_file) {
-      dumper = pcap_dump_open(pcap_open_dead(DLT_EN10MB, 16384 /* MTU */), out_pcap_file);
+      openDump();
 
-      if(dumper == NULL) {
-	printf("Unable to create dump file %s\n", out_pcap_file);
-	return(-1);
-      }
+      if(dumper == NULL) return(-1);
+
+      (void)signal(SIGHUP, handleSigHup);
     }
 
     if(num_threads > 1) {
@@ -836,7 +951,7 @@ int main(int argc, char* argv[]) {
 	   (version & 0x0000FF00) >> 8,
 	   version & 0x000000FF);
   }
-   
+
   if(strstr(device, "dnacluster:")) {
     printf("Capturing from %s\n", device);
   } else {
@@ -849,11 +964,11 @@ int main(int argc, char* argv[]) {
       fprintf(stderr, "Unable to read the device address\n");
     else {
       int ifindex = -1;
-      
+
       pfring_get_bound_device_ifindex(pd, &ifindex);
-      
-      printf("Capturing from %s [%s][ifIndex: %d]\n", 
-	     device, etheraddr_string(mac_address, buf), 
+
+      printf("Capturing from %s [%s][ifIndex: %d]\n",
+	     device, etheraddr_string(mac_address, buf),
 	     ifindex);
     }
   }
@@ -974,9 +1089,9 @@ int main(int argc, char* argv[]) {
 
     rule.core_fields.shost.v4 = ntohl(inet_addr(sgsn)),rule.core_fields.shost_mask.v4 = 0xFFFFFFFF;
     rule.core_fields.dhost.v4 = ntohl(inet_addr(ggsn)), rule.core_fields.dhost_mask.v4 = 0xFFFFFFFF;
-    
+
     rule.extended_fields.tunnel.tunnel_id = 0x0000a2b6;
-    
+
     if((rc = pfring_add_filtering_rule(pd, &rule)) < 0)
       fprintf(stderr, "pfring_add_filtering_rule(id=%d) failed: rc=%d\n", rule.rule_id, rc);
     else
@@ -992,13 +1107,13 @@ int main(int argc, char* argv[]) {
 
     rule.core_fields.shost.v4 = ntohl(inet_addr(ggsn)), rule.core_fields.dhost_mask.v4 = 0xFFFFFFFF;
     rule.core_fields.dhost.v4 = ntohl(inet_addr(sgsn)), rule.core_fields.shost_mask.v4 = 0xFFFFFFFF;
-    
+
     rule.extended_fields.tunnel.tunnel_id = 0x776C0000;
     if((rc = pfring_add_filtering_rule(pd, &rule)) < 0)
       fprintf(stderr, "pfring_add_filtering_rule(id=%d) failed: rc=%d\n", rule.rule_id, rc);
     else
       printf("Rule %d added successfully...\n", rule.rule_id );
-    
+
     /* ************************************** */
 
     /* Signaling (Up) */
@@ -1067,7 +1182,7 @@ int main(int argc, char* argv[]) {
 
     for(i=0; i<num_threads; i++)
       pthread_join(my_thread, NULL);
-  } 
+  }
 
   sleep(1);
   pfring_close(pd);
