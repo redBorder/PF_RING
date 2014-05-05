@@ -686,7 +686,7 @@ void openDump() {
 
   dump_id++;
 
-  snprintf(path, sizeof(path), "%u_%s", dump_id, out_pcap_file);
+  snprintf(path, sizeof(path), "%s.%u", out_pcap_file, dump_id);
 
   if(dumper != NULL) {
     pcap_dump_close(dumper);
@@ -703,7 +703,7 @@ void openDump() {
   if(dumper == NULL)
     printf("Unable to create dump file %s\n", path);
   else {
-    snprintf(path, sizeof(path), "%u_%s.log", dump_id, out_pcap_file);
+    snprintf(path, sizeof(path), "%s.log.%u", out_pcap_file, dump_id);
 
     match_dumper = fopen(path, "w");
 
@@ -717,8 +717,10 @@ void openDump() {
 /* *************************************** */
 
 void dumpMatch(char *str) {
-  if(match_dumper != NULL)
+  if(match_dumper != NULL) {
     fprintf(match_dumper, "%s", str);
+    fflush(match_dumper);
+  }
 }
 
 /* *************************************** */
