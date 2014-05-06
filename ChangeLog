@@ -1,3 +1,33 @@
+---------------------------------------                                                                                                                                                                             
+2014-05-06 PF_RING 6.0.1
+
+* PF_RING ZC
+ - New pfring_zc_send_pkt_burst()
+ - Fix for e1000e rx
+ - Added ZC version in demo apps help
+
+* DNA
+ - Fix for pfring_set_tx_watermark()
+
+* Drivers
+ - Added numa_cpu_affinity parameter to PF_RING-aware/ZC ixgbe driver
+ - PF_RING-aware/ZC drivers update:
+   - ixgbe-zc v.3.21.2
+   - igb-zc v.5.2.5
+ - DNA drivers update:
+  - ixgbe-dna v.3.21.2
+
+* Examples
+ - pfcount:
+   - Added ability to search strings on the payload
+   - Added ability to dump on a pcap file the traffic matching strings (-x)
+   - Improved ability to dump (-o) traffic on disk and create a log file
+   - Handling SIGHUP with -o to close exising dump and create a new one
+ - Fixed numa affinity
+
+* PF_RING Kernel module
+ - added checksum offload flags to the packet header (when enabled)
+
 ---------------------------------------
 2014-04-14 PF_RING 6.0.0
 
