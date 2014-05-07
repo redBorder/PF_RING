@@ -45,7 +45,6 @@
 #define ALARM_SLEEP             1
 #define MAX_CARD_SLOTS      32768
 #define QUEUE_LEN            8192
-#define POOL_SIZE              16
 
 #define NBUFF      256 /* pow 2 */
 #define NBUFFMASK 0xFF /* 256-1 */
@@ -55,7 +54,6 @@
 
 pfring_zc_cluster *zc;
 pfring_zc_queue *zq;
-pfring_zc_buffer_pool *zp;
 pfring_zc_pkt_buff *buffers[NBUFF];
 
 struct timeval startTime;
@@ -580,13 +578,6 @@ int main(int argc, char* argv[]) {
       return -1;
     }
    
-    zp = pfring_zc_create_buffer_pool(zc, POOL_SIZE);
-
-    if (zp == NULL) {
-      fprintf(stderr, "pfring_zc_create_buffer_pool error\n");
-      return -1;
-    }
- 
     fprintf(stderr, "Sending packets to cluster %u queue %u\n", cluster_id, 0);
   }
 
