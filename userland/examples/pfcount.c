@@ -375,8 +375,10 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h,
 
     if((h->caplen > 42 /* FIX: do proper parsing */)
        && (search_string((char*)&p[42], h->caplen-42) == 1)) {
-      if(dumper)
+      if(dumper) {
 	pcap_dump((u_char*)dumper, (struct pcap_pkthdr*)h, p);
+	pcap_dump_flush(dumper);
+      }
 
       numStringMatches[threadId]++;
       dump_match = 1;
