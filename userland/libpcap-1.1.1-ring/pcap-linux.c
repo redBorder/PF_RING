@@ -1368,6 +1368,17 @@ pcap_read_linux(pcap_t *handle, int max_packets, pcap_handler callback, u_char *
 	return pcap_read_packet(handle, callback, user);
 }
 
+static int vlan_offset(pcap_t *handle)
+{
+	switch (handle->linktype) {
+		case DLT_EN10MB:
+			return 2 * ETH_ALEN;
+		case DLT_LINUX_SLL:
+			return 14;
+	}
+	return -1;
+}
+
 /*
  *  Read a packet from the socket calling the handler provided by
  *  the user. Returns the number of packets received or -1 if an
@@ -1641,6 +1652,7 @@ pcap_read_packet(pcap_t *handle, pcap_handler callback, u_char *userdata)
 		struct tpacket_auxdata *aux;
 		unsigned int len;
 		struct vlan_tag *tag;
+		int vlan_off;
 
 		if (cmsg->cmsg_len < CMSG_LEN(sizeof(struct tpacket_auxdata)) ||
 		    cmsg->cmsg_level != SOL_PACKET ||
@@ -1652,13 +1664,14 @@ pcap_read_packet(pcap_t *handle, pcap_handler callback, u_char *userdata)
 			continue;
 
 		len = packet_len > iov.iov_len ? iov.iov_len : packet_len;
-		if (len < 2 * ETH_ALEN)
+		vlan_off = vlan_offset(handle);
+		if (vlan_off == -1 || len < (unsigned int) vlan_off)
 			break;
 
 		bp -= VLAN_TAG_LEN;
-		memmove(bp, bp + VLAN_TAG_LEN, 2 * ETH_ALEN);
+		memmove(bp, bp + VLAN_TAG_LEN, vlan_off);
 
-		tag = (struct vlan_tag *)(bp + 2 * ETH_ALEN);
+		tag = (struct vlan_tag *)(bp + vlan_off);
 		tag->vlan_tpid = htons(ETH_P_8021Q);
 		tag->vlan_tci = htons(aux->tp_vlan_tci);
 
@@ -3750,19 +3763,21 @@ pcap_read_linux_mmap(pcap_t *handle, int max_packets, pcap_handler callback,
 		}
 
 #ifdef HAVE_TPACKET2
-		if (handle->md.tp_version == TPACKET_V2 && h.h2->tp_vlan_tci &&
-		    tp_snaplen >= 2 * ETH_ALEN) {
+		if (handle->md.tp_version == TPACKET_V2 && h.h2->tp_vlan_tci) {
 			struct vlan_tag *tag;
+			int vlan_off;
 
-			bp -= VLAN_TAG_LEN;
-			memmove(bp, bp + VLAN_TAG_LEN, 2 * ETH_ALEN);
+			vlan_off = vlan_offset(handle);
+			if (vlan_off != -1 && tp_snaplen >= (unsigned int) vlan_off) {
+				bp -= VLAN_TAG_LEN;
+				memmove(bp, bp + VLAN_TAG_LEN, vlan_off);
 
-			tag = (struct vlan_tag *)(bp + 2 * ETH_ALEN);
-			tag->vlan_tpid = htons(ETH_P_8021Q);
-			tag->vlan_tci = htons(h.h2->tp_vlan_tci);
-
-			pcaphdr.caplen += VLAN_TAG_LEN;
-			pcaphdr.len += VLAN_TAG_LEN;
+				tag = (struct vlan_tag *)(bp + vlan_off);
+				tag->vlan_tpid = htons(ETH_P_8021Q);
+				tag->vlan_tci = htons(h.h2->tp_vlan_tci);
+				pcaphdr.caplen += VLAN_TAG_LEN;
+				pcaphdr.len += VLAN_TAG_LEN;
+			}
 		}
 #endif
 
