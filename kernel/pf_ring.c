@@ -2879,11 +2879,13 @@ static inline int copy_data_to_ring(struct sk_buff *skb,
     if(hdr->ts.tv_sec == 0)
       set_skb_time(skb, hdr);
 
+#if(LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39))
     if(skb->dev->features & NETIF_F_RXCSUM) {
       hdr->extended_hdr.flags |= PKT_FLAGS_CHECKSUM_OFFLOAD;
       if(skb_csum_unnecessary(skb))
         hdr->extended_hdr.flags |= PKT_FLAGS_CHECKSUM_OK;
     }
+#endif
 
     if(pfr->header_len == long_pkt_header) {
       if((plugin_mem != NULL) && (offset > 0))
