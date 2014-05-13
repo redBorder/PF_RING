@@ -54,6 +54,7 @@ u_int32_t lru = 0;
 static struct timeval startTime;
 unsigned long long numPkts = 0, numBytes = 0;
 int bind_core = -1;
+int buffer_len = 1536;
 u_int8_t wait_for_packet = 1, do_shutdown = 0, verbose = 0;
 
 /* *************************************** */
@@ -184,6 +185,7 @@ void printHelp(void) {
   printf("-c <cluster id> Cluster id\n");
   printf("-g <core_id>    Bind this app to a core\n");
   printf("-a              Active packet wait\n");
+  printf("-B              Packet buffer size (default: %d bytes)\n", buffer_len);
   printf("-v              Verbose\n");
   exit(-1);
 }
@@ -235,7 +237,7 @@ int main(int argc, char* argv[]) {
 
   startTime.tv_sec = 0;
 
-  while((c = getopt(argc,argv,"ac:g:hi:v")) != '?') {
+  while((c = getopt(argc,argv,"ac:g:hi:vB:")) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -254,6 +256,9 @@ int main(int argc, char* argv[]) {
     case 'g':
       bind_core = atoi(optarg);
       break;
+    case 'B':
+      buffer_len = atoi(optarg);
+      break;
     case 'v':
       verbose = 1;
       break;
@@ -265,7 +270,7 @@ int main(int argc, char* argv[]) {
 
   zc = pfring_zc_create_cluster(
     cluster_id, 
-    1536, 
+    buffer_len,
     0, 
     MAX_CARD_SLOTS + NBUFF,
     numa_node_of_cpu(bind_core),
