@@ -38,6 +38,15 @@
 #include "ixgbe_phy.h"
 #endif
 
+#ifdef HAVE_PF_RING
+#include "../../../../../../kernel/linux/pf_ring.h"
+extern s32 ixgbe_ftqf_add_filter(struct ixgbe_hw *hw, u8 proto, u32 saddr, u16 sport, u32 daddr, u16 dport, u8 rx_queue, u8 filter_id);
+
+#ifdef ETHTOOL_SRXNTUPLE /* was ETHTOOL_RXNTUPLE_ACTION_DROP */
+static int ixgbe_set_rx_ntuple(struct net_device *dev, struct ethtool_rx_ntuple *cmd);
+#endif
+#endif
+
 #ifndef ETH_GSTRING_LEN
 #define ETH_GSTRING_LEN 32
 #endif
@@ -3172,6 +3181,13 @@ static int ixgbe_set_rxnfc(struct net_device *dev, struct ethtool_rxnfc *cmd)
 	struct ixgbe_adapter *adapter = netdev_priv(dev);
 	int ret = -EOPNOTSUPP;
 
+#ifdef HAVE_PF_RING
+	struct ethtool_rx_flow_spec *fsp = (struct ethtool_rx_flow_spec*) &cmd->fs;
+
+	if (fsp->ring_cookie > (adapter->num_rx_queues - 1))
+		fsp->ring_cookie = RX_CLS_FLOW_DISC; /* drop */
+#endif
+
 	switch (cmd->cmd) {
 	case ETHTOOL_SRXCLSRLINS:
 		ret = ixgbe_add_ethtool_fdir_entry(adapter, cmd);
@@ -3182,6 +3198,34 @@ static int ixgbe_set_rxnfc(struct net_device *dev, struct ethtool_rxnfc *cmd)
 	case ETHTOOL_SRXFH:
 		ret = ixgbe_set_rss_hash_opt(adapter, cmd);
 		break;
+#ifdef HAVE_PF_RING
+	case ETHTOOL_PFRING_SRXFTRLINS:
+		{
+		spin_lock(&adapter->fdir_perfect_lock);
+		ret = ixgbe_ftqf_add_filter(&adapter->hw, 
+					    fsp->flow_type,
+					    fsp->h_u.tcp_ip4_spec.ip4src, 
+					    fsp->h_u.tcp_ip4_spec.psrc,
+					    fsp->h_u.tcp_ip4_spec.ip4dst, 
+					    fsp->h_u.tcp_ip4_spec.pdst,
+					    fsp->ring_cookie,
+					    fsp->location);
+		spin_unlock(&adapter->fdir_perfect_lock);
+		}
+		break;
+	case ETHTOOL_PFRING_SRXFTRLDEL:
+		spin_lock(&adapter->fdir_perfect_lock);
+		ret = ixgbe_ftqf_add_filter(&adapter->hw, 0, 0, 0, 0, 0, 0, 
+					    fsp->location);
+		spin_unlock(&adapter->fdir_perfect_lock);
+		break;
+	case ETHTOOL_PFRING_SRXFTCHECK:
+		if (adapter->hw.mac.type != ixgbe_mac_82598EB) 	
+			ret = RING_MAGIC_VALUE;
+		else 
+			printk("[PF_RING] Hardware filtering rule not supported (no 82599)\n");
+		break;
+#endif
 	default:
 		break;
 	}
