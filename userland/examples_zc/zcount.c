@@ -55,7 +55,7 @@ static struct timeval startTime;
 unsigned long long numPkts = 0, numBytes = 0;
 int bind_core = -1;
 int buffer_len = 1536;
-u_int8_t wait_for_packet = 1, do_shutdown = 0, verbose = 0;
+u_int8_t wait_for_packet = 1, do_shutdown = 0, verbose = 0, add_filtering_rule = 0;
 
 /* *************************************** */
 
@@ -186,6 +186,7 @@ void printHelp(void) {
   printf("-g <core_id>    Bind this app to a core\n");
   printf("-a              Active packet wait\n");
   printf("-B              Packet buffer size (default: %d bytes)\n", buffer_len);
+  printf("-R              Test hw filters adding a rule (Intel 82599)\n");
   printf("-v              Verbose\n");
   exit(-1);
 }
@@ -237,7 +238,7 @@ int main(int argc, char* argv[]) {
 
   startTime.tv_sec = 0;
 
-  while((c = getopt(argc,argv,"ac:g:hi:vB:")) != '?') {
+  while((c = getopt(argc,argv,"ac:g:hi:vB:R")) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -258,6 +259,9 @@ int main(int argc, char* argv[]) {
       break;
     case 'B':
       buffer_len = atoi(optarg);
+      break;
+    case 'R':
+      add_filtering_rule = 1;
       break;
     case 'v':
       verbose = 1;
@@ -299,6 +303,22 @@ int main(int argc, char* argv[]) {
       fprintf(stderr, "pfring_zc_get_packet_handle error\n");
       return -1;
     }
+  }
+
+  if(add_filtering_rule) {
+    int rc;
+    hw_filtering_rule rule;
+    intel_82599_perfect_filter_hw_rule *perfect_rule = &rule.rule_family.perfect_rule;
+
+    memset(&rule, 0, sizeof(rule)), rule.rule_family_type = intel_82599_perfect_filter_rule;
+    rule.rule_id = 0, perfect_rule->queue_id = -1, perfect_rule->proto = 17, perfect_rule->s_addr = ntohl(inet_addr("10.0.0.1"));
+
+    rc = pfring_zc_add_hw_rule(zq, &rule);
+
+    if(rc != 0)
+      printf("pfring_zc_add_hw_rule(%d) failed: did you enable the FlowDirector (ethtool -K ethX ntuple on)\n", rule.rule_id);
+    else
+      printf("pfring_zc_add_hw_rule(%d) succeeded: dropping UDP traffic 192.168.30.207:* -> *\n", rule.rule_id);
   }
 
   signal(SIGINT,  sigproc);

@@ -16,6 +16,7 @@
  */
 
 #include <sys/types.h>
+#include <linux/pf_ring.h> /* needed for hw_filtering_rule */
 
 #define PF_RING_ZC_DEVICE_ASYMMETRIC_RSS     1 << 0    /**< pfring_zc_open_device() flag: use asymmetric hw RSS for multiqueue devices. */
 #define PF_RING_ZC_DEVICE_FIXED_RSS_Q_0      1 << 1    /**< pfring_zc_open_device() flag: redirect all traffic to the first hw queue. */
@@ -220,6 +221,34 @@ void
 pfring_zc_sync_queue(
   pfring_zc_queue *queue,
   pfring_zc_queue_mode direction 
+);
+
+/* **************************************************************************************** */
+
+/**
+ * Add an hw filtering rule to the network device, when the queue is bound to a supported card.
+ * @param queue The queue handle.
+ * @param rule  The filtering rule.
+ * @return      0 on success, a negative value otherwise.
+ */
+int
+pfring_zc_add_hw_rule(
+	pfring_zc_queue *queue,
+	hw_filtering_rule *rule
+);
+
+/* **************************************************************************************** */
+
+/**
+ * Remove an hw filtering rule from the network device.
+ * @param queue    The queue handle.
+ * @param rule_id  The filtering rule identifier.
+ * @return         0 on success, a negative value otherwise.
+ */
+int
+pfring_zc_remove_hw_rule(
+	pfring_zc_queue *queue,
+	u_int16_t rule_id
 );
 
 /* **************************************************************************************** */
