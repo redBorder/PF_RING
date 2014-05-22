@@ -27,7 +27,7 @@ LIBS       = ${LIBPFRING} @NT_LIB@ $(LIBPCAP) -lpthread -lrt -lnuma
 CC         = ${CROSS_COMPILE}gcc
 CFLAGS     = -O2 -Wall @CFLAGS@ ${INCLUDE}
 
-%.o: %.c
+%.o: %.c zutils.c
 	${CC} ${CFLAGS} -c $< -o $@
 
 #

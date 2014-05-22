@@ -37,8 +37,9 @@
 #include <numa.h>
 
 #include "pfring.h"
-
 #include "pfring_zc.h"
+
+#include "zutils.c"
 
 #define ALARM_SLEEP             1
 #define MAX_CARD_SLOTS      32768
@@ -67,55 +68,6 @@ volatile u_int64_t *pulse_timestamp_ns;
 static struct timeval start_time;
 u_int8_t wait_for_packet = 1, enable_vm_support = 0, time_pulse = 0;
 volatile u_int8_t do_shutdown = 0;
-
-/* *************************************** */
-
-int bind2node(int core_id) {
-  char node_str[8];
-
-  if (core_id < 0 || numa_available() == -1)
-    return -1;
-
-  snprintf(node_str, sizeof(node_str), "%u", numa_node_of_cpu(core_id));
-  numa_bind(numa_parse_nodestring(node_str));
-
-  return 0;
-}
-
-/* *************************************** */
-
-int bind2core(int core_id) {
-  cpu_set_t cpuset;
-  int s;
-
-  if (core_id < 0) return -1;
-
-  CPU_ZERO(&cpuset);
-  CPU_SET(core_id, &cpuset);
-  if ((s = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset)) != 0) {
-    fprintf(stderr, "Error while binding to core %u: errno=%i\n", core_id, s);
-    return -1;
-  }
-  
-  return 0;
-}
-
-/* *************************************** */
-
-double delta_time (struct timeval * now, struct timeval * before) {
-  time_t delta_seconds;
-  time_t delta_microseconds;
-  
-  delta_seconds      = now -> tv_sec  - before -> tv_sec;
-  delta_microseconds = now -> tv_usec - before -> tv_usec;
-
-  if(delta_microseconds < 0) {
-    delta_microseconds += 1000000;  /* 1e6 */
-    -- delta_seconds;
-  }
-
-  return ((double)(delta_seconds * 1000) + (double)delta_microseconds/1000);
-}
 
 /* ******************************** */
 
@@ -355,7 +307,7 @@ int main(int argc, char* argv[]) {
 
   zc = pfring_zc_create_cluster(
     cluster_id, 
-    1536,
+    max_packet_len(devices[0]),
     0,
     (num_devices * MAX_CARD_SLOTS) + (num_slaves * (QUEUE_LEN + POOL_SIZE)) + PREFETCH_BUFFERS, 
     numa_node_of_cpu(bind_worker_core),

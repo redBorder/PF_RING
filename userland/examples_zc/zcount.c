@@ -37,11 +37,13 @@
 #include <numa.h>
 
 #include "pfring.h"
-
 #include "pfring_zc.h"
+
+#include "zutils.c"
 
 #define ALARM_SLEEP             1
 #define MAX_CARD_SLOTS      32768
+#define MIN_BUFFER_LEN       1536
 
 #define NBUFF      256 /* pow */
 #define NBUFFMASK 0xFF /* 256-1 */
@@ -54,41 +56,8 @@ u_int32_t lru = 0;
 static struct timeval startTime;
 unsigned long long numPkts = 0, numBytes = 0;
 int bind_core = -1;
-int buffer_len = 1536;
+int buffer_len;
 u_int8_t wait_for_packet = 1, do_shutdown = 0, verbose = 0, add_filtering_rule = 0;
-
-/* *************************************** */
-
-int bind2core(u_int core_id) {
-  cpu_set_t cpuset;
-  int s;
-
-  CPU_ZERO(&cpuset);
-  CPU_SET(core_id, &cpuset);
-  if((s = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset)) != 0) {
-    fprintf(stderr, "Error while binding to core %u: errno=%i\n", core_id, s);
-    return(-1);
-  } else {
-    return(0);
-  }
-}
-
-/* *************************************** */
-
-double delta_time (struct timeval * now, struct timeval * before) {
-  time_t delta_seconds;
-  time_t delta_microseconds;
-  
-  delta_seconds      = now -> tv_sec  - before -> tv_sec;
-  delta_microseconds = now -> tv_usec - before -> tv_usec;
-
-  if(delta_microseconds < 0) {
-    delta_microseconds += 1000000;  /* 1e6 */
-    -- delta_seconds;
-  }
-
-  return ((double)(delta_seconds * 1000) + (double)delta_microseconds/1000);
-}
 
 /* ******************************** */
 
@@ -185,7 +154,6 @@ void printHelp(void) {
   printf("-c <cluster id> Cluster id\n");
   printf("-g <core_id>    Bind this app to a core\n");
   printf("-a              Active packet wait\n");
-  printf("-B              Packet buffer size (default: %d bytes)\n", buffer_len);
   printf("-R              Test hw filters adding a rule (Intel 82599)\n");
   printf("-v              Verbose\n");
   exit(-1);
@@ -238,7 +206,7 @@ int main(int argc, char* argv[]) {
 
   startTime.tv_sec = 0;
 
-  while((c = getopt(argc,argv,"ac:g:hi:vB:R")) != '?') {
+  while((c = getopt(argc,argv,"ac:g:hi:vR")) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -257,9 +225,6 @@ int main(int argc, char* argv[]) {
     case 'g':
       bind_core = atoi(optarg);
       break;
-    case 'B':
-      buffer_len = atoi(optarg);
-      break;
     case 'R':
       add_filtering_rule = 1;
       break;
@@ -271,6 +236,8 @@ int main(int argc, char* argv[]) {
   
   if (device == NULL) printHelp();
   if (cluster_id < 0) printHelp();
+
+  buffer_len = max_packet_len(device);
 
   zc = pfring_zc_create_cluster(
     cluster_id, 

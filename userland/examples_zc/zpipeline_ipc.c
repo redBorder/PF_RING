@@ -37,8 +37,9 @@
 #include <numa.h>
 
 #include "pfring.h"
-
 #include "pfring_zc.h"
+
+#include "zutils.c"
 
 #define ALARM_SLEEP             1
 #define MAX_CARD_SLOTS      32768
@@ -68,39 +69,6 @@ forwarder_info_t forwarder[2];
 
 static struct timeval start_time;
 u_int8_t wait_for_packet = 1, flush_packet = 0, do_shutdown = 0, enable_vm_support = 0;
-
-/* *************************************** */
-
-int bind2core(u_int core_id) {
-  cpu_set_t cpuset;
-  int s;
-
-  CPU_ZERO(&cpuset);
-  CPU_SET(core_id, &cpuset);
-  if((s = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset)) != 0) {
-    fprintf(stderr, "Error while binding to core %u: errno=%i\n", core_id, s);
-    return(-1);
-  } else {
-    return(0);
-  }
-}
-
-/* *************************************** */
-
-double delta_time (struct timeval * now, struct timeval * before) {
-  time_t delta_seconds;
-  time_t delta_microseconds;
-  
-  delta_seconds      = now -> tv_sec  - before -> tv_sec;
-  delta_microseconds = now -> tv_usec - before -> tv_usec;
-
-  if(delta_microseconds < 0) {
-    delta_microseconds += 1000000;  /* 1e6 */
-    -- delta_seconds;
-  }
-
-  return ((double)(delta_seconds * 1000) + (double)delta_microseconds/1000);
-}
 
 /* ******************************** */
 
@@ -307,7 +275,7 @@ int main(int argc, char* argv[]) {
 
   zc = pfring_zc_create_cluster(
     cluster_id, 
-    1536, 
+    in_device != NULL ? max_packet_len(in_device) : 1536, 
     0,
     (((in_device != NULL) + (out_device != NULL)) * (MAX_CARD_SLOTS + 1)) + (num_ipc_queues * (QUEUE_LEN + 1)), 
     numa_node_of_cpu(forwarder[RX_FWDR].bind_core),
