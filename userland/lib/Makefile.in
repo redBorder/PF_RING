@@ -29,11 +29,6 @@ DNA_OBJS  = @DNA_OBJS@
 PF_RING_ZC_OBJS  = @PF_RING_ZC_OBJS@
 
 #
-# Virtual PF_RING
-#
-VIRTUAL_OBJS = @VIRTUAL_OBJS@
-
-#
 # DAG
 #
 DAG_OBJS  = @DAG_OBJS@
@@ -46,7 +41,7 @@ NT_OBJS  = @NT_OBJS@
 #
 # Object files
 #
-OBJS      = pfring.o pfring_mod.o pfring_utils.o pfring_mod_stack.o pfring_mod_usring.o pfring_hw_filtering.o ${ZERO_OBJS} ${DNA_OBJS} ${PF_RING_ZC_OBJS} ${VIRTUAL_OBJS} ${DAG_OBJS} ${NT_OBJS}
+OBJS      = pfring.o pfring_mod.o pfring_utils.o pfring_mod_stack.o pfring_mod_usring.o pfring_hw_filtering.o ${ZERO_OBJS} ${DNA_OBJS} ${PF_RING_ZC_OBJS} ${DAG_OBJS} ${NT_OBJS}
 
 #
 # C compiler and flags
@@ -55,7 +50,7 @@ OBJS      = pfring.o pfring_mod.o pfring_utils.o pfring_mod_stack.o pfring_mod_u
 # CROSS_COMPILE=arm-mv5sft-linux-gnueabi-
 #
 CC        = ${CROSS_COMPILE}gcc
-CFLAGS    =  @CFLAGS@ -Wall -fPIC ${INCLUDE} @HAVE_ZERO@ @HAVE_DNA@ @HAVE_PF_RING_ZC@ @HAVE_VIRTUAL@ @HAVE_DAG@ @NT_INC@ @HAVE_BPF@ @HAVE_REDIRECTOR@ @HAVE_HW_TIMESTAMP@ @HAVE_LIBNUMA@ -O2 # -g
+CFLAGS    =  @CFLAGS@ -Wall -fPIC ${INCLUDE} @HAVE_ZERO@ @HAVE_DNA@ @HAVE_PF_RING_ZC@ @HAVE_DAG@ @NT_INC@ @HAVE_BPF@ @HAVE_REDIRECTOR@ @HAVE_HW_TIMESTAMP@ @HAVE_LIBNUMA@ -O2 # -g
 LDFLAGS   = -g -shared
 SYSLIBS   = -lpthread @SYSLIBS@
 
@@ -74,12 +69,12 @@ RING_H     = ../../kernel/linux/pf_ring.h
 
 all: ${TARGETS}
 
-${STATICLIB}: Makefile @ZERO_DEP@ @DNA_DEP@ @PF_RING_ZC_DEP@ @VIRTUAL_DEP@ ${OBJS} pfring.h ${RING_H}
+${STATICLIB}: Makefile @ZERO_DEP@ @DNA_DEP@ @PF_RING_ZC_DEP@ ${OBJS} pfring.h ${RING_H}
 	@echo "=*= making library $@ =*="
 	ar rs $@ ${OBJS}
 	ranlib $@
 
-${DYNAMICLIB}: ${OBJS} @ZERO_DEP@ @DNA_DEP@ @PF_RING_ZC_DEP@ @VIRTUAL_DEP@ pfring.h ${RING_H} Makefile
+${DYNAMICLIB}: ${OBJS} @ZERO_DEP@ @DNA_DEP@ @PF_RING_ZC_DEP@ pfring.h ${RING_H} Makefile
 	@echo "=*= making library $@ =*="
 	${CC} ${LDFLAGS} ${OBJS} ${SYSLIBS} -o $@
 
@@ -91,9 +86,6 @@ extract_zero_lib:
 
 extract_pfring_zc_lib:
 	ar x @PF_RING_ZC_LIB@
-
-extract_virtual_lib:
-	ar x @VIRTUAL_LIB@
 
 extract_userspace_ring_lib:
 	ar x @USERSPACE_RING_LIB@

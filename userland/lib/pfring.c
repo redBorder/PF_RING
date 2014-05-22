@@ -44,10 +44,6 @@
 extern int pfring_zc_open(pfring *ring);
 #endif
 
-#ifdef HAVE_VIRTUAL
-#include "pfring_mod_virtual.h"
-#endif
-
 static pfring_module_info pfring_module_list[] = {
   { /* usually you don't need to specify this */
     .name = "default",
@@ -57,12 +53,6 @@ static pfring_module_info pfring_module_list[] = {
     .name = "stack",
     .open = pfring_mod_stack_open,
   },
-#ifdef HAVE_VIRTUAL
-  { /* vPF_RING (guest-side) */
-    .name = "host",
-    .open = pfring_virtual_open,
-  },
-#endif
 #ifdef HAVE_DAG
   {
     .name = "dag",
