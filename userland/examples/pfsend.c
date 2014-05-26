@@ -523,6 +523,13 @@ int main(int argc, char* argv[]) {
 	avg_send_len += p->len;
 	num_pcap_pkts++;
       } /* while */
+
+      if (num_pcap_pkts == 0) {
+        printf("Pcap file %s is empty\n", pcap_in);
+        pfring_close(pd);
+        return(-1);
+      }
+
       avg_send_len /= num_pcap_pkts;
 
       pcap_close(pt);
