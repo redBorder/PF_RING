@@ -4505,7 +4505,7 @@ static int skb_ring_handler(struct sk_buff *skb,
 
 #if 0 /* safety check (this leads to wrong numbers with GSO) */
   hdr.len = hdr.caplen = min(skb->len + displ,
-    skb->dev->mtu /* 1500 */ + skb->dev->hard_header_len /* 14 */ + 4 /* VLAN header */);
+    skb->dev->mtu /* 1500 */ + skb->dev->hard_header_len /* 14 */ + VLAN_HLEN /* 4 */);
 #endif
 
   if(quick_mode) {
@@ -6699,7 +6699,7 @@ static int ring_sendmsg(struct kiocb *iocb, struct socket *sock,
    *	raw protocol and you must do your own fragmentation at this level.
    */
   err = -EMSGSIZE;
-  if(len > pfr->ring_netdev->dev->mtu + pfr->ring_netdev->dev->hard_header_len)
+  if(len > pfr->ring_netdev->dev->mtu + pfr->ring_netdev->dev->hard_header_len + VLAN_HLEN)
     goto out;
 
   if (pfr->stack_injection_mode) {
