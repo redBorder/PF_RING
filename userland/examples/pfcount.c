@@ -533,6 +533,7 @@ void printHelp(void) {
   printf("-i <device>     Device name. Use:\n"
 	 "                - ethX@Y for channels\n"
 	 "                - dnaX for DNA-based adapters\n"
+	 "                - zc:ethX for ZC devices\n"
 	 "                - dnacluster:X for DNA cluster Id X\n"
 #ifdef HAVE_DAG
 	 "                - dag:dagX:Y for Endace DAG cards\n"
@@ -991,7 +992,7 @@ int main(int argc, char* argv[]) {
 #ifdef ENABLE_BPF
   if(bpfFilter != NULL) {
 
-    if (pd->dna.dna_mapped_device) {
+    if (strncmp(device, "dna", 3) || strncmp(device, "zc", 2)) {
 
       if (parse_bpf_filter(bpfFilter, snaplen) == 0) {
         userspace_bpf = 1;
