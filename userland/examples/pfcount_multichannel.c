@@ -50,16 +50,29 @@
 #define DEFAULT_SNAPLEN       128
 #define MAX_NUM_THREADS        64
 
+struct thread_stats {
+  u_int64_t __padding_0[8];
+
+  u_int64_t numPkts;
+  u_int64_t numBytes;
+
+  pfring *ring;
+  pthread_t pd_thread;
+  int core_affinity;
+
+  volatile u_int64_t do_shutdown;
+
+  u_int64_t __padding_1[3];
+};
+
 int verbose = 0, num_channels = 1;
 pfring_stat pfringStats;
 
-static struct timeval startTime;
-pfring  *ring[MAX_NUM_THREADS] = { NULL };
-unsigned long long numPkts[MAX_NUM_THREADS] = { 0 }, numBytes[MAX_NUM_THREADS] = { 0 };
+struct timeval startTime;
 u_int8_t use_extended_pkt_header = 0, wait_for_packet = 1, do_shutdown = 0;
-pthread_t pd_thread[MAX_NUM_THREADS];
-int thread_core_affinity[MAX_NUM_THREADS];
-static u_int numCPU;
+u_int numCPU;
+
+struct thread_stats *threads;
 
 #define DEFAULT_DEVICE     "eth0"
 
@@ -88,25 +101,25 @@ void print_stats() {
   delta = delta_time(&endTime, &lastTime);
 
   for(i=0; i < num_channels; i++) {
-    nBytes += numBytes[i], nPkts += numPkts[i];
+    nBytes += threads[i].numBytes, nPkts += threads[i].numPkts;
   
-    if(pfring_stats(ring[i], &pfringStat) >= 0) {
-      double thpt = ((double)8*numBytes[i])/(deltaMillisec*1000);
+    if(pfring_stats(threads[i].ring, &pfringStat) >= 0) {
+      double thpt = ((double)8*threads[i].numBytes)/(deltaMillisec*1000);
 
       fprintf(stderr, "=========================\n"
 	      "Absolute Stats: [channel=%d][%u pkts rcvd][%u pkts dropped]\n"
 	      "Total Pkts=%u/Dropped=%.1f %%\n",
-	      i, (unsigned int)numPkts[i], (unsigned int)pfringStat.drop,
-	      (unsigned int)(numPkts[i]+pfringStat.drop),
-	      numPkts[i] == 0 ? 0 : (double)(pfringStat.drop*100)/(double)(numPkts[i]+pfringStat.drop));
-      fprintf(stderr, "%llu pkts - %llu bytes", numPkts[i], numBytes[i]);
-      fprintf(stderr, " [%.1f pkt/sec - %.2f Mbit/sec]\n", (double)(numPkts[i]*1000)/deltaMillisec, thpt);
+	      i, (unsigned int)threads[i].numPkts, (unsigned int)pfringStat.drop,
+	      (unsigned int)(threads[i].numPkts+pfringStat.drop),
+	      threads[i].numPkts == 0 ? 0 : (double)(pfringStat.drop*100)/(double)(threads[i].numPkts+pfringStat.drop));
+      fprintf(stderr, "%lu pkts - %lu bytes", threads[i].numPkts, threads[i].numBytes);
+      fprintf(stderr, " [%.1f pkt/sec - %.2f Mbit/sec]\n", (double)(threads[i].numPkts*1000)/deltaMillisec, thpt);
       pkt_dropped += pfringStat.drop;
 
       if(lastTime.tv_sec > 0) {
 	double pps;
 	
-	diff = numPkts[i]-lastPkts[i];
+	diff = threads[i].numPkts-lastPkts[i];
 	nPktsLast += diff;
 	tot_thpt += thpt;
 	pps = ((double)diff/(double)(delta/1000));
@@ -116,7 +129,7 @@ void print_stats() {
 	pkt_thpt += pps;
       }
 
-      lastPkts[i] = numPkts[i];
+      lastPkts[i] = threads[i].numPkts;
     }
   }
 
@@ -141,7 +154,8 @@ void sigproc(int sig) {
 
   fprintf(stderr, "Shutting down sockets...\n");
   for(i=0; i<num_channels; i++) {
-    pfring_shutdown(ring[i]);
+    threads[i].do_shutdown = 1;
+    pfring_shutdown(threads[i].ring);
     printf("\t%d...\n", i);
   }
 
@@ -184,61 +198,63 @@ void printHelp(void) {
 
 static int32_t thiszone;
 
-void dummyProcesssPacket(const struct pfring_pkthdr *h,
-                         const u_char *p,
-                         const u_char *user_bytes) {
-   const int BUFSIZE = 4096;
-   char bigbuf[BUFSIZE]; // buf into which we spew prints
-   int  buflen = 0;
+void print_packet(const struct pfring_pkthdr *h, const u_char *p, long threadId) {
+  int s;
+  uint nsec;
+  const int BUFSIZE = 4096;
+  char bigbuf[BUFSIZE]; // buf into which we spew prints
+  int  buflen = 0;
 
-   long threadId = (long)user_bytes;
+  if(h->ts.tv_sec == 0) {
+    memset((void*)&h->extended_hdr.parsed_pkt, 0, sizeof(struct pkt_parsing_info));
+    pfring_parse_pkt((u_char*)p, (struct pfring_pkthdr*)h, 5, 1, 1);
+  }
 
-   if(unlikely(do_shutdown)) return;
-
-   if(verbose) {
-      int s;
-      uint nsec;
-
-      if(h->ts.tv_sec == 0) {
-        memset((void*)&h->extended_hdr.parsed_pkt, 0, sizeof(struct pkt_parsing_info));
-	pfring_parse_pkt((u_char*)p, (struct pfring_pkthdr*)h, 5, 1, 1);
-      }
-
-      s = (h->ts.tv_sec + thiszone) % 86400;
-      nsec = h->extended_hdr.timestamp_ns % 1000;
+  s = (h->ts.tv_sec + thiszone) % 86400;
+  nsec = h->extended_hdr.timestamp_ns % 1000;
     
-      buflen += snprintf(&bigbuf[buflen], BUFSIZE - buflen,
-        "%02d:%02d:%02d.%06u%03u ",
-        s / 3600, (s % 3600) / 60, s % 60,
-        (unsigned)h->ts.tv_usec, nsec);
+  buflen += snprintf(&bigbuf[buflen], BUFSIZE - buflen,
+    "%02d:%02d:%02d.%06u%03u ",
+    s / 3600, (s % 3600) / 60, s % 60,
+    (unsigned)h->ts.tv_usec, nsec);
 
 #if 0
-      for(i=0; i<32; i++) buflen += snprintf(&bigbuf[buflen], BUFSIZE - buflen, "%02X ", p[i]);
-      printf("\n");
+  for(i=0; i<32; i++) buflen += snprintf(&bigbuf[buflen], BUFSIZE - buflen, "%02X ", p[i]);
+  printf("\n");
 #endif
 
-      buflen += snprintf(&bigbuf[buflen], BUFSIZE - buflen, "[T%lu]", threadId);
+  buflen += snprintf(&bigbuf[buflen], BUFSIZE - buflen, "[T%lu]", threadId);
 
-      if(use_extended_pkt_header) {
-        buflen += pfring_print_parsed_pkt(&bigbuf[buflen], BUFSIZE - buflen, p, h);
-      } else {
-        struct ether_header *ehdr = (struct ether_header *) p;
-        u_short eth_type = ntohs(ehdr->ether_type);
-        if(eth_type == 0x0806) buflen += snprintf(&bigbuf[buflen], BUFSIZE - buflen, "[ARP]");
-        else buflen += snprintf(&bigbuf[buflen], BUFSIZE - buflen, "[eth_type=0x%04X]", eth_type);
+  if(use_extended_pkt_header) {
+    buflen += pfring_print_parsed_pkt(&bigbuf[buflen], BUFSIZE - buflen, p, h);
+  } else {
+    struct ether_header *ehdr = (struct ether_header *) p;
+    u_short eth_type = ntohs(ehdr->ether_type);
+    if(eth_type == 0x0806) buflen += snprintf(&bigbuf[buflen], BUFSIZE - buflen, "[ARP]");
+    else buflen += snprintf(&bigbuf[buflen], BUFSIZE - buflen, "[eth_type=0x%04X]", eth_type);
 
-        buflen += snprintf(&bigbuf[buflen], BUFSIZE - buflen, "[caplen=%d][len=%d][parsed_header_len=%d]"
-                "[eth_offset=%d][l3_offset=%d][l4_offset=%d][payload_offset=%d]\n",
-                h->caplen, h->len, h->extended_hdr.parsed_header_len,
-                h->extended_hdr.parsed_pkt.offset.eth_offset,
-                h->extended_hdr.parsed_pkt.offset.l3_offset,
-                h->extended_hdr.parsed_pkt.offset.l4_offset,
-                h->extended_hdr.parsed_pkt.offset.payload_offset);
-      }
-      fputs(bigbuf, stdout);
-   }
+    buflen += snprintf(&bigbuf[buflen], BUFSIZE - buflen, "[caplen=%d][len=%d][parsed_header_len=%d]"
+      "[eth_offset=%d][l3_offset=%d][l4_offset=%d][payload_offset=%d]\n",
+      h->caplen, h->len, h->extended_hdr.parsed_header_len,
+      h->extended_hdr.parsed_pkt.offset.eth_offset,
+      h->extended_hdr.parsed_pkt.offset.l3_offset,
+      h->extended_hdr.parsed_pkt.offset.l4_offset,
+      h->extended_hdr.parsed_pkt.offset.payload_offset);
+  }
+  fputs(bigbuf, stdout);
+}
 
-   numPkts[threadId]++, numBytes[threadId] += h->len+24 /* 8 Preamble + 4 CRC + 12 IFG */;
+/* ****************************************************** */
+
+void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, const u_char *user_bytes) {
+   long threadId = (long) user_bytes;
+
+   if(unlikely(threads[threadId].do_shutdown)) return;
+
+   if(unlikely(verbose))
+     print_packet(h, p, threadId);
+
+   threads[threadId].numPkts++, threads[threadId].numBytes += h->len+24 /* 8 Preamble + 4 CRC + 12 IFG */;
 }
 
 /* *************************************** */
@@ -281,8 +297,8 @@ void* packet_consumer_thread(void* _id) {
       u_long core_id;
       int s;
 
-      if (thread_core_affinity[thread_id] != -1)
-         core_id = thread_core_affinity[thread_id] % numCPU;
+      if (threads[thread_id].core_affinity != -1)
+         core_id = threads[thread_id].core_affinity % numCPU;
       else
          core_id = (thread_id + 1) % numCPU;
 
@@ -301,12 +317,12 @@ void* packet_consumer_thread(void* _id) {
       u_char *buffer = NULL;
       struct pfring_pkthdr hdr;
 
-      if(pfring_recv(ring[thread_id], &buffer, 0, &hdr, wait_for_packet) > 0) {
+      if(pfring_recv(threads[thread_id].ring, &buffer, 0, &hdr, wait_for_packet) > 0) {
          dummyProcesssPacket(&hdr, buffer, (u_char*)thread_id);
 
       } else {
-         if(wait_for_packet == 0) sched_yield();
-         //usleep(1);
+         if(wait_for_packet == 0) 
+           usleep(1); //sched_yield();
       }
    }
 
@@ -376,11 +392,13 @@ int main(int argc, char* argv[]) {
   u_int16_t cpu_percentage = 0, poll_duration = 0;
   u_int32_t version;
   u_int32_t flags = 0;
+  pfring *ring[MAX_NUM_RX_CHANNELS];
+  int threads_core_affinity[MAX_NUM_RX_CHANNELS];
 
+  memset(threads_core_affinity, -1, sizeof(threads_core_affinity));
   startTime.tv_sec = 0;
   thiszone = gmt2local(0);
   numCPU = sysconf( _SC_NPROCESSORS_ONLN );
-  memset(thread_core_affinity, -1, sizeof(thread_core_affinity));
 
   while((c = getopt(argc,argv,"hi:l:mvae:w:b:rp:g:")) != -1) {
     switch(c) {
@@ -438,13 +456,16 @@ int main(int argc, char* argv[]) {
     int idx = 0;
 
     while(id != NULL) {
-      thread_core_affinity[idx++] = atoi(id) % numCPU;
-      if(idx >= num_channels) break;
+      threads_core_affinity[idx++] = atoi(id) % numCPU;
+      if(idx >= MAX_NUM_THREADS) break;
       id = strtok(NULL, ":");
     }
   }
 
-  bind2node(thread_core_affinity[0]);
+  bind2node(threads_core_affinity[0]);
+
+  if ((threads = calloc(MAX_NUM_THREADS, sizeof(struct thread_stats))) == NULL)
+    return -1;
 
   printf("Capturing from %s\n", device);
 
@@ -479,46 +500,35 @@ int main(int argc, char* argv[]) {
 	 (version & 0x0000FF00) >> 8,
 	 version & 0x000000FF);
   
-  for(i=0; i<num_channels; i++)
-  {
-     char buf[32];
-    
-     snprintf(buf, sizeof(buf), "pfcount_multichannel-thread %ld", i);
-     pfring_set_application_name(ring[i], buf);
+  for(i=0; i<num_channels; i++) {
+    char buf[32];
+   
+    threads[i].ring = ring[i];
+    threads[i].core_affinity = threads_core_affinity[i];
+ 
+    snprintf(buf, sizeof(buf), "pfcount_multichannel-thread %ld", i);
+    pfring_set_application_name(threads[i].ring, buf);
 
-     if((rc = pfring_set_direction(ring[i], direction)) != 0)
+    if((rc = pfring_set_direction(threads[i].ring, direction)) != 0)
 	fprintf(stderr, "pfring_set_direction returned %d [direction=%d] (you can't capture TX with DNA)\n", rc, direction);
     
-     if((rc = pfring_set_socket_mode(ring[i], recv_only_mode)) != 0)
+    if((rc = pfring_set_socket_mode(threads[i].ring, recv_only_mode)) != 0)
 	fprintf(stderr, "pfring_set_socket_mode returned [rc=%d]\n", rc);
 
-     if(watermark > 0) {
-        if((rc = pfring_set_poll_watermark(ring[i], watermark)) != 0)
-           fprintf(stderr, "pfring_set_poll_watermark returned [rc=%d][watermark=%d]\n", rc, watermark);
-     }
-#if 0    
-  setup_steering(ring[0], "192.168.30.207", -1);
+    if(watermark > 0) {
+      if((rc = pfring_set_poll_watermark(threads[i].ring, watermark)) != 0)
+         fprintf(stderr, "pfring_set_poll_watermark returned [rc=%d][watermark=%d]\n", rc, watermark);
+    }
 
-  /* UTDF */
-  setup_steering(ring[0], "224.0.1.92", 1);
-  setup_steering(ring[0], "224.0.1.94", 1);
-  setup_steering(ring[0], "224.0.1.96", 1);
-
-  /* BATS */
-  setup_steering(ring[0], "224.0.62.2", 2);
-
-  /* default: should go to channel 0 */
-#endif
-     if(rehash_rss)
-        pfring_enable_rss_rehash(ring[i]);
+    if(rehash_rss)
+       pfring_enable_rss_rehash(threads[i].ring);
     
-     if(poll_duration > 0)
-        pfring_set_poll_duration(ring[i], poll_duration);
+    if(poll_duration > 0)
+       pfring_set_poll_duration(threads[i].ring, poll_duration);
 
-     pfring_enable_ring(ring[i]);
+    pfring_enable_ring(threads[i].ring);
 
-     pthread_create(&pd_thread[i], NULL, packet_consumer_thread, (void*)i);
-     usleep(500);
+    pthread_create(&threads[i].pd_thread, NULL, packet_consumer_thread, (void*)i);
   }
 
   if(cpu_percentage > 0) {
@@ -536,8 +546,8 @@ int main(int argc, char* argv[]) {
   }
 
   for(i=0; i<num_channels; i++) {
-    pthread_join(pd_thread[i], NULL);
-    pfring_close(ring[i]);
+    pthread_join(threads[i].pd_thread, NULL);
+    pfring_close(threads[i].ring);
   }
 
   return(0);

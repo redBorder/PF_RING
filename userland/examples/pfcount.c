@@ -69,16 +69,27 @@ int verbose = 0, num_threads = 1;
 pfring_stat pfringStats;
 void *automa = NULL;
 static struct timeval startTime;
-unsigned long long numPkts[MAX_NUM_THREADS] = { 0 }, numBytes[MAX_NUM_THREADS] = { 0 }, numStringMatches[MAX_NUM_THREADS] = { 0 };
 pcap_dumper_t *dumper = NULL;
 u_int string_id = 1;
 char *out_pcap_file = NULL;
 FILE *match_dumper = NULL;
 #ifdef ENABLE_BPF
-unsigned long long numPktsFiltered[MAX_NUM_THREADS] = { 0 };
 struct bpf_program filter;
 u_int8_t userspace_bpf = 0, do_close_dump = 0;
 #endif
+
+struct app_stats {
+  u_int64_t numPkts[MAX_NUM_THREADS];
+  u_int64_t numBytes[MAX_NUM_THREADS];
+  u_int64_t numStringMatches[MAX_NUM_THREADS];
+#ifdef ENABLE_BPF
+  unsigned long long numPktsFiltered[MAX_NUM_THREADS];
+#endif
+
+  volatile u_int64_t do_shutdown;
+};
+
+struct app_stats *stats;
 
 struct strmatch {
   char *str;
@@ -125,11 +136,11 @@ void print_stats() {
 #endif
 
     for(i=0; i < num_threads; i++) {
-      nBytes += numBytes[i];
-      nPkts += numPkts[i];
-      nMatches += numStringMatches[i];
+      nBytes += stats->numBytes[i];
+      nPkts += stats->numPkts[i];
+      nMatches += stats->numStringMatches[i];
 #ifdef ENABLE_BPF
-      nPktsFiltered += numPktsFiltered[i];
+      nPktsFiltered += stats->numPktsFiltered[i];
 #endif
     }
 
@@ -257,7 +268,7 @@ void sigproc(int sig) {
 
   fprintf(stderr, "Leaving...\n");
   if(called) return; else called = 1;
-  do_shutdown = 1;
+  stats->do_shutdown = 1;
 
   print_stats();
 
@@ -267,7 +278,7 @@ void sigproc(int sig) {
 /* ******************************** */
 
 void my_sigalarm(int sig) {
-  if(do_shutdown)
+  if(stats->do_shutdown)
     return;
 
   print_stats();
@@ -350,124 +361,88 @@ static int search_string(char *string_to_match, u_int string_to_match_len) {
 
 static int32_t thiszone;
 
-void dummyProcesssPacket(const struct pfring_pkthdr *h,
-			 const u_char *p, const u_char *user_bytes) {
-  long threadId = (long)user_bytes;
-  u_int8_t dump_match = 0;
+void print_packet(const struct pfring_pkthdr *h, const u_char *p, u_int8_t dump_match) {
+  int s;
+  u_int usec, nsec = 0;
+  char dump_str[512] = { 0 };
 
-  numPkts[threadId]++, numBytes[threadId] += h->len+24 /* 8 Preamble + 4 CRC + 12 IFG */;
-
-#ifdef ENABLE_BPF
-  if (userspace_bpf && bpf_filter(filter.bf_insns, p, h->caplen, h->len) == 0)
-    return; /* rejected */
-
-  numPktsFiltered[threadId]++;
-#endif
-
-  if(touch_payload) {
-    volatile int __attribute__ ((unused)) i;
-
-    i = p[12] + p[13];
+  if(h->ts.tv_sec == 0) {
+    memset((void*)&h->extended_hdr.parsed_pkt, 0, sizeof(struct pkt_parsing_info));
+    pfring_parse_pkt((u_char*)p, (struct pfring_pkthdr*)h, 5, 1, 1);
   }
 
-  if(unlikely(automa != NULL)) {
-    if(unlikely(do_close_dump)) openDump();
+  s = (h->ts.tv_sec + thiszone) % 86400;
 
-    if((h->caplen > 42 /* FIX: do proper parsing */)
-       && (search_string((char*)&p[42], h->caplen-42) == 1)) {
-      if(dumper) {
-	pcap_dump((u_char*)dumper, (struct pcap_pkthdr*)h, p);
-	pcap_dump_flush(dumper);
+  if(h->extended_hdr.timestamp_ns) {
+    if (pd->dna.dna_dev.mem_info.device_model != intel_igb_82580 /* other than intel_igb_82580 */)
+      s = ((h->extended_hdr.timestamp_ns / 1000000000) + thiszone) % 86400;
+    /* "else" intel_igb_82580 has 40 bit ts, using gettimeofday seconds:
+     * be careful with drifts mixing sys time and hw timestamp */
+    usec = (h->extended_hdr.timestamp_ns / 1000) % 1000000;
+    nsec = h->extended_hdr.timestamp_ns % 1000;
+  } else {
+    usec = h->ts.tv_usec;
+  }
+
+  snprintf(dump_str, sizeof(dump_str), "%02d:%02d:%02d.%06u%03u ",
+           s / 3600, (s % 3600) / 60, s % 60,
+           usec, nsec);
+
+  if(use_extended_pkt_header) {
+    char bigbuf[4096];
+    u_int len;
+
+    snprintf(&dump_str[strlen(dump_str)], sizeof(dump_str)-strlen(dump_str), "%s[if_index=%d]",
+      h->extended_hdr.rx_direction ? "[RX]" : "[TX]",
+      h->extended_hdr.if_index);
+
+    pfring_print_parsed_pkt(bigbuf, sizeof(bigbuf), p, h);
+    len = strlen(bigbuf);
+
+    if(len > 0) bigbuf[len-1] = '\0';
+
+    snprintf(&dump_str[strlen(dump_str)], sizeof(dump_str)-strlen(dump_str), "%s", bigbuf);
+  } else {
+    char buf1[32], buf2[32];
+    struct ether_header *ehdr = (struct ether_header *) p;
+
+    snprintf(&dump_str[strlen(dump_str)], sizeof(dump_str)-strlen(dump_str), 
+             "[%s -> %s][eth_type=0x%04X][caplen=%d][len=%d]",
+	     etheraddr_string(ehdr->ether_shost, buf1),
+	     etheraddr_string(ehdr->ether_dhost, buf2),
+	     ntohs(ehdr->ether_type),
+	     h->caplen, h->len);     
+  }
+
+  if(verbose) printf("%s\n", dump_str);
+  if(unlikely(dump_match)) {
+    /* I need to find out which string matched */
+    struct strmatch *m = matching_strings;
+    char *_payload = (char*)&p[42], payload[1500];
+    u_int payload_len = h->caplen-42, i;
+
+    if(payload_len > sizeof(payload)) payload_len = sizeof(payload);
+      
+    for(i=0; i<payload_len; i++)
+      payload[i] = isprint(_payload[i]) ? _payload[i] : ' ';
+
+    snprintf(&dump_str[strlen(dump_str)], sizeof(dump_str)-strlen(dump_str),
+	     "[matches:");
+      
+    while(m != NULL) {
+      if(strstr(payload, m->str)) {
+        snprintf(&dump_str[strlen(dump_str)], sizeof(dump_str)-strlen(dump_str), " '%s'",
+		 m->str);
       }
 
-      numStringMatches[threadId]++;
-      dump_match = 1;
+      m = m->next;
     }
+
+    snprintf(&dump_str[strlen(dump_str)], sizeof(dump_str)-strlen(dump_str), "]\n");
+
+    dumpMatch(dump_str);
   }
-
-  if(verbose || dump_match) {
-    int s;
-    u_int usec, nsec = 0;
-    char dump_str[512] = { 0 };
-
-    if(h->ts.tv_sec == 0) {
-      memset((void*)&h->extended_hdr.parsed_pkt, 0, sizeof(struct pkt_parsing_info));
-      pfring_parse_pkt((u_char*)p, (struct pfring_pkthdr*)h, 5, 1, 1);
-    }
-
-    s = (h->ts.tv_sec + thiszone) % 86400;
-
-    if(h->extended_hdr.timestamp_ns) {
-      if (pd->dna.dna_dev.mem_info.device_model != intel_igb_82580 /* other than intel_igb_82580 */)
-        s = ((h->extended_hdr.timestamp_ns / 1000000000) + thiszone) % 86400;
-      /* "else" intel_igb_82580 has 40 bit ts, using gettimeofday seconds:
-       * be careful with drifts mixing sys time and hw timestamp */
-      usec = (h->extended_hdr.timestamp_ns / 1000) % 1000000;
-      nsec = h->extended_hdr.timestamp_ns % 1000;
-    } else {
-      usec = h->ts.tv_usec;
-    }
-
-    snprintf(dump_str, sizeof(dump_str), "%02d:%02d:%02d.%06u%03u ",
-	     s / 3600, (s % 3600) / 60, s % 60,
-	     usec, nsec);
-
-    if(use_extended_pkt_header) {
-      char bigbuf[4096];
-      u_int len;
-
-      snprintf(&dump_str[strlen(dump_str)], sizeof(dump_str)-strlen(dump_str), "%s[if_index=%d]",
-        h->extended_hdr.rx_direction ? "[RX]" : "[TX]",
-        h->extended_hdr.if_index);
-
-      pfring_print_parsed_pkt(bigbuf, sizeof(bigbuf), p, h);
-      len = strlen(bigbuf);
-
-      if(len > 0) bigbuf[len-1] = '\0';
-
-      snprintf(&dump_str[strlen(dump_str)], sizeof(dump_str)-strlen(dump_str), "%s", bigbuf);
-   } else {
-      char buf1[32], buf2[32];
-      struct ether_header *ehdr = (struct ether_header *) p;
-
-      snprintf(&dump_str[strlen(dump_str)], sizeof(dump_str)-strlen(dump_str), 
-	       "[%s -> %s][eth_type=0x%04X][caplen=%d][len=%d]",
-	       etheraddr_string(ehdr->ether_shost, buf1),
-	       etheraddr_string(ehdr->ether_dhost, buf2),
-	       ntohs(ehdr->ether_type),
-	       h->caplen, h->len);     
-    }
-
-    if(verbose) printf("%s\n", dump_str);
-    if(unlikely(dump_match)) {
-      /* I need to find out which string matched */
-      struct strmatch *m = matching_strings;
-      char *_payload = (char*)&p[42], payload[1500];
-      u_int payload_len = h->caplen-42, i;
-
-      if(payload_len > sizeof(payload)) payload_len = sizeof(payload);
-      
-      for(i=0; i<payload_len; i++)
-	payload[i] = isprint(_payload[i]) ? _payload[i] : ' ';
-
-      snprintf(&dump_str[strlen(dump_str)], sizeof(dump_str)-strlen(dump_str),
-	       "[matches:");
-      
-      while(m != NULL) {
-	if(strstr(payload, m->str)) {
-	  snprintf(&dump_str[strlen(dump_str)], sizeof(dump_str)-strlen(dump_str), " '%s'",
-		   m->str);
-	}
-
-	m = m->next;
-      }
-
-      snprintf(&dump_str[strlen(dump_str)], sizeof(dump_str)-strlen(dump_str), "]\n");
-
-      dumpMatch(dump_str);
-    }
-  }
-
+  
   if(verbose == 2) {
     int i, len = h->caplen;
 
@@ -487,6 +462,48 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h,
       printf("%02X ", p[i]);
 
     printf("\n");
+  }
+}
+
+/* ****************************************************** */
+
+void dummyProcesssPacket(const struct pfring_pkthdr *h,
+			 const u_char *p, const u_char *user_bytes) {
+  long threadId = (long)user_bytes;
+  u_int8_t dump_match = 0;
+
+  stats->numPkts[threadId]++, stats->numBytes[threadId] += h->len+24 /* 8 Preamble + 4 CRC + 12 IFG */;
+
+#ifdef ENABLE_BPF
+  if (unlikely(userspace_bpf && bpf_filter(filter.bf_insns, p, h->caplen, h->len) == 0))
+    return; /* rejected */
+
+  stats->numPktsFiltered[threadId]++;
+#endif
+
+  if(touch_payload) {
+    volatile int __attribute__ ((unused)) i;
+
+    i = p[12] + p[13];
+  }
+
+  if(unlikely(automa != NULL)) {
+    if(unlikely(do_close_dump)) openDump();
+
+    if((h->caplen > 42 /* FIX: do proper parsing */)
+       && (search_string((char*)&p[42], h->caplen-42) == 1)) {
+      if(dumper) {
+	pcap_dump((u_char*)dumper, (struct pcap_pkthdr*)h, p);
+	pcap_dump_flush(dumper);
+      }
+
+      stats->numStringMatches[threadId]++;
+      dump_match = 1;
+    }
+  }
+
+  if(unlikely(verbose || dump_match)) {
+    print_packet(h, p, dump_match);
   }
 
   if(unlikely(add_drop_rule)) {
@@ -588,10 +605,10 @@ void* packet_consumer_thread(void* _id) {
     int rc;
     u_int len;
 
-    if(do_shutdown) break;
+    if(stats->do_shutdown) break;
 
     if((rc = pfring_recv(pd, &buffer_p, NO_ZC_BUFFER_LEN, &hdr, wait_for_packet)) > 0) {
-      if(do_shutdown) break;
+      if(stats->do_shutdown) break;
       dummyProcesssPacket(&hdr, buffer, (u_char*)thread_id);
 #ifdef TEST_SEND
       buffer[0] = 0x99;
@@ -901,6 +918,9 @@ int main(int argc, char* argv[]) {
   if(num_threads > MAX_NUM_THREADS) num_threads = MAX_NUM_THREADS;
 
   bind2node(bind_core);
+
+  if ((stats = calloc(1, sizeof(struct app_stats))) == NULL)
+    return -1;
 
   /* hardcode: promisc=1, to_ms=500 */
   promisc = 1;
