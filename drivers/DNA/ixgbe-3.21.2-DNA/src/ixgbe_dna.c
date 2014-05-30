@@ -343,9 +343,6 @@ int wait_packet_function_ptr(void *data, int mode)
 
 /* ********************************** */
 
-#define IXGBE_PCI_DEVICE_CACHE_LINE_SIZE	0x0C
-#define PCI_DEVICE_CACHE_LINE_SIZE_BYTES	8
-
 void dna_ixgbe_alloc_tx_buffers(struct ixgbe_ring *tx_ring, struct pfring_hooks *hook) {
   union ixgbe_adv_tx_desc *tx_desc, *shadow_tx_desc;
   struct ixgbe_tx_buffer *bi;
@@ -421,18 +418,55 @@ void dna_ixgbe_alloc_tx_buffers(struct ixgbe_ring *tx_ring, struct pfring_hooks 
 
 /* ********************************** */
 
+#define CACHE_LINE_SIZE 64
+
+int gcd(int a, int b) {
+  int c;
+  while (a != 0) {
+    c = a; 
+    a = b % a;
+    b = c;
+  }
+  return b;
+}
+
+u32 compute_buffer_padding(u32 size, u32 channels, u32 ranks) {
+  u32 padded_size = (size + CACHE_LINE_SIZE - 1) / CACHE_LINE_SIZE;
+  while (gcd(padded_size, channels * ranks) != 1 || gcd(channels, padded_size) != 1)
+    padded_size++;
+  padded_size *= CACHE_LINE_SIZE;
+  return padded_size;
+}
+
+/* ********************************** */
+
 void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
   union ixgbe_adv_rx_desc *rx_desc, *shadow_rx_desc;
   struct ixgbe_rx_buffer *bi;
   u16 i;
   struct ixgbe_adapter 	*adapter = netdev_priv(rx_ring->netdev);
   struct ixgbe_hw       *hw = &adapter->hw;
-  u16	                cache_line_size;
   struct ixgbe_ring     *tx_ring = adapter->tx_ring[rx_ring->queue_index];
   struct pfring_hooks   *hook = (struct pfring_hooks*)rx_ring->netdev->pfring_ptr;
   mem_ring_info         rx_info = {0};
   mem_ring_info         tx_info = {0};
   int                   num_slots_per_page;
+#if 0
+#define IXGBE_PCI_DEVICE_CACHE_LINE_SIZE	0x0C
+#define PCI_DEVICE_CACHE_LINE_SIZE_BYTES	8
+  u16	                cache_line_size;
+
+  cache_line_size = cpu_to_le16(IXGBE_READ_PCIE_WORD(hw, IXGBE_PCI_DEVICE_CACHE_LINE_SIZE));
+  cache_line_size &= 0x00FF;
+  cache_line_size *= PCI_DEVICE_CACHE_LINE_SIZE_BYTES;
+  if(cache_line_size == 0) cache_line_size = 64;
+
+  if(unlikely(enable_debug))
+    printk("%s(): pci cache line size %d\n",__FUNCTION__, cache_line_size);
+
+#undef IXGBE_PCI_DEVICE_CACHE_LINE_SIZE
+#undef PCI_DEVICE_CACHE_LINE_SIZE_BYTES
+#endif
 
   /* Check if the memory has been already allocated */
   if(rx_ring->dna.memory_allocated) return;
@@ -449,15 +483,10 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
 
   init_waitqueue_head(&rx_ring->dna.rx_tx.rx.packet_waitqueue);
 
-  cache_line_size = cpu_to_le16(IXGBE_READ_PCIE_WORD(hw, IXGBE_PCI_DEVICE_CACHE_LINE_SIZE));
-  cache_line_size &= 0x00FF;
-  cache_line_size *= PCI_DEVICE_CACHE_LINE_SIZE_BYTES;
-  if(cache_line_size == 0) cache_line_size = 64;
+  /* Optimising slot len for most common systems adding padding at the end. Please note 
+   * that some Intel chipset has three channels, in this case no padding is required. */
+  rx_ring->dna.packet_slot_len  = compute_buffer_padding(rx_ring->rx_buf_len, 4, 4);
 
-  if(unlikely(enable_debug))
-    printk("%s(): pci cache line size %d\n",__FUNCTION__, cache_line_size);
-
-  rx_ring->dna.packet_slot_len  = ALIGN(rx_ring->rx_buf_len, cache_line_size);
   rx_ring->dna.packet_num_slots = rx_ring->count;
 
   rx_ring->dna.tot_packet_memory = PAGE_SIZE << DNA_MAX_CHUNK_ORDER;
@@ -621,9 +650,6 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
     ixgbe_irq_disable_queues(rx_ring->q_vector->adapter, ((u64)1 << rx_ring->queue_index));
 #endif
 }
-
-#undef IXGBE_PCI_DEVICE_CACHE_LINE_SIZE
-#undef PCI_DEVICE_CACHE_LINE_SIZE_BYTES
 
 /* ********************************** */
 
