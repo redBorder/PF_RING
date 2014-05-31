@@ -48,6 +48,9 @@
 #define NBUFF      256 /* pow */
 #define NBUFFMASK 0xFF /* 256-1 */
 
+//#define USE_BURST_API
+#define BURST_LEN   32
+
 pfring_zc_cluster *zc;
 pfring_zc_queue *zq;
 pfring_zc_pkt_buff *buffers[NBUFF];
@@ -161,34 +164,55 @@ void printHelp(void) {
 
 /* *************************************** */
 
-void* packet_consumer_thread(void* _id) {
+void print_packet(pfring_zc_pkt_buff *buffer) {
+  if (buffer->ts.tv_nsec)
+    printf("[%u.%u] ", buffer->ts.tv_sec, buffer->ts.tv_nsec);
+#if 1
+  char bigbuf[4096];
+  pfring_print_pkt(bigbuf, sizeof(bigbuf), buffer->data, buffer->len, buffer->len);
+  fputs(bigbuf, stdout);
+#else
+  int i;
+  for(i = 0; i < buffer->len; i++)
+    printf("%02X ", buffer->data[i]);
+  printf("\n");
+#endif
+}
+
+/* *************************************** */
+
+
+void *packet_consumer_thread(void *user) {
 
   if (bind_core >= 0)
     bind2core(bind_core);
 
   while(!do_shutdown) {
+
+#ifdef USE_BURST_API
+    if((n = pfring_zc_recv_pkt_burst(zq, buffers, BURST_LEN, wait_for_packet)) > 0) {
+
+      if (unlikely(verbose))
+        for (i = 0; i < n; i++) 
+          print_packet(buffers[i]);
+
+      for (i = 0; i < n; i++) {
+        numPkts++;
+        numBytes += buffers[i]->len + 24; /* 8 Preamble + 4 CRC + 12 IFG */
+      }
+    }
+#else
     if(pfring_zc_recv_pkt(zq, &buffers[lru], wait_for_packet) > 0) {
 
-      if (unlikely(verbose)) {
-        if (buffers[lru]->ts.tv_nsec)
-          printf("[%u.%u] ", buffers[lru]->ts.tv_sec, buffers[lru]->ts.tv_nsec);
-#if 1
-        char bigbuf[4096];
-        pfring_print_pkt(bigbuf, sizeof(bigbuf), buffers[lru]->data, buffers[lru]->len, buffers[lru]->len);
-        fputs(bigbuf, stdout);
-#else
-        int i;
-        for(i = 0; i < buffers[lru]->len; i++)
-          printf("%02X ", buffers[lru]->data[i]);
-        printf("\n");
-#endif
-      }
+      if (unlikely(verbose))
+        print_packet(buffers[lru]);
 
       numPkts++;
       numBytes += buffers[lru]->len + 24; /* 8 Preamble + 4 CRC + 12 IFG */
 
       lru++; lru &= NBUFFMASK;
     }
+#endif
 
   }
 
