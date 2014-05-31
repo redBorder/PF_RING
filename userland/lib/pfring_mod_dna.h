@@ -25,6 +25,7 @@ int  pfring_dna_enable_ring(pfring *ring);
 int  pfring_dna_set_direction(pfring *ring, packet_direction direction);
 int  pfring_dna_poll(pfring *ring, u_int wait_duration);
 int  pfring_dna_set_tx_watermark(pfring *ring, u_int16_t watermark);
+int  pfring_dna_set_poll_watermark(pfring *ring, u_int16_t watermark);
 
 /* DNA */
 int dna_init(pfring* ring, u_int len);
