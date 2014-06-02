@@ -4095,4 +4095,16 @@ extern int __kc_pci_enable_msix_range(struct pci_dev *dev,
 #define HAVE_NDO_SELECT_QUEUE_ACCEL_FALLBACK
 #endif /* 3.14.0 */
 
+#if ( LINUX_VERSION_CODE > KERNEL_VERSION(3,14,0) )
+static inline unsigned _kc_compare_ether_addr(const u8 *addr1, const u8 *addr2)
+{
+	const u16 *a = (const u16 *) addr1;
+	const u16 *b = (const u16 *) addr2;
+
+	return ((a[0] ^ b[0]) | (a[1] ^ b[1]) | (a[2] ^ b[2])) != 0;
+}
+#undef compare_ether_addr
+#define compare_ether_addr(addr1, addr2) _kc_compare_ether_addr(addr1, addr2)
+#endif /* > 3.14.0 */
+
 #endif /* _KCOMPAT_H_ */
