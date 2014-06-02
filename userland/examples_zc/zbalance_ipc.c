@@ -209,17 +209,17 @@ void printHelp(void) {
 
 /* *************************************** */
 
-int32_t ip_distribution_func(pfring_zc_pkt_buff *pkt_handle, void *user) {
+int32_t ip_distribution_func(pfring_zc_pkt_buff *pkt_handle, pfring_zc_queue *in_queue, void *user) {
   long num_out_queues = (long) user;
   if (time_pulse) SET_TS_FROM_PULSE(pkt_handle, *pulse_timestamp_ns);
-  return pfring_zc_builtin_ip_hash(pkt_handle) % num_out_queues;
+  return pfring_zc_builtin_ip_hash(pkt_handle, in_queue) % num_out_queues;
 }
 
 /* *************************************** */
 
 static int rr = -1;
 
-int32_t rr_distribution_func(pfring_zc_pkt_buff *pkt_handle, void *user) {
+int32_t rr_distribution_func(pfring_zc_pkt_buff *pkt_handle, pfring_zc_queue *in_queue, void *user) {
   long num_out_queues = (long) user;
   if (time_pulse) SET_TS_FROM_PULSE(pkt_handle, *pulse_timestamp_ns);
   if (++rr == num_out_queues) rr = 0;
@@ -228,7 +228,7 @@ int32_t rr_distribution_func(pfring_zc_pkt_buff *pkt_handle, void *user) {
 
 /* *************************************** */
 
-int32_t fo_distribution_func(pfring_zc_pkt_buff *pkt_handle, void *user) {
+int32_t fo_distribution_func(pfring_zc_pkt_buff *pkt_handle, pfring_zc_queue *in_queue, void *user) {
   if (time_pulse) SET_TS_FROM_PULSE(pkt_handle, *pulse_timestamp_ns);
   return 0xffffffff; 
 }
@@ -236,7 +236,7 @@ int32_t fo_distribution_func(pfring_zc_pkt_buff *pkt_handle, void *user) {
 /* *************************************** */
 
 
-int32_t fo_rr_distribution_func(pfring_zc_pkt_buff *pkt_handle, void *user) {
+int32_t fo_rr_distribution_func(pfring_zc_pkt_buff *pkt_handle, pfring_zc_queue *in_queue, void *user) {
   long num_out_queues = (long) user;
   if (time_pulse) SET_TS_FROM_PULSE(pkt_handle, *pulse_timestamp_ns);
   if (++rr == (num_out_queues - 1)) rr = 0;

@@ -39,6 +39,15 @@ typedef enum {
 } pfring_zc_queue_mode;
 
 /**
+ * Queue stats structure. 
+ */
+typedef struct {
+  u_int64_t recv;
+  u_int64_t sent;
+  u_int64_t drop;
+} pfring_zc_stat;
+
+/**
  * Struct for nsec time (similar to struct timespec).
  */
 typedef struct {
@@ -53,18 +62,20 @@ typedef struct {
   u_int32_t len;         /**< Packet length. */
   u_int32_t hash;        /**< Packet hash. */
   pfring_zc_timespec ts; /**< Packet timestamp (nsec) */
-  u_char *data;          /**< Pointer to the packet. */
-  u_char user[];         /**< Pointer to the user metadata, if any. */
+  u_char user[];         /**< Start of user metadata, if any. */
 } pfring_zc_pkt_buff;
 
 /**
- * Queue stats structure. 
+ * Returns the pointer to the actual packet data.
+ * @param pkt_handle The buffer handle.
+ * @param queue      The queue from which the packet is arrived or destined.
+ * @return           The pointer on success, NULL otherwise.
  */
-typedef struct {
-  u_int64_t recv;
-  u_int64_t sent;
-  u_int64_t drop;
-} pfring_zc_stat;
+u_char *
+pfring_zc_pkt_buff_data(
+  pfring_zc_pkt_buff *pkt_handle,
+  pfring_zc_queue *queue
+);
 
 /* **************************************************************************************** */
 
@@ -331,12 +342,14 @@ typedef enum {
 /**
  * The distribution function prototype.
  * @param pkt_handle The received buffer handle.
+ * @param in_queue   The ingress queues handle from which the packet arrived.
  * @param user       The pointer to the user data.
  * @return           The egress queue index (or a negative value to drop the packet) in case of balancing, the egress queues bit-mask in case of fan-out.
  */
 typedef int32_t
 (*pfring_zc_distribution_func) (
   pfring_zc_pkt_buff *pkt_handle,
+  pfring_zc_queue *in_queue,
   void *user
 );
 
@@ -545,10 +558,13 @@ pfring_zc_vm_guest_init(
 /**
  * Computes an IP-based packet hash.
  * @param pkt_handle The pointer to the buffer handle.
+ * @param queue      The queue from which the packet is arrived or destined.
+ * @return           The packet hash.
  */
 u_int32_t
 pfring_zc_builtin_ip_hash(
-  pfring_zc_pkt_buff *pkt_handle
+  pfring_zc_pkt_buff *pkt_handle,
+  pfring_zc_queue *queue
 );
 
 /* **************************************************************************************** */

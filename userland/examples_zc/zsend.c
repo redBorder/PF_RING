@@ -367,9 +367,9 @@ void send_traffic() {
       for (i = 0; i < BURSTLEN; i++) {
         buffers[buffer_id + i]->len = packet_len;
         if (stdin_packet_len > 0)
-          memcpy(buffers[buffer_id + i]->data, stdin_packet, stdin_packet_len);
+          memcpy(pfring_zc_pkt_buff_data(buffers[buffer_id + i], zq), stdin_packet, stdin_packet_len);
         else
-          forge_udp_packet(buffers[buffer_id + i]->data, numPkts + i);
+          forge_udp_packet(pfring_zc_pkt_buff_data(buffers[buffer_id + i], zq), numPkts + i);
       }
     }
 
@@ -404,17 +404,18 @@ void send_traffic() {
 #if 1
     if (numPkts < num_queue_buffers + NBUFF || num_ips > 1) { /* forge all buffers 1 time */
       if (stdin_packet_len > 0)
-        memcpy(buffers[buffer_id]->data, stdin_packet, stdin_packet_len);
+        memcpy(pfring_zc_pkt_buff_data(buffers[buffer_id], zq), stdin_packet, stdin_packet_len);
       else
-        forge_udp_packet(buffers[buffer_id]->data, numPkts);
+        forge_udp_packet(pfring_zc_pkt_buff_data(buffers[buffer_id], zq), numPkts);
     }
 #else
     {
+      u_char *pkt_data = pfring_zc_pkt_buff_data(buffers[buffer_id], zq);
       int k;
       u_int8_t j = numPkts;
       for(k = 0; k < buffers[buffer_id]->len; k++)
-        buffers[buffer_id]->data[k] = j++;
-      buffers[buffer_id]->data[k-1] = cluster_id;
+        pkt_data[k] = j++;
+      pkt_data[k-1] = cluster_id;
     }
 #endif
 

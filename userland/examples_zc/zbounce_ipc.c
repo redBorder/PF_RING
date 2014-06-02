@@ -161,13 +161,14 @@ void *packet_consumer_thread(void *data) {
 
       if (unlikely(verbose)) {
         char bigbuf[4096];
-        pfring_print_pkt(bigbuf, sizeof(bigbuf), tmpbuff->data, tmpbuff->len, tmpbuff->len);
+        pfring_print_pkt(bigbuf, sizeof(bigbuf), pfring_zc_pkt_buff_data(tmpbuff, inzq), tmpbuff->len, tmpbuff->len);
         fputs(bigbuf, stdout);
       }
 #if 0
       int i;
+      u_char *pkt_data = pfring_zc_pkt_buff_data(tmpbuff, inzq),
       for(i = 0; i < tmpbuff->len; i++)
-        printf("%02X ", tmpbuff->data[i]);
+        printf("%02X ", pkt_data[i]);
       printf("\n");
 #endif
 

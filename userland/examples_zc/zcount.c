@@ -165,16 +165,19 @@ void printHelp(void) {
 /* *************************************** */
 
 void print_packet(pfring_zc_pkt_buff *buffer) {
+  u_char *pkt_data = pfring_zc_pkt_buff_data(buffer, zq);
+  char bigbuf[4096];
+
   if (buffer->ts.tv_nsec)
     printf("[%u.%u] ", buffer->ts.tv_sec, buffer->ts.tv_nsec);
+
 #if 1
-  char bigbuf[4096];
-  pfring_print_pkt(bigbuf, sizeof(bigbuf), buffer->data, buffer->len, buffer->len);
+  pfring_print_pkt(bigbuf, sizeof(bigbuf), pkt_data, buffer->len, buffer->len);
   fputs(bigbuf, stdout);
 #else
   int i;
   for(i = 0; i < buffer->len; i++)
-    printf("%02X ", buffer->data[i]);
+    printf("%02X ", pkt_data[i]);
   printf("\n");
 #endif
 }

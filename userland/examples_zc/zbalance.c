@@ -222,7 +222,7 @@ void* consumer_thread(void* _id) {
 
 static int rr = 0;
 
-int32_t rr_distribution_func(pfring_zc_pkt_buff *pkt_handle, void *user) {
+int32_t rr_distribution_func(pfring_zc_pkt_buff *pkt_handle, pfring_zc_queue *in_queue, void *user) {
   long num_out_queues = (long) user;
   return rr++ % num_out_queues;
 }

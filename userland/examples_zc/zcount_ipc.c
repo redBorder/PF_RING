@@ -174,13 +174,14 @@ void *packet_consumer_thread(void *_id) {
     if(pfring_zc_recv_pkt(zq, &buffer, g->wait_for_packet) > 0) {
 
       if (unlikely(g->verbose)) {
+        u_char *pkt_data = pfring_zc_pkt_buff_data(buffer, zq);
         int i;
 
         if (buffer->ts.tv_nsec)
           printf("[%u.%u] ", buffer->ts.tv_sec, buffer->ts.tv_nsec);
 
         for(i = 0; i < buffer->len; i++)
-          printf("%02X ", buffer->data[i]);
+          printf("%02X ", pkt_data[i]);
         printf("\n");
       }
 
