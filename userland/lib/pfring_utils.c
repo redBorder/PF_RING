@@ -605,8 +605,17 @@ int pfring_print_parsed_pkt(char *buff, u_int buff_len, const u_char *p, const s
       h->extended_hdr.parsed_pkt.tcp.seq_num);
 	
   } else if(h->extended_hdr.parsed_pkt.eth_type == 0x0806 /* ARP */) {
-    buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
-      "[ARP]");
+    buff_used += snprintf(&buff[buff_used], buff_len - buff_used, "[ARP]");
+    if (buff_len >= h->extended_hdr.parsed_pkt.offset.l3_offset+30) {
+      buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
+        "[Sender=%s/%s]",
+        etheraddr2string(&p[h->extended_hdr.parsed_pkt.offset.l3_offset+8], buf1),
+        intoa(ntohl(*((u_int32_t *) &p[h->extended_hdr.parsed_pkt.offset.l3_offset+14]))));
+      buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
+        "[Target=%s/%s]", 
+        etheraddr2string(&p[h->extended_hdr.parsed_pkt.offset.l3_offset+18], buf2),
+        intoa(ntohl(*((u_int32_t *) &p[h->extended_hdr.parsed_pkt.offset.l3_offset+24]))));
+    }
   } else {
     buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
       "[eth_type=0x%04X]", h->extended_hdr.parsed_pkt.eth_type);
