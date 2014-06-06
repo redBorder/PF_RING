@@ -3253,6 +3253,11 @@ static void e1000e_vlan_strip_disable(struct e1000_adapter *adapter)
 	struct e1000_hw *hw = &adapter->hw;
 	u32 ctrl;
 
+#ifdef ENABLE_DNA
+	if(adapter->dna.dna_enabled)
+		return;
+#endif
+
 	/* disable VLAN tag insert/strip */
 	ctrl = er32(CTRL);
 	ctrl &= ~E1000_CTRL_VME;
@@ -3267,6 +3272,11 @@ static void e1000e_vlan_strip_enable(struct e1000_adapter *adapter)
 {
 	struct e1000_hw *hw = &adapter->hw;
 	u32 ctrl;
+
+#ifdef ENABLE_DNA
+	if(adapter->dna.dna_enabled)
+		return;
+#endif
 
 	/* enable VLAN tag insert/strip */
 	ctrl = er32(CTRL);
