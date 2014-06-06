@@ -1436,6 +1436,7 @@ pcap_read_packet(pcap_t *handle, pcap_handler callback, u_char *userdata)
 	    }
 
 	    pcap_header.ts.tv_sec = 0;
+	    errno = 0;
 
 	    //if(pfring_poll(handle->ring, handle->md.timeout) > 0)
 	      ret = pfring_recv(handle->ring, (u_char**)&packet,
