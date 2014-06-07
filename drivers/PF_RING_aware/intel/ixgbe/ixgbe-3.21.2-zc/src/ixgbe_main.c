@@ -6662,27 +6662,28 @@ out:
 int ixgbe_setup_tx_resources(struct ixgbe_ring *tx_ring)
 {
 	struct device *dev = tx_ring->dev;
-#ifndef HAVE_PF_RING
 	int orig_node = dev_to_node(dev);
-#endif
 	int numa_node = -1;
 	int size;
 #ifdef HAVE_PF_RING
 	int selected_cpu;
         struct ixgbe_adapter *adapter = netdev_priv(tx_ring->netdev);
 
+	numa_node = orig_node;
+
 	selected_cpu = numa_cpu_affinity[adapter->bd_number];
 	if (selected_cpu != -1) {
 		if (cpu_online(selected_cpu)) {
-			numa_node = cpu_to_node(selected_cpu);
-			if (node_online(numa_node)) {
-				tx_ring->q_vector->numa_node = numa_node;
+			int selected_numa_node = cpu_to_node(selected_cpu);
+			if (node_online(selected_numa_node)) {
+				numa_node = selected_numa_node;
+				if (tx_ring->q_vector)
+					tx_ring->q_vector->numa_node = numa_node;
 				e_dev_info("selected numa node %d for tx memory allocation\n", 
-				           numa_node);
+				           selected_numa_node);
 			} else {
 				printk("[PF_RING-ZC] %s(): Warning: numa node %d is not available\n",
-				       __FUNCTION__, numa_node);
-				numa_node = -1;
+				       __FUNCTION__, selected_numa_node);
 			}
 		} else {
 			printk("[PF_RING-ZC] %s(): Warning: cpu %d is not available\n",
@@ -6693,9 +6694,6 @@ int ixgbe_setup_tx_resources(struct ixgbe_ring *tx_ring)
 
 	size = sizeof(struct ixgbe_tx_buffer) * tx_ring->count;
 
-#ifdef HAVE_PF_RING
-	if (numa_node == -1)
-#endif
 	if (tx_ring->q_vector)
 		numa_node = tx_ring->q_vector->numa_node;
 
@@ -6772,27 +6770,28 @@ err_setup_tx:
 int ixgbe_setup_rx_resources(struct ixgbe_ring *rx_ring)
 {
 	struct device *dev = rx_ring->dev;
-#ifndef HAVE_PF_RING
 	int orig_node = dev_to_node(dev);
-#endif
 	int numa_node = -1;
 	int size;
 #ifdef HAVE_PF_RING
 	int selected_cpu;
         struct ixgbe_adapter *adapter = netdev_priv(rx_ring->netdev);
 
+	numa_node = orig_node;
+
 	selected_cpu = numa_cpu_affinity[adapter->bd_number];
 	if (selected_cpu != -1) {
 		if (cpu_online(selected_cpu)) {
-			numa_node = cpu_to_node(selected_cpu);
-			if (node_online(numa_node)) {
-				rx_ring->q_vector->numa_node = numa_node;
+			int selected_numa_node = cpu_to_node(selected_cpu);
+			if (node_online(selected_numa_node)) {
+				numa_node = selected_numa_node;
+				if (rx_ring->q_vector)
+					rx_ring->q_vector->numa_node = numa_node;
 				e_dev_info("selected numa node %d for rx memory allocation\n", 
-				           numa_node);
+				           selected_numa_node);
 			} else {
 				printk("[PF_RING-ZC] %s(): Warning: numa node %d is not available\n",
-				       __FUNCTION__, numa_node);
-				numa_node = -1;
+				       __FUNCTION__, selected_numa_node);
 			}
 		} else {
 			printk("[PF_RING-ZC] %s(): Warning: cpu %d is not available\n",
@@ -6803,9 +6802,6 @@ int ixgbe_setup_rx_resources(struct ixgbe_ring *rx_ring)
 
 	size = sizeof(struct ixgbe_rx_buffer) * rx_ring->count;
 
-#ifdef HAVE_PF_RING
-	if (numa_node == -1)
-#endif
 	if (rx_ring->q_vector)
 		numa_node = rx_ring->q_vector->numa_node;
 
@@ -6824,6 +6820,7 @@ int ixgbe_setup_rx_resources(struct ixgbe_ring *rx_ring)
 					   rx_ring->size,
 					   &rx_ring->dma,
 					   GFP_KERNEL);
+
 #ifndef HAVE_PF_RING
 	set_dev_node(dev, orig_node);
 	if (!rx_ring->desc)
