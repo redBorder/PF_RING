@@ -164,6 +164,7 @@ pfring* pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags) 
               break;
 	    }
 	  }
+	  fclose(proc_net_pfr);
 	}
         if (!is_dna) continue;
       } else
