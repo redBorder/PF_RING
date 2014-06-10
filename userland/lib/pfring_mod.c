@@ -374,7 +374,7 @@ void pfring_mod_close(pfring *ring) {
   if(ring->buffer != NULL) {
     if(munmap(ring->buffer, ring->slots_info->tot_mem) == -1) {
       fprintf(stderr, "Warning: unable to unmap ring buffer memory [address=%p][size=%u]\n",
-     	      ring->buffer, ring->slots_info->tot_mem);
+     	      ring->buffer, (unsigned int)ring->slots_info->tot_mem);
     }
   }
 
