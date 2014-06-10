@@ -631,7 +631,8 @@ typedef struct _sw_filtering_hash_bucket {
 typedef struct flowSlotInfo {
   /* first page, managed by kernel */
   u_int16_t version, sample_rate;
-  u_int32_t min_num_slots, slot_len, data_len, tot_mem;
+  u_int32_t min_num_slots, slot_len, data_len;
+  u_int64_t tot_mem;
   u_int32_t insert_off, kernel_remove_off;
   u_int64_t tot_pkts, tot_lost, tot_insert;
   u_int64_t kernel_tot_read;
@@ -824,12 +825,12 @@ struct create_dna_cluster_info {
   u_int32_t cluster_id;
   u_int32_t mode; /* socket_mode */
   u_int32_t options;
+  u_int32_t recovered; /* fresh or recovered */
   u_int32_t num_slots; /* total number of rx/tx nic/slaves slots */
   u_int32_t num_slaves;
-  u_int32_t slave_mem_len; /* per slave shared memory size */
-  u_int32_t master_persistent_mem_len;
+  u_int64_t slave_mem_len; /* per slave shared memory size */
+  u_int64_t master_persistent_mem_len;
   char      hugepages_dir[DNA_CLUSTER_MAX_HP_DIR_LEN];
-  u_int32_t recovered; /* fresh or recovered */
   u_int64_t dma_addr[];
 };
 
@@ -1024,7 +1025,7 @@ struct dna_cluster {
 
   struct dma_memory_info *extra_dma_memory;
 
-  u_int32_t slave_shared_memory_len; /* per slave len */
+  u_int64_t slave_shared_memory_len; /* per slave len */
   char *shared_memory;
 
   char hugepages_dir[DNA_CLUSTER_MAX_HP_DIR_LEN];

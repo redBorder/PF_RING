@@ -1525,7 +1525,7 @@ static int ring_proc_get_info(struct seq_file *m, void *data_not_used)
 	seq_printf(m, "Min Num Slots      : %d\n", fsi->min_num_slots);
 	seq_printf(m, "Bucket Len         : %d\n", fsi->data_len);
 	seq_printf(m, "Slot Len           : %d [bucket+header]\n", fsi->slot_len);
-	seq_printf(m, "Tot Memory         : %d\n", fsi->tot_mem);
+	seq_printf(m, "Tot Memory         : %llu\n", fsi->tot_mem);
 	seq_printf(m, "Tot Packets        : %lu\n", (unsigned long)fsi->tot_pkts);
 	seq_printf(m, "Tot Pkt Lost       : %lu\n", (unsigned long)fsi->tot_lost);
 	seq_printf(m, "Tot Insert         : %lu\n", (unsigned long)fsi->tot_insert);
@@ -1648,9 +1648,9 @@ static void ring_proc_term(void)
 
 /* ********************************** */
 
-static char *allocate_shared_memory(u_int32_t *mem_len)
+static char *allocate_shared_memory(u_int64_t *mem_len)
 {
-  u_int32_t tot_mem = *mem_len;
+  u_int64_t tot_mem = *mem_len;
   char *shared_mem;
 
   tot_mem = PAGE_ALIGN(tot_mem);
@@ -1658,14 +1658,16 @@ static char *allocate_shared_memory(u_int32_t *mem_len)
   /* Alignment necessary on ARM platforms */
   tot_mem += SHMLBA - (tot_mem % SHMLBA);
 
-  /* rounding size to the next power of 2 (needed by vPFRing) */
+#if 0 /* rounding size to the next power of 2 was needed by vPFRing (deprecated) */
   tot_mem--;
   tot_mem |= tot_mem >> 1;
   tot_mem |= tot_mem >> 2;
   tot_mem |= tot_mem >> 4;
   tot_mem |= tot_mem >> 8;
   tot_mem |= tot_mem >> 16;
+  tot_mem |= tot_mem >> 32;
   tot_mem++;
+#endif
 
   /* Memory is already zeroed */
   shared_mem = vmalloc_user(tot_mem);
@@ -1681,7 +1683,7 @@ static char *allocate_shared_memory(u_int32_t *mem_len)
 static int ring_alloc_mem(struct sock *sk)
 {
   u_int the_slot_len;
-  u_int32_t tot_mem;
+  u_int64_t tot_mem;
   struct pf_ring_socket *pfr = ring_sk(sk);
 
   /* Userspace RING
@@ -1768,7 +1770,7 @@ static int ring_alloc_mem(struct sock *sk)
   pfr->slots_info->sample_rate = 1;
 
   if(unlikely(enable_debug))
-    printk("[PF_RING] allocated %d slots [slot_len=%d][tot_mem=%u]\n",
+    printk("[PF_RING] allocated %d slots [slot_len=%d][tot_mem=%llu]\n",
 	   pfr->slots_info->min_num_slots, pfr->slots_info->slot_len,
 	   pfr->slots_info->tot_mem);
 
@@ -5352,8 +5354,8 @@ static void free_extra_dma_memory(struct dma_memory_info *dma_memory)
 /* ********************************** */
 
 static struct dna_cluster* dna_cluster_create(u_int32_t dna_cluster_id, u_int32_t num_slots,
-                                              u_int32_t num_slaves, u_int32_t slave_mem_len,
-					      u_int32_t master_persistent_mem_len, socket_mode mode,
+                                              u_int32_t num_slaves, u_int64_t slave_mem_len,
+					      u_int64_t master_persistent_mem_len, socket_mode mode,
 					      u_int32_t options, char *hugepages_dir,
                                               struct device *hwdev, u_int32_t slot_len, u_int32_t chunk_len,
 					      u_int32_t *recovered)
@@ -5361,7 +5363,7 @@ static struct dna_cluster* dna_cluster_create(u_int32_t dna_cluster_id, u_int32_
   struct list_head *ptr, *tmp_ptr;
   struct dna_cluster *entry;
   struct dna_cluster *dnac = NULL;
-  u_int32_t shared_mem_size;
+  u_int64_t shared_mem_size;
   int i;
 
   write_lock(&dna_cluster_lock);
@@ -6461,7 +6463,7 @@ static int ring_mmap(struct file *file,
       /* If userspace tries to mmap beyond end of our buffer, then fail */
       if(size > pfr->slots_info->tot_mem) {
         if(unlikely(enable_debug))
-	  printk("[PF_RING] %s() failed: area too large [%ld > %d]\n", __FUNCTION__, size, pfr->slots_info->tot_mem);
+	  printk("[PF_RING] %s() failed: area too large [%ld > %llu]\n", __FUNCTION__, size, pfr->slots_info->tot_mem);
         return(-EINVAL);
       }
 
@@ -6531,7 +6533,7 @@ static int ring_mmap(struct file *file,
 
       if(size > (pfr->dna_cluster->slave_shared_memory_len * pfr->dna_cluster->num_slaves)) {
         if(unlikely(enable_debug))
-          printk("[PF_RING] %s() failed: area too large [%ld > %d]\n",
+          printk("[PF_RING] %s() failed: area too large [%ld > %llu]\n",
 	         __FUNCTION__, size, pfr->dna_cluster->slave_shared_memory_len * pfr->dna_cluster->num_slaves);
         return(-EINVAL);
       }
@@ -6556,7 +6558,7 @@ static int ring_mmap(struct file *file,
 
       if(size > pfr->dna_cluster->slave_shared_memory_len) {
         if(unlikely(enable_debug))
-          printk("[PF_RING] %s() failed: area too large [%ld > %d]\n",
+          printk("[PF_RING] %s() failed: area too large [%ld > %llu]\n",
 	         __FUNCTION__, size, pfr->dna_cluster->slave_shared_memory_len * pfr->dna_cluster->num_slaves);
         return(-EINVAL);
       }
