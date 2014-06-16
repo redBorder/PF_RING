@@ -1683,7 +1683,7 @@ static char *allocate_shared_memory(u_int64_t *mem_len)
 static int ring_alloc_mem(struct sock *sk)
 {
   u_int the_slot_len;
-  u_int64_t tot_mem;
+  u_int64_t tot_mem, actual_min_num_slots;
   struct pf_ring_socket *pfr = ring_sk(sk);
 
   /* Userspace RING
@@ -1765,7 +1765,10 @@ static int ring_alloc_mem(struct sock *sk)
   pfr->slots_info->version = RING_FLOWSLOT_VERSION;
   pfr->slots_info->slot_len = the_slot_len;
   pfr->slots_info->data_len = pfr->bucket_len;
-  pfr->slots_info->min_num_slots = (tot_mem - sizeof(FlowSlotInfo)) / the_slot_len;
+  actual_min_num_slots = tot_mem - sizeof(FlowSlotInfo);
+  do_div(actual_min_num_slots, the_slot_len);
+  pfr->slots_info->min_num_slots = actual_min_num_slots;
+  printk("slots: %llu\n", actual_min_num_slots);
   pfr->slots_info->tot_mem = tot_mem;
   pfr->slots_info->sample_rate = 1;
 
