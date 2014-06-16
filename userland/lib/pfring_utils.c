@@ -30,7 +30,8 @@ int pfring_enable_hw_timestamp(pfring* ring, char *device_name, u_int8_t enable_
   int rc, sock_fd;
 
   sock_fd = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
-  if(sock_fd <= 0) return(-1);
+  if (sock_fd <= 0)
+    return(-1);
 
   memset(&hwconfig, 0, sizeof(hwconfig));
 
@@ -39,20 +40,24 @@ int pfring_enable_hw_timestamp(pfring* ring, char *device_name, u_int8_t enable_
 
   memset(&ifr, 0, sizeof(ifr));
   strncpy(ifr.ifr_name, device_name, sizeof(ifr.ifr_name)-1);
-  ifr.ifr_data = (void *)&hwconfig;
+  ifr.ifr_data = (void *) &hwconfig;
 
   rc = ioctl(sock_fd, SIOCSHWTSTAMP, &ifr);
-  if(rc < 0)
+
+  if (rc < 0)
     rc = errno;
   else
     rc = 0;
+
+  errno = 0;
 
 #ifdef RING_DEBUG
   printf("pfring_enable_hw_timestamp(%s) returned %d\n", device_name, rc);
 #endif
 
   close(sock_fd);
-  return(rc);
+
+  return rc;
 #else
   return(-1);
 #endif
