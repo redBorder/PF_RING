@@ -131,7 +131,7 @@ pfring* pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags) 
   ring->chunk_mode_enabled  = !!(flags & PF_RING_CHUNK_MODE);
 
 #ifdef RING_DEBUG
-  printf("pfring_open: device_name=%s\n", device_name);
+  printf("[PF_RING] pfring_open: device_name=%s\n", device_name);
 #endif
   /* modules */
 
@@ -173,7 +173,7 @@ pfring* pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags) 
       if(!pfring_module_list[i].open)                              continue;
       mod_found = 1;
 #ifdef RING_DEBUG
-      printf("pfring_open: found module %s\n", pfring_module_list[i].name);
+      printf("[PF_RING] pfring_open: found module %s\n", pfring_module_list[i].name);
 #endif
 
       if (str != NULL) {

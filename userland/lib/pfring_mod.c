@@ -80,7 +80,7 @@ int pfring_mod_open_setup(pfring *ring) {
     return -1;
 
 #ifdef RING_DEBUG
-  printf("Open RING [fd=%d]\n", ring->fd);
+  printf("[PF_RING] Open RING [fd=%d]\n", ring->fd);
 #endif
 
   if(ring->caplen > MAX_CAPLEN) ring->caplen = MAX_CAPLEN;
@@ -100,8 +100,6 @@ int pfring_mod_open_setup(pfring *ring) {
     }
   }
 
-  /* printf("channel_id=%d\n", channel_id); */
-
   if(!strcmp(ring->device_name, "none")) {
     /* No binding yet */
     rc = 0;
@@ -119,14 +117,14 @@ int pfring_mod_open_setup(pfring *ring) {
 			      MAP_SHARED, ring->fd, 0);
 
   if(ring->buffer == MAP_FAILED) {
-    printf("mmap() failed: try with a smaller snaplen\n");
+    fprintf(stderr, "[PF_RING] mmap() failed: try with a smaller snaplen\n");
     close(ring->fd);
     return -1;
   }
 
   ring->slots_info = (FlowSlotInfo *)ring->buffer;
   if(ring->slots_info->version != RING_FLOWSLOT_VERSION) {
-    printf("Wrong RING version: "
+    fprintf(stderr, "[PF_RING] Wrong RING version: "
 	   "kernel is %i, libpfring was compiled with %i\n",
 	   ring->slots_info->version, RING_FLOWSLOT_VERSION);
     close(ring->fd);
@@ -135,7 +133,7 @@ int pfring_mod_open_setup(pfring *ring) {
   memSlotsLen = ring->slots_info->tot_mem;
   
   if(munmap(ring->buffer, PAGE_SIZE) == -1) {
-    fprintf(stderr, "Warning: unable to unmap ring buffer memory [address=%p][size=%u]\n",
+    fprintf(stderr, "[PF_RING] Warning: unable to unmap ring buffer memory [address=%p][size=%u]\n",
             ring->buffer, PAGE_SIZE);
   }
 
@@ -143,10 +141,8 @@ int pfring_mod_open_setup(pfring *ring) {
 			      PROT_READ|PROT_WRITE,
 			      MAP_SHARED, ring->fd, 0);
 
-  /* printf("mmap len %u\n", memSlotsLen); */
-
   if(ring->buffer == MAP_FAILED) {
-    printf("mmap() failed");
+    fprintf(stderr, "[PF_RING] mmap() failed");
     close(ring->fd);
     return -1;
    }
@@ -169,7 +165,7 @@ int pfring_mod_open_setup(pfring *ring) {
 
   ring->slot_header_len = pfring_get_slot_header_len(ring);
   if(ring->slot_header_len == (u_int16_t)-1) {
-    printf("ring failure (pfring_get_slot_header_len)\n");
+    fprintf(stderr, "[PF_RING] ring failure (pfring_get_slot_header_len)\n");
     close(ring->fd);
     return -1;
   }
@@ -179,7 +175,7 @@ int pfring_mod_open_setup(pfring *ring) {
   if(ring->tx.enabled_rx_packet_send) {
     int dummy = 0;
     if(setsockopt(ring->fd, 0, SO_ENABLE_RX_PACKET_BOUNCE, &dummy, sizeof(dummy)) < 0) {
-      printf("failure enabling rx packet bounce support\n");
+      fprintf(stderr, "[PF_RING] failure enabling rx packet bounce support\n");
       close(ring->fd);
       return -1;
     }
