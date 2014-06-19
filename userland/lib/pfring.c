@@ -386,6 +386,11 @@ int pfring_loop(pfring *ring, pfringProcesssPacket looper,
 	break;
       else if(rc > 0) {
 	hdr.caplen = min_val(hdr.caplen, ring->caplen);
+
+#ifdef ENABLE_BPF
+        if (unlikely(ring->userspace_bpf && bpf_filter(ring->userspace_bpf_filter.bf_insns, buffer, hdr.caplen, hdr.len) == 0))
+          continue; /* rejected */
+#endif
 	
 	looper(&hdr, buffer, user_bytes);
       } else {
@@ -585,32 +590,41 @@ int pfring_stats(pfring *ring, pfring_stat *stats) {
 int pfring_recv(pfring *ring, u_char** buffer, u_int buffer_len,
 		struct pfring_pkthdr *hdr,
 		u_int8_t wait_for_incoming_packet) {
-  if(likely((ring
+  if (likely(ring
 	     && ring->enabled
 	     && ring->recv
-	     && (ring->mode != send_only_mode)))) {
+	     && ring->mode != send_only_mode)) {
     int rc;
 
     /* Reentrancy is not compatible with zero copy */
-    if(unlikely((buffer_len == 0) && ring->reentrant))
-      return(PF_RING_ERROR_INVALID_ARGUMENT);
-
+    if (unlikely(buffer_len == 0 && ring->reentrant))
+      return PF_RING_ERROR_INVALID_ARGUMENT;
+    
     ring->break_recv_loop = 0;
+
+#ifdef ENABLE_BPF
+recv_next:
+#endif
+
     rc = ring->recv(ring, buffer, buffer_len, hdr, wait_for_incoming_packet);
+
     hdr->caplen = min_val(hdr->caplen, ring->caplen);
 
-    if(unlikely(ring->reflector_socket != NULL)) {
-      if (rc > 0)
+#ifdef ENABLE_BPF
+    if (unlikely(rc > 0 && ring->userspace_bpf && bpf_filter(ring->userspace_bpf_filter.bf_insns, *buffer, hdr->caplen, hdr->len) == 0))
+      goto recv_next; /* rejected */
+#endif
+
+    if (unlikely(rc > 0 && ring->reflector_socket != NULL))
         pfring_send(ring->reflector_socket, (char *) *buffer, hdr->caplen, 0 /* flush */);
-    }
 
     return rc;
   }
 
-  if(!ring->enabled)
-    return(PF_RING_ERROR_RING_NOT_ENABLED);
+  if (!ring->enabled)
+    return PF_RING_ERROR_RING_NOT_ENABLED;
 
-  return(PF_RING_ERROR_NOT_SUPPORTED);
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */
@@ -1221,21 +1235,39 @@ int pfring_next_pkt_raw_timestamp(pfring *ring, u_int64_t *ts) {
 /* **************************************************** */
 
 int pfring_set_bpf_filter(pfring *ring, char *filter_buffer) {
-  if(ring && ring->set_bpf_filter) {
-    return ring->set_bpf_filter(ring, filter_buffer);
-  }
+  int rc = PF_RING_ERROR_NOT_SUPPORTED;
 
-  return(PF_RING_ERROR_NOT_SUPPORTED);
+  if (ring && ring->set_bpf_filter)
+    return ring->set_bpf_filter(ring, filter_buffer);
+
+  /* no in-kernel bpf support, setting up userspace bpf */
+
+  if (unlikely(ring->reentrant))
+    pthread_rwlock_wrlock(&ring->rx_lock);
+
+  rc = pfring_parse_bpf_filter(filter_buffer, ring->caplen, &ring->userspace_bpf_filter);
+
+  if(unlikely(ring->reentrant))
+    pthread_rwlock_unlock(&ring->rx_lock);
+
+  if (rc == 0)
+    ring->userspace_bpf = 1;
+
+  return rc;
 }
 
 /* **************************************************** */
 
 int pfring_remove_bpf_filter(pfring *ring) {
-  if(ring && ring->remove_bpf_filter) {
+  if (ring && ring->remove_bpf_filter)
     return ring->remove_bpf_filter(ring);
+
+  if (ring->userspace_bpf) {
+    ring->userspace_bpf = 0;
+    return 0;
   }
 
-  return(PF_RING_ERROR_NOT_SUPPORTED);
+  return PF_RING_ERROR_NOT_SUPPORTED;
 }
 
 /* **************************************************** */

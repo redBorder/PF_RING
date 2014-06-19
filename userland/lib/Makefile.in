@@ -11,7 +11,7 @@ INSTDIR   = ${DESTDIR}/@INSTALL_PREFIX@
 #
 # Search directories
 #
-INCLUDE   = -I../../kernel -I../../vPF_RING/guest/kernel @BPF_INCLUDE@
+INCLUDE   = -I../../kernel @BPF_INCLUDE@
 
 #
 # Zero ToolKit

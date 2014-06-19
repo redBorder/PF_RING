@@ -44,12 +44,6 @@
 #include <monetary.h>
 #include <locale.h>
 
-#ifdef ENABLE_BPF
-#include <pcap/pcap.h>
-#include <pcap/bpf.h>
-//#include <linux/filter.h>
-#endif
-
 #include "pfring.h"
 
 #include "pfutils.c"
@@ -73,18 +67,12 @@ pcap_dumper_t *dumper = NULL;
 u_int string_id = 1;
 char *out_pcap_file = NULL;
 FILE *match_dumper = NULL;
-#ifdef ENABLE_BPF
-struct bpf_program filter;
-u_int8_t userspace_bpf = 0, do_close_dump = 0;
-#endif
+u_int8_t do_close_dump = 0;
 
 struct app_stats {
   u_int64_t numPkts[MAX_NUM_THREADS];
   u_int64_t numBytes[MAX_NUM_THREADS];
   u_int64_t numStringMatches[MAX_NUM_THREADS];
-#ifdef ENABLE_BPF
-  unsigned long long numPktsFiltered[MAX_NUM_THREADS];
-#endif
 
   volatile u_int64_t do_shutdown;
 };
@@ -131,17 +119,11 @@ void print_stats() {
     double thpt;
     int i;
     unsigned long long nBytes = 0, nPkts = 0, nMatches = 0;
-#ifdef ENABLE_BPF
-    unsigned long long nPktsFiltered = 0;
-#endif
 
     for(i=0; i < num_threads; i++) {
       nBytes += stats->numBytes[i];
       nPkts += stats->numPkts[i];
       nMatches += stats->numStringMatches[i];
-#ifdef ENABLE_BPF
-      nPktsFiltered += stats->numPktsFiltered[i];
-#endif
     }
 
     deltaMillisecStart = delta_time(&endTime, &startTime);
@@ -149,16 +131,10 @@ void print_stats() {
              "Duration: %s\n"
              "Packets:  %lu\n"
              "Dropped:  %lu\n"
-#ifdef ENABLE_BPF
-	     "Filtered: %lu\n"
-#endif
              "Bytes:    %lu\n",
              msec2dhmsm(deltaMillisecStart, timebuf, sizeof(timebuf)),
              (long unsigned int) pfringStat.recv,
              (long unsigned int) pfringStat.drop,
-#ifdef ENABLE_BPF
-	     (long unsigned int) nPktsFiltered,
-#endif
              (long unsigned int) nBytes);
     pfring_set_application_stats(pd, buf);
 
@@ -166,15 +142,9 @@ void print_stats() {
 
     fprintf(stderr, "=========================\n"
 	    "Absolute Stats: [%u pkts rcvd]"
-#ifdef ENABLE_BPF
-	    "[%u pkts filtered]"
-#endif
 	    "[%u pkts dropped]\n"
 	    "Total Pkts=%u/Dropped=%.1f %%\n",
 	    (unsigned int)pfringStat.recv,
-#ifdef ENABLE_BPF
-	    (unsigned int)nPktsFiltered,
-#endif
 	    (unsigned int)pfringStat.drop,
 	    (unsigned int)(pfringStat.recv+pfringStat.drop),
 	    pfringStat.recv == 0 ? 0 :
@@ -285,27 +255,6 @@ void my_sigalarm(int sig) {
   alarm(ALARM_SLEEP);
   signal(SIGALRM, my_sigalarm);
 }
-
-/* ****************************************************** */
-
-#ifdef ENABLE_BPF
-int parse_bpf_filter(char *filter_buffer, u_int caplen) {
-  if(pcap_compile_nopcap(caplen,        /* snaplen_arg */
-                         DLT_EN10MB,    /* linktype_arg */
-                         &filter,       /* program */
-                         filter_buffer, /* const char *buf */
-                         0,             /* optimize */
-                         0              /* mask */
-                         ) == -1) {
-    return -1;
-  }
-
-  if(filter.bf_insns == NULL)
-    return -1;
-
-  return 0;
-}
-#endif
 
 /* ****************************************************** */
 
@@ -473,13 +422,6 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h,
   u_int8_t dump_match = 0;
 
   stats->numPkts[threadId]++, stats->numBytes[threadId] += h->len+24 /* 8 Preamble + 4 CRC + 12 IFG */;
-
-#ifdef ENABLE_BPF
-  if (unlikely(userspace_bpf && bpf_filter(filter.bf_insns, p, h->caplen, h->len) == 0))
-    return; /* rejected */
-
-  stats->numPktsFiltered[threadId]++;
-#endif
 
   if(touch_payload) {
     volatile int __attribute__ ((unused)) i;
@@ -764,53 +706,12 @@ int main(int argc, char* argv[]) {
   packet_direction direction = rx_and_tx_direction;
   u_int16_t watermark = 0, poll_duration = 0,
     cpu_percentage = 0, rehash_rss = 0;
-#ifdef ENABLE_BPF
   char *bpfFilter = NULL;
-#endif
-
-#if 0
-  struct sched_param schedparam;
-
-  /* mlockall(MCL_CURRENT|MCL_FUTURE); */
-
-  schedparam.sched_priority = 50;
-  if(sched_setscheduler(0, SCHED_FIFO, &schedparam) == -1) {
-    printf("error while setting the scheduler, errno=%i\n", errno);
-    exit(1);
-  }
-
-#undef TEST_PROCESSOR_AFFINITY
-#ifdef TEST_PROCESSOR_AFFINITY
-  {
-    unsigned long new_mask = 1;
-    unsigned int len = sizeof(new_mask);
-    unsigned long cur_mask;
-    pid_t p = 0; /* current process */
-    int ret;
-
-    ret = sched_getaffinity(p, len, NULL);
-    printf(" sched_getaffinity = %d, len = %u\n", ret, len);
-
-    ret = sched_getaffinity(p, len, &cur_mask);
-    printf(" sched_getaffinity = %d, cur_mask = %08lx\n", ret, cur_mask);
-
-    ret = sched_setaffinity(p, len, &new_mask);
-    printf(" sched_setaffinity = %d, new_mask = %08lx\n", ret, new_mask);
-
-    ret = sched_getaffinity(p, len, &cur_mask);
-    printf(" sched_getaffinity = %d, cur_mask = %08lx\n", ret, cur_mask);
-  }
-#endif
-#endif
 
   startTime.tv_sec = 0;
   thiszone = gmt2local(0);
 
-  while((c = getopt(argc,argv,"hi:c:Cd:l:v:ae:n:w:o:p:b:rg:u:mtsSTx:"
-#ifdef ENABLE_BPF
-		    "f:"
-#endif
-        )) != '?') {
+  while((c = getopt(argc,argv,"hi:c:Cd:l:v:ae:n:w:o:p:b:rg:u:mtsSTx:f:")) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -856,11 +757,9 @@ int main(int argc, char* argv[]) {
       else
 	printHelp();
       break;
-#ifdef ENABLE_BPF
     case 'f':
       bpfFilter = strdup(optarg);
       break;
-#endif
     case 'w':
       watermark = atoi(optarg);
       break;
@@ -1009,35 +908,13 @@ int main(int argc, char* argv[]) {
       fprintf(stderr, "Error setting device clock\n");
   }
 
-#ifdef ENABLE_BPF
   if(bpfFilter != NULL) {
-
-    if (strncmp(device, "dna", 3) || strncmp(device, "zc", 2)) {
-
-      if (parse_bpf_filter(bpfFilter, snaplen) == 0) {
-        userspace_bpf = 1;
-        printf("Successfully set BPF filter '%s'\n", bpfFilter);
-      } else
-        printf("Error compiling BPF filter '%s'\n", bpfFilter);
-
-    } else {
-
-      rc = pfring_set_bpf_filter(pd, bpfFilter);
-      if(rc != 0)
-        printf("pfring_set_bpf_filter(%s) returned %d\n", bpfFilter, rc);
-      else
-        printf("Successfully set BPF filter '%s'\n", bpfFilter);
-
-#if 0
-      rc = pfring_remove_bpf_filter(pd);
-      if(rc != 0)
-        printf("pfring_remove_bpf_filter() returned %d\n", rc);
-      else
-        printf("Successfully removed BPF filter '%s'\n", bpfFilter);
-#endif
-    }
+    rc = pfring_set_bpf_filter(pd, bpfFilter);
+    if(rc != 0)
+      printf("pfring_set_bpf_filter(%s) returned %d\n", bpfFilter, rc);
+    else
+      printf("Successfully set BPF filter '%s'\n", bpfFilter);
   }
-#endif
 
   if(clusterId > 0) {
     rc = pfring_set_cluster(pd, clusterId, cluster_round_robin);

@@ -756,3 +756,27 @@ int pfring_get_mtu_size(pfring* ring) {
   else
     return(ifr.ifr_mtu);
 }
+
+/* *************************************** */
+
+int pfring_parse_bpf_filter(char *filter_buffer, u_int caplen, struct bpf_program *filter) {
+#ifdef ENABLE_BPF
+  if (pcap_compile_nopcap(caplen,        /* snaplen_arg */
+                          DLT_EN10MB,    /* linktype_arg */
+                          filter,        /* program */
+                          filter_buffer, /* const char *buf */
+                          0,             /* optimize */
+                          0              /* mask */
+                          ) == -1)
+    return PF_RING_ERROR_INVALID_ARGUMENT;
+
+  if(filter->bf_insns == NULL)
+    return PF_RING_ERROR_INVALID_ARGUMENT;
+
+  return 0;
+#else
+  return PF_RING_ERROR_NOT_SUPPORTED;
+#endif
+}
+
+

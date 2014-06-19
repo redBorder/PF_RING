@@ -42,6 +42,11 @@
 #include <linux/sockios.h>
 #endif
 
+#ifdef ENABLE_BPF
+#include <pcap/pcap.h>
+#include <pcap/bpf.h>
+#endif
+
 #include <linux/if_packet.h>
 #include <arpa/inet.h>
 #include <sys/ioctl.h>
@@ -150,11 +155,23 @@ typedef void pfring_pkt_buff;
 
 /* ********************************* */
 
+#ifndef BPF_RELEASE
+struct bpf_program {
+  u_int bf_len; 
+  void *bf_insns; 
+};
+#endif
+
+/* ********************************* */
+
 struct __pfring {
-  u_int8_t initialized, enabled, long_header, rss_mode, force_timestamp, strip_hw_timestamp, 
-    disable_parsing, disable_timestamp, chunk_mode_enabled;
+  u_int8_t initialized, enabled, long_header, rss_mode;
+  u_int8_t force_timestamp, strip_hw_timestamp, disable_parsing, disable_timestamp;
+  u_int8_t chunk_mode_enabled, userspace_bpf;
   packet_direction direction; /* Specify the capture direction for packets */
   socket_mode mode;
+
+  struct bpf_program userspace_bpf_filter;
 
   /* Hardware Timestamp */
   struct {
@@ -1256,6 +1273,10 @@ int pfring_recv_chunk(pfring *ring, void **chunk, u_int32_t *chunk_len, u_int8_t
  * @return 0 on success, a negative value otherwise.
  */
 int pfring_set_bound_dev_name(pfring *ring, char *custom_dev_name);
+
+/* ********************************* */
+
+int pfring_parse_bpf_filter(char *filter_buffer, u_int caplen, struct bpf_program *filter);
 
 /* ********************************* */
 

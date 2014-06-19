@@ -369,7 +369,7 @@ int pfring_mod_bind(pfring *ring, char *device_name) {
 void pfring_mod_close(pfring *ring) {
   if(ring->buffer != NULL) {
     if(munmap(ring->buffer, ring->slots_info->tot_mem) == -1) {
-      fprintf(stderr, "Warning: unable to unmap ring buffer memory [address=%p][size=%u]\n",
+      fprintf(stderr, "[PF_RING] Warning: unable to unmap ring buffer memory [address=%p][size=%u]\n",
      	      ring->buffer, (unsigned int)ring->slots_info->tot_mem);
     }
   }
