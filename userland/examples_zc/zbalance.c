@@ -203,7 +203,7 @@ void* consumer_thread(void* _id) {
       int i;
 
       for(i = 0; i < b->len; i++)
-        printf("%02X ", b->data[i]);
+        printf("%02X ", pfring_zc_pkt_buff_data(b, outzq[id])[i]);
       printf("\n");
 #endif
 
