@@ -47,6 +47,7 @@
 #define QUEUE_LEN            8192
 #define POOL_SIZE              16
 #define CACHE_LINE_LEN         64
+#define MAX_NUM_APP	       32
 
 pfring_zc_cluster *zc;
 pfring_zc_worker *zw;
@@ -57,7 +58,9 @@ pfring_zc_buffer_pool **pools;
 pfring_zc_buffer_pool *wsp;
 
 u_int32_t num_devices = 0;
-u_int32_t num_slaves = 1;
+u_int32_t num_apps = 0;
+u_int32_t num_consumer_queues = 0;
+u_int32_t instances_per_app[MAX_NUM_APP];
 char **devices = NULL;
 
 int bind_worker_core = -1;
@@ -125,7 +128,7 @@ void print_stats() {
     if (pfring_zc_stats(inzqs[i], &stats) == 0)
       tot_recv += stats.recv, tot_drop += stats.drop;
 
-  for (i = 0; i < num_slaves; i++)
+  for (i = 0; i < num_consumer_queues; i++)
     if (pfring_zc_stats(outzqs[i], &stats) == 0)
       tot_slave_recv += stats.recv, tot_slave_drop += stats.drop;
 
@@ -194,10 +197,11 @@ void printHelp(void) {
   printf("-h              Print this help\n");
   printf("-i <device>     Device (comma-separated list)\n");
   printf("-c <cluster id> Cluster id\n");
-  printf("-n <num_slaves> Number of slaves applications\n");
+  printf("-n <num inst>   Number of application instances\n");
   printf("-m <hash mode>  Hashing modes:\n"
          "                0 - No hash: Round-Robin (default)\n"
-         "                1 - IP hash\n"
+         "                1 - IP hash (with the ability to spread packets across multiple instances\n"
+         "                    of multiple applications, using a comma-separated list in -n)\n"
          "                2 - Fan-out\n"
          "                3 - Fan-out (1st) + Round-Robin (2nd, 3rd, ..)\n");
   printf("-S <core id>    Enable Time Pulse thread and bind it to a core\n");
@@ -235,7 +239,6 @@ int32_t fo_distribution_func(pfring_zc_pkt_buff *pkt_handle, pfring_zc_queue *in
 
 /* *************************************** */
 
-
 int32_t fo_rr_distribution_func(pfring_zc_pkt_buff *pkt_handle, pfring_zc_queue *in_queue, void *user) {
   long num_out_queues = (long) user;
   if (time_pulse) SET_TS_FROM_PULSE(pkt_handle, *pulse_timestamp_ns);
@@ -245,11 +248,30 @@ int32_t fo_rr_distribution_func(pfring_zc_pkt_buff *pkt_handle, pfring_zc_queue 
 
 /* *************************************** */
 
+int32_t fo_multiapp_ip_distribution_func(pfring_zc_pkt_buff *pkt_handle, pfring_zc_queue *in_queue, void *user) {
+  int32_t i, offset = 0, app_instance, consumers_mask = 0, hash;
+
+  if (time_pulse) SET_TS_FROM_PULSE(pkt_handle, *pulse_timestamp_ns);
+
+  hash = pfring_zc_builtin_ip_hash(pkt_handle, in_queue);
+
+  for (i = 0; i < num_apps; i++) {
+    app_instance = hash % instances_per_app[i];
+    consumers_mask |= (1 << (offset + app_instance));
+    offset += instances_per_app[i];
+  }
+
+  return consumers_mask;
+}
+
+/* *************************************** */
+
 int main(int argc, char* argv[]) {
   char c;
   char *device = NULL, *dev; 
+  char *applications = NULL, *app, *app_pos = NULL;
   char *vm_sockets = NULL, *vm_sock; 
-  long i;
+  long i, j;
   int cluster_id = -1;
   int hash_mode = 0;
   pthread_t time_thread;
@@ -274,7 +296,7 @@ int main(int argc, char* argv[]) {
       hash_mode = atoi(optarg);
       break;
     case 'n':
-      num_slaves = atoi(optarg);
+      applications = strdup(optarg);
       break;
     case 'i':
       device = strdup(optarg);
@@ -295,7 +317,7 @@ int main(int argc, char* argv[]) {
   
   if (device == NULL) printHelp();
   if (cluster_id < 0) printHelp();
-  if (num_slaves < 1) printHelp();
+  if (applications == NULL) printHelp();
 
   dev = strtok(device, ",");
   while(dev != NULL) {
@@ -305,11 +327,23 @@ int main(int argc, char* argv[]) {
     dev = strtok(NULL, ",");
   }
 
+  app = strtok_r(applications, ",", &app_pos);
+  while (app != NULL && num_apps < MAX_NUM_APP) {
+    instances_per_app[num_apps] = atoi(app);
+    if (instances_per_app[num_apps] == 0) printHelp();
+    num_consumer_queues += instances_per_app[num_apps];
+    num_apps++;
+    app = strtok_r(NULL, ",", &app_pos);
+  }
+
+  if (num_apps == 0) printHelp();
+  if (num_apps != 1 && hash_mode != 1) printHelp();
+
   zc = pfring_zc_create_cluster(
     cluster_id, 
     max_packet_len(devices[0]),
     0,
-    (num_devices * MAX_CARD_SLOTS) + (num_slaves * (QUEUE_LEN + POOL_SIZE)) + PREFETCH_BUFFERS, 
+    (num_devices * MAX_CARD_SLOTS) + (num_consumer_queues * (QUEUE_LEN + POOL_SIZE)) + PREFETCH_BUFFERS, 
     numa_node_of_cpu(bind_worker_core),
     NULL /* auto hugetlb mountpoint */ 
   );
@@ -321,8 +355,8 @@ int main(int argc, char* argv[]) {
   }
 
   inzqs  = calloc(num_devices, sizeof(pfring_zc_queue *));
-  outzqs = calloc(num_slaves,  sizeof(pfring_zc_queue *));
-  pools  = calloc(num_slaves,  sizeof(pfring_zc_buffer_pool *));
+  outzqs = calloc(num_consumer_queues,  sizeof(pfring_zc_queue *));
+  pools  = calloc(num_consumer_queues,  sizeof(pfring_zc_buffer_pool *));
 
   for (i = 0; i < num_devices; i++) {
     inzqs[i] = pfring_zc_open_device(zc, devices[i], rx_only, 0);
@@ -334,7 +368,7 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  for (i = 0; i < num_slaves; i++) { 
+  for (i = 0; i < num_consumer_queues; i++) { 
     outzqs[i] = pfring_zc_create_queue(zc, QUEUE_LEN);
 
     if(outzqs[i] == NULL) {
@@ -343,7 +377,7 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  for (i = 0; i < num_slaves; i++) { 
+  for (i = 0; i < num_consumer_queues; i++) { 
     pools[i] = pfring_zc_create_buffer_pool(zc, POOL_SIZE);
 
     if (pools[i] == NULL) {
@@ -393,27 +427,38 @@ int main(int argc, char* argv[]) {
     while (!*pulse_timestamp_ns && !do_shutdown); /* wait for ts */
   }
 
-  printf("Starting balancer for %d slave applications..\n", num_slaves);
+  printf("Starting balancer with %d consumer queues..\n", num_consumer_queues);
+  printf("You can now attach to the balancer your application instances as follows:\n");
+  if (num_apps == 1) {
+    printf("\tpfcount -i dnacluster:%d\n", cluster_id);
+  } else {
+    int off = 0;
+    for (i = 0; i < num_apps; i++) {
+      printf("Application %lu\n", i);
+      for (j = 0; j < instances_per_app[i]; j++)
+        printf("\tpfcount -i dnacluster:%d@%u\n", cluster_id, off++);
+    }
+  }
 
-  if (hash_mode < 2) { /* balancer */
+  if (hash_mode == 0 || (hash_mode == 1 && num_apps == 1)) { /* balancer */
 
     zw = pfring_zc_run_balancer(
       inzqs, 
       outzqs, 
       num_devices, 
-      num_slaves,
+      num_consumer_queues,
       wsp,
       round_robin_bursts_policy,
       NULL,
       hash_mode == 0 ? rr_distribution_func : (time_pulse ? ip_distribution_func : NULL /* built-in IP-based  */),
-      (void *) ((long) num_slaves),
+      (void *) ((long) num_consumer_queues),
       !wait_for_packet, 
       bind_worker_core
     );
 
   } else { /* fanout */
     
-    outzmq = pfring_zc_create_multi_queue(outzqs, num_slaves);
+    outzmq = pfring_zc_create_multi_queue(outzqs, num_consumer_queues);
 
     if(outzmq == NULL) {
       fprintf(stderr, "pfring_zc_create_multi_queue error [%s]\n", strerror(errno));
@@ -427,8 +472,11 @@ int main(int argc, char* argv[]) {
       wsp,
       round_robin_bursts_policy, 
       NULL /* idle callback */,
-      hash_mode == 3 ? fo_rr_distribution_func : (time_pulse ? fo_distribution_func : NULL /* built-in send-to-all */), 
-      (void *) ((long) num_slaves),
+      hash_mode == 3 ? fo_rr_distribution_func : (
+      hash_mode == 1 ? fo_multiapp_ip_distribution_func : (
+      time_pulse     ? fo_distribution_func : 
+      NULL /* built-in send-to-all */)), 
+      (void *) ((long) num_consumer_queues),
       !wait_for_packet, 
       bind_worker_core
     );
