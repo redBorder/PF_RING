@@ -271,7 +271,7 @@ int main(int argc, char* argv[]) {
   char *device = NULL, *dev; 
   char *applications = NULL, *app, *app_pos = NULL;
   char *vm_sockets = NULL, *vm_sock; 
-  long i, j;
+  long i, j, off = 0;
   int cluster_id = -1;
   int hash_mode = 0;
   pthread_t time_thread;
@@ -429,15 +429,10 @@ int main(int argc, char* argv[]) {
 
   printf("Starting balancer with %d consumer queues..\n", num_consumer_queues);
   printf("You can now attach to the balancer your application instances as follows:\n");
-  if (num_apps == 1) {
-    printf("\tpfcount -i dnacluster:%d\n", cluster_id);
-  } else {
-    int off = 0;
-    for (i = 0; i < num_apps; i++) {
-      printf("Application %lu\n", i);
-      for (j = 0; j < instances_per_app[i]; j++)
-        printf("\tpfcount -i dnacluster:%d@%u\n", cluster_id, off++);
-    }
+  for (i = 0; i < num_apps; i++) {
+    if (num_apps > 1) printf("Application %lu\n", i);
+    for (j = 0; j < instances_per_app[i]; j++)
+      printf("\tpfcount -i zc:%d@%lu\n", cluster_id, off++);
   }
 
   if (hash_mode == 0 || (hash_mode == 1 && num_apps == 1)) { /* balancer */
