@@ -759,7 +759,13 @@ int pfring_get_mtu_size(pfring* ring) {
 
 /* *************************************** */
 
-int pfring_parse_bpf_filter(char *filter_buffer, u_int caplen, struct bpf_program *filter) {
+int pfring_parse_bpf_filter(char *filter_buffer, u_int caplen,
+#ifdef BPF_RELEASE
+                            struct bpf_program
+#else
+                            struct pfring_bpf_program
+#endif
+                            *filter) {
 #ifdef ENABLE_BPF
   if (pcap_compile_nopcap(caplen,        /* snaplen_arg */
                           DLT_EN10MB,    /* linktype_arg */

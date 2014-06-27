@@ -156,7 +156,7 @@ typedef void pfring_pkt_buff;
 /* ********************************* */
 
 #ifndef BPF_RELEASE
-struct bpf_program {
+struct pfring_bpf_program {
   u_int bf_len; 
   void *bf_insns; 
 };
@@ -171,7 +171,12 @@ struct __pfring {
   packet_direction direction; /* Specify the capture direction for packets */
   socket_mode mode;
 
-  struct bpf_program userspace_bpf_filter;
+#ifdef BPF_RELEASE
+  struct bpf_program
+#else
+  struct pfring_pf_program
+#endif
+    userspace_bpf_filter;
 
   /* Hardware Timestamp */
   struct {
@@ -1276,7 +1281,13 @@ int pfring_set_bound_dev_name(pfring *ring, char *custom_dev_name);
 
 /* ********************************* */
 
-int pfring_parse_bpf_filter(char *filter_buffer, u_int caplen, struct bpf_program *filter);
+int pfring_parse_bpf_filter(char *filter_buffer, u_int caplen,
+ #ifdef BPF_RELEASE
+                            struct bpf_program
+#else
+                            struct pfring_bpf_program
+#endif
+                            *filter);
 
 /* ********************************* */
 
