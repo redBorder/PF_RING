@@ -94,7 +94,7 @@ install: install-static install-shared
 
 install-includes:
 	mkdir -p ${INSTDIR}/include
-	cp pfring.h ${INSTDIR}/include/
+	cp pfring.h @PF_RING_ZC_H@ ${INSTDIR}/include/
 
 install-static: ${STATICLIB} install-includes
 	mkdir -p ${INSTDIR}/lib

@@ -624,6 +624,7 @@ ZERO_DEP
 ZERO_OBJS
 ZERO_LIB
 HAVE_ZERO
+PF_RING_ZC_H
 PF_RING_ZC_DEP
 PF_RING_ZC_OBJS
 PF_RING_ZC_LIB
@@ -3316,6 +3317,7 @@ if test -f $PF_RING_ZC_LIB; then
   HAVE_PF_RING_ZC="-D HAVE_PF_RING_ZC"
   PF_RING_ZC_OBJS=`ar t $PF_RING_ZC_LIB | grep -F .o | tr '\n' ' '`
   PF_RING_ZC_DEP="extract_pfring_zc_lib"
+  PF_RING_ZC_H="pfring_zc.h"
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
 else
@@ -3323,6 +3325,7 @@ else
   HAVE_PF_RING_ZC=""
   PF_RING_ZC_OBJS=""
   PF_RING_ZC_DEP=""
+  PF_RING_ZC_H=""
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
 fi
@@ -3741,6 +3744,7 @@ if test ".${prefix}" = ".NONE"; then
 else
    INSTALL_PREFIX=${prefix};
 fi
+
 
 
 
