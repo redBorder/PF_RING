@@ -174,7 +174,7 @@ struct __pfring {
 #ifdef BPF_RELEASE
   struct bpf_program
 #else
-  struct pfring_pf_program
+  struct pfring_bpf_program
 #endif
     userspace_bpf_filter;
 
