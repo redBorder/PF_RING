@@ -1,0 +1,10 @@
+AC_INIT([Makefile.in], 1.0)
+
+VERS=`cat ./linux/pf_ring.h | grep RING_VERSION | head -1 | cut -d '"' -f 2`
+
+AC_SUBST(VERS)
+
+AC_CONFIG_FILES(Makefile.dkms)
+AC_CONFIG_FILES(dkms.conf)
+
+AC_OUTPUT

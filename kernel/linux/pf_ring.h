@@ -41,6 +41,7 @@
 #define pfring_ptr ax25_ptr
 
 /* Versioning */
+/* NOTE: remember to update dkms.conf */
 #define RING_VERSION                "6.0.2"
 #define RING_VERSION_NUM           0x060002
 
