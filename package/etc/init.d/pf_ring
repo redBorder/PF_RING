@@ -21,9 +21,8 @@ MGMT_INTERFACE_DRIVER="$(/sbin/ethtool -i $MGMT_INTERFACE | grep driver | cut -d
 start_pf_ring() {
     # Set CPU freq to performance useful in particular
     # on CPUs with aggressive scaling such as Intel E5
-    while read -r line; do
-	`echo performance > $line`
-    done <<< "`find /sys/devices/system/cpu/ -name scaling_governor`"
+
+    find /sys/devices/system/cpu/ -name scaling_governor -exec echo performance > {} \;
 
     KERNEL_VERSION=$(uname -r)
 
