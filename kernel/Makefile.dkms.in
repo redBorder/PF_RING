@@ -3,7 +3,7 @@ all: install
 add:
 	\/bin/rm -rf /usr/src/pf_ring-@VERS@
 	mkdir /usr/src/pf_ring-@VERS@
-	cp -r Makefile dkms.conf pf_ring.c linux/ plugins/ /usr/src/pf_ring-@VERS@
+	cp -r Makefile dkms.conf pf_ring.c linux/ /usr/src/pf_ring-@VERS@
 	dkms add -m pf_ring -v @VERS@
 
 build: add
