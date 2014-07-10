@@ -35,17 +35,20 @@ int bind2node(int core_id) {
 
 /* *************************************** */
 
-int bind2core(u_int core_id) {
+int bind2core(int core_id) {
   cpu_set_t cpuset;
   int s;
+
+  if (core_id < 0)
+    return -1;
 
   CPU_ZERO(&cpuset);
   CPU_SET(core_id, &cpuset);
   if((s = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset)) != 0) {
     fprintf(stderr, "Error while binding to core %u: errno=%i\n", core_id, s);
-    return(-1);
+    return -1;
   } else {
-    return(0);
+    return 0;
   }
 }
 

@@ -75,6 +75,13 @@ struct compact_ipv6_hdr {
   struct in6_addr daddr;
 };
 
+struct compact_udp_hdr {
+  u_int16_t	  sport;
+  u_int16_t	  dport;
+  u_int16_t	  len;
+  u_int16_t	  check;
+};
+
 /* ******************************** */
 
 void daemonize() {

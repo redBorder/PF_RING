@@ -264,7 +264,8 @@ void printHelp(void) {
 	 "                0 - IP hash (default)\n"
 	 "                1 - MAC Address hash\n"
 	 "                2 - IP protocol hash\n"
-	 "                3 - Fan-Out\n");
+	 "                3 - Fan-Out\n"
+	 "                4 - 5-tuple hash (IP, port, protocol)\n");
   printf("-s              Enable TX thread\n");
   printf("-r <core id>    Bind the RX thread to a core\n");
   printf("-t <core id>    Bind the TX thread to a core (-s only)\n");
@@ -392,15 +393,16 @@ void* frwd_thread(void *user) {
 /* *************************************** */
 
 inline u_int32_t master_custom_hash_function(const u_char *buffer, const u_int16_t buffer_len) {
-  u_int32_t l3_offset = sizeof(struct compact_eth_hdr);
+  u_int32_t hash, l3_offset = sizeof(struct compact_eth_hdr), l4_offset;
   u_int16_t eth_type;
+  u_int8_t l3_proto;
 
   if(hashing_mode == 1 /* MAC hash */)
     return(buffer[3] + buffer[4] + buffer[5] + buffer[9] + buffer[10] + buffer[11]);
 
   eth_type = (buffer[12] << 8) + buffer[13];
 
-  while (eth_type == 0x8100 /* VLAN */) {
+  while (eth_type == 0x8100 /* VLAN */ && l3_offset+4 < buffer_len) {
     l3_offset += 4;
     eth_type = (buffer[l3_offset - 2] << 8) + buffer[l3_offset - 1];
   }
@@ -416,10 +418,13 @@ inline u_int32_t master_custom_hash_function(const u_char *buffer, const u_int16
 
       iph = (struct compact_ip_hdr *) &buffer[l3_offset];
 
-      if(hashing_mode == 0 /* IP hash */)
-	return ntohl(iph->saddr) + ntohl(iph->daddr); /* this can be optimized by avoiding calls to ntohl(), but it can lead to balancing issues */
-      else /* IP protocol hash */
+      if(hashing_mode == 2) /* IP protocol hash */
 	return iph->protocol;
+
+      hash = ntohl(iph->saddr) + ntohl(iph->daddr); /* this can be optimized by avoiding calls to ntohl(), but it can lead to balancing issues */
+
+      l3_proto = iph->protocol;
+      l4_offset = l3_offset + (iph->ihl * 4);
     }
     break;
   case 0x86DD:
@@ -433,16 +438,27 @@ inline u_int32_t master_custom_hash_function(const u_char *buffer, const u_int16
 
       ipv6h = (struct compact_ipv6_hdr *) &buffer[l3_offset];
 
-      if(hashing_mode == 0 /* IP hash */) {
-	s = (u_int32_t *) &ipv6h->saddr, d = (u_int32_t *) &ipv6h->daddr;
-	return(s[0] + s[1] + s[2] + s[3] + d[0] + d[1] + d[2] + d[3]);
-      } else
+      if(hashing_mode == 2) /* IP protocol hash */
 	return(ipv6h->nexthdr);
+ 
+      s = (u_int32_t *) &ipv6h->saddr, d = (u_int32_t *) &ipv6h->daddr;
+      return(s[0] + s[1] + s[2] + s[3] + d[0] + d[1] + d[2] + d[3]);
     }
     break;
   default:
     return 0; /* Unknown protocol */
   }
+
+  if(hashing_mode == 0) /* IP hash */
+    return hash;
+
+  /* hashing_mode == 4 - 5-tuple hash */
+  if(likely(l3_proto == IPPROTO_TCP || l3_proto == IPPROTO_UDP || l3_proto == IPPROTO_SCTP)) {
+    struct compact_udp_hdr *udph = (struct compact_udp_hdr *)(&buffer[l4_offset]);
+    hash += ntohs(udph->sport) + ntohs(udph->dport);
+  } 
+
+  return hash;
 }
 
 /* ******************************* */
@@ -673,7 +689,7 @@ int main(int argc, char* argv[]) {
     printHelp();
   }
 
-  if (cluster_id < 0 || hashing_mode < 0 || hashing_mode > 3)
+  if (cluster_id < 0 || hashing_mode < 0 || hashing_mode > 4)
     printHelp();
 
   if (device == NULL) device = strdup(DEFAULT_DEVICE);
@@ -784,6 +800,10 @@ int main(int argc, char* argv[]) {
   case 3:
     trace(TRACE_NORMAL, "Replicating each packet on all applications (no copy)\n");
     dna_cluster_set_distribution_function(dna_cluster_handle, fanout_distribution_function);
+    break;
+  case 4:
+    trace(TRACE_NORMAL, "Hashing packets using 5-tuple\n");
+    dna_cluster_set_distribution_function(dna_cluster_handle, multi_app_distribution_function);
     break;
   }
 

@@ -187,7 +187,7 @@ void printHelp(void) {
   printf("-b <cpu %%>      CPU pergentage priority (0-99)\n");
   printf("-a              Active packet wait\n");
   printf("-g <id:id...>   Specifies the thread affinity mask. Each <id> represents\n"
-	 "                the codeId where the i-th will bind. Example: -g 7:6:5:4\n"
+	 "                the core id where the i-th will bind. Example: -g 7:6:5:4\n"
 	 "                binds thread <device>@0 on coreId 7, <device>@1 on coreId 6\n"
 	 "                and so on.\n");
   printf("-r              Rehash RSS packets\n");
