@@ -407,6 +407,11 @@ inline u_int32_t master_custom_hash_function(const u_char *buffer, const u_int16
     eth_type = (buffer[l3_offset - 2] << 8) + buffer[l3_offset - 1];
   }
 
+  if (eth_type == 0x8864 /* PPPoE */) {
+    l3_offset += 8;
+    eth_type = 0x0800; /* TODO Check for IPv6 */
+  }
+
   switch (eth_type) {
   case 0x0800:
     {
