@@ -1587,7 +1587,7 @@ static void ring_proc_init(void)
 #endif
 			     proc_net);
 
-  if(ring_proc_dir) {
+  if(ring_proc_dir != NULL) {
 #if(LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30))
     ring_proc_dir->owner = THIS_MODULE;
 #endif
@@ -9355,6 +9355,10 @@ int add_device_to_ring_list(struct net_device *dev) {
   INIT_LIST_HEAD(&dev_ptr->device_list);
   dev_ptr->dev = dev;
   strcpy(dev_ptr->device_name, dev->name);
+  if (strlen(dev_ptr->device_name) < 1 || strlen(dev_ptr->device_name) > sizeof(dev_ptr->device_name) || 
+      ring_proc_dev_dir == NULL) /* safety check */
+    printk("[PF_RING] unexpected proc_mkdir() parameters in %s\n", __FUNCTION__);
+  else
   dev_ptr->proc_entry = proc_mkdir(dev_ptr->device_name, ring_proc_dev_dir);
   dev_ptr->device_type = standard_nic_family; /* Default */
 
