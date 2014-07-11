@@ -975,8 +975,6 @@ static void ring_proc_add(struct pf_ring_socket *pfr)
 
     if(unlikely(enable_debug))
       printk("[PF_RING] Added /proc/net/pf_ring/%s\n", pfr->sock_proc_name);
-
-    ring_table_size++;
   }
 }
 
@@ -1008,8 +1006,6 @@ static void ring_proc_remove(struct pf_ring_socket *pfr)
       pfr->sock_proc_stats_name[0] = '\0';
 
     }
-
-    ring_table_size--;
   }
 }
 
@@ -1812,6 +1808,8 @@ static inline int ring_insert(struct sock *sk)
   if(lockless_list_add(&ring_table, sk) == -1)
     return -1;
 
+  ring_table_size++;
+
   pfr = (struct pf_ring_socket *)ring_sk(sk);
   pfr->ring_pid = current->pid;
   bitmap_zero(pfr->netdev_mask, MAX_NUM_DEVICES_ID), pfr->num_bound_devices = 0;
@@ -1867,7 +1865,10 @@ static inline void ring_remove(struct sock *sk_to_delete)
   }
 
   if(socket_found) {
-    lockless_list_remove(&ring_table, sk_to_delete);
+    if (lockless_list_remove(&ring_table, sk_to_delete) == -1)
+      printk("[PF_RING] WARNING: Unable to find socket to remove!!\n");
+    else
+      ring_table_size--;
   } else
     printk("[PF_RING] WARNING: Unable to find socket to remove!!!\n");
 
