@@ -1939,7 +1939,7 @@ static int parse_raw_pkt(u_char *data, u_int data_len,
 			 u_int8_t *second_fragment)
 {
   struct ethhdr *eh = (struct ethhdr *)data;
-  u_int16_t displ = 0, ip_len, fragment_offset = 0, tunnel_offset = 0;
+  u_int16_t displ = sizeof(struct ethhdr), ip_len, fragment_offset = 0, tunnel_offset = 0;
 
   memset(&hdr->extended_hdr.parsed_pkt, 0, sizeof(hdr->extended_hdr.parsed_pkt));
 
@@ -1971,7 +1971,35 @@ static int parse_raw_pkt(u_char *data, u_int data_len,
     }
   }
 
-  hdr->extended_hdr.parsed_pkt.offset.l3_offset = hdr->extended_hdr.parsed_pkt.offset.eth_offset + displ + sizeof(struct ethhdr);
+  if (hdr->extended_hdr.parsed_pkt.eth_type == ETH_P_MPLS_UC /* MPLS Unicast Traffic */) { 
+    int i = 0, max_tags = 10, last_tag = 0;
+    u_int32_t tag;
+    u_int16_t iph_start;
+
+    for (i = 0; i < max_tags && !last_tag && displ <= data_len; i++) { 
+      tag = htonl(*((u_int32_t *) (&data[displ])));
+
+      if (tag & 0x00000100) /* Found last MPLS tag */
+        last_tag = 1;
+      
+      displ += 4;
+    }
+
+    if (i == max_tags) /* max tags reached for MPLS packet */
+      return(0);
+
+    iph_start = htons(*((u_int16_t *) (&data[displ])));
+
+    if ((iph_start & 0x4000) == 0x4000) { /* Found IP4 Packet after tags */
+      hdr->extended_hdr.parsed_pkt.eth_type = ETH_P_IP;
+    } else if ((iph_start & 0x6000) == 0x6000) { /* Found IP6 Packet after tags */
+      hdr->extended_hdr.parsed_pkt.eth_type = ETH_P_IPV6;
+    } else { /* Cannot determine packet type after MPLS labels */
+      return(0);
+    }
+  }
+
+  hdr->extended_hdr.parsed_pkt.offset.l3_offset = hdr->extended_hdr.parsed_pkt.offset.eth_offset + displ;
 
   if(unlikely(enable_debug))
     printk("[PF_RING] [eth_type=%04X]\n", hdr->extended_hdr.parsed_pkt.eth_type);
