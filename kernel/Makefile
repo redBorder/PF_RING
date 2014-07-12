@@ -12,9 +12,10 @@ ifeq (,$(BUILD_KERNEL))
 BUILD_KERNEL=$(shell uname -r)
 endif
 
-EXTRA_CFLAGS += -I$(PWD) $(SVNDEF)
+PWD := $(shell pwd)
+EXTRA_CFLAGS += -I${PWD} $(SVNDEF)
 
-HERE=$(PWD)
+HERE=${PWD}
 
 # set the install path
 INSTDIR := $(DESTDIR)/lib/modules/$(BUILD_KERNEL)/kernel/net/pf_ring
@@ -29,7 +30,7 @@ all: Makefile pf_ring.c linux/pf_ring.h
 		echo "*"; \
 		echo "*********************************************"; \
 	fi
-	make -C /lib/modules/$(BUILD_KERNEL)/build SUBDIRS=$(HERE) EXTRA_CFLAGS='$(EXTRA_CFLAGS)' modules
+	make -C /lib/modules/$(BUILD_KERNEL)/build SUBDIRS=${HERE} EXTRA_CFLAGS='${EXTRA_CFLAGS}' modules
 #	cd plugins; make
 
 clean:
