@@ -22,7 +22,7 @@ start_pf_ring() {
     # Set CPU freq to performance useful in particular
     # on CPUs with aggressive scaling such as Intel E5
 
-    find /sys/devices/system/cpu/ -name scaling_governor -exec echo performance > {} \;
+    find /sys/devices/system/cpu/ -name scaling_governor -exec sh -c 'echo performance > {}' \;
 
     KERNEL_VERSION=$(uname -r)
 
