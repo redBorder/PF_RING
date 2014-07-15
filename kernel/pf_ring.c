@@ -161,7 +161,7 @@ static ring_device_element any_device_element, none_device_element;
 
 /* List of all ring sockets. */
 static lockless_list ring_table;
-static u_int ring_table_size;
+static atomic_t ring_table_size;
 
 /*
   List where we store pointers that we need to remove in
@@ -1441,7 +1441,7 @@ static int ring_proc_get_info(struct seq_file *m, void *data_not_used)
   if(m->private == NULL) {
     /* /proc/net/pf_ring/info */
     seq_printf(m, "PF_RING Version          : %s ($Revision: %s$)\n", RING_VERSION, SVN_REV);
-    seq_printf(m, "Total rings              : %d\n", ring_table_size);
+    seq_printf(m, "Total rings              : %d\n", atomic_read(&ring_table_size));
     seq_printf(m, "\nStandard (non DNA) Options\n");
     seq_printf(m, "Ring slots               : %d\n", min_num_slots);
     seq_printf(m, "Slot version             : %d\n", RING_FLOWSLOT_VERSION);
@@ -1808,7 +1808,7 @@ static inline int ring_insert(struct sock *sk)
   if(lockless_list_add(&ring_table, sk) == -1)
     return -1;
 
-  ring_table_size++;
+  atomic_inc(&ring_table_size);
 
   pfr = (struct pf_ring_socket *)ring_sk(sk);
   pfr->ring_pid = current->pid;
@@ -1868,7 +1868,7 @@ static inline void ring_remove(struct sock *sk_to_delete)
     if (lockless_list_remove(&ring_table, sk_to_delete) == -1)
       printk("[PF_RING] WARNING: Unable to find socket to remove!!\n");
     else
-      ring_table_size--;
+      atomic_dec(&ring_table_size);
   } else
     printk("[PF_RING] WARNING: Unable to find socket to remove!!!\n");
 
@@ -4209,7 +4209,7 @@ static int hash_pkt_cluster(ring_cluster_element *cluster_ptr,
     }
   }
 
-  return(idx % cluster_ptr->cluster.num_cluster_elements);
+  return(idx);
 }
 
 /* ********************************** */
@@ -4475,7 +4475,7 @@ static int skb_ring_handler(struct sk_buff *skb,
   /* Check if there's at least one PF_RING ring defined that
      could receive the packet: if none just stop here */
 
-  if(ring_table_size == 0)
+  if(atomic_read(&ring_table_size) == 0)
     return(0);
 
   // prefetch(skb->data);
@@ -4637,11 +4637,12 @@ static int skb_ring_handler(struct sk_buff *skb,
     /* [2] Check socket clusters */
     while(cluster_ptr != NULL) {
       struct pf_ring_socket *pfr;
+      u_short num_cluster_elements = ACCESS_ONCE(cluster_ptr->cluster.num_cluster_elements);
 
-      if(cluster_ptr->cluster.num_cluster_elements > 0) {
+      if(num_cluster_elements > 0) {
 	u_short num_iterations;
-	int skb_hash = hash_pkt_cluster(cluster_ptr, &hdr,
-					ip_id, first_fragment, second_fragment);
+	int skb_hash = hash_pkt_cluster(cluster_ptr, &hdr, ip_id, first_fragment, second_fragment) 
+                       % num_cluster_elements;
 
 	/*
 	  If the hashing value is negative, then this is a fragment that we are 
@@ -4657,7 +4658,7 @@ static int skb_ring_handler(struct sk_buff *skb,
 	    then we give up :-(
 	  */
 	  for(num_iterations = 0;
-	      num_iterations < cluster_ptr->cluster.num_cluster_elements;
+	      num_iterations < num_cluster_elements;
 	      num_iterations++) {
 
 	    skElement = cluster_ptr->cluster.sk[skb_hash];
@@ -4688,7 +4689,7 @@ static int skb_ring_handler(struct sk_buff *skb,
 
 		} else if((cluster_ptr->cluster.hashing_mode != cluster_round_robin)
 			  /* We're the last element of the cluster so no further cluster element to check */
-			  || ((num_iterations + 1) > cluster_ptr->cluster.num_cluster_elements)) {
+			  || ((num_iterations + 1) > num_cluster_elements)) {
 		  pfr->slots_info->tot_pkts++, pfr->slots_info->tot_lost++;
 		}
 	      }
@@ -4697,7 +4698,7 @@ static int skb_ring_handler(struct sk_buff *skb,
 	    if(cluster_ptr->cluster.hashing_mode != cluster_round_robin)
 	      break;
 	    else
-	      skb_hash = (skb_hash + 1) % cluster_ptr->cluster.num_cluster_elements;
+	      skb_hash = (skb_hash + 1) % num_cluster_elements;
 	  }
 	} else
 	  num_cluster_discarded_fragments++;
@@ -7580,7 +7581,7 @@ static int ring_setsockopt(struct socket *sock,
 			   int optlen)
 {
   struct pf_ring_socket *pfr = ring_sk(sock->sk);
-  int val, found, ret = 0 /* OK */, i;
+  int found, ret = 0 /* OK */, i;
   u_int32_t ring_id;
   struct add_to_cluster cluster;
   u_int32_t channel_id_mask;
@@ -7597,9 +7598,6 @@ static int ring_setsockopt(struct socket *sock,
 
   if(pfr == NULL)
     return(-EINVAL);
-
-  if(get_user(val, (int *)optval))
-    return(-EFAULT);
 
   found = 1;
 
