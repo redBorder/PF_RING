@@ -15,12 +15,53 @@
 # Short-Description: Start/stop pf_ring
 ### END INIT INFO
 
+if [ -f /lib/lsb/init-functions ]; then
+   DISTRO="debian"
+   . /lib/lsb/init-functions
+fi
+if [ -f /etc/init.d/functions ]; then
+   DISTRO="centos"
+   . /etc/init.d/functions
+fi
+
 MGMT_INTERFACE="eth0"
 MGMT_INTERFACE_DRIVER="$(/sbin/ethtool -i $MGMT_INTERFACE | grep driver | cut -d ' ' -f 2)"
+PFRING="pf_ring"
+ERROR=0
+
+check_pf_ring() {
+   # check the module status
+   RETVAL=0
+   if [ $1 == "start" ] && [ `lsmod | grep ${PFRING} | wc -l ` -gt 0 ]; then
+       MSG="PF_RING already loaded. Exiting"
+       ERROR=1
+       RETVAL=1
+   elif [ $1 == "stop" ] && [ `lsmod | grep ${PFRING} | wc -l ` -le 0 ]; then
+       MSG="PF_RING already unloaded Exiting"
+       ERROR=1 
+       RETVAL=1
+   fi
+
+   if [ ${ERROR} -gt 0 ]; then
+      if [ ${DISTRO} == "debian" ]; then
+         log_failure_msg "${MSG}"
+         log_end_msg $ERROR
+         exit 99
+      elif [ ${DISTRO} == "centos" ]; then
+         echo -n ${MSG} 
+         echo_failure; echo
+         exit 99
+      fi
+   fi
+}
+
 
 start_pf_ring() {
     # Set CPU freq to performance useful in particular
     # on CPUs with aggressive scaling such as Intel E5
+
+    [ ${DISTRO} == "debian" ] && log_daemon_msg "Starting PF_RING module"
+    [ ${DISTRO} == "centos" ] && echo -n "Starting PF_RING module: "
 
     find /sys/devices/system/cpu/ -name scaling_governor -exec sh -c 'echo performance > {}' \;
 
@@ -34,6 +75,8 @@ start_pf_ring() {
 
     PF_RING_MOD="/lib/modules/$KERNEL_VERSION/kernel/net/pf_ring/pf_ring.ko"
     PF_RING_MOD_LOCAL="/usr/local/pfring/kernel/pf_ring.ko"
+
+    check_pf_ring start
 
     if [ -f $PF_RING_MOD ]; then
         /sbin/insmod $PF_RING_MOD $PARAM
@@ -79,10 +122,19 @@ start_pf_ring() {
             /sbin/ethtool -K $D sg off tso off gso off gro off
         fi
     done
+    [ ${DISTRO} == "debian" ] && log_end_msg $ERROR
+    [ ${DISTRO} == "centos" ] && echo_success && echo
 }
 
 
 stop_pf_ring() {
+
+    RETVAL=0
+    [ ${DISTRO} == "debian" ] && log_daemon_msg "Stopping PF_RING module"
+    [ ${DISTRO} == "centos" ] && echo -n "Stopping PF_RING module: "
+
+    check_pf_ring stop
+
     if [ -f /etc/init.d/nprobe ]; then
 	/etc/init.d/nprobe stop
 	sleep 2
@@ -122,7 +174,16 @@ stop_pf_ring() {
     NUM="$(grep pf_ring /proc/modules|wc -l)"
     if [ $NUM -gt 0 ]; then
 	/sbin/rmmod pf_ring
+        NUM="$(grep pf_ring /proc/modules|wc -l)"
+	if [ ${NUM} -gt 0 ]; then
+	   MSG="unable to unload PF_RING module"
+           [ ${DISTRO} == "debian" ] && log_failure_msg "$MSG"
+           [ ${DISTRO} == "centos" ] && echo_failure
+           ERROR=1
+	fi
     fi
+    [ ${DISTRO} == "debian" ] && log_end_msg $ERROR
+    [ ${DISTRO} == "centos" ] && echo_success && echo
 }
 
 ########
@@ -149,3 +210,4 @@ case "$1" in
 esac
 
 exit 0
+
