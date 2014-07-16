@@ -152,7 +152,7 @@ int pfring_mod_open_setup(pfring *ring) {
 
 #ifdef RING_DEBUG
   printf("RING (%s): tot_mem=%u/max_slot_len=%u/"
-	 "insert_off=%u/remove_off=%u/dropped=%lu\n",
+	 "insert_off=%llu/remove_off=%llu/dropped=%lu\n",
 	 ring->device_name, ring->slots_info->tot_mem,
 	 ring->slots_info->slot_len,   ring->slots_info->insert_off,
 	 ring->slots_info->remove_off, ring->slots_info->tot_lost);
@@ -481,7 +481,8 @@ int pfring_mod_recv(pfring *ring, u_char** buffer, u_int buffer_len,
 
     if(pfring_there_is_pkt_available(ring)) {
       char *bucket = &ring->slots[ring->slots_info->remove_off];
-      u_int32_t next_off, real_slot_len, bktLen;
+      u_int64_t next_off;
+      u_int32_t real_slot_len, bktLen;
 
       /* Keep it for packet sending */
       ring->tx.last_received_hdr = (struct pfring_pkthdr*)bucket;

@@ -679,18 +679,18 @@ void term_lockless_list(lockless_list *l, u_int8_t free_memory) {
 
 /* ************************************************** */
 
-static inline char* get_slot(struct pf_ring_socket *pfr, u_int32_t off) { return(&(pfr->ring_slots[off])); }
+static inline char *get_slot(struct pf_ring_socket *pfr, u_int64_t off) { return(&(pfr->ring_slots[off])); }
 
 /* ********************************** */
 
-static inline int get_next_slot_offset(struct pf_ring_socket *pfr, u_int32_t off)
+static inline u_int64_t get_next_slot_offset(struct pf_ring_socket *pfr, u_int64_t off)
 {
   struct pfring_pkthdr *hdr;
   u_int32_t real_slot_size;
 
   // smp_rmb();
 
-  hdr = (struct pfring_pkthdr*)get_slot(pfr, off);
+  hdr = (struct pfring_pkthdr *) get_slot(pfr, off);
 
   real_slot_size = pfr->slot_header_len + hdr->caplen;
 
@@ -773,7 +773,7 @@ static void consume_pending_pkts(struct pf_ring_socket *pfr, u_int8_t synchroniz
     struct pfring_pkthdr *hdr = (struct pfring_pkthdr*) &pfr->ring_slots[pfr->slots_info->kernel_remove_off];
 
     if(unlikely(enable_debug))
-      printk("[PF_RING] Original offset [kernel_remove_off=%u][remove_off=%u][skb=%p]\n",
+      printk("[PF_RING] Original offset [kernel_remove_off=%llu][remove_off=%llu][skb=%p]\n",
 	     pfr->slots_info->kernel_remove_off,
 	     pfr->slots_info->remove_off,
 	     hdr->extended_hdr.tx.reserved);
@@ -834,7 +834,7 @@ static void consume_pending_pkts(struct pf_ring_socket *pfr, u_int8_t synchroniz
     pfr->slots_info->kernel_tot_read++;
 
     if(unlikely(enable_debug))
-      printk("[PF_RING] New offset [kernel_remove_off=%u][remove_off=%u]\n",
+      printk("[PF_RING] New offset [kernel_remove_off=%llu][remove_off=%llu]\n",
 	     pfr->slots_info->kernel_remove_off,
 	     pfr->slots_info->remove_off);
   }
@@ -844,7 +844,7 @@ static void consume_pending_pkts(struct pf_ring_socket *pfr, u_int8_t synchroniz
 
 static inline int check_free_ring_slot(struct pf_ring_socket *pfr)
 {
-  u_int32_t remove_off;
+  u_int64_t remove_off;
 
   // smp_rmb();
 
@@ -2860,7 +2860,7 @@ static inline int copy_data_to_ring(struct sk_buff *skb,
 			     void *raw_data, uint raw_data_len,
 			     int *clone_id) {
   char *ring_bucket;
-  u_int32_t off;
+  u_int64_t off;
   u_short do_lock = (
     (enable_tx_capture && pfr->direction == rx_and_tx_direction) ||
     (pfr->num_bound_devices > 1) ||
@@ -2896,7 +2896,7 @@ static inline int copy_data_to_ring(struct sk_buff *skb,
     pfr->slots_info->tot_lost++;
 
     if(unlikely(enable_debug))
-      printk("[PF_RING] ==> slot(off=%d) is full [insert_off=%u][remove_off=%u][slot_len=%u][num_queued_pkts=%llu]\n",
+      printk("[PF_RING] ==> slot(off=%llu) is full [insert_off=%llu][remove_off=%llu][slot_len=%u][num_queued_pkts=%llu]\n",
 	     off, pfr->slots_info->insert_off, pfr->slots_info->remove_off, pfr->slots_info->slot_len, num_queued_pkts(pfr));
 
    if(do_lock) write_unlock(&pfr->ring_index_lock);
@@ -3010,7 +3010,7 @@ static inline int copy_data_to_ring(struct sk_buff *skb,
   pfr->slots_info->insert_off = get_next_slot_offset(pfr, off);
 
   if(unlikely(enable_debug))
-    printk("[PF_RING] ==> insert_off=%d\n", pfr->slots_info->insert_off);
+    printk("[PF_RING] ==> insert_off=%llu\n", pfr->slots_info->insert_off);
 
   /* NOTE: smp_* barriers are _compiler_ barriers on UP, mandatory barriers on SMP
    * a consumer _must_ see the new value of tot_insert only after the buffer update completes */
@@ -3958,7 +3958,7 @@ int bpf_filter_skb(struct sk_buff *skb,
       /* Filter failed */
       if(unlikely(enable_debug))
 	printk("[PF_RING] %s(skb): Filter failed [len=%d][tot=%llu]"
-	       "[insert_off=%d][pkt_type=%d][cloned=%d]\n", __FUNCTION__,
+	       "[insert_off=%llu][pkt_type=%d][cloned=%d]\n", __FUNCTION__,
 	       (int)skb->len, pfr->slots_info->tot_pkts,
 	       pfr->slots_info->insert_off, skb->pkt_type,
 	       skb->cloned);
@@ -4091,7 +4091,7 @@ static int add_skb_to_ring(struct sk_buff *skb,
 
 	if(unlikely(enable_debug))
 	  printk("[PF_RING] %s(skb): sampled packet [len=%d]"
-		 "[tot=%llu][insert_off=%d][pkt_type=%d][cloned=%d]\n",
+		 "[tot=%llu][insert_off=%llu][pkt_type=%d][cloned=%d]\n",
 		 __FUNCTION__,
 		 (int)skb->len, pfr->slots_info->tot_pkts,
 		 pfr->slots_info->insert_off, skb->pkt_type,
@@ -4136,7 +4136,7 @@ static int add_skb_to_ring(struct sk_buff *skb,
   }
 
   if(unlikely(enable_debug))
-    printk("[PF_RING] [pfr->slots_info->insert_off=%d]\n",
+    printk("[PF_RING] [pfr->slots_info->insert_off=%llu]\n",
 	   pfr->slots_info->insert_off);
 
   if(free_parse_mem)
@@ -9556,10 +9556,7 @@ static int ring_notifier(struct notifier_block *this, unsigned long msg, void *d
       /* safety check */
       list_for_each_safe(ptr, tmp_ptr, &ring_aware_device_list) {
         ring_device_element *dev_ptr = list_entry(ptr, ring_device_element, device_list);
-        if(dev_ptr->dev == dev && dev->pfring_ptr == NULL) {
-          printk("[PF_RING] WARNING: device already registered but pfring hook not set\n");
-          dev->pfring_ptr = &ring_hooks;
-        } else if(dev_ptr->dev != dev && strcmp(dev_ptr->dev->name, dev->name) == 0) {
+        if(dev_ptr->dev != dev && strcmp(dev_ptr->dev->name, dev->name) == 0) {
           printk("[PF_RING] WARNING: multiple devices with the same name\n");
           dev->pfring_ptr = &ring_hooks;
         }
