@@ -2348,7 +2348,14 @@ static int parse_pkt(struct sk_buff *skb,
 
   skb_copy_bits(skb, -skb_displ, buffer, data_len);
 
+  if(unlikely(enable_debug))
+    printk("[PF_RING] calling parse_raw_pkt()\n");
+
   rc = parse_raw_pkt(buffer, data_len, hdr, ip_id, first_fragment, second_fragment);
+
+  if(unlikely(enable_debug))
+    printk("[PF_RING] parse_raw_pkt() returned %d\n", rc);
+
   hdr->extended_hdr.parsed_pkt.offset.eth_offset = -skb_displ;
 
   return(rc);
