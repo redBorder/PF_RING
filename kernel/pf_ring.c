@@ -1962,7 +1962,7 @@ static int parse_raw_pkt(u_char *data, u_int data_len,
     struct eth_vlan_hdr *vh;
 
     hdr->extended_hdr.parsed_pkt.offset.vlan_offset = sizeof(struct ethhdr) - sizeof(struct eth_vlan_hdr);
-    while (hdr->extended_hdr.parsed_pkt.eth_type == ETH_P_8021Q /* 802.1q (VLAN) */) {
+    while (hdr->extended_hdr.parsed_pkt.eth_type == ETH_P_8021Q /* 802.1q (VLAN) */ && displ <= data_len) {
       hdr->extended_hdr.parsed_pkt.offset.vlan_offset += sizeof(struct eth_vlan_hdr);
       vh = (struct eth_vlan_hdr *) &data[hdr->extended_hdr.parsed_pkt.offset.vlan_offset];
       hdr->extended_hdr.parsed_pkt.vlan_id = ntohs(vh->h_vlan_id) & 0x0fff;
@@ -2348,13 +2348,7 @@ static int parse_pkt(struct sk_buff *skb,
 
   skb_copy_bits(skb, -skb_displ, buffer, data_len);
 
-  if(unlikely(enable_debug))
-    printk("[PF_RING] calling parse_raw_pkt()\n");
-
   rc = parse_raw_pkt(buffer, data_len, hdr, ip_id, first_fragment, second_fragment);
-
-  if(unlikely(enable_debug))
-    printk("[PF_RING] parse_raw_pkt() returned %d\n", rc);
 
   hdr->extended_hdr.parsed_pkt.offset.eth_offset = -skb_displ;
 
