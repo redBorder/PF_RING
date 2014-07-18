@@ -2864,17 +2864,18 @@ static inline int copy_data_to_ring(struct sk_buff *skb,
   u_int64_t off;
   u_short do_lock = (
     (enable_tx_capture && pfr->direction == rx_and_tx_direction) ||
-    (pfr->num_bound_devices > 1) ||
     (pfr->num_channels_per_ring > 1) ||
+    (pfr->channel_id_mask == RING_ANY_CHANNEL && get_num_rx_queues(skb->dev) > 1) ||
     (pfr->rehash_rss != NULL && get_num_rx_queues(skb->dev) > 1) ||
+    (pfr->num_bound_devices > 1) ||
     (pfr->cluster_id != 0)
   );
 
   if(pfr->ring_slots == NULL) return(0);
 
-  if(unlikely(enable_debug))
-    printk("[PF_RING] do_lock=%d [num_channels_per_ring=%d][num_bound_devices=%d]\n",
-	   do_lock, pfr->num_channels_per_ring, pfr->num_bound_devices);
+  //if(unlikely(enable_debug))
+  //  printk("[PF_RING] do_lock=%d [num_channels_per_ring=%d][num_bound_devices=%d]\n",
+  //	   do_lock, pfr->num_channels_per_ring, pfr->num_bound_devices);
 
   /* We need to lock as two ksoftirqd might put data onto the same ring */
 
@@ -2896,9 +2897,9 @@ static inline int copy_data_to_ring(struct sk_buff *skb,
     /* No room left */
     pfr->slots_info->tot_lost++;
 
-    if(unlikely(enable_debug))
-      printk("[PF_RING] ==> slot(off=%llu) is full [insert_off=%llu][remove_off=%llu][slot_len=%u][num_queued_pkts=%llu]\n",
-	     off, pfr->slots_info->insert_off, pfr->slots_info->remove_off, pfr->slots_info->slot_len, num_queued_pkts(pfr));
+    //if(unlikely(enable_debug))
+    //  printk("[PF_RING] ==> slot(off=%llu) is full [insert_off=%llu][remove_off=%llu][slot_len=%u][num_queued_pkts=%llu]\n",
+    //	     off, pfr->slots_info->insert_off, pfr->slots_info->remove_off, pfr->slots_info->slot_len, num_queued_pkts(pfr));
 
    if(do_lock) write_unlock(&pfr->ring_index_lock);
     return(0);
@@ -2930,10 +2931,10 @@ static inline int copy_data_to_ring(struct sk_buff *skb,
     if(hdr->caplen > 0) {
       u16 vlan_tci = 0;
 
-      if(unlikely(enable_debug))
-	printk("[PF_RING] --> [caplen=%d][len=%d][displ=%d][extended_hdr.parsed_header_len=%d][bucket_len=%d][sizeof=%d]\n",
-	       hdr->caplen, hdr->len, displ, hdr->extended_hdr.parsed_header_len, pfr->bucket_len,
-	       pfr->slot_header_len);
+      //if(unlikely(enable_debug))
+      //  printk("[PF_RING] --> [caplen=%d][len=%d][displ=%d][extended_hdr.parsed_header_len=%d][bucket_len=%d][sizeof=%d]\n",
+      //         hdr->caplen, hdr->len, displ, hdr->extended_hdr.parsed_header_len, pfr->bucket_len,
+      //         pfr->slot_header_len);
 
       if((vlan_get_tag(skb, &vlan_tci) == 0) /* The packet is tagged... */
 	 && (hdr->extended_hdr.parsed_pkt.offset.vlan_offset == 0) /* but we have seen no tag -> it has been stripped */) {
@@ -3010,8 +3011,8 @@ static inline int copy_data_to_ring(struct sk_buff *skb,
   /* Update insert offset */
   pfr->slots_info->insert_off = get_next_slot_offset(pfr, off);
 
-  if(unlikely(enable_debug))
-    printk("[PF_RING] ==> insert_off=%llu\n", pfr->slots_info->insert_off);
+  //if(unlikely(enable_debug))
+  //  printk("[PF_RING] ==> insert_off=%llu\n", pfr->slots_info->insert_off);
 
   /* NOTE: smp_* barriers are _compiler_ barriers on UP, mandatory barriers on SMP
    * a consumer _must_ see the new value of tot_insert only after the buffer update completes */
