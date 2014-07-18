@@ -83,6 +83,21 @@ start_pf_ring() {
     else
         /sbin/insmod $PF_RING_MOD_LOCAL $PARAM
     fi
+   
+    if [ `lsmod | grep ${PFRING} | wc -l ` -le 0 ] ; then
+       MSG="Unable to load PF_RING. Exiting"
+       ERROR=1
+       RETVAL=1
+       if [ ${DISTRO} == "debian" ]; then
+           log_failure_msg "${MSG}"
+           log_end_msg $ERROR
+           exit 99
+       elif [ ${DISTRO} == "centos" ]; then
+           echo -n ${MSG} 
+           echo_failure; echo
+           exit 99
+      fi
+    fi
 
     DNA_DRIVERS_DIR="/usr/local/pfring/drivers/DNA"
 
