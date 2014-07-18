@@ -2863,7 +2863,7 @@ static inline int copy_data_to_ring(struct sk_buff *skb,
   char *ring_bucket;
   u_int64_t off;
   u_short do_lock = (
-    (enable_tx_capture && pfr->direction == rx_and_tx_direction) ||
+    (enable_tx_capture && pfr->direction != rx_only_direction) ||
     (pfr->num_channels_per_ring > 1) ||
     (pfr->channel_id_mask == RING_ANY_CHANNEL && get_num_rx_queues(skb->dev) > 1) ||
     (pfr->rehash_rss != NULL && get_num_rx_queues(skb->dev) > 1) ||
