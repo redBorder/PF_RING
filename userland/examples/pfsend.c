@@ -671,6 +671,13 @@ int main(int argc, char* argv[]) {
   while((num_to_send == 0) 
 	|| (i < num_to_send)) {
     int rc;
+#if 0 /* hw ts simulation */
+    struct timespec now_nsec;
+    clock_gettime(CLOCK_REALTIME, &now_nsec);
+    *((u_int32_t *) &tosend->pkt[tosend->len - 9]) = htonl(now_nsec.tv_sec);
+    *((u_int32_t *) &tosend->pkt[tosend->len - 5]) = htonl(now_nsec.tv_nsec);
+    tosend->pkt[tosend->len - 1] = 0xC3;
+#endif
 
   redo:
 

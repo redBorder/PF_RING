@@ -420,6 +420,30 @@ pfring_zc_run_fanout(
 );
 
 /**
+ * Run a fifo worker. (experimental) 
+ * @param in_queues        The ingress queues handles array. 
+ * @param out_queue        The egress queue handle.
+ * @param num_in_queues    The number of ingress queues.
+ * @param working_set_pool The pool handle for working set buffers allocation. The worker uses num_in_queues * 32 buffers.
+ * @param callback         The function called when there is no incoming packet.
+ * @param active_wait      The flag indicating whether the worker should use active or passive wait for incoming packets.
+ * @param core_id_affinity_sorter The core affinity for the sorter thread.
+ * @param core_id_affinity_timer  The core affinity for the timer thread.
+ * @return                 The worker handle on success, NULL otherwise (errno is set appropriately). 
+ */
+pfring_zc_worker * 
+pfring_zc_run_fifo(
+  pfring_zc_queue *in_queues[],
+  pfring_zc_queue *out_queue,
+  u_int32_t num_in_queues,
+  pfring_zc_buffer_pool *working_set_pool,
+  pfring_zc_idle_callback callback,
+  u_int32_t active_wait,
+  int32_t core_id_affinity_sorter,
+  int32_t core_id_affinity_timer
+);
+
+/**
  * Kill the worker. 
  * @param worker The worker handle.
  */
