@@ -2457,11 +2457,12 @@ pcap_setfilter_linux_common(pcap_t *handle, struct bpf_program *filter,
 	}
 
 #ifdef HAVE_PF_RING
-	if(can_filter_in_kernel
-	   && handle->ring != NULL && handle->ring->dna.dna_mapped_device)
-	  can_filter_in_kernel = 0; /* With DNA we need to filter in userland
-				       as the kernel is bypassed
-				    */
+	if(can_filter_in_kernel && handle->ring != NULL) {
+		int if_index;
+		if (handle->ring->dna.dna_mapped_device /* DNA: we need to filter in userland as kernel is bypassed */
+		    || pfring_get_bound_device_ifindex(handle->ring, &if_index) != 0 /* not a physical device */)
+			can_filter_in_kernel = 0;
+	}
 #endif
 
 	if (can_filter_in_kernel) {
