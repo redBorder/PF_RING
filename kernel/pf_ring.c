@@ -1882,9 +1882,9 @@ static inline u_int32_t hash_pkt(u_int16_t vlan_id, u_int8_t proto,
 			         ip_addr host_peer_a, ip_addr host_peer_b,
 			         u_int16_t port_peer_a, u_int16_t port_peer_b)
 {
-  if(unlikely(enable_debug))
-    printk("[PF_RING] hash_pkt(vlan_id=%u, proto=%u, port_peer_a=%u, port_peer_b=%u)\n",
-	   vlan_id,proto, port_peer_a, port_peer_b);
+  //if(unlikely(enable_debug))
+  //  printk("[PF_RING] hash_pkt(vlan_id=%u, proto=%u, port_peer_a=%u, port_peer_b=%u)\n",
+  //	   vlan_id,proto, port_peer_a, port_peer_b);
 
   return(vlan_id+proto+
 	 host_peer_a.v6.s6_addr32[0]+host_peer_a.v6.s6_addr32[1]+
@@ -2001,8 +2001,8 @@ static int parse_raw_pkt(u_char *data, u_int data_len,
 
   hdr->extended_hdr.parsed_pkt.offset.l3_offset = hdr->extended_hdr.parsed_pkt.offset.eth_offset + displ;
 
-  if(unlikely(enable_debug))
-    printk("[PF_RING] [eth_type=%04X]\n", hdr->extended_hdr.parsed_pkt.eth_type);
+  //if(unlikely(enable_debug))
+  //  printk("[PF_RING] [eth_type=%04X]\n", hdr->extended_hdr.parsed_pkt.eth_type);
 
   if(hdr->extended_hdr.parsed_pkt.eth_type == ETH_P_IP /* IPv4 */) {
     struct iphdr *ip;
@@ -2015,7 +2015,7 @@ static int parse_raw_pkt(u_char *data, u_int data_len,
     ip = (struct iphdr *)(&data[hdr->extended_hdr.parsed_pkt.offset.l3_offset]);
     *ip_id = ip->id, frag_off = ntohs(ip->frag_off);
 
-    if(unlikely(enable_debug)) printk("[PF_RING] frag_off=%04X\n", frag_off);
+    //if(unlikely(enable_debug)) printk("[PF_RING] frag_off=%04X\n", frag_off);
 
     if(frag_off & 0x1FFF /* Fragment offset */)
       *second_fragment = 1; /* Packet offset > 0 */
@@ -2085,8 +2085,8 @@ static int parse_raw_pkt(u_char *data, u_int data_len,
     return(0); /* No IP */
   }
 
-  if(unlikely(enable_debug))
-    printk("[PF_RING] [l3_proto=%d]\n", hdr->extended_hdr.parsed_pkt.l3_proto);
+  //if(unlikely(enable_debug))
+  //  printk("[PF_RING] [l3_proto=%d]\n", hdr->extended_hdr.parsed_pkt.l3_proto);
 
   hdr->extended_hdr.parsed_pkt.offset.l4_offset = hdr->extended_hdr.parsed_pkt.offset.l3_offset+ip_len;
 
@@ -2135,8 +2135,8 @@ static int parse_raw_pkt(u_char *data, u_int data_len,
 
 	  hdr->extended_hdr.parsed_pkt.tunnel.tunnel_id = ntohl(gtp->teid);
 
-	  if(unlikely(enable_debug))
-	    printk("[PF_RING] GTPv1 [%04X]\n", hdr->extended_hdr.parsed_pkt.tunnel.tunnel_id);
+	  //if(unlikely(enable_debug))
+	  //  printk("[PF_RING] GTPv1 [%04X]\n", hdr->extended_hdr.parsed_pkt.tunnel.tunnel_id);
 
 	  if((hdr->extended_hdr.parsed_pkt.l4_src_port == GTP_U_DATA_PORT)
 	     || (hdr->extended_hdr.parsed_pkt.l4_dst_port == GTP_U_DATA_PORT)) {
@@ -2320,11 +2320,11 @@ static int parse_raw_pkt(u_char *data, u_int data_len,
     } else
       hdr->extended_hdr.parsed_pkt.offset.payload_offset = hdr->extended_hdr.parsed_pkt.offset.l4_offset;
 
-    if(unlikely(enable_debug))
-      printk("[PF_RING] [l4_offset=%d][l4_src_port/l4_dst_port=%d/%d]\n",
-	     hdr->extended_hdr.parsed_pkt.offset.l4_offset,
-	     hdr->extended_hdr.parsed_pkt.l4_src_port,
-	     hdr->extended_hdr.parsed_pkt.l4_dst_port);
+    //if(unlikely(enable_debug))
+    //  printk("[PF_RING] [l4_offset=%d][l4_src_port/l4_dst_port=%d/%d]\n",
+    //	     hdr->extended_hdr.parsed_pkt.offset.l4_offset,
+    //	     hdr->extended_hdr.parsed_pkt.l4_src_port,
+    //	     hdr->extended_hdr.parsed_pkt.l4_dst_port);
   } else
     hdr->extended_hdr.parsed_pkt.l4_src_port = hdr->extended_hdr.parsed_pkt.l4_dst_port = 0;
 
@@ -2833,10 +2833,10 @@ static inline void set_skb_time(struct sk_buff *skb, struct pfring_pkthdr *hdr) 
     /* Use hardware timestamps when present. If not, just use software timestamps */
     hdr->extended_hdr.timestamp_ns = ktime_to_ns(skb_hwtstamps(skb)->hwtstamp);
 
-    if(unlikely(enable_debug))
-      printk("[PF_RING] hwts=%llu/dev=%s\n",
-	     hdr->extended_hdr.timestamp_ns,
-	     skb->dev ? skb->dev->name : "???");
+    //if(unlikely(enable_debug))
+    //  printk("[PF_RING] hwts=%llu/dev=%s\n",
+    //	     hdr->extended_hdr.timestamp_ns,
+    //	     skb->dev ? skb->dev->name : "???");
   }
 #endif
   if(hdr->extended_hdr.timestamp_ns == 0)
@@ -3054,9 +3054,9 @@ static inline int add_pkt_to_ring(struct sk_buff *skb,
   struct pf_ring_socket *pfr = (_pfr->master_ring != NULL) ? _pfr->master_ring : _pfr;
   u_int32_t the_bit = 1 << channel_id;
 
-  if(unlikely(enable_debug))
-    printk("[PF_RING] --> add_pkt_to_ring(len=%d) [pfr->channel_id_mask=%08X][channel_id=%d][real_skb=%u]\n",
-	   hdr->len, pfr->channel_id_mask, channel_id, real_skb);
+  //if(unlikely(enable_debug))
+  //  printk("[PF_RING] --> add_pkt_to_ring(len=%d) [pfr->channel_id_mask=%08X][channel_id=%d][real_skb=%u]\n",
+  //	   hdr->len, pfr->channel_id_mask, channel_id, real_skb);
 
   if((!pfr->ring_active) || (!skb))
     return(0);
@@ -4013,11 +4013,11 @@ static int add_skb_to_ring(struct sk_buff *skb,
      that will then be freed when the packet has been handled
   */
 
-  if(unlikely(enable_debug))
-    printk("[PF_RING] --> %s(len=%d) [channel_id=%d/%d][active=%d][%s]\n",
-           __FUNCTION__,
-	   hdr->len, channel_id, num_rx_channels,
-	   pfr->ring_active, pfr->ring_netdev->dev->name);
+  //if(unlikely(enable_debug))
+  //  printk("[PF_RING] --> %s(len=%d) [channel_id=%d/%d][active=%d][%s]\n",
+  //         __FUNCTION__,
+  //	   hdr->len, channel_id, num_rx_channels,
+  //	   pfr->ring_active, pfr->ring_netdev->dev->name);
 
   if((!pfring_enabled) || ((!pfr->ring_active) && (pfr->master_ring == NULL)))
     return(-1);
@@ -4035,15 +4035,15 @@ static int add_skb_to_ring(struct sk_buff *skb,
     }
   }
 
-  if(unlikely(enable_debug)) {
-    printk("[PF_RING] %s: [%s][displ=%d][len=%d][caplen=%d]"
-	   "[is_ip_pkt=%d][%d -> %d][%p/%p]\n", __FUNCTION__,
-	   (skb->dev->name != NULL) ? skb->dev->name : "<NULL>",
-	   displ, hdr->len, hdr->caplen,
-	   is_ip_pkt, hdr->extended_hdr.parsed_pkt.l4_src_port,
-	   hdr->extended_hdr.parsed_pkt.l4_dst_port, skb->dev,
-	   pfr->ring_netdev);
-  }
+  //if(unlikely(enable_debug)) {
+  //  printk("[PF_RING] %s: [%s][displ=%d][len=%d][caplen=%d]"
+  //	   "[is_ip_pkt=%d][%d -> %d][%p/%p]\n", __FUNCTION__,
+  //	   (skb->dev->name != NULL) ? skb->dev->name : "<NULL>",
+  //	   displ, hdr->len, hdr->caplen,
+  //	   is_ip_pkt, hdr->extended_hdr.parsed_pkt.l4_src_port,
+  //	   hdr->extended_hdr.parsed_pkt.l4_dst_port, skb->dev,
+  //	   pfr->ring_netdev);
+  //}
 
   /* Extensions */
   fwd_pkt = pfr->sw_filtering_rules_default_accept_policy;
@@ -4059,8 +4059,8 @@ static int add_skb_to_ring(struct sk_buff *skb,
     hash_found = check_perfect_rules(skb, pfr, hdr, &fwd_pkt, &free_parse_mem,
 				     parse_memory_buffer, displ, &last_matched_plugin);
 
-  if(unlikely(enable_debug))
-    printk("[PF_RING] check_perfect_rules() returned %d\n", hash_found);
+  //if(unlikely(enable_debug))
+  //  printk("[PF_RING] check_perfect_rules() returned %d\n", hash_found);
 
   /* [2.2] Search rules list */
   if((!hash_found) && (pfr->num_sw_filtering_rules > 0)) {
@@ -4068,18 +4068,18 @@ static int add_skb_to_ring(struct sk_buff *skb,
 			    parse_memory_buffer, displ, &last_matched_plugin) != 0)
       fwd_pkt = 0;
 
-    if(unlikely(enable_debug))
-      printk("[PF_RING] check_wildcard_rules() completed: fwd_pkt=%d\n", fwd_pkt);
+    //if(unlikely(enable_debug))
+    //  printk("[PF_RING] check_wildcard_rules() completed: fwd_pkt=%d\n", fwd_pkt);
   }
 
-  if(unlikely(enable_debug))
-    printk("[PF_RING] %s() verdict: fwd_pkt=%d [default=%u]\n", __FUNCTION__,
-	   fwd_pkt, pfr->sw_filtering_rules_default_accept_policy);
+  //if(unlikely(enable_debug))
+  //  printk("[PF_RING] %s() verdict: fwd_pkt=%d [default=%u]\n", __FUNCTION__,
+  //	   fwd_pkt, pfr->sw_filtering_rules_default_accept_policy);
 
   if(fwd_pkt) {
     /* We accept the packet: it needs to be queued */
-    if(unlikely(enable_debug))
-      printk("[PF_RING] Forwarding packet to userland\n");
+    //if(unlikely(enable_debug))
+    //  printk("[PF_RING] Forwarding packet to userland\n");
 
     /* [3] Packet sampling */
     if(pfr->sample_rate > 1) {
@@ -4091,13 +4091,13 @@ static int add_skb_to_ring(struct sk_buff *skb,
       } else {
 	pfr->pktToSample--;
 
-	if(unlikely(enable_debug))
-	  printk("[PF_RING] %s(skb): sampled packet [len=%d]"
-		 "[tot=%llu][insert_off=%llu][pkt_type=%d][cloned=%d]\n",
-		 __FUNCTION__,
-		 (int)skb->len, pfr->slots_info->tot_pkts,
-		 pfr->slots_info->insert_off, skb->pkt_type,
-		 skb->cloned);
+	//if(unlikely(enable_debug))
+	//  printk("[PF_RING] %s(skb): sampled packet [len=%d]"
+	//	 "[tot=%llu][insert_off=%llu][pkt_type=%d][cloned=%d]\n",
+	//	 __FUNCTION__,
+	//	 (int)skb->len, pfr->slots_info->tot_pkts,
+	//	 pfr->slots_info->insert_off, skb->pkt_type,
+	//	 skb->cloned);
 
 	write_unlock(&pfr->ring_index_lock);
 
@@ -4122,9 +4122,9 @@ static int add_skb_to_ring(struct sk_buff *skb,
 
 	hdr->extended_hdr.parsed_pkt.last_matched_plugin_id = last_matched_plugin;
 
-	if(unlikely(enable_debug))
-	  printk("[PF_RING] --> [last_matched_plugin = %d][extended_hdr.parsed_header_len=%d]\n",
-		 last_matched_plugin, hdr->extended_hdr.parsed_header_len);
+	//if(unlikely(enable_debug))
+	//  printk("[PF_RING] --> [last_matched_plugin = %d][extended_hdr.parsed_header_len=%d]\n",
+	//	 last_matched_plugin, hdr->extended_hdr.parsed_header_len);
 
 	if(offset > pfr->bucket_len)
 	  offset = hdr->extended_hdr.parsed_header_len = pfr->bucket_len;
@@ -4137,15 +4137,15 @@ static int add_skb_to_ring(struct sk_buff *skb,
     }
   }
 
-  if(unlikely(enable_debug))
-    printk("[PF_RING] [pfr->slots_info->insert_off=%llu]\n",
-	   pfr->slots_info->insert_off);
+  //if(unlikely(enable_debug))
+  //  printk("[PF_RING] [pfr->slots_info->insert_off=%llu]\n",
+  //         pfr->slots_info->insert_off);
 
   if(free_parse_mem)
     free_parse_memory(parse_memory_buffer);
 
-  if(unlikely(enable_debug))
-    printk("[PF_RING] %s() returned %d\n", __FUNCTION__, rc);
+  //if(unlikely(enable_debug))
+  //  printk("[PF_RING] %s() returned %d\n", __FUNCTION__, rc);
 
   atomic_dec(&pfr->num_ring_users);
   return(rc);
@@ -4159,9 +4159,9 @@ static int hash_pkt_cluster(ring_cluster_element *cluster_ptr,
 {
   int idx;
 
-  if(unlikely(enable_debug))
-    printk("[PF_RING] %s(ip_id=%02X, first_fragment=%d, second_fragment=%d)\n",
-	   __FUNCTION__, ip_id, first_fragment, second_fragment);
+  //if(unlikely(enable_debug))
+  //  printk("[PF_RING] %s(ip_id=%02X, first_fragment=%d, second_fragment=%d)\n",
+  //	   __FUNCTION__, ip_id, first_fragment, second_fragment);
 
   if(enable_frag_coherence && second_fragment) {
     if((idx = get_fragment_app_id(hdr->extended_hdr.parsed_pkt.ipv4_src,
@@ -4347,9 +4347,9 @@ static struct sk_buff* defrag_skb(struct sk_buff *skb,
   iphdr = ip_hdr(skb);
 
   if(iphdr && (iphdr->version == 4)) {
-    if(unlikely(enable_debug))
-      printk("[PF_RING] [version=%d] %X -> %X\n",
-	     iphdr->version, iphdr->saddr, iphdr->daddr);
+    //if(unlikely(enable_debug))
+    //  printk("[PF_RING] [version=%d] %X -> %X\n",
+    //	     iphdr->version, iphdr->saddr, iphdr->daddr);
 
     if(iphdr->frag_off & htons(IP_MF | IP_OFFSET)) {
       if((cloned = skb_clone(skb, GFP_ATOMIC)) != NULL) {
@@ -4420,17 +4420,17 @@ static struct sk_buff* defrag_skb(struct sk_buff *skb,
 	  return(NULL);	/* mask rcvd fragments */
 	}
       }
-    } else {
-      if(unlikely(enable_debug))
-	printk("[PF_RING] Do not seems to be a fragmented ip_pkt[iphdr=%p]\n",
-	       iphdr);
     }
+    // else {
+    //  if(unlikely(enable_debug))
+    //	printk("[PF_RING] Do not seems to be a fragmented ip_pkt[iphdr=%p]\n", iphdr);
+    //}
   } else if(iphdr && iphdr->version == 6) {
     /* Re-assembling fragmented IPv6 packets has not been
        implemented. Probability of observing fragmented IPv6
        packets is extremely low. */
-    if(unlikely(enable_debug))
-      printk("[PF_RING] Re-assembling fragmented IPv6 packet hs not been implemented\n");
+    //if(unlikely(enable_debug))
+    //  printk("[PF_RING] Re-assembling fragmented IPv6 packet hs not been implemented\n");
   }
 
   return(skb);
@@ -4490,13 +4490,11 @@ static int skb_ring_handler(struct sk_buff *skb,
   } else
     displ = 0;
 
-#if 0
-  if(unlikely(enable_debug)) {
-    if(skb->dev && (skb->dev->ifindex < MAX_NUM_IFIDX))
-      printk("[PF_RING] (1) %s(): [%d rings on %s (idx=%d), %d 'any' rings]\n", __FUNCTION__
-	     num_rings_per_device[skb->dev->ifindex], skb->dev->name, skb->dev->ifindex, num_any_rings);
-  }
-#endif
+  //if(unlikely(enable_debug)) {
+  //  if(skb->dev && (skb->dev->ifindex < MAX_NUM_IFIDX))
+  //    printk("[PF_RING] (1) %s(): [%d rings on %s (idx=%d), %d 'any' rings]\n", __FUNCTION__
+  //	     num_rings_per_device[skb->dev->ifindex], skb->dev->name, skb->dev->ifindex, num_any_rings);
+  //}
 
   if((num_any_rings == 0)
      && (skb->dev
@@ -4517,23 +4515,18 @@ static int skb_ring_handler(struct sk_buff *skb,
   if(channel_id > MAX_NUM_RX_CHANNELS) channel_id = 0 /* MAX_NUM_RX_CHANNELS */;
 
   if((!skb) /* Invalid skb */ ||((!enable_tx_capture) && (!recv_packet))) {
-    /*
-      An outgoing packet is about to be sent out
-      but we decided not to handle transmitted
-      packets.
-    */
+    /* An outgoing packet is about to be sent out but we decided not to handle transmitted packets. */
     return(0);
   }
 
-  if(unlikely(enable_debug)) {
-    struct timeval tv;
-
-    skb_get_timestamp(skb, &tv);
-    printk("[PF_RING] %s(): [skb=%p][%u.%u][len=%d][dev=%s][csum=%u]\n", __FUNCTION__,
-	   skb, (unsigned int)tv.tv_sec, (unsigned int)tv.tv_usec,
-	   skb->len, skb->dev == NULL ? "<NULL>" : skb->dev->name,
-	   skb->csum);
-  }
+  //if(unlikely(enable_debug)) {
+  //  struct timeval tv;
+  //  skb_get_timestamp(skb, &tv);
+  //  printk("[PF_RING] %s(): [skb=%p][%u.%u][len=%d][dev=%s][csum=%u]\n", __FUNCTION__,
+  //	   skb, (unsigned int)tv.tv_sec, (unsigned int)tv.tv_usec,
+  //	   skb->len, skb->dev == NULL ? "<NULL>" : skb->dev->name,
+  //	   skb->csum);
+  //}
 
 #ifdef PROFILING
   rdt1 = _rdtsc();
@@ -4560,7 +4553,7 @@ static int skb_ring_handler(struct sk_buff *skb,
       pfr = device_rings[skb->dev->ifindex][channel_id];
     }
 
-    if(unlikely(enable_debug)) printk("[PF_RING] Expecting channel %d [%p]\n", channel_id, pfr);
+    //if(unlikely(enable_debug)) printk("[PF_RING] Expecting channel %d [%p]\n", channel_id, pfr);
 
     if((pfr != NULL) && is_valid_skb_direction(pfr->direction, recv_packet)) {
       /* printk("==>>> [%d][%d]\n", skb->dev->ifindex, channel_id); */
@@ -4597,9 +4590,9 @@ static int skb_ring_handler(struct sk_buff *skb,
     /* [1] Check unclustered sockets */
     sk = (struct sock*)lockless_list_get_first(&ring_table, &last_list_idx);
 
-    if(unlikely(enable_debug))
-      printk("[PF_RING] -> lockless_list_get_first=%p [num elements=%u][last_list_idx=%u]\n",
-	     sk, ring_table.num_elements, (unsigned int)last_list_idx);
+    //if(unlikely(enable_debug))
+    //  printk("[PF_RING] -> lockless_list_get_first=%p [num elements=%u][last_list_idx=%u]\n",
+    //	     sk, ring_table.num_elements, (unsigned int)last_list_idx);
 
     while(sk != NULL) {
       pfr = ring_sk(sk);
@@ -4629,9 +4622,9 @@ static int skb_ring_handler(struct sk_buff *skb,
 
       sk = (struct sock*)lockless_list_get_next(&ring_table, &last_list_idx);
 
-      if(unlikely(enable_debug))
-	printk("[PF_RING] -> lockless_list_get_next=%p [num elements=%u][last_list_idx=%u]\n",
-	       sk, ring_table.num_elements, (unsigned int)last_list_idx);
+      //if(unlikely(enable_debug))
+      //  printk("[PF_RING] -> lockless_list_get_next=%p [num elements=%u][last_list_idx=%u]\n",
+      //         sk, ring_table.num_elements, (unsigned int)last_list_idx);
     }
 
     cluster_ptr = (ring_cluster_element*)lockless_list_get_first(&ring_cluster_list, &last_list_idx);
@@ -4726,8 +4719,8 @@ static int skb_ring_handler(struct sk_buff *skb,
     if(transparent_mode == driver2pf_ring_non_transparent /* 2 */) {
       /* transparent mode = 2 */
       if(recv_packet && real_skb) {
-	if(unlikely(enable_debug))
-	  printk("[PF_RING] kfree_skb()\n");
+	//if(unlikely(enable_debug))
+	//  printk("[PF_RING] kfree_skb()\n");
 
 	if(clone_id == 0) /* We have not used the orig_skb */
 	  kfree_skb(orig_skb); /* Free memory */
@@ -4757,7 +4750,7 @@ static int skb_ring_handler(struct sk_buff *skb,
   if((rc == 1) && (room_available == 0))
     rc = 2;
 
-  if(unlikely(enable_debug)) printk("[PF_RING] (4) %s(): returned %d\n", __FUNCTION__, rc);
+  //if(unlikely(enable_debug)) printk("[PF_RING] (4) %s(): returned %d\n", __FUNCTION__, rc);
 
   return(rc); /*  0 = packet not handled */
 }
@@ -4770,9 +4763,9 @@ static int buffer_ring_handler(struct net_device *dev, char *data, int len)
 {
   u_int8_t skb_reference_in_use;
 
-  if(unlikely(enable_debug))
-    printk("[PF_RING] buffer_ring_handler: [dev=%s][len=%d]\n",
-	   dev->name == NULL ? "<NULL>" : dev->name, len);
+  //if(unlikely(enable_debug))
+  //  printk("[PF_RING] buffer_ring_handler: [dev=%s][len=%d]\n",
+  //         dev->name == NULL ? "<NULL>" : dev->name, len);
 
   skb.dev = dev, skb.len = len, skb.data = data, skb.data_len = len;
 
