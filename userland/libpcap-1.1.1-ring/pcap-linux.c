@@ -1446,26 +1446,25 @@ pcap_read_packet(pcap_t *handle, pcap_handler callback, u_char *userdata)
 	    //  return(0);
 
 	    if(ret == 0) {
-	      if (errno == EINTR)
-	        continue;
+	      //if (errno == EINTR)
+	      //  continue;
 
 	      if (wait_for_incoming_packet)
 	        continue;
-	      else
-	        return 0; /* non-blocking */
-
+	      
+	      return 0; /* non-blocking */
 	    } else if (ret > 0) {
 	      bp = packet;
 	      pcap_header.caplen = min(pcap_header.caplen, handle->bufsize);
 	      caplen = pcap_header.caplen, packet_len = pcap_header.len;
 	      if(pcap_header.ts.tv_sec == 0) gettimeofday((struct timeval*)&pcap_header.ts, NULL);
-	      break;
 
+	      break;
 	    } else {
-	      if (errno == EINTR || errno == ENETDOWN)
+	      if (wait_for_incoming_packet && (errno == EINTR || errno == ENETDOWN))
 	        continue;
-	      else
-	        return -1;
+	      
+	      return -1;
 	    }
 	  } while (1);
 
