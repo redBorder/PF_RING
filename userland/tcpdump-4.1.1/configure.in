@@ -71,7 +71,7 @@ else
       AC_MSG_RESULT(no)
 fi
 
-LIBS="$LIBS ../lib/libpfring.a -lpthread $SILICOM_LIBS"
+LIBS="$LIBS ../lib/libpfring.a -lpthread -lnuma -lrt $SILICOM_LIBS"
 
 case "$host_os" in
 
