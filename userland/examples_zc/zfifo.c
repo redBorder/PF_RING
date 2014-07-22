@@ -325,7 +325,7 @@ int main(int argc, char* argv[]) {
   );
 
   if(zw == NULL) {
-    fprintf(stderr, "pfring_zc_run_balancer error [%s]\n", strerror(errno));
+    fprintf(stderr, "pfring_zc_run_fifo error [%s]\n", strerror(errno));
     return -1;
   }
 
