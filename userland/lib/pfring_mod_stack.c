@@ -38,7 +38,6 @@ int pfring_mod_stack_open(pfring *ring) {
 
   /* Only send (inject) and recv (intercept tx) are supported, resetting unused func ptrs */
   ring->set_direction       = NULL; 
-  ring->set_socket_mode     = NULL; 
   ring->set_cluster         = NULL; 
   ring->remove_from_cluster = NULL; 
   ring->set_master_id       = NULL; 
