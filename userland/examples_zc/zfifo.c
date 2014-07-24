@@ -50,8 +50,8 @@
 
 struct stats {
   u_int64_t __cache_line_padding_p[8];
-  u_int64_t numPkts;
-  u_int64_t numBytes;
+  u_int64_t tot_recv;
+  u_int64_t tot_bytes;
   u_int64_t __cache_line_padding_a[6];
 };
 
@@ -78,15 +78,18 @@ struct stats consumers_stats;
 /* ******************************** */
 
 void print_stats() {
-  struct timeval endTime;
-  double deltaMillisec;
+  struct timeval end_time;
+  double delta_msec;
   static u_int8_t print_all;
-  static u_int64_t lastPkts = 0;
-  static u_int64_t lastBytes = 0;
-  double diff, bytesDiff;
-  static struct timeval lastTime;
-  char buf1[64], buf2[64], buf3[64];
-  unsigned long long nBytes = 0, nPkts = 0;
+  static u_int64_t last_tot_recv = 0;
+  static u_int64_t last_tot_bytes = 0;
+  static u_int64_t last_tot_drop = 0;
+  double diff_recv, diff_bytes, diff_drop;
+  static struct timeval last_time;
+  char buf1[64], buf2[64];
+  unsigned long long tot_bytes = 0, tot_recv = 0, tot_drop = 0;
+  pfring_zc_stat stats;
+  int i;
 
   if(startTime.tv_sec == 0) {
     gettimeofday(&startTime, NULL);
@@ -94,44 +97,44 @@ void print_stats() {
   } else
     print_all = 1;
 
-  gettimeofday(&endTime, NULL);
-  deltaMillisec = delta_time(&endTime, &startTime);
+  gettimeofday(&end_time, NULL);
+  delta_msec = delta_time(&end_time, &startTime);
 
-#ifdef VERY_VERBOSE
-  fprintf(stderr, "=========================\n");
-#endif
-#ifdef VERY_VERBOSE
-  fprintf(stderr, "Consumer: %s pkts - %s bytes\n",
-	  pfring_format_numbers((double)consumers_stats.numPkts, buf1, sizeof(buf1), 0),
-	  pfring_format_numbers((double)consumers_stats.numBytes, buf2, sizeof(buf2), 0));
-#endif
-    nPkts  += consumers_stats.numPkts;
-    nBytes += consumers_stats.numBytes;
+  for (i = 0; i < num_devices; i++)
+    if (pfring_zc_stats(inzq[i], &stats) == 0)
+      tot_recv += stats.recv, tot_drop += stats.drop;
+
+  tot_bytes = consumers_stats.tot_bytes;
 
   fprintf(stderr, "=========================\n"
-	  "Absolute Stats: %s pkts - %s bytes\n", 
-	  pfring_format_numbers((double)nPkts, buf1, sizeof(buf1), 0),
-	  pfring_format_numbers((double)nBytes, buf2, sizeof(buf2), 0));
+	  "FIFO Stats: %s pkts (%s drops)\n", 
+	  pfring_format_numbers((double)tot_recv, buf1, sizeof(buf1), 0),
+	  pfring_format_numbers((double)tot_drop, buf2, sizeof(buf2), 0));
 
-  if(print_all && (lastTime.tv_sec > 0)) {
-    char buf[256];
+#ifdef VERY_VERBOSE
+  fprintf(stderr, "Consumer Stats: %s pkts - %s bytes",
+	  pfring_format_numbers((double)consumers_stats.tot_recv, buf1, sizeof(buf1), 0),
+	  pfring_format_numbers((double)consumers_stats.tot_bytes, buf2, sizeof(buf2), 0));
+#endif
 
-    deltaMillisec = delta_time(&endTime, &lastTime);
-    diff = nPkts-lastPkts;
-    bytesDiff = nBytes - lastBytes;
-    bytesDiff /= (1000*1000*1000)/8;
+  if(print_all && (last_time.tv_sec > 0)) {
+    delta_msec = delta_time(&end_time, &last_time);
+    diff_recv = tot_recv-last_tot_recv;
+    diff_bytes = tot_bytes - last_tot_bytes;
+    diff_bytes /= (1000*1000*1000)/8;
+    diff_drop = tot_drop-last_tot_drop;
 
-    snprintf(buf, sizeof(buf),
-	     "Actual Stats: %s pps - %s Gbps",
-	     pfring_format_numbers(((double)diff/(double)(deltaMillisec/1000)),  buf2, sizeof(buf2), 1),
-	     pfring_format_numbers(((double)bytesDiff/(double)(deltaMillisec/1000)),  buf3, sizeof(buf3), 1));
-    fprintf(stderr, "%s\n", buf);
+    fprintf(stderr, " (%s Gbps)\n", pfring_format_numbers(((double)diff_bytes/(double)(delta_msec/1000)),  buf1, sizeof(buf1), 1));
+
+    fprintf(stderr, "Actual FIFO Stats: %s pps (%s drops)",
+	    pfring_format_numbers(((double)diff_recv/(double)(delta_msec/1000)),  buf1, sizeof(buf1), 1),
+	    pfring_format_numbers(((double)diff_drop/(double)(delta_msec/1000)),  buf2, sizeof(buf2), 1));
   }
     
-  fprintf(stderr, "=========================\n\n");
+  fprintf(stderr, "\n=========================\n\n");
 
-  lastPkts = nPkts, lastBytes = nBytes;
-  lastTime.tv_sec = endTime.tv_sec, lastTime.tv_usec = endTime.tv_usec;
+  last_tot_recv = tot_recv, last_tot_bytes = tot_bytes, last_tot_drop = tot_drop;
+  last_time.tv_sec = end_time.tv_sec, last_time.tv_usec = end_time.tv_usec;
 }
 
 /* ******************************** */
@@ -195,8 +198,8 @@ void* consumer_thread(void *user) {
       printf("\n");
 #endif
 
-      consumers_stats.numPkts++;
-      consumers_stats.numBytes += b->len + 24; /* 8 Preamble + 4 CRC + 12 IFG */
+      consumers_stats.tot_recv++;
+      consumers_stats.tot_bytes += b->len + 24; /* 8 Preamble + 4 CRC + 12 IFG */
     }
 
   }
@@ -272,7 +275,7 @@ int main(int argc, char* argv[]) {
     return -1;
   }
 
-  inzq =    calloc(num_devices,     sizeof(pfring_zc_queue *));
+  inzq = calloc(num_devices,     sizeof(pfring_zc_queue *));
 
   buffer = pfring_zc_get_packet_handle(zc);
 
