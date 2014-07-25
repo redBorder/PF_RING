@@ -84,6 +84,7 @@ void print_stats() {
   static u_int64_t last_tot_recv = 0;
   static u_int64_t last_tot_bytes = 0;
   static u_int64_t last_tot_drop = 0;
+  static u_int64_t initial_drop = 0;
   double diff_recv, diff_bytes, diff_drop;
   static struct timeval last_time;
   char buf1[64], buf2[64];
@@ -91,25 +92,27 @@ void print_stats() {
   pfring_zc_stat stats;
   int i;
 
-  if(startTime.tv_sec == 0) {
-    gettimeofday(&startTime, NULL);
-    print_all = 0;
-  } else
-    print_all = 1;
-
-  gettimeofday(&end_time, NULL);
-  delta_msec = delta_time(&end_time, &startTime);
-
   for (i = 0; i < num_devices; i++)
     if (pfring_zc_stats(inzq[i], &stats) == 0)
       tot_recv += stats.recv, tot_drop += stats.drop;
 
   tot_bytes = consumers_stats.tot_bytes;
 
+
+  if(startTime.tv_sec == 0) {
+    gettimeofday(&startTime, NULL);
+    print_all = 0;
+    initial_drop = tot_drop;
+  } else
+    print_all = 1;
+
+  gettimeofday(&end_time, NULL);
+  delta_msec = delta_time(&end_time, &startTime);
+
   fprintf(stderr, "=========================\n"
 	  "FIFO Stats: %s pkts (%s drops)\n", 
 	  pfring_format_numbers((double)tot_recv, buf1, sizeof(buf1), 0),
-	  pfring_format_numbers((double)tot_drop, buf2, sizeof(buf2), 0));
+	  pfring_format_numbers((double)tot_drop-initial_drop, buf2, sizeof(buf2), 0));
 
 #ifdef VERY_VERBOSE
   fprintf(stderr, "Consumer Stats: %s pkts - %s bytes",
