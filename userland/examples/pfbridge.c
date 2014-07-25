@@ -75,8 +75,9 @@ int main(int argc, char* argv[]) {
   int a_ifindex, b_ifindex;
   int bind_core = -1;
   u_int16_t watermark = 1;
+  char *bpfFilter = NULL;
 
-  while((c = getopt(argc,argv, "ha:b:c:fvpg:w:")) != -1) {
+  while((c = getopt(argc,argv, "ha:b:c:f:vpg:w:")) != -1) {
     switch(c) {
       case 'h':
 	printHelp();
@@ -87,6 +88,9 @@ int main(int argc, char* argv[]) {
 	break;
       case 'b':
 	b_dev = strdup(optarg);
+	break;
+      case 'f':
+        bpfFilter = strdup(optarg);
 	break;
       case 'p':
 	use_pfring_send = 1;
@@ -127,6 +131,15 @@ int main(int argc, char* argv[]) {
   pfring_set_socket_mode(a_ring, recv_only_mode);
   pfring_set_poll_watermark(a_ring, watermark);
   pfring_get_bound_device_ifindex(a_ring, &a_ifindex);
+
+  /* Adding BPF filter */
+  if(bpfFilter != NULL) {
+    int rc = pfring_set_bpf_filter(a_ring, bpfFilter);
+    if(rc != 0)
+      printf("pfring_set_bpf_filter(%s) returned %d\n", bpfFilter, rc);
+    else
+      printf("Successfully set BPF filter '%s'\n", bpfFilter);
+  }
 
   /* Device B */
 
