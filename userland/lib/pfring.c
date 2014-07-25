@@ -40,7 +40,7 @@
 #include "pfring_mod_dna.h"
 #endif
 
-#include "pfring_ixia.c"
+#include "pfring_hw_timestamp.h"
 
 #ifdef HAVE_PF_RING_ZC
 extern int pfring_zc_open(pfring *ring);
@@ -146,7 +146,7 @@ pfring* pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags) 
       str = str1 = NULL;
 #ifdef HAVE_DNA
       u_int8_t is_dna = 0;
-      if(strcmp(pfring_module_list[i].name, "dna") == 0) { 
+      if(strcmp(pfring_module_list[i].name, "dna") == 0) {
         /* DNA module: check proc for renamed interfaces */
         FILE *proc_net_pfr;
 	char line[256];
@@ -384,7 +384,7 @@ int pfring_loop(pfring *ring, pfringProcesssPacket looper,
 
     while(!ring->break_recv_loop) {
       rc = ring->recv(ring, &buffer, 0, &hdr, wait_for_packet);
-      
+
       if(rc < 0)
 	break;
       else if(rc > 0) {
@@ -394,9 +394,9 @@ int pfring_loop(pfring *ring, pfringProcesssPacket looper,
         if (unlikely(ring->userspace_bpf && bpf_filter(ring->userspace_bpf_filter.bf_insns, buffer, hdr.caplen, hdr.len) == 0))
           continue; /* rejected */
 #endif
-        if (ring->ixia_timestamp_enabled)
-          ixia_add_timestamp(buffer,hdr.caplen, &hdr);
-	
+        if(unlikely(ring->ixia_timestamp_enabled))
+          handle_ixia_hw_timestamp(buffer, &hdr);
+
 	looper(&hdr, buffer, user_bytes);
       } else {
 	/* if(!wait_for_packet) usleep(1); */
@@ -405,7 +405,7 @@ int pfring_loop(pfring *ring, pfringProcesssPacket looper,
   } else {
     /* Chunk mode */
     void *chunk;
-    
+
     if(!ring->recv_chunk) return(-2);
 
     /* All set to zero as the header is meaningless */
@@ -413,12 +413,12 @@ int pfring_loop(pfring *ring, pfringProcesssPacket looper,
 
     while(!ring->break_recv_loop) {
       rc = ring->recv_chunk(ring, &chunk, &hdr.len, wait_for_packet);
-      
+
       if(rc < 0)
 	break;
       else if(rc > 0) {
 	hdr.caplen = min_val(hdr.len, ring->caplen);
-	
+
 	looper(&hdr, chunk, user_bytes);
       } else {
 	/* if(!wait_for_packet) usleep(1); */
@@ -511,9 +511,9 @@ redo_pfring_bundle_read:
     for(i=0; i<bundle->num_sockets; i++) {
       if(founds[i] == 0) {
 	pfring *ring = bundle->sockets[i];
-	
+
 	rc = pfring_next_pkt_time(ring, &tmpts);
-	
+
 	if(rc == 0) {
 	  if(!found || timespec_is_before(&tmpts, &ts)) {
 	    memcpy(&ts, &tmpts, sizeof(struct timespec));
@@ -527,7 +527,7 @@ redo_pfring_bundle_read:
 	}
       }
     }
-    
+
     if(found) {
 #ifdef EXTRA_SAFE
       if(empty_rings && (scans == 1))
@@ -604,7 +604,7 @@ int pfring_recv(pfring *ring, u_char** buffer, u_int buffer_len,
     /* Reentrancy is not compatible with zero copy */
     if (unlikely(buffer_len == 0 && ring->reentrant))
       return PF_RING_ERROR_INVALID_ARGUMENT;
-    
+
     ring->break_recv_loop = 0;
 
 #ifdef ENABLE_BPF
@@ -612,11 +612,10 @@ recv_next:
 #endif
 
     rc = ring->recv(ring, buffer, buffer_len, hdr, wait_for_incoming_packet);
-		
-    if (ring->ixia_timestamp_enabled)
-      ixia_add_timestamp(*buffer,buffer_len, hdr);
-			
     hdr->caplen = min_val(hdr->caplen, ring->caplen);
+
+    if(unlikely(ring->ixia_timestamp_enabled))
+      handle_ixia_hw_timestamp(*buffer, hdr);
 
 #ifdef ENABLE_BPF
     if (unlikely(rc > 0 && ring->userspace_bpf && bpf_filter(ring->userspace_bpf_filter.bf_insns, *buffer, hdr->caplen, hdr->len) == 0))
@@ -884,7 +883,7 @@ int pfring_set_sampling_rate(pfring *ring, u_int32_t rate /* 1 = no sampling */)
 
     if (rc == 0)
       ring->sampling_rate = rate;
-      
+
     return(rc);
   }
 
@@ -1385,7 +1384,7 @@ u_char* pfring_get_pkt_buff_data(pfring *ring, pfring_pkt_buff *pkt_handle) {
 int pfring_set_pkt_buff_len(pfring *ring, pfring_pkt_buff *pkt_handle, u_int32_t len) {
   if(ring && ring->set_pkt_buff_len)
     return ring->set_pkt_buff_len(ring, pkt_handle, len);
-  
+
   return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
@@ -1394,7 +1393,7 @@ int pfring_set_pkt_buff_len(pfring *ring, pfring_pkt_buff *pkt_handle, u_int32_t
 int pfring_set_pkt_buff_ifindex(pfring *ring, pfring_pkt_buff *pkt_handle, int if_index) {
   if(ring && ring->set_pkt_buff_ifindex)
     return ring->set_pkt_buff_ifindex(ring, pkt_handle, if_index);
-  
+
   return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
@@ -1403,7 +1402,7 @@ int pfring_set_pkt_buff_ifindex(pfring *ring, pfring_pkt_buff *pkt_handle, int i
 int pfring_register_zerocopy_tx_ring(pfring *ring, pfring *tx_ring) {
   if(ring && ring->register_zerocopy_tx_ring)
     return ring->register_zerocopy_tx_ring(ring, tx_ring);
-  
+
   return(PF_RING_ERROR_NOT_SUPPORTED);
 }
 
@@ -1470,7 +1469,7 @@ int pfring_flush_tx_packets(pfring *ring) {
 int pfring_search_payload(pfring *ring, char *string_to_search) {
   if (!ring)
     return(-1);
-    
+
   return(-2);
 }
 

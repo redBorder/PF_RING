@@ -166,8 +166,10 @@ struct pfring_bpf_program {
 
 struct __pfring {
   u_int8_t initialized, enabled, long_header, rss_mode;
-  u_int8_t force_timestamp, strip_hw_timestamp, disable_parsing, disable_timestamp, ixia_timestamp_enabled;
-  u_int8_t chunk_mode_enabled, userspace_bpf;
+  u_int8_t force_timestamp:1, strip_hw_timestamp:1, disable_parsing:1,
+    disable_timestamp:1, ixia_timestamp_enabled:1,
+    cpacket_timestamp_enabled:1,
+    chunk_mode_enabled:1, userspace_bpf:1;
   packet_direction direction; /* Specify the capture direction for packets */
   socket_mode mode;
 
@@ -344,7 +346,8 @@ struct __pfring {
 #define PF_RING_DO_NOT_PARSE         1 << 9  /**< pfring_open() flag: Disable packet parsing also when 1-copy is used. (parsing already disabled in zero-copy) */
 #define PF_RING_DO_NOT_TIMESTAMP     1 << 10 /**< pfring_open() flag: Disable packet timestamping also when 1-copy is used. (sw timestamp already disabled in zero-copy) */
 #define PF_RING_CHUNK_MODE           1 << 11 /**< pfring_open() flag: Enable chunk mode operations. This mode is supported only by specific adapters and it's not for general purpose. */
-#define PF_RING_IXIA_TIMESTAMP	     1 << 12 /**< pfring_open() flag: Enable ixia timestemp. */
+#define PF_RING_IXIA_TIMESTAMP	     1 << 12 /**< pfring_open() flag: Enable ixiacom.com hardware timestemp support+stripping. */
+#define PF_RING_CPACKET_TIMESTAMP    1 << 13 /**< pfring_open() flag: Enable cpacket.com hardware timestemp support+stripping. */
 
 /* ********************************* */
 
@@ -1289,6 +1292,8 @@ int pfring_parse_bpf_filter(char *filter_buffer, u_int caplen,
                             struct pfring_bpf_program
 #endif
                             *filter);
+
+int32_t gmt2local(time_t t);
 
 /* ********************************* */
 

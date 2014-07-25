@@ -41,7 +41,7 @@ NT_OBJS  = @NT_OBJS@
 #
 # Object files
 #
-OBJS      = pfring.o pfring_mod.o pfring_utils.o pfring_mod_stack.o pfring_mod_usring.o pfring_hw_filtering.o ${ZERO_OBJS} ${DNA_OBJS} ${PF_RING_ZC_OBJS} ${DAG_OBJS} ${NT_OBJS}
+OBJS      = pfring.o pfring_mod.o pfring_utils.o pfring_mod_stack.o pfring_mod_usring.o pfring_hw_filtering.o pfring_hw_timestamp.o ${ZERO_OBJS} ${DNA_OBJS} ${PF_RING_ZC_OBJS} ${DAG_OBJS} ${NT_OBJS}
 
 #
 # C compiler and flags

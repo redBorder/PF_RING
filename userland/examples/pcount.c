@@ -37,7 +37,7 @@ unsigned long long numPkts = 0, numBytes = 0;
 
 #define DEFAULT_DEVICE "eth1" /* "e1000" */
 
-
+int32_t gmt2local(time_t t);
 int pcap_set_cluster(pcap_t *ring, u_int clusterId);
 int pcap_set_application_name(pcap_t *handle, char *name);
 char* pfring_format_numbers(double val, char *buf, u_int buf_len, u_int8_t add_decimals);
@@ -297,34 +297,6 @@ void dummyProcesssPacket(u_char *_deviceId,
       printf("\n");
   }
  }
-
-/* *************************************** */
-
-int32_t gmt2local(time_t t) {
-  int dt, dir;
-  struct tm *gmt, *loc;
-  struct tm sgmt;
-
-  if (t == 0)
-    t = time(NULL);
-  gmt = &sgmt;
-  *gmt = *gmtime(&t);
-  loc = localtime(&t);
-  dt = (loc->tm_hour - gmt->tm_hour) * 60 * 60 +
-        (loc->tm_min - gmt->tm_min) * 60;
-
-  /*
-   * If the year or julian day is different, we span 00:00 GMT
-   * and must add or subtract a day. Check the year first to
-   * avoid problems when the julian day wraps.
-   */
-  dir = loc->tm_year - gmt->tm_year;
-  if (dir == 0)
-    dir = loc->tm_yday - gmt->tm_yday;
-  dt += dir * 24 * 60 * 60;
-
-  return (dt);
-}
 
 /* *************************************** */
 
