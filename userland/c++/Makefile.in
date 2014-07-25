@@ -6,12 +6,12 @@ INCLUDE=-I$(KERNEL_DIR) -I$(LIBPCAP_DIR) -I../lib
 LIBPFRING_CPP=libpfring_cpp.a
 RANLIB=ranlib
 OBJ=PFring.o
-LIBS=../lib/libpfring.a -lpthread -lnuma -lrt @SYSLIBS@ @SILICOM_LIBS@
+LIBS=../lib/libpfring.a @SILICOM_LIBS@ -lpthread
 
 all: $(LIBPFRING_CPP) pf_test
 
 pf_test: pf_test.cpp $(LIBPFRING_CPP)
-	$(CPP) $(INCLUDE) $< $(LIBPFRING_CPP) -o $@ $(LIBS) $(LIBPCAP_DIR)/libpcap.a
+	$(CPP) $(INCLUDE) $< $(LIBPFRING_CPP) -o $@ $(LIBS) $(LIBPCAP_DIR)/libpcap.a @SYSLIBS@ @LIBNUMA@
 
 $(LIBPFRING_CPP): $(OBJ)
 	@rm -f $@
