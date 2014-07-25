@@ -4154,64 +4154,43 @@ static int add_skb_to_ring(struct sk_buff *skb,
 /* ********************************** */
 
 static int hash_pkt_cluster(ring_cluster_element *cluster_ptr,
-			    struct pfring_pkthdr *hdr,
-			    u_int16_t ip_id, u_int8_t first_fragment, u_int8_t second_fragment)
+			    struct pfring_pkthdr *hdr)
 {
-  int idx;
+  int hash;
 
-  //if(unlikely(enable_debug))
-  //  printk("[PF_RING] %s(ip_id=%02X, first_fragment=%d, second_fragment=%d)\n",
-  //	   __FUNCTION__, ip_id, first_fragment, second_fragment);
+  switch(cluster_ptr->cluster.hashing_mode) {
 
-  if(enable_frag_coherence && second_fragment) {
-    if((idx = get_fragment_app_id(hdr->extended_hdr.parsed_pkt.ipv4_src,
-				  hdr->extended_hdr.parsed_pkt.ipv4_dst,
-				  ip_id)) < 0)
-      return(idx);
-  } else {
-    switch(cluster_ptr->cluster.hashing_mode) {
+  case cluster_round_robin:
+    hash = cluster_ptr->cluster.hashing_id++;
+    break;
 
-    case cluster_round_robin:
-      idx = cluster_ptr->cluster.hashing_id++;
-      break;
+  case cluster_per_flow_2_tuple:
+    hash = hash_pkt_header(hdr, HASH_PKT_HDR_RECOMPUTE | HASH_PKT_HDR_MASK_PORT | HASH_PKT_HDR_MASK_PROTO | HASH_PKT_HDR_MASK_VLAN);
+    break;
 
-    case cluster_per_flow_2_tuple:
-      idx = hash_pkt_header(hdr, HASH_PKT_HDR_RECOMPUTE | HASH_PKT_HDR_MASK_PORT | HASH_PKT_HDR_MASK_PROTO | HASH_PKT_HDR_MASK_VLAN);
-      break;
+  case cluster_per_flow_4_tuple:
+    hash = hash_pkt_header(hdr, HASH_PKT_HDR_RECOMPUTE | HASH_PKT_HDR_MASK_PROTO | HASH_PKT_HDR_MASK_VLAN);
+    break;
 
-    case cluster_per_flow_4_tuple:
-      idx = hash_pkt_header(hdr, HASH_PKT_HDR_RECOMPUTE | HASH_PKT_HDR_MASK_PROTO | HASH_PKT_HDR_MASK_VLAN);
-      break;
+  case cluster_per_flow_tcp_5_tuple:
+    if(((hdr->extended_hdr.parsed_pkt.tunnel.tunnel_id == NO_TUNNEL_ID) ?
+	hdr->extended_hdr.parsed_pkt.l3_proto : hdr->extended_hdr.parsed_pkt.tunnel.tunneled_proto) == IPPROTO_TCP)
+      hash = hash_pkt_header(hdr, HASH_PKT_HDR_RECOMPUTE | HASH_PKT_HDR_MASK_VLAN); /* 5 tuple for TCP */
+    else 
+      hash = hash_pkt_header(hdr, HASH_PKT_HDR_RECOMPUTE | HASH_PKT_HDR_MASK_PORT | HASH_PKT_HDR_MASK_PROTO | HASH_PKT_HDR_MASK_VLAN); /* 2 tuple for non-TCP */
+    break;
 
-    case cluster_per_flow_tcp_5_tuple:
-	if(((hdr->extended_hdr.parsed_pkt.tunnel.tunnel_id == NO_TUNNEL_ID) ?
-	    hdr->extended_hdr.parsed_pkt.l3_proto : hdr->extended_hdr.parsed_pkt.tunnel.tunneled_proto) == IPPROTO_TCP)
-	  idx = hash_pkt_header(hdr, HASH_PKT_HDR_RECOMPUTE | HASH_PKT_HDR_MASK_VLAN); /* 5 tuple for TCP */
-	else 
-	  idx = hash_pkt_header(hdr, HASH_PKT_HDR_RECOMPUTE | HASH_PKT_HDR_MASK_PORT | HASH_PKT_HDR_MASK_PROTO | HASH_PKT_HDR_MASK_VLAN); /* 2 tuple for non-TCP */
+  case cluster_per_flow_5_tuple:
+    hash = hash_pkt_header(hdr, HASH_PKT_HDR_RECOMPUTE | HASH_PKT_HDR_MASK_VLAN);
+    break;
 
-      break;
-
-    case cluster_per_flow_5_tuple:
-      idx = hash_pkt_header(hdr, HASH_PKT_HDR_RECOMPUTE | HASH_PKT_HDR_MASK_VLAN);
-      break;
-
-    case cluster_per_flow:
-    default:
-      idx = hash_pkt_header(hdr, 0);
-      break;
-    }
-
-    if (idx < 0) idx = -idx; /* idx must be positive */
-
-    if(enable_frag_coherence && first_fragment) {
-      add_fragment_app_id(hdr->extended_hdr.parsed_pkt.ipv4_src,
-			  hdr->extended_hdr.parsed_pkt.ipv4_dst,
-			  ip_id, idx);
-    }
+  case cluster_per_flow:
+  default:
+    hash = hash_pkt_header(hdr, 0);
+    break;
   }
 
-  return(idx);
+  return(hash);
 }
 
 /* ********************************** */
@@ -4471,6 +4450,7 @@ static int skb_ring_handler(struct sk_buff *skb,
   ring_cluster_element *cluster_ptr;
   u_int16_t ip_id = 0;
   u_int8_t first_fragment = 0, second_fragment = 0;
+  int skb_hash = -1;
 
   *skb_reference_in_use = 0;
 
@@ -4572,9 +4552,8 @@ static int skb_ring_handler(struct sk_buff *skb,
 	 && recv_packet) {
 	skb = skk = defrag_skb(skb, displ, &hdr, &defragmented_skb);
 
-	if(skb == NULL) {
+	if(skb == NULL)
 	  return(0);
-	}
       }
     }
 
@@ -4636,15 +4615,36 @@ static int skb_ring_handler(struct sk_buff *skb,
 
       if(num_cluster_elements > 0) {
 	u_short num_iterations;
-	int skb_hash = hash_pkt_cluster(cluster_ptr, &hdr, ip_id, first_fragment, second_fragment) 
-                       % num_cluster_elements;
+	int cluster_element_idx;
+
+        if (enable_frag_coherence && second_fragment) {
+          if (skb_hash == -1) { /* read hash once */
+            skb_hash = get_fragment_app_id(hdr.extended_hdr.parsed_pkt.ipv4_src,
+				           hdr.extended_hdr.parsed_pkt.ipv4_dst,
+				           ip_id);
+            if (skb_hash < 0)
+              skb_hash = 0;
+          }
+        } else if (!(enable_frag_coherence && first_fragment) || skb_hash == -1) { 
+            /* compute hash once for all clusters in case of first fragment */
+
+            skb_hash = hash_pkt_cluster(cluster_ptr, &hdr);
+
+            if (enable_frag_coherence && first_fragment) {
+              add_fragment_app_id(hdr.extended_hdr.parsed_pkt.ipv4_src,
+			          hdr.extended_hdr.parsed_pkt.ipv4_dst,
+			          ip_id, skb_hash);
+            }
+        }
+
+        cluster_element_idx = skb_hash % num_cluster_elements;
 
 	/*
 	  If the hashing value is negative, then this is a fragment that we are 
 	  not able to reassemble and thus we discard as the application has no
 	  idea to what do with it
 	*/
-	if(skb_hash >= 0) {
+	if(cluster_element_idx >= 0) {
 	  /*
 	    We try to add the packet to the right cluster
 	    element, but if we're working in round-robin and this
@@ -4656,7 +4656,7 @@ static int skb_ring_handler(struct sk_buff *skb,
 	      num_iterations < num_cluster_elements;
 	      num_iterations++) {
 
-	    skElement = cluster_ptr->cluster.sk[skb_hash];
+	    skElement = cluster_ptr->cluster.sk[cluster_element_idx];
 
 	    if(skElement != NULL) {
 	      pfr = ring_sk(skElement);
@@ -4693,7 +4693,7 @@ static int skb_ring_handler(struct sk_buff *skb,
 	    if(cluster_ptr->cluster.hashing_mode != cluster_round_robin)
 	      break;
 	    else
-	      skb_hash = (skb_hash + 1) % num_cluster_elements;
+	      cluster_element_idx = (cluster_element_idx + 1) % num_cluster_elements;
 	  }
 	} else
 	  num_cluster_discarded_fragments++;
@@ -7248,7 +7248,7 @@ static int get_fragment_app_id(u_int32_t ipv4_src_host, u_int32_t ipv4_dst_host,
 {
   u_int hash_id = fragment_id % NUM_FRAGMENTS_HASH_SLOTS;
   struct list_head *ptr, *tmp_ptr;
-  u_int8_t app_id;
+  u_int8_t app_id = -1;
 
   if(unlikely(enable_debug))
     printk("[PF_RING] %s(fragment_id=%d) [num_cluster_fragments=%d]\n",
@@ -7276,14 +7276,13 @@ static int get_fragment_app_id(u_int32_t ipv4_src_host, u_int32_t ipv4_dst_host,
 	printk("[PF_RING] %s(fragment_id=%d): found %d [num_cluster_fragments=%d]\n",
 	       __FUNCTION__, fragment_id, app_id, num_cluster_fragments);
 
-      write_unlock(&cluster_fragments_lock);
-      return(app_id);
+      break; /* app_id found */
     }
   }
 
   write_unlock(&cluster_fragments_lock);
 
-  return(-1); /* Not found */
+  return(app_id); /* Not found */
 }
 
 /* ************************************* */
