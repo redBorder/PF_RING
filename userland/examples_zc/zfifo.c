@@ -173,9 +173,11 @@ void printHelp(void) {
   printf("-i <devices>    Comma-separated list of devices\n");
   printf("-c <cluster id> Cluster id\n");
   printf("-r <id>         Sorter thread core affinity\n");
-  printf("-t <id>         Timer thread core affinity\n");
+  //  printf("-t <id>         Timer thread core affinity\n");
   printf("-g <id>         Consumer thread core affinity\n");
   printf("-a              Active packet wait\n");
+
+  printf("\n\nExample: zfifo -i zc:eth1,zc:eth2 -c 10 -r 1 -g 2\n");
   exit(-1);
 }
 
