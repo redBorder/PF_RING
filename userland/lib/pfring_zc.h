@@ -194,7 +194,7 @@ pfring_zc_queue_breakloop(
 /**
  * Insert a packet into the queue.
  * @param queue        The queue handle.
- * @param pkt_handle   The pointer to the buffer handle to send. Once a packet has been sent, the buffer handle can be reused or if not longer necessary it must be freed by calling release_pkt_handle().
+ * @param pkt_handle   The pointer to the buffer handle to send. Once a packet has been sent, the buffer handle can be reused or if not longer necessary it must be freed by calling pfring_zc_release_packet_handle().
  * @param flush_packet The flag indicating whether this call should flush the enqueued packet, and older packets if any.
  * @return             The packet length on success, a negative value otherwise. 
  */
@@ -316,7 +316,7 @@ pfring_zc_create_multi_queue(
 /**
  * Send a packet to multiple queues bound to a multi-queue object.
  * @param multi_queue  The multi-queue handle.
- * @param pkt_handle   The pointer to the buffer handle to send. Once a packet has been sent, the buffer handle can be reused or if not longer necessary it must be freed by calling release_pkt_handle().
+ * @param pkt_handle   The pointer to the buffer handle to send. Once a packet has been sent, the buffer handle can be reused or if not longer necessary it must be freed by calling pfring_zc_release_packet_handle().
  * @param queues_mask  The mask with the egress queues where the buffer should be inserted. The LSB indicates the first queue in the multi-queue array.
  * @param flush_packet The flag indicating whether this call should flush the enqueued packet, and older packets if any.
  * @return             The number of packet copies enqueued. 
