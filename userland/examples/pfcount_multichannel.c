@@ -369,7 +369,7 @@ int main(int argc, char* argv[]) {
 
   memset(threads_core_affinity, -1, sizeof(threads_core_affinity));
   startTime.tv_sec = 0;
-  thiszone = gmt2local(0);
+  thiszone = gmt_to_local(0);
   numCPU = sysconf( _SC_NPROCESSORS_ONLN );
 
   while((c = getopt(argc,argv,"hi:l:mvae:w:b:rp:g:")) != -1) {

@@ -297,7 +297,7 @@ int main(int argc, char* argv[]) {
   filtering_rule rule;
   struct dummy_filter *filter;
 
-  thiszone = gmt2local(0);
+  thiszone = gmt_to_local(0);
 
   while((c = getopt(argc,argv,"hi:c:vp:a" /* "f:" */)) != -1) {
     switch(c) {

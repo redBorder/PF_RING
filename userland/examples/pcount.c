@@ -37,7 +37,7 @@ unsigned long long numPkts = 0, numBytes = 0;
 
 #define DEFAULT_DEVICE "eth1" /* "e1000" */
 
-int32_t gmt2local(time_t t);
+int32_t gmt_to_local(time_t t);
 int pcap_set_cluster(pcap_t *ring, u_int clusterId);
 int pcap_set_application_name(pcap_t *handle, char *name);
 char* pfring_format_numbers(double val, char *buf, u_int buf_len, u_int8_t add_decimals);
@@ -368,7 +368,7 @@ int main(int argc, char* argv[]) {
 #endif
 
   startTime.tv_sec = 0;
-  thiszone = gmt2local(0);
+  thiszone = gmt_to_local(0);
 
   while((c = getopt(argc,argv,"hi:l:v:f:S")) != '?') {
     if((c == 255) || (c == -1)) break;

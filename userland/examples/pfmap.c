@@ -337,7 +337,7 @@ int main(int argc, char* argv[]) {
   char buffer[2048];
 
   startTime.tv_sec = 0;
-  thiszone = gmt2local(0);
+  thiszone = gmt_to_local(0);
 
   while((c = getopt(argc,argv,"hi:l:vs:a" /* "f:" */)) != -1) {
     switch(c) {

@@ -683,7 +683,7 @@ int main(int argc, char* argv[]) {
   char *bpfFilter = NULL;
 
   startTime.tv_sec = 0;
-  thiszone = gmt2local(0);
+  thiszone = gmt_to_local(0);
 
   while((c = getopt(argc,argv,"hi:c:Cd:l:v:ae:n:w:o:p:b:rg:u:mtsSTx:f:z")) != '?') {
     if((c == 255) || (c == -1)) break;

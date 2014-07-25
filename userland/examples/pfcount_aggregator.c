@@ -461,7 +461,7 @@ int main(int argc, char* argv[]) {
 
   startTime.tv_sec = 0;
 #ifdef VERBOSE_SUPPORT
-  thiszone = gmt2local(0);
+  thiszone = gmt_to_local(0);
 #endif
 
   while((c = getopt(argc,argv,"hi:l:vse:w:p:b:g:")) != '?') {

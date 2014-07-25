@@ -530,7 +530,7 @@ int main(int argc, char* argv[]) {
 #endif
 
   startTime.tv_sec = 0;
-  thiszone = gmt2local(0);
+  thiszone = gmt_to_local(0);
 
   while((c = getopt(argc,argv,"hi:c:l:vae:n:w:m")) != '?') {
     if((c == 255) || (c == -1)) break;

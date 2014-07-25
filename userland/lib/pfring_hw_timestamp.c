@@ -31,7 +31,7 @@ void handle_ixia_hw_timestamp(u_char* buffer, struct pfring_pkthdr *hdr) {
   signature = (u_char*)&ixia->signature;
 
   if((signature[0] == 0xAF) && (signature[1] == 0x12)) {
-    if(unlikely(thiszone == 0)) thiszone = gmt2local(0);    
+    if(unlikely(thiszone == 0)) thiszone = gmt_to_local(0);    
 
     hdr->caplen = hdr->len = hdr->len - IXIA_TS_LEN;
     hdr->ts.tv_sec = ntohl(ixia->sec) - thiszone;

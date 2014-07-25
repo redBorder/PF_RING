@@ -371,7 +371,7 @@ int main(int argc, char* argv[]) {
   } else
     pfring_set_application_name(pd, "pfwrite");
 
-  thiszone = gmt2local(0);
+  thiszone = gmt_to_local(0);
   if(device) printf("Capture device: %s\n", device);
   printf("Dump file path: %s\n", out_dump);
 

@@ -787,7 +787,7 @@ int pfring_parse_bpf_filter(char *filter_buffer, u_int caplen,
 
 /* *************************************** */
 
-int32_t gmt2local(time_t t) {
+int32_t gmt_to_local(time_t t) {
   int dt, dir;
   struct tm *gmt, *loc;
   struct tm sgmt;
