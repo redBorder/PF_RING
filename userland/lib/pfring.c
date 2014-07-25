@@ -40,6 +40,8 @@
 #include "pfring_mod_dna.h"
 #endif
 
+#include "pfring_ixia.c"
+
 #ifdef HAVE_PF_RING_ZC
 extern int pfring_zc_open(pfring *ring);
 #endif
@@ -129,6 +131,7 @@ pfring* pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags) 
   ring->disable_parsing     = !!(flags & PF_RING_DO_NOT_PARSE);
   ring->disable_timestamp   = !!(flags & PF_RING_DO_NOT_TIMESTAMP);
   ring->chunk_mode_enabled  = !!(flags & PF_RING_CHUNK_MODE);
+  ring->ixia_timestamp_enabled = !!(flags & PF_RING_IXIA_TIMESTAMP);
 
 #ifdef RING_DEBUG
   printf("[PF_RING] pfring_open: device_name=%s\n", device_name);
@@ -391,6 +394,8 @@ int pfring_loop(pfring *ring, pfringProcesssPacket looper,
         if (unlikely(ring->userspace_bpf && bpf_filter(ring->userspace_bpf_filter.bf_insns, buffer, hdr.caplen, hdr.len) == 0))
           continue; /* rejected */
 #endif
+        if (ring->ixia_timestamp_enabled)
+          ixia_add_timestamp(buffer,hdr.caplen, &hdr);
 	
 	looper(&hdr, buffer, user_bytes);
       } else {
@@ -607,7 +612,10 @@ recv_next:
 #endif
 
     rc = ring->recv(ring, buffer, buffer_len, hdr, wait_for_incoming_packet);
-
+		
+    if (ring->ixia_timestamp_enabled)
+      ixia_add_timestamp(*buffer,buffer_len, hdr);
+			
     hdr->caplen = min_val(hdr->caplen, ring->caplen);
 
 #ifdef ENABLE_BPF

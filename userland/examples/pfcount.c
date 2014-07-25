@@ -317,11 +317,11 @@ void print_packet(const struct pfring_pkthdr *h, const u_char *p, u_int8_t dump_
 
   if(h->ts.tv_sec == 0) {
     memset((void*)&h->extended_hdr.parsed_pkt, 0, sizeof(struct pkt_parsing_info));
-    pfring_parse_pkt((u_char*)p, (struct pfring_pkthdr*)h, 5, 1, 1);
+    pfring_parse_pkt((u_char*)p, (struct pfring_pkthdr*)h, 5, 0, 1);
   }
-
+  
   s = (h->ts.tv_sec + thiszone) % 86400;
-
+  
   if(h->extended_hdr.timestamp_ns) {
     if (pd->dna.dna_dev.mem_info.device_model != intel_igb_82580 /* other than intel_igb_82580 */)
       s = ((h->extended_hdr.timestamp_ns / 1000000000) + thiszone) % 86400;
@@ -520,6 +520,7 @@ void printHelp(void) {
   printf("-o <path>       Dump matching packets onto the specified pcap (need -x).\n");
   printf("-u <1|2>        For each incoming packet add a drop rule (1=hash, 2=wildcard rule)\n");
   printf("-v <mode>       Verbose [1: verbose, 2: very verbose (print packet payload)]\n");
+  printf("-z              Enabled ixia timestamping\n");
   exit(0);
 }
 
@@ -701,6 +702,7 @@ int main(int argc, char* argv[]) {
   int promisc, snaplen = DEFAULT_SNAPLEN, rc;
   u_int clusterId = 0;
   u_int8_t chunk_mode = 0;
+  u_int8_t enable_ixia_timestamp = 0;
   u_int32_t flags = 0;
   int bind_core = -1;
   packet_direction direction = rx_and_tx_direction;
@@ -711,7 +713,7 @@ int main(int argc, char* argv[]) {
   startTime.tv_sec = 0;
   thiszone = gmt2local(0);
 
-  while((c = getopt(argc,argv,"hi:c:Cd:l:v:ae:n:w:o:p:b:rg:u:mtsSTx:f:")) != '?') {
+  while((c = getopt(argc,argv,"hi:c:Cd:l:v:ae:n:w:o:p:b:rg:u:mtsSTx:f:z")) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -795,7 +797,9 @@ int main(int argc, char* argv[]) {
       case 1:
 	printf("Adding hash filtering rules\n");
 	break;
-
+      case 'z':
+	enable_ixia_timestamp = 1;
+	break;
       default:
 	printf("Adding wildcard filtering rules\n");
 	add_drop_rule = 2;
@@ -855,6 +859,7 @@ int main(int argc, char* argv[]) {
   if(enable_hw_timestamp)     flags |= PF_RING_HW_TIMESTAMP;
   if(!dont_strip_timestamps)  flags |= PF_RING_STRIP_HW_TIMESTAMP;
   if(chunk_mode)              flags |= PF_RING_CHUNK_MODE;
+  if(enable_ixia_timestamp)   flags |= PF_RING_IXIA_TIMESTAMP;
   flags |= PF_RING_DNA_SYMMETRIC_RSS;  /* Note that symmetric RSS is ignored by non-DNA drivers */
 
   //printf("flags: %d\n", flags);

@@ -166,7 +166,7 @@ struct pfring_bpf_program {
 
 struct __pfring {
   u_int8_t initialized, enabled, long_header, rss_mode;
-  u_int8_t force_timestamp, strip_hw_timestamp, disable_parsing, disable_timestamp;
+  u_int8_t force_timestamp, strip_hw_timestamp, disable_parsing, disable_timestamp, ixia_timestamp_enabled;
   u_int8_t chunk_mode_enabled, userspace_bpf;
   packet_direction direction; /* Specify the capture direction for packets */
   socket_mode mode;
@@ -344,6 +344,7 @@ struct __pfring {
 #define PF_RING_DO_NOT_PARSE         1 << 9  /**< pfring_open() flag: Disable packet parsing also when 1-copy is used. (parsing already disabled in zero-copy) */
 #define PF_RING_DO_NOT_TIMESTAMP     1 << 10 /**< pfring_open() flag: Disable packet timestamping also when 1-copy is used. (sw timestamp already disabled in zero-copy) */
 #define PF_RING_CHUNK_MODE           1 << 11 /**< pfring_open() flag: Enable chunk mode operations. This mode is supported only by specific adapters and it's not for general purpose. */
+#define PF_RING_IXIA_TIMESTAMP	     1 << 12 /**< pfring_open() flag: Enable ixia timestemp. */
 
 /* ********************************* */
 
