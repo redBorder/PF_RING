@@ -221,6 +221,16 @@ pfring_zc_send_pkt_burst(
   u_int8_t flush_packets 
 ); 
 
+/**
+ * Check if the queue is full. 
+ * @param queue The queue handle.
+ * @return      1 on full queue, 0 otherwise. 
+ */
+int 
+pfring_zc_queue_is_full(
+  pfring_zc_queue *queue 
+); 
+
 /* **************************************************************************************** */
 
 /**
