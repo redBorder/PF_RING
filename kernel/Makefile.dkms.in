@@ -4,7 +4,6 @@ add: remove
 	\/bin/rm -rf /usr/src/pf_ring-@VERS@
 	mkdir /usr/src/pf_ring-@VERS@
 	cp -r Makefile dkms.conf pf_ring.c linux/ /usr/src/pf_ring-@VERS@
-	cp -r pf_ring-dkms-mkdeb /usr/src/pf_ring-@VERS@/
 	dkms add -m pf_ring -v @VERS@
 
 build: add
@@ -13,11 +12,21 @@ build: add
 install: build
 	dkms install -m pf_ring -v @VERS@
 
-deb: add install
+deb: add add_deb install
 	dkms mkdeb -m pf_ring -v @VERS@ --source-only
+
+rpm: add add_rpm install
+	dkms mkrpm -m pf_ring -v @VERS@ --source-only
+
+add_rpm:
+	cp -r pf_ring-dkms-*.spec /usr/src/pf_ring-@VERS@/
+
+add_deb:
+	cp -r pf_ring-dkms-mkdeb /usr/src/pf_ring-@VERS@/
 
 remove:
 	-dkms remove -m pf_ring -v @VERS@ --all
 
 veryclean: remove
 	\/bin/rm -fr /usr/src/pf_ring-@VERS@
+	
