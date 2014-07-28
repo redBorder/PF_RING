@@ -1178,7 +1178,10 @@ pcap_activate_linux(pcap_t *handle)
 	  if(active) pf_ring_active_poll = atoi(active);
 	  handle->ring = pfring_open((char*)device, handle->snapshot, flags);
 
-	  if(handle->ring) {
+	  if(handle->ring != NULL) {
+
+	    if(getenv("PCAP_PF_RING_RECV_ONLY")) pfring_set_socket_mode(handle->ring, recv_only_mode);
+
 	    if(clusterId = getenv("PCAP_PF_RING_CLUSTER_ID")) {
 	      if(atoi(clusterId) > 0 && atoi(clusterId) < 255) {
 		if(getenv("PCAP_PF_RING_USE_CLUSTER_PER_FLOW"))
@@ -1206,8 +1209,8 @@ pcap_activate_linux(pcap_t *handle)
 	    }
 	    pfring_set_poll_watermark(handle->ring, 1 /* watermark */);
 	    handle->ring->dna.dna_rx_sync_watermark = 0; /* trick (otherwise tshark wouldn't work with DNA) */
-	  } else
-	    handle->ring = NULL;
+
+	  }
 	} else
           handle->ring = NULL;
 
