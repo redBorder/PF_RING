@@ -492,7 +492,8 @@ void printHelp(void) {
   printf("-o <path>       Dump matching packets onto the specified pcap (need -x).\n");
   printf("-u <1|2>        For each incoming packet add a drop rule (1=hash, 2=wildcard rule)\n");
   printf("-v <mode>       Verbose [1: verbose, 2: very verbose (print packet payload)]\n");
-  printf("-z              Enabled ixia timestamping\n");
+  printf("-z <mode>       Enabled hw timestamping/stripping. Currently the supported TS mode are:\n"
+	 "                ixia\tTimestamped packets by ixiacom.com hardware devices\n");
   exit(0);
 }
 
@@ -685,7 +686,7 @@ int main(int argc, char* argv[]) {
   startTime.tv_sec = 0;
   thiszone = gmt_to_local(0);
 
-  while((c = getopt(argc,argv,"hi:c:Cd:l:v:ae:n:w:o:p:b:rg:u:mtsSTx:f:z")) != '?') {
+  while((c = getopt(argc,argv,"hi:c:Cd:l:v:ae:n:w:o:p:b:rg:u:mtsSTx:f:z:")) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -783,7 +784,10 @@ int main(int argc, char* argv[]) {
       use_extended_pkt_header = 1;
       break;
     case 'z':
-      enable_ixia_timestamp = 1;
+      if(strcmp(optarg, "ixia") == 0)
+	enable_ixia_timestamp = 1;
+      else
+	printf("WARNING: unknown -z option, it has been ignored\n");
       break;      
     }
   }
@@ -805,10 +809,10 @@ int main(int argc, char* argv[]) {
     pfring_config(cpu_percentage);
   }
 
-  if(automa) {
+  if(automa || enable_ixia_timestamp) {
     if(snaplen < 1500) {
-      printf("WARNING: Snaplen smaller than the MTU. Enlarging it to %u\n", snaplen);
       snaplen = 1500;
+      printf("WARNING: Snaplen smaller than the MTU. Enlarging it (new snaplen %u)\n", snaplen);
     }
 
     if(out_pcap_file) {
