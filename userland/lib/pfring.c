@@ -198,6 +198,7 @@ pfring* pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags) 
   }
 
   if(ret < 0) {
+    errno = ENODEV;
     if(ring->device_name) free(ring->device_name);
     free(ring);
     return NULL;
