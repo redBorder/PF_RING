@@ -323,7 +323,7 @@ int main(int argc, char* argv[]) {
   for (i = 0; i < num_devices; i++) {
     inzq[i] = pfring_zc_open_device(zc, devices[i], rx_only, 0);
 
-    if(inzq[0] == NULL) {
+    if(inzq[i] == NULL) {
       fprintf(stderr, "pfring_zc_open_device error [%s] Please check that %s is up and not already used\n",
 	      strerror(errno), devices[i]);
       return -1;
