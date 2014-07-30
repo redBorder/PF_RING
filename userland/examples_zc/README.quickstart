@@ -10,10 +10,10 @@ Quick Start Guide
    PF_RING ZC-aware drivers can be found in drivers/PF_RING_aware (identified by the '-zc' suffix)
 
  $ cd PF_RING/drivers/PF_RING_aware/intel/ixgbe/ixgbe-3.18.7-zc/src; make
- $ ./load_dna_driver.sh
+ $ ./load_driver.sh
 
 2. Enable and mount enough hugepages, they are needed for memory allocation (please read PF_RING/README.hugepages). 
-   Note: hugepages are automatically initialised by the load_dna_driver.sh script you can use to load the driver.
+   Note: hugepages are automatically initialised by the load_driver.sh script you can use to load the driver.
 
  $ echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
  $ mkdir /mnt/huge
