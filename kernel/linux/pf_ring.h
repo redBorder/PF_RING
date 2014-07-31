@@ -286,7 +286,9 @@ struct pfring_extended_pkthdr {
   u_int64_t timestamp_ns;  /* Packet timestamp at ns precision. Note that if your NIC supports
 			      hardware timestamp, this is the place to read timestamp from */
 #define PKT_FLAGS_CHECKSUM_OFFLOAD 1 << 0 /* IP/TCP checksum offload enabled */
-#define PKT_FLAGS_CHECKSUM_OK      1 << 1 /* valid with checksum offload enabled */
+#define PKT_FLAGS_CHECKSUM_OK      1 << 1 /* Valid checksum (with IP/TCP checksum offload enabled) */
+#define PKT_FLAGS_IP_MORE_FRAG     1 << 2 /* IP More fragments flag set */
+#define PKT_FLAGS_IP_FRAG_OFFSET   1 << 3 /* IP fragment offset set (not 0) */
   u_int32_t flags;
   /* --- short header ends here --- */
   u_int8_t rx_direction;   /* 1=RX: packet received by the NIC, 0=TX: packet transmitted by the NIC */

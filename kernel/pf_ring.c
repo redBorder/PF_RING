@@ -348,7 +348,7 @@ static int remove_from_cluster(struct sock *sock, struct pf_ring_socket *pfr);
 static int ring_map_dna_device(struct pf_ring_socket *pfr,
 			       dna_device_mapping * mapping);
 
-static int  get_fragment_app_id(u_int32_t ipv4_src_host, u_int32_t ipv4_dst_host, u_int16_t fragment_id);
+static int  get_fragment_app_id(u_int32_t ipv4_src_host, u_int32_t ipv4_dst_host, u_int16_t fragment_id, u_int8_t more_fragments);
 static void add_fragment_app_id(u_int32_t ipv4_src_host, u_int32_t ipv4_dst_host, u_int16_t fragment_id, u_int8_t app_id);
 
 /* Extern */
@@ -1934,9 +1934,7 @@ static inline u_int32_t hash_pkt_header(struct pfring_pkthdr * hdr, u_int32_t fl
 
 static int parse_raw_pkt(u_char *data, u_int data_len,
 			 struct pfring_pkthdr *hdr,
-			 u_int16_t *ip_id,
-			 u_int8_t *first_fragment,
-			 u_int8_t *second_fragment)
+			 u_int16_t *ip_id)
 {
   struct ethhdr *eh = (struct ethhdr *)data;
   u_int16_t displ = sizeof(struct ethhdr), ip_len, fragment_offset = 0, tunnel_offset = 0;
@@ -1945,7 +1943,7 @@ static int parse_raw_pkt(u_char *data, u_int data_len,
 
   /* Default */
   hdr->extended_hdr.parsed_pkt.tunnel.tunnel_id = NO_TUNNEL_ID;
-  *ip_id = 0, *first_fragment = 0, *second_fragment = 0;
+  *ip_id = 0;
 
   if(data_len < sizeof(struct ethhdr)) return(0);
 
@@ -2018,9 +2016,9 @@ static int parse_raw_pkt(u_char *data, u_int data_len,
     //if(unlikely(enable_debug)) printk("[PF_RING] frag_off=%04X\n", frag_off);
 
     if(frag_off & 0x1FFF /* Fragment offset */)
-      *second_fragment = 1; /* Packet offset > 0 */
-    else if(frag_off & 0x2000 /* More Fragments set */)
-      *first_fragment = 1;
+      hdr->extended_hdr.flags |= PKT_FLAGS_IP_FRAG_OFFSET; /* Packet offset > 0 */
+    if(frag_off & 0x2000 /* More Fragments set */)
+      hdr->extended_hdr.flags |= PKT_FLAGS_IP_MORE_FRAG;
 
     hdr->extended_hdr.parsed_pkt.ipv4_src = ntohl(ip->saddr);
     hdr->extended_hdr.parsed_pkt.ipv4_dst = ntohl(ip->daddr);
@@ -2339,16 +2337,15 @@ static int parse_pkt(struct sk_buff *skb,
 		     u_int8_t real_skb,
 		     u_int16_t skb_displ,
 		     struct pfring_pkthdr *hdr,
-		     u_int16_t *ip_id,
-		     u_int8_t *first_fragment,
-		     u_int8_t *second_fragment) {
+		     u_int16_t *ip_id) 
+{
   int rc;
   u_char buffer[128]; /* Enough for standard and tunneled headers */
   u_int16_t data_len = min((u_int16_t)(skb->len + skb_displ), (u_int16_t)sizeof(buffer));
 
   skb_copy_bits(skb, -skb_displ, buffer, data_len);
 
-  rc = parse_raw_pkt(buffer, data_len, hdr, ip_id, first_fragment, second_fragment);
+  rc = parse_raw_pkt(buffer, data_len, hdr, ip_id);
 
   hdr->extended_hdr.parsed_pkt.offset.eth_offset = -skb_displ;
 
@@ -3091,9 +3088,8 @@ static int add_packet_to_ring(struct pf_ring_socket *pfr,
 {
   if(parse_pkt_first) {
     u_int16_t ip_id;
-    u_int8_t first_fragment, second_fragment;
 
-    parse_pkt(skb, real_skb, displ, hdr, &ip_id, &first_fragment, &second_fragment);
+    parse_pkt(skb, real_skb, displ, hdr, &ip_id);
   }
 
   ring_read_lock();
@@ -3112,9 +3108,8 @@ static int add_raw_packet_to_ring(struct pf_ring_socket *pfr, struct pfring_pkth
 
   if(parse_pkt_first) {
     u_int16_t ip_id;
-    u_int8_t first_fragment, second_fragment;
 
-    parse_raw_pkt(data, data_len, hdr, &ip_id, &first_fragment, &second_fragment);
+    parse_raw_pkt(data, data_len, hdr, &ip_id);
   }
 
   ring_read_lock();
@@ -4363,7 +4358,6 @@ static struct sk_buff* defrag_skb(struct sk_buff *skb,
 
 	if(skk != NULL) {
 	  u_int16_t ip_id;
-	  u_int8_t first_fragment, second_fragment;
 
 	  if(unlikely(enable_debug)) {
 	    unsigned char *c;
@@ -4393,7 +4387,7 @@ static struct sk_buff* defrag_skb(struct sk_buff *skb,
 	  skb = skk;
 	  *defragmented_skb = 1;
 	  hdr->len = hdr->caplen = skb->len + displ;
-	  parse_pkt(skb, 1, displ, hdr, &ip_id, &first_fragment, &second_fragment);
+	  parse_pkt(skb, 1, displ, hdr, &ip_id);
 	} else {
 	  //printk("[PF_RING] Fragment queued \n");
 	  return(NULL);	/* mask rcvd fragments */
@@ -4449,7 +4443,6 @@ static int skb_ring_handler(struct sk_buff *skb,
   struct pf_ring_socket *pfr;
   ring_cluster_element *cluster_ptr;
   u_int16_t ip_id = 0;
-  u_int8_t first_fragment = 0, second_fragment = 0;
   int skb_hash = -1;
 
   *skb_reference_in_use = 0;
@@ -4528,7 +4521,7 @@ static int skb_ring_handler(struct sk_buff *skb,
     hdr.extended_hdr.parsed_header_len = 0;
 
     if(pfr && pfr->rehash_rss != NULL && skb->dev) {
-      parse_pkt(skb, real_skb, displ, &hdr, &ip_id, &first_fragment, &second_fragment);
+      parse_pkt(skb, real_skb, displ, &hdr, &ip_id);
       channel_id = pfr->rehash_rss(skb, &hdr) % get_num_rx_queues(skb->dev);
       pfr = device_rings[skb->dev->ifindex][channel_id];
     }
@@ -4543,8 +4536,7 @@ static int skb_ring_handler(struct sk_buff *skb,
 					  displ, 0, NULL, NULL, 0, real_skb ? &clone_id : NULL);
     }
   } else {
-    is_ip_pkt = parse_pkt(skb, real_skb, displ, &hdr,
-			  &ip_id, &first_fragment, &second_fragment);
+    is_ip_pkt = parse_pkt(skb, real_skb, displ, &hdr, &ip_id);
 
     if(enable_ip_defrag) {
       if(real_skb
@@ -4616,12 +4608,15 @@ static int skb_ring_handler(struct sk_buff *skb,
       if(num_cluster_elements > 0) {
 	u_short num_iterations;
 	int cluster_element_idx;
+        int fragment_not_first = hdr.extended_hdr.flags & PKT_FLAGS_IP_FRAG_OFFSET;
+        int more_fragments     = hdr.extended_hdr.flags & PKT_FLAGS_IP_MORE_FRAG;
+	int first_fragment     = more_fragments && !fragment_not_first;
 
-        if (enable_frag_coherence && second_fragment) {
+        if (enable_frag_coherence && fragment_not_first) {
           if (skb_hash == -1) { /* read hash once */
             skb_hash = get_fragment_app_id(hdr.extended_hdr.parsed_pkt.ipv4_src,
 				           hdr.extended_hdr.parsed_pkt.ipv4_dst,
-				           ip_id);
+				           ip_id, more_fragments);
             if (skb_hash < 0)
               skb_hash = 0;
           }
@@ -4631,9 +4626,8 @@ static int skb_ring_handler(struct sk_buff *skb,
             skb_hash = hash_pkt_cluster(cluster_ptr, &hdr);
 
             if (enable_frag_coherence && first_fragment) {
-              add_fragment_app_id(hdr.extended_hdr.parsed_pkt.ipv4_src,
-			          hdr.extended_hdr.parsed_pkt.ipv4_dst,
-			          ip_id, skb_hash);
+              add_fragment_app_id(hdr.extended_hdr.parsed_pkt.ipv4_src, hdr.extended_hdr.parsed_pkt.ipv4_dst,
+                ip_id, skb_hash % num_cluster_elements);
             }
         }
 
@@ -6829,9 +6823,9 @@ unsigned int ring_poll(struct file *file,
   struct pf_ring_socket *pfr = ring_sk(sock->sk);
   int rc, mask = 0;
 
-  if(unlikely(enable_debug))
-    printk("[PF_RING] -- poll called [DNA: %p][%s]\n", pfr->dna_device,
-	   pfr->ring_netdev->dev->name ? pfr->ring_netdev->dev->name : "???");
+  //if(unlikely(enable_debug))
+  //  printk("[PF_RING] -- poll called [DNA: %p][%s]\n", pfr->dna_device,
+  //	   pfr->ring_netdev->dev->name ? pfr->ring_netdev->dev->name : "???");
 
   pfr->num_poll_calls++;
 
@@ -6841,8 +6835,8 @@ unsigned int ring_poll(struct file *file,
   if(pfr->dna_device == NULL) {
     /* PF_RING mode (No DNA) */
 
-    /* if(unlikely(enable_debug))
-      printk("[PF_RING] poll called (non DNA device)\n"); */
+    // if(unlikely(enable_debug))
+    //  printk("[PF_RING] poll called (non DNA device)\n");
 
     pfr->ring_active = 1;
     // smp_rmb();
@@ -7244,15 +7238,15 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 
 /* ************************************* */
 
-static int get_fragment_app_id(u_int32_t ipv4_src_host, u_int32_t ipv4_dst_host, u_int16_t fragment_id) 
+static int get_fragment_app_id(u_int32_t ipv4_src_host, u_int32_t ipv4_dst_host, u_int16_t fragment_id, u_int8_t more_fragments) 
 {
   u_int hash_id = fragment_id % NUM_FRAGMENTS_HASH_SLOTS;
   struct list_head *ptr, *tmp_ptr;
   u_int8_t app_id = -1;
 
-  if(unlikely(enable_debug))
-    printk("[PF_RING] %s(fragment_id=%d) [num_cluster_fragments=%d]\n",
-	   __FUNCTION__, fragment_id, num_cluster_fragments);
+  //if(unlikely(enable_debug))
+  //  printk("[PF_RING] %s(fragment_id=%d) [num_cluster_fragments=%d]\n",
+  //	   __FUNCTION__, fragment_id, num_cluster_fragments);
 
   if(num_cluster_fragments == 0)
     return(-1); /* no fragment */
@@ -7265,16 +7259,18 @@ static int get_fragment_app_id(u_int32_t ipv4_src_host, u_int32_t ipv4_dst_host,
     if(frag->ip_fragment_id == fragment_id
        && frag->ipv4_src_host == ipv4_src_host
        && frag->ipv4_dst_host == ipv4_dst_host) {
-      /* Found: 1) return queue_id and 2) delete this entry */
+      /* Found: 1) return queue_id and 2) delete this entry if last fragment (not more_fragments) */
       app_id = frag->cluster_app_id;
 
-      list_del(ptr);  
-      kfree(frag);
-      num_cluster_fragments--;
+      //if(unlikely(enable_debug))
+      //  printk("[PF_RING] %s(fragment_id=%d): found %d [num_cluster_fragments=%d]\n",
+      //         __FUNCTION__, fragment_id, app_id, num_cluster_fragments);
 
-      if(unlikely(enable_debug))
-	printk("[PF_RING] %s(fragment_id=%d): found %d [num_cluster_fragments=%d]\n",
-	       __FUNCTION__, fragment_id, app_id, num_cluster_fragments);
+      if(!more_fragments){
+        list_del(ptr);  
+        kfree(frag);
+        num_cluster_fragments--;
+      }
 
       break; /* app_id found */
     }
@@ -7329,9 +7325,9 @@ static void add_fragment_app_id(u_int32_t ipv4_src_host, u_int32_t ipv4_dst_host
   if(num_cluster_fragments > MAX_CLUSTER_FRAGMENTS_LEN) /* Avoid filling up all memory */
     return;
 
-  if(unlikely(enable_debug))
-    printk("[PF_RING] %s(fragment_id=%d, app_id=%d) [num_cluster_fragments=%d]\n",
-	   __FUNCTION__, fragment_id, app_id, num_cluster_fragments);
+  //if(unlikely(enable_debug))
+  //  printk("[PF_RING] %s(fragment_id=%d, app_id=%d) [num_cluster_fragments=%d]\n",
+  //	   __FUNCTION__, fragment_id, app_id, num_cluster_fragments);
 
   write_lock(&cluster_fragments_lock);
 
@@ -7352,7 +7348,7 @@ static void add_fragment_app_id(u_int32_t ipv4_src_host, u_int32_t ipv4_dst_host
 
   /* 2. Not found, let's add it */
   if((frag = kmalloc(sizeof(struct hash_fragment_node), GFP_ATOMIC)) == NULL) {
-    printk("[PF_RING] Out of memory\n");
+    printk("[PF_RING] Out of memory (%s)\n", __FUNCTION__);
     write_unlock(&cluster_fragments_lock);
     return;
   }
