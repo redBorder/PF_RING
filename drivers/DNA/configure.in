@@ -1,0 +1,13 @@
+AC_INIT([Makefile.in], 1.0)
+
+DRV_TYPE="ixgbe"
+DRV_VERSION=`grep "IXGBE=" Makefile|cut -d '-' -f 2`
+
+AC_SUBST(DRV_TYPE)
+AC_SUBST(DRV_VERSION)
+
+AC_CONFIG_FILES(Makefile.dkms)
+AC_CONFIG_FILES(dkms.conf)
+#AC_CONFIG_FILES(pf_ring-dkms-mkrpm.spec)
+
+AC_OUTPUT
