@@ -24,6 +24,10 @@
 //#define PF_RING_ZC_DEVICE_HW_TIMESTAMP       1 << 3
 //#define PF_RING_ZC_DEVICE_STRIP_HW_TIMESTAMP 1 << 4
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef void pfring_zc_cluster;
 typedef void pfring_zc_queue;
 typedef void pfring_zc_buffer_pool;
@@ -611,6 +615,10 @@ char *
 pfring_zc_version();
 
 /* **************************************************************************************** */
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _PF_RING_ZC_H_ */
 
