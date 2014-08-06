@@ -4625,6 +4625,9 @@ static int skb_ring_handler(struct sk_buff *skb,
 
             skb_hash = hash_pkt_cluster(cluster_ptr, &hdr);
 
+            if (skb_hash < 0)
+              skb_hash = -skb_hash;
+
             if (enable_frag_coherence && first_fragment) {
               add_fragment_app_id(hdr.extended_hdr.parsed_pkt.ipv4_src, hdr.extended_hdr.parsed_pkt.ipv4_dst,
                 ip_id, skb_hash % num_cluster_elements);
