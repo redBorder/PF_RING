@@ -53,23 +53,29 @@
 #define BURST_API
 #define BURSTLEN    16 /* pow 2 */
 
+#define N2DISK_METADATA             16
+#define N2DISK_CONSUMER_QUEUE_LEN 8192
+#define N2DISK_PREFETCH_BUFFERS      8
+
 pfring_zc_cluster *zc;
 pfring_zc_queue *zq;
 pfring_zc_pkt_buff *buffers[NBUFF];
 
 struct timeval startTime;
 unsigned long long numPkts = 0, numBytes = 0;
-int cluster_id = -1, bind_core = -1, pps = -1, packet_len = 60, num_ips = 0;
+int cluster_id = -1, bind_core = -1, pps = -1, packet_len = 60, num_ips = 0, metadata_len = 0;
 u_int64_t num_to_send = 0;
 u_int8_t active = 0, do_shutdown = 0, flush_packet = 0;
 #ifdef BURST_API
 u_int8_t use_pkt_burst_api = 0;
 #endif
+u_int8_t n2disk_producer = 0;
+u_int32_t n2disk_threads;
 
 u_char stdin_packet[9000];
 int stdin_packet_len = 0;
 
-u_int32_t num_queue_buffers;
+u_int32_t num_queue_buffers, num_consumer_buffers = 0;
 
 /* *************************************** */
 
@@ -317,13 +323,15 @@ void printHelp(void) {
   printf("Using PFRING_ZC v.%s\n", pfring_zc_version());
   printf("A traffic generator able to replay synthetic udp packets or hex from standard input.\n"); 
   printf("-h              Print this help\n");
-  printf("-i <device>     Device name\n");
+  printf("-i <device>     Device name (optional: do not specify a device to send to a sw queue)\n");
   printf("-c <cluster id> Cluster id\n");
   printf("-g <core_id>    Bind this app to a core\n");
   printf("-p <pps>        Rate (packets/s)\n");
   printf("-l <len>        Packet len (bytes)\n");
   printf("-n <num>        Number of packets\n");
   printf("-b <num>        Number of different IPs\n");
+  printf("-m <len>        Metadata len (bytes)\n");
+  printf("-N <num>        Simulate a producer for n2disk multi-thread (<num> threads)\n");
   printf("-z              Use burst API\n");
   printf("-a              Active packet wait\n");
   exit(-1);
@@ -453,7 +461,7 @@ int main(int argc, char* argv[]) {
 
   startTime.tv_sec = 0;
 
-  while((c = getopt(argc,argv,"ab:c:g:hi:n:p:l:z")) != '?') {
+  while((c = getopt(argc,argv,"ab:c:g:hi:n:p:l:zN:")) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -489,10 +497,21 @@ int main(int argc, char* argv[]) {
       use_pkt_burst_api = 1;
       break;
 #endif
+    case 'N':
+      n2disk_producer = 1;
+      n2disk_threads = atoi(optarg);
+      break;
     }
   }
 
   if (cluster_id < 0) printHelp();
+
+  if (n2disk_producer) {
+    if (device != NULL) printHelp();
+    if (n2disk_threads < 1) printHelp();
+    metadata_len = N2DISK_METADATA;
+    num_consumer_buffers += (n2disk_threads * (N2DISK_CONSUMER_QUEUE_LEN + 1)) + N2DISK_PREFETCH_BUFFERS;
+  }
   
   if (device) {
     num_queue_buffers = MAX_CARD_SLOTS;
@@ -507,9 +526,9 @@ int main(int argc, char* argv[]) {
 
   zc = pfring_zc_create_cluster(
     cluster_id, 
-    max_packet_len(device), 
-    0,
-    num_queue_buffers + NBUFF, 
+    max_packet_len(device),
+    metadata_len, 
+    num_queue_buffers + NBUFF + num_consumer_buffers, 
     numa_node_of_cpu(bind_core),
     NULL /* auto hugetlb mountpoint */ 
   );
@@ -548,6 +567,28 @@ int main(int argc, char* argv[]) {
     }
    
     fprintf(stderr, "Sending packets to cluster %u queue %u\n", cluster_id, 0);
+
+    if (n2disk_producer) {
+      char queues_list[256];
+      queues_list[0] = '\0';
+
+      for (i = 0; i < n2disk_threads; i++) {
+        if(pfring_zc_create_queue(zc, N2DISK_CONSUMER_QUEUE_LEN) == NULL) {
+          fprintf(stderr, "pfring_zc_create_queue error [%s]\n", strerror(errno));
+          return -1;
+        }
+        sprintf(&queues_list[strlen(queues_list)], "%d,", i+1);
+      }
+      queues_list[strlen(queues_list)-1] = '\0';
+
+      if (pfring_zc_create_buffer_pool(zc, N2DISK_PREFETCH_BUFFERS) == NULL) {
+        fprintf(stderr, "pfring_zc_create_buffer_pool error\n");
+        return -1;
+      }
+
+      fprintf(stderr, "Run n2disk with: --cluster-ipc-attach --cluster-id %d --cluster-ipc-queues %s --cluster-ipc-pool 0\n", cluster_id, queues_list);
+    }
+
   }
 
   signal(SIGINT,  sigproc);
