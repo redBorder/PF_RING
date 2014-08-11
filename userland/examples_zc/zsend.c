@@ -330,7 +330,6 @@ void printHelp(void) {
   printf("-l <len>        Packet len (bytes)\n");
   printf("-n <num>        Number of packets\n");
   printf("-b <num>        Number of different IPs\n");
-  printf("-m <len>        Metadata len (bytes)\n");
   printf("-N <num>        Simulate a producer for n2disk multi-thread (<num> threads)\n");
   printf("-z              Use burst API\n");
   printf("-a              Active packet wait\n");
