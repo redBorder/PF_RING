@@ -220,11 +220,12 @@ void* consumer_thread(void* _id) {
 
 /* *************************************** */
 
-static int rr = 0;
-
+static int rr = -1;
+ 
 int32_t rr_distribution_func(pfring_zc_pkt_buff *pkt_handle, pfring_zc_queue *in_queue, void *user) {
   long num_out_queues = (long) user;
-  return rr++ % num_out_queues;
+  if (++rr == num_out_queues) rr = 0;
+  return rr;
 }
 
 /* *************************************** */

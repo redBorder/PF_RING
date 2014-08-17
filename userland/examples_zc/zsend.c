@@ -55,7 +55,7 @@
 
 #define N2DISK_METADATA             16
 #define N2DISK_CONSUMER_QUEUE_LEN 8192
-#define N2DISK_PREFETCH_BUFFERS      8
+#define N2DISK_PREFETCH_BUFFERS     32
 
 pfring_zc_cluster *zc;
 pfring_zc_queue *zq;
