@@ -53,10 +53,6 @@
 #define BURST_API
 #define BURSTLEN    16 /* pow 2 */
 
-#define N2DISK_METADATA             16
-#define N2DISK_CONSUMER_QUEUE_LEN 8192
-#define N2DISK_PREFETCH_BUFFERS     32
-
 pfring_zc_cluster *zc;
 pfring_zc_queue *zq;
 pfring_zc_pkt_buff *buffers[NBUFF];
@@ -580,7 +576,7 @@ int main(int argc, char* argv[]) {
       }
       queues_list[strlen(queues_list)-1] = '\0';
 
-      if (pfring_zc_create_buffer_pool(zc, N2DISK_PREFETCH_BUFFERS) == NULL) {
+      if (pfring_zc_create_buffer_pool(zc, N2DISK_PREFETCH_BUFFERS + n2disk_threads) == NULL) {
         fprintf(stderr, "pfring_zc_create_buffer_pool error\n");
         return -1;
       }

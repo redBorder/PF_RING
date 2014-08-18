@@ -64,6 +64,7 @@ u_int32_t instances_per_app[MAX_NUM_APP];
 char **devices = NULL;
 
 int cluster_id = -1;
+int metadata_len = 0;
 
 int bind_worker_core = -1;
 int bind_time_pulse_core = -1;
@@ -73,6 +74,9 @@ volatile u_int64_t *pulse_timestamp_ns;
 static struct timeval start_time;
 u_int8_t wait_for_packet = 1, enable_vm_support = 0, time_pulse = 0, print_interface_stats = 0;
 volatile u_int8_t do_shutdown = 0;
+
+u_int8_t n2disk_producer = 0;
+u_int32_t n2disk_threads;
 
 /* ******************************** */
 
@@ -255,6 +259,7 @@ void printHelp(void) {
          "                3 - Fan-out (1st) + Round-Robin (2nd, 3rd, ..)\n");
   printf("-S <core id>    Enable Time Pulse thread and bind it to a core\n");
   printf("-g <core_id>    Bind this app to a core\n");
+  printf("-N <num>        Producer for n2disk multi-thread (<num> threads)\n");
   printf("-a              Active packet wait\n");
   printf("-l <sock list>  Enable VM support (comma-separated list of QEMU monitor sockets)\n");
   exit(-1);
@@ -322,12 +327,13 @@ int main(int argc, char* argv[]) {
   char *vm_sockets = NULL, *vm_sock; 
   long i, j, off = 0;
   int hash_mode = 0;
+  int num_additional_buffers = 0;
   pthread_t time_thread;
   int rc;
 
   start_time.tv_sec = 0;
 
-  while((c = getopt(argc,argv,"ac:g:hi:m:n:l:S:")) != '?') {
+  while((c = getopt(argc,argv,"ac:g:hi:m:n:l:N:S:")) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -356,6 +362,10 @@ int main(int argc, char* argv[]) {
       enable_vm_support = 1;
       vm_sockets = strdup(optarg);
       break;
+    case 'N':
+      n2disk_producer = 1;
+      n2disk_threads = atoi(optarg);
+      break;
     case 'S':
       time_pulse = 1;
       bind_time_pulse_core = atoi(optarg);
@@ -366,6 +376,12 @@ int main(int argc, char* argv[]) {
   if (device == NULL) printHelp();
   if (cluster_id < 0) printHelp();
   if (applications == NULL) printHelp();
+
+  if (n2disk_producer) {
+    if (n2disk_threads < 1) printHelp();
+    metadata_len = N2DISK_METADATA;
+    num_additional_buffers += (n2disk_threads * (N2DISK_CONSUMER_QUEUE_LEN + 1)) + N2DISK_PREFETCH_BUFFERS;
+  }
 
   dev = strtok(device, ",");
   while(dev != NULL) {
@@ -390,8 +406,8 @@ int main(int argc, char* argv[]) {
   zc = pfring_zc_create_cluster(
     cluster_id, 
     max_packet_len(devices[0]),
-    0,
-    (num_devices * MAX_CARD_SLOTS) + (num_consumer_queues * (QUEUE_LEN + POOL_SIZE)) + PREFETCH_BUFFERS, 
+    metadata_len,
+    (num_devices * MAX_CARD_SLOTS) + (num_consumer_queues * (QUEUE_LEN + POOL_SIZE)) + PREFETCH_BUFFERS + num_additional_buffers, 
     numa_node_of_cpu(bind_worker_core),
     NULL /* auto hugetlb mountpoint */ 
   );
@@ -439,6 +455,27 @@ int main(int argc, char* argv[]) {
   if (wsp == NULL) {
     fprintf(stderr, "pfring_zc_create_buffer_pool error\n");
     return -1;
+  }
+
+  if (n2disk_producer) {
+    char queues_list[256];
+    queues_list[0] = '\0';
+
+    for (i = 0; i < n2disk_threads; i++) {
+      if(pfring_zc_create_queue(zc, N2DISK_CONSUMER_QUEUE_LEN) == NULL) {
+        fprintf(stderr, "pfring_zc_create_queue error [%s]\n", strerror(errno));
+        return -1;
+      }
+      sprintf(&queues_list[strlen(queues_list)], "%ld,", i + num_consumer_queues);
+    }
+    queues_list[strlen(queues_list)-1] = '\0';
+
+    if (pfring_zc_create_buffer_pool(zc, N2DISK_PREFETCH_BUFFERS + n2disk_threads) == NULL) {
+      fprintf(stderr, "pfring_zc_create_buffer_pool error\n");
+      return -1;
+    }
+
+    fprintf(stderr, "Run n2disk with: --cluster-ipc-attach --cluster-id %d --cluster-ipc-queues %s --cluster-ipc-pool %d\n", cluster_id, queues_list, num_consumer_queues);
   }
 
   if (enable_vm_support) {
