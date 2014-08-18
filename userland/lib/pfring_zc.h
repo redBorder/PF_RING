@@ -262,8 +262,6 @@ pfring_zc_add_hw_rule(
 	hw_filtering_rule *rule
 );
 
-/* **************************************************************************************** */
-
 /**
  * Remove an hw filtering rule from the network device.
  * @param queue    The queue handle.
@@ -603,6 +601,20 @@ u_int32_t
 pfring_zc_builtin_ip_hash(
   pfring_zc_pkt_buff *pkt_handle,
   pfring_zc_queue *queue
+);
+
+/* **************************************************************************************** */
+
+/**
+ * Write custom stats under /proc/net/pf_ring/stats/<cluster>
+ * @param cluster The cluster handle.
+ * @param stats   The stats string to write.
+ * @return        0 on success, a negative value otherwise.
+ */
+int
+pfring_zc_set_proc_stats(
+  pfring_zc_cluster *cluster,
+  char *stats
 );
 
 /* **************************************************************************************** */
