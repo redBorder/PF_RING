@@ -63,13 +63,15 @@ u_int32_t num_consumer_queues = 0;
 u_int32_t instances_per_app[MAX_NUM_APP];
 char **devices = NULL;
 
+int cluster_id = -1;
+
 int bind_worker_core = -1;
 int bind_time_pulse_core = -1;
 
 volatile u_int64_t *pulse_timestamp_ns;
 
 static struct timeval start_time;
-u_int8_t wait_for_packet = 1, enable_vm_support = 0, time_pulse = 0;
+u_int8_t wait_for_packet = 1, enable_vm_support = 0, time_pulse = 0, print_interface_stats = 0;
 volatile u_int8_t do_shutdown = 0;
 
 /* ******************************** */
@@ -115,6 +117,9 @@ void print_stats() {
   struct timeval end_time;
   char buf1[64], buf2[64], buf3[64], buf4[64];
   pfring_zc_stat stats;
+  char stats_buf[1024];
+  char time_buf[128];
+  double duration;
   int i;
 
   if(start_time.tv_sec == 0)
@@ -123,6 +128,8 @@ void print_stats() {
     print_all = 1;
 
   gettimeofday(&end_time, NULL);
+
+  duration = delta_time(&end_time, &start_time);
 
   for (i = 0; i < num_devices; i++)
     if (pfring_zc_stats(inzqs[i], &stats) == 0)
@@ -139,6 +146,48 @@ void print_stats() {
 	  pfring_format_numbers((double)tot_slave_recv, buf3, sizeof(buf3), 0),
 	  pfring_format_numbers((double)tot_slave_drop, buf4, sizeof(buf4), 0)
   );
+
+  snprintf(stats_buf, sizeof(stats_buf), 
+           "ClusterId:         %d\n"
+           "TotQueues:         %d\n"
+           "Applications:      %d\n", 
+           cluster_id,
+           num_consumer_queues,
+           num_apps);
+
+  for (i = 0; i < num_apps; i++)
+    snprintf(&stats_buf[strlen(stats_buf)], sizeof(stats_buf)-strlen(stats_buf), 
+             "App%dQueues:        %d\n", 
+             i, instances_per_app[i]);
+
+  snprintf(&stats_buf[strlen(stats_buf)], sizeof(stats_buf)-strlen(stats_buf),
+           "Duration:          %s\n"
+  	   "Packets:           %lu\n"
+	   "Processed:         %lu\n",
+           msec2dhmsm(duration, time_buf, sizeof(time_buf)),
+	   (long unsigned int)tot_recv,
+	   (long unsigned int)tot_slave_recv);
+
+  if (print_interface_stats) {
+    int i;
+    u_int64_t tot_if_recv = 0, tot_if_drop = 0;
+    for (i = 0; i < num_devices; i++) {
+      if (pfring_zc_stats(inzqs[i], &stats) == 0) {
+        tot_if_recv += stats.recv;
+        tot_if_drop += stats.drop;
+        fprintf(stderr, "                %s RX %lu pkts Dropped %lu pkts (%.1f %%)\n", 
+                devices[i], stats.recv, stats.drop, 
+	        stats.recv == 0 ? 0 : ((double)(stats.drop*100)/(double)(stats.recv + stats.drop)));
+      }
+    }
+    snprintf(&stats_buf[strlen(stats_buf)], sizeof(stats_buf)-strlen(stats_buf),
+             "IFPackets:         %lu\n"
+  	     "tot_if_dropped:         %lu\n",
+	     (long unsigned int)tot_if_recv, 
+	     (long unsigned int)tot_if_drop);
+  }
+
+  pfring_zc_set_proc_stats(zc, stats_buf);
 
   if(print_all && last_time.tv_sec > 0) {
     double delta_msec = delta_time(&end_time, &last_time);
@@ -272,7 +321,6 @@ int main(int argc, char* argv[]) {
   char *applications = NULL, *app, *app_pos = NULL;
   char *vm_sockets = NULL, *vm_sock; 
   long i, j, off = 0;
-  int cluster_id = -1;
   int hash_mode = 0;
   pthread_t time_thread;
   int rc;

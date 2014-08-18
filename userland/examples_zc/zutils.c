@@ -93,5 +93,23 @@ double delta_time (struct timeval * now, struct timeval * before) {
   return ((double)(delta_seconds * 1000) + (double)delta_microseconds/1000);
 }
 
-/* ******************************** */
+/* *************************************** */
+
+#define MSEC_IN_DAY    (1000 * 60 * 60 * 24) 
+#define MSEC_IN_HOUR   (1000 * 60 * 60)
+#define MSEC_IN_MINUTE (1000 * 60)
+#define MSEC_IN_SEC    (1000)
+
+char *msec2dhmsm(u_int64_t msec, char *buf, u_int buf_len) {
+  snprintf(buf, buf_len, "%u:%02u:%02u:%02u:%03u", 
+    (unsigned) (msec / MSEC_IN_DAY), 
+    (unsigned) (msec / MSEC_IN_HOUR)   %   24, 
+    (unsigned) (msec / MSEC_IN_MINUTE) %   60, 
+    (unsigned) (msec / MSEC_IN_SEC)    %   60,
+    (unsigned) (msec)                  % 1000
+  );
+  return(buf);
+}
+
+/* *************************************** */
 
