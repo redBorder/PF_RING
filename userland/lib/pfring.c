@@ -27,6 +27,7 @@
 #include "pfring_mod.h"
 #include "pfring_mod_stack.h"
 #include "pfring_mod_usring.h"
+#include "pfring_mod_sysdig.h"
 
 #ifdef HAVE_NT
 #include "pfring_mod_nt.h"
@@ -54,6 +55,10 @@ static pfring_module_info pfring_module_list[] = {
   {
     .name = "stack",
     .open = pfring_mod_stack_open,
+  },
+  {
+    .name = "sysdig",
+    .open = pfring_mod_sysdig_open,
   },
 #ifdef HAVE_DAG
   {

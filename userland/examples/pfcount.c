@@ -48,6 +48,8 @@
 
 #include "pfutils.c"
 
+#include "pfring_mod_sysdig.h"
+
 #include "third-party/sort.c"
 #include "third-party/node.c"
 #include "third-party/ahocorasick.c"
@@ -67,7 +69,7 @@ pcap_dumper_t *dumper = NULL;
 u_int string_id = 1;
 char *out_pcap_file = NULL;
 FILE *match_dumper = NULL;
-u_int8_t do_close_dump = 0;
+u_int8_t do_close_dump = 0, is_sysdig = 0;
 
 struct app_stats {
   u_int64_t numPkts[MAX_NUM_THREADS];
@@ -308,6 +310,186 @@ static int search_string(char *string_to_match, u_int string_to_match_len) {
 
 /* ****************************************************** */
 
+static char* sysdig_event2name(u_int event_type) {
+  static char unknown[32];
+
+  switch(event_type) {
+  case 0: return("GENERIC_E");
+  case 1: return("GENERIC_X");
+  case 2: return("SYSCALL_OPEN_E");
+  case 3: return("SYSCALL_OPEN_X");
+  case 4: return("SYSCALL_CLOSE_E");
+  case 5: return("SYSCALL_CLOSE_X");
+  case 6: return("SYSCALL_READ_E");
+  case 7: return("SYSCALL_READ_X");
+  case 8: return("SYSCALL_WRITE_E");
+  case 9: return("SYSCALL_WRITE_X");
+  case 10: return("SYSCALL_BRK_1_E");
+  case 11: return("SYSCALL_BRK_1_X");
+  case 12: return("SYSCALL_EXECVE_8_E");
+  case 13: return("SYSCALL_EXECVE_8_X");
+  case 14: return("CLONE_11_E");
+  case 15: return("CLONE_11_X");
+  case 16: return("PROCEXIT_E");
+  case 17: return("PROCEXIT_X");
+  case 18: return("SOCKET_SOCKET_E");
+  case 19: return("SOCKET_SOCKET_X");
+  case 20: return("SOCKET_BIND_E");
+  case 21: return("SOCKET_BIND_X");
+  case 22: return("SOCKET_CONNECT_E");
+  case 23: return("SOCKET_CONNECT_X");
+  case 24: return("SOCKET_LISTEN_E");
+  case 25: return("SOCKET_LISTEN_X");
+  case 26: return("SOCKET_ACCEPT_E");
+  case 27: return("SOCKET_ACCEPT_X");
+  case 28: return("SOCKET_SEND_E");
+  case 29: return("SOCKET_SEND_X");
+  case 30: return("SOCKET_SENDTO_E");
+  case 31: return("SOCKET_SENDTO_X");
+  case 32: return("SOCKET_RECV_E");
+  case 33: return("SOCKET_RECV_X");
+  case 34: return("SOCKET_RECVFROM_E");
+  case 35: return("SOCKET_RECVFROM_X");
+  case 36: return("SOCKET_SHUTDOWN_E");
+  case 37: return("SOCKET_SHUTDOWN_X");
+  case 38: return("SOCKET_GETSOCKNAME_E");
+  case 39: return("SOCKET_GETSOCKNAME_X");
+  case 40: return("SOCKET_GETPEERNAME_E");
+  case 41: return("SOCKET_GETPEERNAME_X");
+  case 42: return("SOCKET_SOCKETPAIR_E");
+  case 43: return("SOCKET_SOCKETPAIR_X");
+  case 44: return("SOCKET_SETSOCKOPT_E");
+  case 45: return("SOCKET_SETSOCKOPT_X");
+  case 46: return("SOCKET_GETSOCKOPT_E");
+  case 47: return("SOCKET_GETSOCKOPT_X");
+  case 48: return("SOCKET_SENDMSG_E");
+  case 49: return("SOCKET_SENDMSG_X");
+  case 50: return("SOCKET_SENDMMSG_E");
+  case 51: return("SOCKET_SENDMMSG_X");
+  case 52: return("SOCKET_RECVMSG_E");
+  case 53: return("SOCKET_RECVMSG_X");
+  case 54: return("SOCKET_RECVMMSG_E");
+  case 55: return("SOCKET_RECVMMSG_X");
+  case 56: return("SOCKET_ACCEPT4_E");
+  case 57: return("SOCKET_ACCEPT4_X");
+  case 58: return("SYSCALL_CREAT_E");
+  case 59: return("SYSCALL_CREAT_X");
+  case 60: return("SYSCALL_PIPE_E");
+  case 61: return("SYSCALL_PIPE_X");
+  case 62: return("SYSCALL_EVENTFD_E");
+  case 63: return("SYSCALL_EVENTFD_X");
+  case 64: return("SYSCALL_FUTEX_E");
+  case 65: return("SYSCALL_FUTEX_X");
+  case 66: return("SYSCALL_STAT_E");
+  case 67: return("SYSCALL_STAT_X");
+  case 68: return("SYSCALL_LSTAT_E");
+  case 69: return("SYSCALL_LSTAT_X");
+  case 70: return("SYSCALL_FSTAT_E");
+  case 71: return("SYSCALL_FSTAT_X");
+  case 72: return("SYSCALL_STAT64_E");
+  case 73: return("SYSCALL_STAT64_X");
+  case 74: return("SYSCALL_LSTAT64_E");
+  case 75: return("SYSCALL_LSTAT64_X");
+  case 76: return("SYSCALL_FSTAT64_E");
+  case 77: return("SYSCALL_FSTAT64_X");
+  case 78: return("SYSCALL_EPOLLWAIT_E");
+  case 79: return("SYSCALL_EPOLLWAIT_X");
+  case 80: return("SYSCALL_POLL_E");
+  case 81: return("SYSCALL_POLL_X");
+  case 82: return("SYSCALL_SELECT_E");
+  case 83: return("SYSCALL_SELECT_X");
+  case 84: return("SYSCALL_NEWSELECT_E");
+  case 85: return("SYSCALL_NEWSELECT_X");
+  case 86: return("SYSCALL_LSEEK_E");
+  case 87: return("SYSCALL_LSEEK_X");
+  case 88: return("SYSCALL_LLSEEK_E");
+  case 89: return("SYSCALL_LLSEEK_X");
+  case 90: return("SYSCALL_IOCTL_E");
+  case 91: return("SYSCALL_IOCTL_X");
+  case 92: return("SYSCALL_GETCWD_E");
+  case 93: return("SYSCALL_GETCWD_X");
+  case 94: return("SYSCALL_CHDIR_E");
+  case 95: return("SYSCALL_CHDIR_X");
+  case 96: return("SYSCALL_FCHDIR_E");
+  case 97: return("SYSCALL_FCHDIR_X");
+  case 98: return("SYSCALL_MKDIR_E");
+  case 99: return("SYSCALL_MKDIR_X");
+  case 100: return("SYSCALL_RMDIR_E");
+  case 101: return("SYSCALL_RMDIR_X");
+  case 102: return("SYSCALL_OPENAT_E");
+  case 103: return("SYSCALL_OPENAT_X");
+  case 104: return("SYSCALL_LINK_E");
+  case 105: return("SYSCALL_LINK_X");
+  case 106: return("SYSCALL_LINKAT_E");
+  case 107: return("SYSCALL_LINKAT_X");
+  case 108: return("SYSCALL_UNLINK_E");
+  case 109: return("SYSCALL_UNLINK_X");
+  case 110: return("SYSCALL_UNLINKAT_E");
+  case 111: return("SYSCALL_UNLINKAT_X");
+  case 112: return("SYSCALL_PREAD_E");
+  case 113: return("SYSCALL_PREAD_X");
+  case 114: return("SYSCALL_PWRITE_E");
+  case 115: return("SYSCALL_PWRITE_X");
+  case 116: return("SYSCALL_READV_E");
+  case 117: return("SYSCALL_READV_X");
+  case 118: return("SYSCALL_WRITEV_E");
+  case 119: return("SYSCALL_WRITEV_X");
+  case 120: return("SYSCALL_PREADV_E");
+  case 121: return("SYSCALL_PREADV_X");
+  case 122: return("SYSCALL_PWRITEV_E");
+  case 123: return("SYSCALL_PWRITEV_X");
+  case 124: return("SYSCALL_DUP_E");
+  case 125: return("SYSCALL_DUP_X");
+  case 126: return("SYSCALL_SIGNALFD_E");
+  case 127: return("SYSCALL_SIGNALFD_X");
+  case 128: return("SYSCALL_KILL_E");
+  case 129: return("SYSCALL_KILL_X");
+  case 130: return("SYSCALL_TKILL_E");
+  case 131: return("SYSCALL_TKILL_X");
+  case 132: return("SYSCALL_TGKILL_E");
+  case 133: return("SYSCALL_TGKILL_X");
+  case 134: return("SYSCALL_NANOSLEEP_E");
+  case 135: return("SYSCALL_NANOSLEEP_X");
+  case 136: return("SYSCALL_TIMERFD_CREATE_E");
+  case 137: return("SYSCALL_TIMERFD_CREATE_X");
+  case 138: return("SYSCALL_INOTIFY_INIT_E");
+  case 139: return("SYSCALL_INOTIFY_INIT_X");
+  case 140: return("SYSCALL_GETRLIMIT_E");
+  case 141: return("SYSCALL_GETRLIMIT_X");
+  case 142: return("SYSCALL_SETRLIMIT_E");
+  case 143: return("SYSCALL_SETRLIMIT_X");
+  case 144: return("SYSCALL_PRLIMIT_E");
+  case 145: return("SYSCALL_PRLIMIT_X");
+  case 146: return("SCHEDSWITCH_1_E");
+  case 147: return("SCHEDSWITCH_1_X");
+  case 148: return("DROP_E");
+  case 149: return("DROP_X");
+  case 150: return("SYSCALL_FCNTL_E");
+  case 151: return("SYSCALL_FCNTL_X");
+  case 152: return("SCHEDSWITCH_6_E");
+  case 153: return("SCHEDSWITCH_6_X");
+  case 154: return("SYSCALL_EXECVE_13_E");
+  case 155: return("SYSCALL_EXECVE_13_X");
+  case 156: return("CLONE_16_E");
+  case 157: return("CLONE_16_X");
+  case 158: return("SYSCALL_BRK_4_E");
+  case 159: return("SYSCALL_BRK_4_X");
+  case 160: return("SYSCALL_MMAP_E");
+  case 161: return("SYSCALL_MMAP_X");
+  case 162: return("SYSCALL_MMAP2_E");
+  case 163: return("SYSCALL_MMAP2_X");
+  case 164: return("SYSCALL_MUNMAP_E");
+  case 165: return("SYSCALL_MUNMAP_X");
+  case 166: return("SYSCALL_SPLICE_E");
+  case 167: return("SYSCALL_SPLICE_X");
+  default:
+    snprintf(unknown, sizeof(unknown), "%u", event_type);
+  }
+
+  return("???"); /* NOTREACHED */
+};
+
+/* ****************************************************** */
 static int32_t thiszone;
 
 void print_packet(const struct pfring_pkthdr *h, const u_char *p, u_int8_t dump_match) {
@@ -315,7 +497,7 @@ void print_packet(const struct pfring_pkthdr *h, const u_char *p, u_int8_t dump_
   u_int usec, nsec = 0;
   char dump_str[512] = { 0 };
 
-  if(h->ts.tv_sec == 0) {
+  if((!is_sysdig) && (h->ts.tv_sec == 0)) {
     memset((void*)&h->extended_hdr.parsed_pkt, 0, sizeof(struct pkt_parsing_info));
     pfring_parse_pkt((u_char*)p, (struct pfring_pkthdr*)h, 5, 0, 1);
   }
@@ -336,6 +518,16 @@ void print_packet(const struct pfring_pkthdr *h, const u_char *p, u_int8_t dump_
   snprintf(dump_str, sizeof(dump_str), "%02d:%02d:%02d.%06u%03u ",
            s / 3600, (s % 3600) / 60, s % 60,
            usec, nsec);
+
+  if(is_sysdig) {
+    struct sysdig_event_header *ev = (struct sysdig_event_header*)p;
+
+    snprintf(&dump_str[strlen(dump_str)], sizeof(dump_str)-strlen(dump_str), "[cpu_id=%u][tid=%lu][%u|%s]",
+	     h->extended_hdr.if_index, ev->thread_id, 
+	     ev->event_type, sysdig_event2name(ev->event_type));
+    printf("%s\n", dump_str);
+    return;
+  }
 
   if(use_extended_pkt_header) {
     char bigbuf[4096];
@@ -466,6 +658,7 @@ void printHelp(void) {
 	 "                - dnaX for DNA-based adapters\n"
 	 "                - zc:ethX for ZC devices\n"
 	 "                - dnacluster:X for DNA cluster Id X\n"
+	 "                - sysdig for capturing sysdig events\n"
 #ifdef HAVE_DAG
 	 "                - dag:dagX:Y for Endace DAG cards\n"
 #endif
@@ -720,6 +913,7 @@ int main(int argc, char* argv[]) {
       break;
     case 'i':
       device = strdup(optarg);
+      if(strcmp(device, "sysdig") == 0) is_sysdig = 1;
       break;
     case 'n':
       num_threads = atoi(optarg);
