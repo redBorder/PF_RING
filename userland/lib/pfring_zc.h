@@ -21,8 +21,8 @@
 #define PF_RING_ZC_DEVICE_ASYMMETRIC_RSS     1 << 0    /**< pfring_zc_open_device() flag: use asymmetric hw RSS for multiqueue devices. */
 #define PF_RING_ZC_DEVICE_FIXED_RSS_Q_0      1 << 1    /**< pfring_zc_open_device() flag: redirect all traffic to the first hw queue. */
 //#define PF_RING_ZC_DEVICE_SW_TIMESTAMP       1 << 2
-//#define PF_RING_ZC_DEVICE_HW_TIMESTAMP       1 << 3
-//#define PF_RING_ZC_DEVICE_STRIP_HW_TIMESTAMP 1 << 4
+#define PF_RING_ZC_DEVICE_HW_TIMESTAMP       1 << 3
+#define PF_RING_ZC_DEVICE_STRIP_HW_TIMESTAMP 1 << 4
 
 #ifdef __cplusplus
 extern "C" {
