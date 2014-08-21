@@ -23,6 +23,7 @@
 //#define PF_RING_ZC_DEVICE_SW_TIMESTAMP       1 << 2
 #define PF_RING_ZC_DEVICE_HW_TIMESTAMP       1 << 3
 #define PF_RING_ZC_DEVICE_STRIP_HW_TIMESTAMP 1 << 4
+#define PF_RING_ZC_DEVICE_IXIA_TIMESTAMP     1 << 5
 
 #ifdef __cplusplus
 extern "C" {

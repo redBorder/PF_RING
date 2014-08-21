@@ -20,23 +20,43 @@
 
 /* ********************************* */
 
-void handle_ixia_hw_timestamp(u_char* buffer, struct pfring_pkthdr *hdr) {
+int read_ixia_hw_timestamp(u_char *buffer, u_int32_t buffer_len, struct timespec *ts) {
   struct ixia_hw_ts* ixia;
   u_char *signature;
   static int32_t thiszone = 0;
 
-  if(hdr->caplen != hdr->len) return; /* Too short */
-
-  ixia = (struct ixia_hw_ts*)&buffer[hdr->caplen - IXIA_TS_LEN];
-  signature = (u_char*)&ixia->signature;
+  ixia = (struct ixia_hw_ts *) &buffer[buffer_len - IXIA_TS_LEN];
+  signature = (u_char *) &ixia->signature;
 
   if((signature[0] == 0xAF) && (signature[1] == 0x12)) {
     if(unlikely(thiszone == 0)) thiszone = gmt_to_local(0);    
+    ts->tv_sec = ntohl(ixia->sec) - thiszone;
+    ts->tv_nsec = ntohl(ixia->nsec);
+    return IXIA_TS_LEN;
+  }
 
-    hdr->caplen = hdr->len = hdr->len - IXIA_TS_LEN;
-    hdr->ts.tv_sec = ntohl(ixia->sec) - thiszone;
-    hdr->extended_hdr.timestamp_ns = (((u_int64_t)hdr->ts.tv_sec) * 1000000000) + ntohl(ixia->nsec);
-    hdr->ts.tv_usec = hdr->extended_hdr.timestamp_ns / 1000;
+  ts->tv_sec = ts->tv_nsec = 0;
+  return 0;
+}
+
+/* ********************************* */
+
+void handle_ixia_hw_timestamp(u_char* buffer, struct pfring_pkthdr *hdr) {
+  struct timespec ts;
+  int ts_size;
+
+  if (unlikely(hdr->caplen != hdr->len)) 
+    return; /* full packet only */
+
+  ts_size = read_ixia_hw_timestamp(buffer, hdr->len, &ts);
+
+  if (likely(ts_size > 0)) {
+    hdr->caplen = hdr->len = hdr->len - ts_size;
+    hdr->ts.tv_sec = ts.tv_sec;
+    hdr->ts.tv_usec = ts.tv_nsec/1000;
+    hdr->extended_hdr.timestamp_ns = (((u_int64_t) ts.tv_sec) * 1000000000) + ts.tv_nsec;
   }
 }
+
+/* ********************************* */
 
