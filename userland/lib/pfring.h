@@ -1283,6 +1283,10 @@ int pfring_recv_chunk(pfring *ring, void **chunk, u_int32_t *chunk_len, u_int8_t
  */
 int pfring_set_bound_dev_name(pfring *ring, char *custom_dev_name);
 
+int pfring_read_ixia_hw_timestamp(u_char *buffer, u_int32_t buffer_len, struct timespec *ts);
+
+void pfring_handle_ixia_hw_timestamp(u_char* buffer, struct pfring_pkthdr *hdr);
+
 /* ********************************* */
 
 int pfring_parse_bpf_filter(char *filter_buffer, u_int caplen,
@@ -1292,6 +1296,8 @@ int pfring_parse_bpf_filter(char *filter_buffer, u_int caplen,
                             struct pfring_bpf_program
 #endif
                             *filter);
+
+/* ********************************* */
 
 int32_t gmt_to_local(time_t t);
 

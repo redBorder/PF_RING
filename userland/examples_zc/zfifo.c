@@ -290,7 +290,7 @@ int main(int argc, char* argv[]) {
   }
 
   for (i = 0; i < num_devices; i++) {
-    inzq[i] = pfring_zc_open_device(zc, devices[i], rx_only, 0);
+    inzq[i] = pfring_zc_open_device(zc, devices[i], rx_only, PF_RING_ZC_DEVICE_HW_TIMESTAMP);
 
     if(inzq[0] == NULL) {
       fprintf(stderr, "pfring_zc_open_device error [%s] Please check that %s is up and not already used\n",

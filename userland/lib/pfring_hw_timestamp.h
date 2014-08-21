@@ -11,8 +11,6 @@
  *
  */
 
-/* ********************************* */
-
 struct ixia_hw_ts {
   u_int8_t type;
   u_int8_t timestamp_len;
@@ -22,8 +20,4 @@ struct ixia_hw_ts {
   u_int16_t signature;
   u_int16_t fcs;
 } __attribute__((__packed__));
-
-int read_ixia_hw_timestamp(u_char *buffer, u_int32_t buffer_len, struct timespec *ts);
-void handle_ixia_hw_timestamp(u_char* buffer, struct pfring_pkthdr *hdr);
-
 

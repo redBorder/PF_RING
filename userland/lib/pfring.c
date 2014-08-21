@@ -41,8 +41,6 @@
 #include "pfring_mod_dna.h"
 #endif
 
-#include "pfring_hw_timestamp.h"
-
 #ifdef HAVE_PF_RING_ZC
 extern int pfring_zc_open(pfring *ring);
 #endif
@@ -401,7 +399,7 @@ int pfring_loop(pfring *ring, pfringProcesssPacket looper,
           continue; /* rejected */
 #endif
         if(unlikely(ring->ixia_timestamp_enabled))
-          handle_ixia_hw_timestamp(buffer, &hdr);
+          pfring_handle_ixia_hw_timestamp(buffer, &hdr);
 
 	looper(&hdr, buffer, user_bytes);
       } else {
@@ -621,7 +619,7 @@ recv_next:
     hdr->caplen = min_val(hdr->caplen, ring->caplen);
 
     if(unlikely(ring->ixia_timestamp_enabled))
-      handle_ixia_hw_timestamp(*buffer, hdr);
+      pfring_handle_ixia_hw_timestamp(*buffer, hdr);
 
 #ifdef ENABLE_BPF
     if (unlikely(rc > 0 && ring->userspace_bpf && bpf_filter(ring->userspace_bpf_filter.bf_insns, *buffer, hdr->caplen, hdr->len) == 0))

@@ -20,7 +20,7 @@
 
 /* ********************************* */
 
-int read_ixia_hw_timestamp(u_char *buffer, u_int32_t buffer_len, struct timespec *ts) {
+int pfring_read_ixia_hw_timestamp(u_char *buffer, u_int32_t buffer_len, struct timespec *ts) {
   struct ixia_hw_ts* ixia;
   u_char *signature;
   static int32_t thiszone = 0;
@@ -41,14 +41,14 @@ int read_ixia_hw_timestamp(u_char *buffer, u_int32_t buffer_len, struct timespec
 
 /* ********************************* */
 
-void handle_ixia_hw_timestamp(u_char* buffer, struct pfring_pkthdr *hdr) {
+void pfring_handle_ixia_hw_timestamp(u_char* buffer, struct pfring_pkthdr *hdr) {
   struct timespec ts;
   int ts_size;
 
   if (unlikely(hdr->caplen != hdr->len)) 
     return; /* full packet only */
 
-  ts_size = read_ixia_hw_timestamp(buffer, hdr->len, &ts);
+  ts_size = pfring_read_ixia_hw_timestamp(buffer, hdr->len, &ts);
 
   if (likely(ts_size > 0)) {
     hdr->caplen = hdr->len = hdr->len - ts_size;
