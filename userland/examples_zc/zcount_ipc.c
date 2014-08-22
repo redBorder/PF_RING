@@ -38,6 +38,7 @@
 
 #include "pfring.h"
 #include "pfring_zc.h"
+#include "pfring_mod_sysdig.h"
 
 #include "zutils.c"
 
@@ -55,7 +56,7 @@ struct volatile_globals {
   unsigned long long numPkts;
   unsigned long long numBytes;
   int wait_for_packet;
-  int verbose;
+  u_int8_t verbose, dump_as_sysdig_event;
   volatile int do_shutdown;
 };
 
@@ -158,6 +159,7 @@ void printHelp(void) {
   printf("-g <core_id>    Bind this app to a core\n");
   printf("-a              Active packet wait\n");
   printf("-v              Verbose: print packet data\n");
+  printf("-s              In case of -v dump the buffer as sysdig event instead of packet bytes\n");
   printf("-u              Guest VM (master on the host)\n");
   exit(-1);
 }
@@ -175,13 +177,23 @@ void *packet_consumer_thread(void *_id) {
 
       if (unlikely(g->verbose)) {
         u_char *pkt_data = pfring_zc_pkt_buff_data(buffer, zq);
-        int i;
 
         if (buffer->ts.tv_nsec)
           printf("[%u.%u] ", buffer->ts.tv_sec, buffer->ts.tv_nsec);
 
-        for(i = 0; i < buffer->len; i++)
-          printf("%02X ", pkt_data[i]);
+	if(g->dump_as_sysdig_event) {
+	  struct sysdig_event_header *ev = (struct sysdig_event_header*)pkt_data;
+
+	  printf("[cpu_id=%u][tid=%lu][%u|%s]",
+		 buffer->hash, ev->thread_id,
+		 ev->event_type, sysdig_event2name(ev->event_type));		 
+	} else {
+	  int i;
+
+	  for(i = 0; i < buffer->len; i++)
+	    printf("%02X ", pkt_data[i]);
+	}
+
         printf("\n");
       }
 
@@ -201,11 +213,11 @@ int main(int argc, char* argv[]) {
   char c;
   int cluster_id = -1, queue_id = -1;
   pthread_t my_thread;
-  int wait_for_packet = 1, verbose = 0;
+  int wait_for_packet = 1, verbose = 0, dump_as_sysdig_event = 0;
 
   startTime.tv_sec = 0;
 
-  while((c = getopt(argc,argv,"ac:g:hi:vu")) != '?') {
+  while((c = getopt(argc,argv,"ac:g:hi:svu")) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -223,6 +235,9 @@ int main(int argc, char* argv[]) {
       break;
     case 'g':
       bind_core = atoi(optarg);
+      break;
+    case 's':
+      dump_as_sysdig_event = 1;
       break;
     case 'v':
       verbose = 1;
@@ -242,6 +257,7 @@ int main(int argc, char* argv[]) {
   globals = calloc(1, sizeof(*globals));
   globals->wait_for_packet = wait_for_packet;
   globals->verbose = verbose;
+  globals->dump_as_sysdig_event = dump_as_sysdig_event;
   globals->numPkts = 0;
   globals->numBytes = 0;
   globals->do_shutdown = 0;

@@ -38,6 +38,7 @@
 
 #include "pfring.h"
 #include "pfring_zc.h"
+#include "pfring_mod_sysdig.h"
 
 #include "zutils.c"
 
@@ -104,9 +105,9 @@ void print_stats() {
 #endif
   for (i = 0; i < num_threads; i++) {
 #ifdef VERY_VERBOSE
-  fprintf(stderr, "Thread #%u: %s pkts - %s bytes\n", i,
-	  pfring_format_numbers((double)consumers_stats[i].numPkts, buf1, sizeof(buf1), 0),
-	  pfring_format_numbers((double)consumers_stats[i].numBytes, buf2, sizeof(buf2), 0));
+    fprintf(stderr, "Thread #%u: %s pkts - %s bytes\n", i,
+	    pfring_format_numbers((double)consumers_stats[i].numPkts, buf1, sizeof(buf1), 0),
+	    pfring_format_numbers((double)consumers_stats[i].numBytes, buf2, sizeof(buf2), 0));
 #endif
     nPkts  += consumers_stats[i].numPkts;
     nBytes += consumers_stats[i].numBytes;
@@ -173,12 +174,15 @@ void printHelp(void) {
   printf("zbalance - (C) 2014 ntop.org\n");
   printf("Using PFRING_ZC v.%s\n", pfring_zc_version());
   printf("A master thread balancing packets to multiple consumer threads counting packets.\n\n");
+
+  printf("Usage:  zbalance -i <device> -c <cluster id> -g <id:id...>\n"
+	 "                 [-h] [-m <hash mode>] [-r <id>] [-a]\n\n");
   printf("-h              Print this help\n");
   printf("-i <device>     Device name (comma-separated list)\n");
   printf("-c <cluster id> Cluster id\n");
   printf("-m <hash mode>  Hashing modes:\n"
          "                0 - No hash: Round-Robin (default)\n"
-         "                1 - IP hash\n"
+         "                1 - IP hash or TID (thread id) in case of '-i sysdig'\n"
          "                2 - Fan-out\n");
   printf("-r <id>         Balancer thread core affinity\n");
   printf("-g <id:id...>   Consumer threads core affinity mask\n");
@@ -226,6 +230,16 @@ int32_t rr_distribution_func(pfring_zc_pkt_buff *pkt_handle, pfring_zc_queue *in
   long num_out_queues = (long) user;
   if (++rr == num_out_queues) rr = 0;
   return rr;
+}
+
+/* *************************************** */
+
+int32_t sysdig_distribution_func(pfring_zc_pkt_buff *pkt_handle, pfring_zc_queue *in_queue, void *user) {
+  /* NOTE: pkt_handle->hash contains the CPU id */
+  struct sysdig_event_header *ev = (struct sysdig_event_header*)pfring_zc_pkt_buff_data(pkt_handle, in_queue); 
+  long num_out_queues = (long) user;
+
+  return(ev->thread_id % num_out_queues);
 }
 
 /* *************************************** */
@@ -292,13 +306,13 @@ int main(int argc, char* argv[]) {
   }
 
   zc = pfring_zc_create_cluster(
-    cluster_id, 
-    max_packet_len(devices[0]),
-    0,
-    (num_devices * MAX_CARD_SLOTS) + (num_threads * QUEUE_LEN) + num_threads + PREFETCH_BUFFERS,
-    numa_node_of_cpu(bind_worker_core), 
-    NULL /* auto hugetlb mountpoint */ 
-  );
+				cluster_id, 
+				max_packet_len(devices[0]),
+				0,
+				(num_devices * MAX_CARD_SLOTS) + (num_threads * QUEUE_LEN) + num_threads + PREFETCH_BUFFERS,
+				numa_node_of_cpu(bind_worker_core), 
+				NULL /* auto hugetlb mountpoint */ 
+				);
 
   if(zc == NULL) {
     fprintf(stderr, "pfring_zc_create_cluster error [%s] Please check your hugetlb configuration\n",
@@ -356,20 +370,26 @@ int main(int argc, char* argv[]) {
   printf("Starting balancer with %d consumer threads..\n", num_threads);
 
   if (hash_mode < 2) { /* balancer */
+    pfring_zc_distribution_func func;
 
+    if(strcmp(device, "sysdig") == 0)
+      func = (hash_mode == 0) ? rr_distribution_func : sysdig_distribution_func;
+    else
+      func = (hash_mode == 0) ? rr_distribution_func : NULL /* built-in IP-based  */;
+      
     zw = pfring_zc_run_balancer(
-      inzq, 
-      outzq, 
-      num_devices, 
-      num_threads, 
-      wsp,
-      round_robin_bursts_policy, 
-      NULL /* idle callback */,
-      hash_mode == 0 ? rr_distribution_func : NULL /* build-in IP-based  */, 
-      (void *) ((long) num_threads),
-      !wait_for_packet, 
-      bind_worker_core
-    );
+				inzq, 
+				outzq, 
+				num_devices, 
+				num_threads, 
+				wsp,
+				round_robin_bursts_policy, 
+				NULL /* idle callback */,
+				func,
+				(void *) ((long) num_threads),
+				!wait_for_packet, 
+				bind_worker_core
+				);
 
   } else {
 
@@ -381,17 +401,17 @@ int main(int argc, char* argv[]) {
     }
 
     zw = pfring_zc_run_fanout(
-      inzq, 
-      outzmq, 
-      num_devices,
-      wsp,
-      round_robin_bursts_policy, 
-      NULL /* idle callback */,
-      NULL /* built-in send-to-all */, 
-      (void *) ((long) num_threads),
-      !wait_for_packet, 
-      bind_worker_core
-    );
+			      inzq, 
+			      outzmq, 
+			      num_devices,
+			      wsp,
+			      round_robin_bursts_policy, 
+			      NULL /* idle callback */,
+			      NULL /* built-in send-to-all */, 
+			      (void *) ((long) num_threads),
+			      !wait_for_packet, 
+			      bind_worker_core
+			      );
 
   }
 

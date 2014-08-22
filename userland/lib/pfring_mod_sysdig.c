@@ -17,6 +17,7 @@
 
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <sys/ioctl.h>
 
 /* **************************************************** */
 
@@ -24,14 +25,14 @@ int pfring_mod_sysdig_open(pfring *ring) {
   u_int8_t device_id = 0;
   pfring_sysdig *sysdig = NULL;
 
-  ring->close              = pfring_mod_sysdig_close;
-  ring->recv               = pfring_mod_sysdig_recv;
-  ring->poll               = pfring_mod_sysdig_poll;
-  ring->enable_ring        = pfring_mod_sysdig_enable_ring;
-  ring->set_poll_watermark = pfring_mod_sysdig_set_poll_watermark;
-  ring->set_socket_mode    = pfring_mod_sysdig_set_socket_mode;
-  ring->stats              = pfring_mod_sysdig_stats;
-
+  ring->close                    = pfring_mod_sysdig_close;
+  ring->recv                     = pfring_mod_sysdig_recv;
+  ring->poll                     = pfring_mod_sysdig_poll;
+  ring->enable_ring              = pfring_mod_sysdig_enable_ring;
+  ring->set_poll_watermark       = pfring_mod_sysdig_set_poll_watermark;
+  ring->set_socket_mode          = pfring_mod_sysdig_set_socket_mode;
+  ring->stats                    = pfring_mod_sysdig_stats;
+  ring->get_bound_device_ifindex = pfring_mod_sysdig_get_bound_device_ifindex;
   ring->priv_data = malloc(sizeof(pfring_sysdig));
 
   if(ring->priv_data == NULL)
@@ -39,14 +40,15 @@ int pfring_mod_sysdig_open(pfring *ring) {
 
   memset(ring->priv_data, 0, sizeof(pfring_sysdig));
   sysdig = (pfring_sysdig*)ring->priv_data;
-
+ 
   sysdig->num_devices = sysconf(_SC_NPROCESSORS_ONLN); /* # devices = # CPUs */
-
+  
   if(sysdig->num_devices > MAX_NUM_SYSDIG_DEVICES) {
     fprintf(stderr, "Internal error: too many devices %u\n", sysdig->num_devices);
     return(-1);
   }
 
+  sysdig->bytes_watermark = DEFAULT_SYSDIG_DATA_AVAIL;
   if(ring->caplen > MAX_CAPLEN) ring->caplen = MAX_CAPLEN;
   ring->poll_duration = DEFAULT_POLL_DURATION;
 
@@ -112,18 +114,22 @@ void pfring_mod_sysdig_close(pfring *ring) {
 
 /* **************************************************** */
 
-static u_int pfring_sysdig_get_data_available(pfring_sysdig_device *dev) {
-  u_int32_t head = dev->ring_info->head, tail = dev->ring_info->tail;
-
+static u_int32_t pfring_sysdig_get_data_available(pfring_sysdig_device *dev) {
+  u_int32_t rc, head = dev->ring_info->head, tail = dev->ring_info->tail;
+  
   if(tail > head) /* Ring wrap */
-    return(RING_BUF_SIZE - tail + head);
+    rc = RING_BUF_SIZE - tail + head;
   else
-    return(head - tail);
+    rc = head - tail;
+
+  // printf("%s() : %u\n", __FUNCTION__, rc);
+  return(rc);
 }
 
 /* **************************************************** */
 
-static void sysdig_get_first_event(pfring_sysdig_device *dev, 
+static void sysdig_get_first_event(pfring_sysdig *sysdig,
+				   pfring_sysdig_device *dev, 
 				  struct sysdig_event_header **ev) {
   u_int32_t next_tail = dev->ring_info->tail + dev->last_evt_read_len;
 
@@ -136,7 +142,7 @@ static void sysdig_get_first_event(pfring_sysdig_device *dev,
     dev->ring_info->tail = next_tail;
   }
 
-  if(pfring_sysdig_get_data_available(dev) < MIN_SYSDIG_DATA_AVAIL /* Too little data */)
+  if(pfring_sysdig_get_data_available(dev) < sysdig->bytes_watermark /* Too little data */)
     *ev = NULL, dev->last_evt_read_len = 0;
   else {
     // printf("%u ", dev->ring_info->tail);
@@ -173,7 +179,7 @@ int pfring_mod_sysdig_recv(pfring *ring, u_char** buffer, u_int buffer_len,
   for(device_id = 0; device_id < sysdig->num_devices; device_id++) {
     struct sysdig_event_header *this_event;
 
-    sysdig_get_first_event(&sysdig->devices[device_id], &this_event);
+    sysdig_get_first_event(sysdig, &sysdig->devices[device_id], &this_event);
 
     if(this_event) {
       if(ret_event == NULL)
@@ -216,7 +222,7 @@ int pfring_mod_sysdig_recv(pfring *ring, u_char** buffer, u_int buffer_len,
     }
 
     hdr->extended_hdr.timestamp_ns = ret_event->ts;
-    hdr->extended_hdr.if_index = ret_device_id; /* CPU id */
+    hdr->extended_hdr.pkt_hash = hdr->extended_hdr.if_index = ret_device_id; /* CPU id */
 
     /*
       The two statements below are kinda a waste of time as timestamp_ns
@@ -229,14 +235,27 @@ int pfring_mod_sysdig_recv(pfring *ring, u_char** buffer, u_int buffer_len,
  exit:
   if(ring->reentrant)
     pthread_rwlock_unlock(&ring->rx_lock);
-
+  
   return(ret_event ? 1 : 0);
 }
 
 /* **************************************************** */
 
 int pfring_mod_sysdig_enable_ring(pfring *ring) {
-  /* nothing to do */
+  u_int32_t device_id;
+  pfring_sysdig *sysdig;
+
+  if(ring->priv_data == NULL)
+    return -1;
+
+  sysdig = (pfring_sysdig *)ring->priv_data;
+
+  for(device_id = 0; device_id < sysdig->num_devices; device_id++) {
+    if(ioctl(sysdig->devices[device_id].fd, PPM_IOCTL_ENABLE_CAPTURE)) {
+      return(-1);
+    }
+  }
+
   return 0;
 }
 
@@ -253,7 +272,7 @@ int pfring_mod_sysdig_poll(pfring *ring, u_int wait_duration) {
 
   while(1) {
     for(device_id = 0; device_id < sysdig->num_devices; device_id++) {
-      if(pfring_sysdig_get_data_available(&sysdig->devices[device_id]) >= MIN_SYSDIG_DATA_AVAIL)
+      if(pfring_sysdig_get_data_available(&sysdig->devices[device_id]) >= sysdig->bytes_watermark)
 	return(1);
     }
     
@@ -276,7 +295,15 @@ int pfring_mod_sysdig_set_socket_mode(pfring *ring, socket_mode mode) {
 /* ******************************* */
 
 int pfring_mod_sysdig_set_poll_watermark(pfring *ring, u_int16_t watermark) {
-  return(0); /* Ignored */
+  pfring_sysdig *sysdig = NULL;
+
+  if(ring->priv_data == NULL)    
+    return(-1);
+
+  sysdig = (pfring_sysdig*)ring->priv_data;
+  sysdig->bytes_watermark = watermark * 8192;
+
+  return(0);
 }
 
 /* ******************************* */
@@ -301,3 +328,13 @@ int pfring_mod_sysdig_stats(pfring *ring, pfring_stat *stats) {
 
   return(0);
 }
+
+/* **************************************************** */
+
+int pfring_mod_sysdig_get_bound_device_ifindex(pfring *ring, int *if_index) {
+  *if_index = 0; /* Dummy index */
+
+  return(0);
+}
+
+

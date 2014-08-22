@@ -38,6 +38,7 @@
 
 #include "pfring.h"
 #include "pfring_zc.h"
+#include "pfring_mod_sysdig.h"
 
 #include "zutils.c"
 
@@ -246,7 +247,12 @@ void printHelp(void) {
   printf("zbalance_ipc - (C) 2014 ntop.org\n");
   printf("Using PFRING_ZC v.%s\n", pfring_zc_version());
 
-  printf("A master process balancing packets to multiple consumer processes (e.g. zcount_ipc -c <cluster id> -i <consumer id>).\n\n");
+  printf("A master process balancing packets to multiple consumer processes.\n\n");
+
+  printf("Usage:  zbalance_ipc [-h] -i <device> -c <cluster id> -n <num inst>\n"
+	 "                     [-m <hash mode>] [-S <core id>] [-g <core_id>]\n"
+	 "                     [-N <num>] [-a] ]-l <sock list>]\n");
+
   printf("-h              Print this help\n");
   printf("-i <device>     Device (comma-separated list)\n");
   printf("-c <cluster id> Cluster id\n");
@@ -254,7 +260,8 @@ void printHelp(void) {
   printf("-m <hash mode>  Hashing modes:\n"
          "                0 - No hash: Round-Robin (default)\n"
          "                1 - IP hash (with the ability to spread packets across multiple instances\n"
-         "                    of multiple applications, using a comma-separated list in -n)\n"
+         "                    of multiple applications, using a comma-separated list in -n) or\n"
+	 "                    TID (thread id) in case of '-i sysdig'\n"
          "                2 - Fan-out\n"
          "                3 - Fan-out (1st) + Round-Robin (2nd, 3rd, ..)\n");
   printf("-S <core id>    Enable Time Pulse thread and bind it to a core\n");
@@ -282,6 +289,16 @@ int32_t rr_distribution_func(pfring_zc_pkt_buff *pkt_handle, pfring_zc_queue *in
   if (time_pulse) SET_TS_FROM_PULSE(pkt_handle, *pulse_timestamp_ns);
   if (++rr == num_out_queues) rr = 0;
   return rr;
+}
+
+/* *************************************** */
+
+int32_t sysdig_distribution_func(pfring_zc_pkt_buff *pkt_handle, pfring_zc_queue *in_queue, void *user) {
+  /* NOTE: pkt_handle->hash contains the CPU id */
+  struct sysdig_event_header *ev = (struct sysdig_event_header*)pfring_zc_pkt_buff_data(pkt_handle, in_queue); 
+  long num_out_queues = (long) user;
+
+  return(ev->thread_id % num_out_queues);
 }
 
 /* *************************************** */
@@ -521,6 +538,12 @@ int main(int argc, char* argv[]) {
   }
 
   if (hash_mode == 0 || (hash_mode == 1 && num_apps == 1)) { /* balancer */
+    pfring_zc_distribution_func func;
+
+    if(strcmp(device, "sysdig") == 0)
+      func = (hash_mode == 0) ? rr_distribution_func : sysdig_distribution_func;
+    else
+      func = hash_mode == 0 ? rr_distribution_func : (time_pulse ? ip_distribution_func : NULL /* built-in IP-based  */);
 
     zw = pfring_zc_run_balancer(
       inzqs, 
@@ -530,7 +553,7 @@ int main(int argc, char* argv[]) {
       wsp,
       round_robin_bursts_policy,
       NULL,
-      hash_mode == 0 ? rr_distribution_func : (time_pulse ? ip_distribution_func : NULL /* built-in IP-based  */),
+      func,
       (void *) ((long) num_consumer_queues),
       !wait_for_packet, 
       bind_worker_core

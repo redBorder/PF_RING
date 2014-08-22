@@ -1300,6 +1300,7 @@ int pfring_parse_bpf_filter(char *filter_buffer, u_int caplen,
 /* ********************************* */
 
 int32_t gmt_to_local(time_t t);
+char* sysdig_event2name(u_int event_type);
 
 /* ********************************* */
 

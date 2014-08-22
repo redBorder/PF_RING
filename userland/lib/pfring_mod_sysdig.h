@@ -14,12 +14,24 @@
 #ifndef _PFRING_MOD_SYSDIG_H_
 #define _PFRING_MOD_SYSDIG_H_
 
-#define RING_BUF_SIZE             1024 * 1024
-#define SYSDIG_RING_LEN           RING_BUF_SIZE * 2
-#define MIN_SYSDIG_DATA_AVAIL     100000          
-#define BUFFER_EMPTY_WAIT_TIME_MS 30
+#define RING_BUF_SIZE                 1024 * 1024
+#define SYSDIG_RING_LEN               RING_BUF_SIZE * 2
+#define DEFAULT_SYSDIG_DATA_AVAIL     100000          
+#define BUFFER_EMPTY_WAIT_TIME_MS     30
 
-#define MAX_NUM_SYSDIG_DEVICES    64
+#define MAX_NUM_SYSDIG_DEVICES        64
+
+/* From sysdig's ppm_events_public.h */
+#define PPM_IOCTL_MAGIC	                's'
+#define PPM_IOCTL_DISABLE_CAPTURE       _IO(PPM_IOCTL_MAGIC, 0)
+#define PPM_IOCTL_ENABLE_CAPTURE        _IO(PPM_IOCTL_MAGIC, 1)
+#define PPM_IOCTL_DISABLE_DROPPING_MODE _IO(PPM_IOCTL_MAGIC, 2)
+#define PPM_IOCTL_ENABLE_DROPPING_MODE  _IO(PPM_IOCTL_MAGIC, 3)
+#define PPM_IOCTL_SET_SNAPLEN           _IO(PPM_IOCTL_MAGIC, 4)
+#define PPM_IOCTL_MASK_ZERO_EVENTS      _IO(PPM_IOCTL_MAGIC, 5)
+#define PPM_IOCTL_MASK_SET_EVENT        _IO(PPM_IOCTL_MAGIC, 6)
+#define PPM_IOCTL_MASK_UNSET_EVENT      _IO(PPM_IOCTL_MAGIC, 7)
+
 
 struct sysdig_ring_info {
   volatile u_int32_t head;
@@ -41,6 +53,7 @@ typedef struct {
 
 typedef struct {
   u_int8_t                num_devices;
+  u_int32_t               bytes_watermark;
   pfring_sysdig_device    devices[MAX_NUM_SYSDIG_DEVICES];
 } pfring_sysdig;
 
@@ -63,5 +76,6 @@ int  pfring_mod_sysdig_enable_ring(pfring *ring);
 int  pfring_mod_sysdig_set_socket_mode(pfring *ring, socket_mode mode);
 int  pfring_mod_sysdig_set_poll_watermark(pfring *ring, u_int16_t watermark);
 int  pfring_mod_sysdig_stats(pfring *ring, pfring_stat *stats);
+int  pfring_mod_sysdig_get_bound_device_ifindex(pfring *ring, int *if_index);
 
 #endif /* _PFRING_MOD_SYSDIG_H_ */
