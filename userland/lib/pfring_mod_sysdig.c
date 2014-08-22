@@ -158,7 +158,7 @@ static void sysdig_get_first_event(pfring_sysdig *sysdig,
 int pfring_mod_sysdig_recv(pfring *ring, u_char** buffer, u_int buffer_len, 
 			   struct pfring_pkthdr *hdr, u_int8_t wait_for_incoming_packet) {
 
-  u_int8_t device_id, ret_device_id;
+  u_int8_t device_id, ret_device_id = 0;
   pfring_sysdig *sysdig;
   struct sysdig_event_header *ret_event = NULL;
 
