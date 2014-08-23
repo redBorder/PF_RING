@@ -1,6 +1,6 @@
 /*
  *
- * (C) 2005-13 - ntop.org
+ * (C) 2005-14 - ntop.org
  *
  *
  * This program is free software; you can redistribute it and/or modify
@@ -1311,8 +1311,8 @@ int pfring_parse_bpf_filter(char *filter_buffer, u_int caplen,
 
 /* ********************************* */
 
+/* pfring_utils.h */
 int32_t gmt_to_local(time_t t);
-char* sysdig_event2name(u_int event_type);
 
 /* ********************************* */
 
@@ -1324,6 +1324,8 @@ typedef struct {
 #ifdef HAVE_ZERO
 #include "pfring_zero.h"
 #endif
+
+#include "pfring_mod_sysdig.h"
 
 #ifdef __cplusplus
 }

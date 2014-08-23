@@ -1,7 +1,6 @@
 /*
  *
- * (C) 2005-12 - Luca Deri <deri@ntop.org>
- *               Alfredo Cardigliano <cardigliano@ntop.org>
+ * (C) 2005-14 - ntop.org
  *
  *
  * This program is free software; you can redistribute it and/or modify
@@ -13,6 +12,7 @@
  */
 
 #include "pfring.h"
+#include "pfring_mod_sysdig.h"
 #include "pfring_utils.h"
 
 #include <linux/if.h>
@@ -78,7 +78,7 @@ static u_int32_t pfring_hash_pkt(struct pfring_pkthdr *hdr) {
       hdr->extended_hdr.parsed_pkt.ip_dst.v6.s6_addr32[1] +
       hdr->extended_hdr.parsed_pkt.ip_dst.v6.s6_addr32[2] +
       hdr->extended_hdr.parsed_pkt.ip_dst.v6.s6_addr32[3] +
-      hdr->extended_hdr.parsed_pkt.l4_src_port + 
+      hdr->extended_hdr.parsed_pkt.l4_src_port +
       hdr->extended_hdr.parsed_pkt.l4_dst_port;
   } else {
     return
@@ -93,7 +93,7 @@ static u_int32_t pfring_hash_pkt(struct pfring_pkthdr *hdr) {
       hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst.v6.s6_addr32[3] +
       hdr->extended_hdr.parsed_pkt.tunnel.tunneled_l4_src_port +
       hdr->extended_hdr.parsed_pkt.tunnel.tunneled_l4_dst_port;
-  }  
+  }
 }
 
 /* ******************************* */
@@ -121,13 +121,13 @@ static int __pfring_parse_tunneled_pkt(u_char *pkt, struct pfring_pkthdr *hdr, u
   } else if(ip_version == 6 /* IPv6 */ ) {
     struct ipv6hdr *tunneled_ipv6;
 
-    if(hdr->caplen < (tunnel_offset+sizeof(struct ipv6hdr))) 
+    if(hdr->caplen < (tunnel_offset+sizeof(struct ipv6hdr)))
       return 0;
 
     tunneled_ipv6 = (struct ipv6hdr *) (&pkt[tunnel_offset]);
 
     hdr->extended_hdr.parsed_pkt.tunnel.tunneled_proto = tunneled_ipv6->nexthdr;
-    
+
     /* Values of IPv6 addresses are stored as network byte order */
     memcpy(&hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src.v6, &tunneled_ipv6->saddr, sizeof(tunneled_ipv6->saddr));
     memcpy(&hdr->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst.v6, &tunneled_ipv6->daddr, sizeof(tunneled_ipv6->daddr));
@@ -174,17 +174,17 @@ static int __pfring_parse_tunneled_pkt(u_char *pkt, struct pfring_pkthdr *hdr, u
 
     tcp = (struct tcphdr *)(&pkt[tunnel_offset]);
 
-    hdr->extended_hdr.parsed_pkt.tunnel.tunneled_l4_src_port = ntohs(tcp->source), 
+    hdr->extended_hdr.parsed_pkt.tunnel.tunneled_l4_src_port = ntohs(tcp->source),
     hdr->extended_hdr.parsed_pkt.tunnel.tunneled_l4_dst_port = ntohs(tcp->dest);
   } else if(hdr->extended_hdr.parsed_pkt.tunnel.tunneled_proto == IPPROTO_UDP) {
     struct udphdr *udp;
 
-    if(hdr->caplen < tunnel_offset + sizeof(struct udphdr)) 
+    if(hdr->caplen < tunnel_offset + sizeof(struct udphdr))
       return 1;
-    
+
     udp = (struct udphdr *)(&pkt[tunnel_offset]);
 
-    hdr->extended_hdr.parsed_pkt.tunnel.tunneled_l4_src_port = ntohs(udp->source), 
+    hdr->extended_hdr.parsed_pkt.tunnel.tunneled_l4_src_port = ntohs(udp->source),
     hdr->extended_hdr.parsed_pkt.tunnel.tunneled_l4_dst_port = ntohs(udp->dest);
   }
 
@@ -193,7 +193,7 @@ static int __pfring_parse_tunneled_pkt(u_char *pkt, struct pfring_pkthdr *hdr, u
 
 /* ******************************* */
 
-int pfring_parse_pkt(u_char *pkt, struct pfring_pkthdr *hdr, u_int8_t level /* L2..L4, 5 (tunnel) */, 
+int pfring_parse_pkt(u_char *pkt, struct pfring_pkthdr *hdr, u_int8_t level /* L2..L4, 5 (tunnel) */,
 		     u_int8_t add_timestamp /* 0,1 */, u_int8_t add_hash /* 0,1 */) {
   struct ethhdr *eh = (struct ethhdr*) pkt;
   u_int32_t displ = 0, ip_len;
@@ -201,7 +201,7 @@ int pfring_parse_pkt(u_char *pkt, struct pfring_pkthdr *hdr, u_int8_t level /* L
 
   hdr->extended_hdr.parsed_pkt.tunnel.tunnel_id = NO_TUNNEL_ID;
 
-  /* Note: in order to optimize the computation, this function expects a zero-ed 
+  /* Note: in order to optimize the computation, this function expects a zero-ed
    * or partially parsed pkthdr */
   //memset(&hdr->extended_hdr.parsed_pkt, 0, sizeof(struct pkt_parsing_info));
   //hdr->extended_hdr.parsed_header_len = 0;
@@ -263,7 +263,7 @@ int pfring_parse_pkt(u_char *pkt, struct pfring_pkthdr *hdr, u_int8_t level /* L
 
     hdr->extended_hdr.parsed_pkt.ip_version = 6;
 
-    if(hdr->caplen < hdr->extended_hdr.parsed_pkt.offset.l3_offset + sizeof(struct ipv6hdr)) 
+    if(hdr->caplen < hdr->extended_hdr.parsed_pkt.offset.l3_offset + sizeof(struct ipv6hdr))
       goto TIMESTAMP;
 
     ipv6 = (struct ipv6hdr*)(&pkt[hdr->extended_hdr.parsed_pkt.offset.l3_offset]);
@@ -317,7 +317,7 @@ int pfring_parse_pkt(u_char *pkt, struct pfring_pkthdr *hdr, u_int8_t level /* L
   if(hdr->extended_hdr.parsed_pkt.l3_proto == IPPROTO_TCP) {
     struct tcphdr *tcp;
 
-    if(hdr->caplen < hdr->extended_hdr.parsed_pkt.offset.l4_offset + sizeof(struct tcphdr)) 
+    if(hdr->caplen < hdr->extended_hdr.parsed_pkt.offset.l4_offset + sizeof(struct tcphdr))
       goto TIMESTAMP;
 
     tcp = (struct tcphdr *)(&pkt[hdr->extended_hdr.parsed_pkt.offset.l4_offset]);
@@ -335,23 +335,23 @@ int pfring_parse_pkt(u_char *pkt, struct pfring_pkthdr *hdr, u_int8_t level /* L
   } else if(hdr->extended_hdr.parsed_pkt.l3_proto == IPPROTO_UDP) {
     struct udphdr *udp;
 
-    if(hdr->caplen < hdr->extended_hdr.parsed_pkt.offset.l4_offset + sizeof(struct udphdr)) 
+    if(hdr->caplen < hdr->extended_hdr.parsed_pkt.offset.l4_offset + sizeof(struct udphdr))
       goto TIMESTAMP;
 
     udp = (struct udphdr *)(&pkt[hdr->extended_hdr.parsed_pkt.offset.l4_offset]);
 
     hdr->extended_hdr.parsed_pkt.l4_src_port = ntohs(udp->source), hdr->extended_hdr.parsed_pkt.l4_dst_port = ntohs(udp->dest);
     hdr->extended_hdr.parsed_pkt.offset.payload_offset = hdr->extended_hdr.parsed_pkt.offset.l4_offset + sizeof(struct udphdr);
-    
+
     analyzed = 4;
 
     if (level < 5)
       goto TIMESTAMP;
 
     /* GTPv1 */
-    if((hdr->extended_hdr.parsed_pkt.l4_src_port == GTP_SIGNALING_PORT) || 
-       (hdr->extended_hdr.parsed_pkt.l4_dst_port == GTP_SIGNALING_PORT) || 
-       (hdr->extended_hdr.parsed_pkt.l4_src_port == GTP_U_DATA_PORT)    || 
+    if((hdr->extended_hdr.parsed_pkt.l4_src_port == GTP_SIGNALING_PORT) ||
+       (hdr->extended_hdr.parsed_pkt.l4_dst_port == GTP_SIGNALING_PORT) ||
+       (hdr->extended_hdr.parsed_pkt.l4_src_port == GTP_U_DATA_PORT)    ||
        (hdr->extended_hdr.parsed_pkt.l4_dst_port == GTP_U_DATA_PORT))  {
       struct gtp_v1_hdr *gtp;
       u_int16_t gtp_len;
@@ -367,14 +367,14 @@ int pfring_parse_pkt(u_char *pkt, struct pfring_pkthdr *hdr, u_int8_t level /* L
 
 	hdr->extended_hdr.parsed_pkt.tunnel.tunnel_id = ntohl(gtp->teid);
 
-	if((hdr->extended_hdr.parsed_pkt.l4_src_port == GTP_U_DATA_PORT) || 
+	if((hdr->extended_hdr.parsed_pkt.l4_src_port == GTP_U_DATA_PORT) ||
 	   (hdr->extended_hdr.parsed_pkt.l4_dst_port == GTP_U_DATA_PORT)) {
 	  if(gtp->flags & (GTP_FLAGS_EXTENSION | GTP_FLAGS_SEQ_NUM | GTP_FLAGS_NPDU_NUM)) {
 	    struct gtp_v1_opt_hdr *gtpopt;
 
             if(hdr->caplen < (hdr->extended_hdr.parsed_pkt.offset.payload_offset+gtp_len+sizeof(struct gtp_v1_opt_hdr)))
 	      goto TIMESTAMP;
-	      
+
 	    gtpopt = (struct gtp_v1_opt_hdr *) (&pkt[hdr->extended_hdr.parsed_pkt.offset.payload_offset + gtp_len]);
 	    gtp_len += sizeof(struct gtp_v1_opt_hdr);
 
@@ -410,10 +410,10 @@ int pfring_parse_pkt(u_char *pkt, struct pfring_pkthdr *hdr, u_int8_t level /* L
 
     gre_offset = sizeof(struct gre_header);
 
-    if((gre->flags_and_version & GRE_HEADER_VERSION) == 0) { 
+    if((gre->flags_and_version & GRE_HEADER_VERSION) == 0) {
       if(gre->flags_and_version & (GRE_HEADER_CHECKSUM | GRE_HEADER_ROUTING)) gre_offset += 4;
       if(gre->flags_and_version & GRE_HEADER_KEY) {
-        u_int32_t *tunnel_id = (u_int32_t*)(&pkt[hdr->extended_hdr.parsed_pkt.offset.l4_offset+gre_offset]); 
+        u_int32_t *tunnel_id = (u_int32_t*)(&pkt[hdr->extended_hdr.parsed_pkt.offset.l4_offset+gre_offset]);
         gre_offset += 4;
 	hdr->extended_hdr.parsed_pkt.tunnel.tunnel_id = ntohl(*tunnel_id);
       }
@@ -519,12 +519,12 @@ static char *intoa(unsigned int addr) {
 static char *in6toa(struct in6_addr addr6) {
   static char buf[sizeof "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"];
   char *ret = (char*)inet_ntop(AF_INET6, &addr6, buf, sizeof(buf));
-  
+
   if(ret == NULL) {
     //printf("Internal error (&buff[buff_used]r too short)");
     buf[0] = '\0';
   }
-  
+
   return(ret);
 }
 
@@ -550,83 +550,83 @@ int pfring_print_parsed_pkt(char *buff, u_int buff_len, const u_char *p, const s
   char buf1[32], buf2[32];
   int buff_used = 0;
 
-  buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
+  buff_used += snprintf(&buff[buff_used], buff_len - buff_used,
     "[%s -> %s] ",
     etheraddr2string(h->extended_hdr.parsed_pkt.smac, buf1),
-    etheraddr2string(h->extended_hdr.parsed_pkt.dmac, buf2));    
+    etheraddr2string(h->extended_hdr.parsed_pkt.dmac, buf2));
 
   if(h->extended_hdr.parsed_pkt.offset.vlan_offset)
-    buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
+    buff_used += snprintf(&buff[buff_used], buff_len - buff_used,
       "[vlan %u] ", h->extended_hdr.parsed_pkt.vlan_id);
 
   if (h->extended_hdr.parsed_pkt.eth_type == 0x0800 /* IPv4*/ || h->extended_hdr.parsed_pkt.eth_type == 0x86DD /* IPv6*/) {
 
     if(h->extended_hdr.parsed_pkt.eth_type == 0x0800 /* IPv4*/ ) {
-      buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
+      buff_used += snprintf(&buff[buff_used], buff_len - buff_used,
         "[IPv4][%s:%d ", intoa(h->extended_hdr.parsed_pkt.ipv4_src), h->extended_hdr.parsed_pkt.l4_src_port);
-      buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
+      buff_used += snprintf(&buff[buff_used], buff_len - buff_used,
         "-> %s:%d] ", intoa(h->extended_hdr.parsed_pkt.ipv4_dst), h->extended_hdr.parsed_pkt.l4_dst_port);
     } else {
-      buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
+      buff_used += snprintf(&buff[buff_used], buff_len - buff_used,
         "[IPv6][%s:%d ",    in6toa(h->extended_hdr.parsed_pkt.ipv6_src), h->extended_hdr.parsed_pkt.l4_src_port);
-      buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
+      buff_used += snprintf(&buff[buff_used], buff_len - buff_used,
         "-> %s:%d] ", in6toa(h->extended_hdr.parsed_pkt.ipv6_dst), h->extended_hdr.parsed_pkt.l4_dst_port);
     }
 
-    buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
+    buff_used += snprintf(&buff[buff_used], buff_len - buff_used,
       "[l3_proto=%s]", proto2str(h->extended_hdr.parsed_pkt.l3_proto));
 
     if(h->extended_hdr.parsed_pkt.tunnel.tunnel_id != NO_TUNNEL_ID) {
-      buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
-        "[TEID=0x%08X][tunneled_proto=%s]", 
+      buff_used += snprintf(&buff[buff_used], buff_len - buff_used,
+        "[TEID=0x%08X][tunneled_proto=%s]",
         h->extended_hdr.parsed_pkt.tunnel.tunnel_id,
         proto2str(h->extended_hdr.parsed_pkt.tunnel.tunneled_proto));
 
       if(h->extended_hdr.parsed_pkt.eth_type == 0x0800 /* IPv4*/ ) {
-        buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
+        buff_used += snprintf(&buff[buff_used], buff_len - buff_used,
 	  "[IPv4][%s:%d ",
           intoa(h->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src.v4),
           h->extended_hdr.parsed_pkt.tunnel.tunneled_l4_src_port);
-        buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
-	  "-> %s:%d] ", 
+        buff_used += snprintf(&buff[buff_used], buff_len - buff_used,
+	  "-> %s:%d] ",
           intoa(h->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst.v4),
           h->extended_hdr.parsed_pkt.tunnel.tunneled_l4_dst_port);
       } else {
-        buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
-	  "[IPv6][%s:%d ", 
+        buff_used += snprintf(&buff[buff_used], buff_len - buff_used,
+	  "[IPv6][%s:%d ",
           in6toa(h->extended_hdr.parsed_pkt.tunnel.tunneled_ip_src.v6),
           h->extended_hdr.parsed_pkt.tunnel.tunneled_l4_src_port);
-        buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
+        buff_used += snprintf(&buff[buff_used], buff_len - buff_used,
 	  "-> %s:%d] ",
           in6toa(h->extended_hdr.parsed_pkt.tunnel.tunneled_ip_dst.v6),
           h->extended_hdr.parsed_pkt.tunnel.tunneled_l4_dst_port);
-      }	  
+      }
     }
 
-    buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
+    buff_used += snprintf(&buff[buff_used], buff_len - buff_used,
       "[hash=%u][tos=%d][tcp_seq_num=%u]",
       h->extended_hdr.pkt_hash,
-      h->extended_hdr.parsed_pkt.ipv4_tos, 
+      h->extended_hdr.parsed_pkt.ipv4_tos,
       h->extended_hdr.parsed_pkt.tcp.seq_num);
-	
+
   } else if(h->extended_hdr.parsed_pkt.eth_type == 0x0806 /* ARP */) {
     buff_used += snprintf(&buff[buff_used], buff_len - buff_used, "[ARP]");
     if (buff_len >= h->extended_hdr.parsed_pkt.offset.l3_offset+30) {
-      buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
+      buff_used += snprintf(&buff[buff_used], buff_len - buff_used,
         "[Sender=%s/%s]",
         etheraddr2string(&p[h->extended_hdr.parsed_pkt.offset.l3_offset+8], buf1),
         intoa(ntohl(*((u_int32_t *) &p[h->extended_hdr.parsed_pkt.offset.l3_offset+14]))));
-      buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
-        "[Target=%s/%s]", 
+      buff_used += snprintf(&buff[buff_used], buff_len - buff_used,
+        "[Target=%s/%s]",
         etheraddr2string(&p[h->extended_hdr.parsed_pkt.offset.l3_offset+18], buf2),
         intoa(ntohl(*((u_int32_t *) &p[h->extended_hdr.parsed_pkt.offset.l3_offset+24]))));
     }
   } else {
-    buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
+    buff_used += snprintf(&buff[buff_used], buff_len - buff_used,
       "[eth_type=0x%04X]", h->extended_hdr.parsed_pkt.eth_type);
   }
 
-  buff_used += snprintf(&buff[buff_used], buff_len - buff_used, 
+  buff_used += snprintf(&buff[buff_used], buff_len - buff_used,
     " [caplen=%d][len=%d][parsed_header_len=%d][eth_offset=%d][l3_offset=%d][l4_offset=%d][payload_offset=%d]\n",
     h->caplen, h->len, h->extended_hdr.parsed_header_len,
     h->extended_hdr.parsed_pkt.offset.eth_offset,
@@ -685,7 +685,7 @@ static int pfring_promisc(const char *device, int set_promisc) {
 int pfring_set_if_promisc(const char *device, int set_promisc) {
   char name_copy[256], *elem;
   int ret = 0;
-  
+
   snprintf(name_copy, sizeof(name_copy), "%s", device);
   elem = strtok(name_copy, ";,");
 
@@ -695,7 +695,7 @@ int pfring_set_if_promisc(const char *device, int set_promisc) {
     if(at != NULL) at[0] = '\0';
 
     ret = pfring_promisc(elem, set_promisc);
-    
+
     if(ret < 0) return(ret);
 
     elem = strtok(NULL, ";,");
@@ -711,7 +711,7 @@ char* pfring_format_numbers(double val, char *buf, u_int buf_len, u_int8_t add_d
   u_int a = ((u_long)val / 1000000) % 1000;
   u_int b = ((u_long)val / 1000) % 1000;
   u_int c = (u_long)val % 1000;
-  u_int d = (u_int)((val - (u_long)val)*100) % 100;  
+  u_int d = (u_int)((val - (u_long)val)*100) % 100;
 
   if(add_decimals) {
     if(val >= 1000000000) {
@@ -750,9 +750,9 @@ int pfring_get_mtu_size(pfring* ring) {
 
   memset(&ifr, 0, sizeof(ifr));
   strncpy(ifr.ifr_name, ring->device_name, sizeof(ifr.ifr_name));
-  
+
   if(ioctl(ring->fd, SIOCGIFMTU, &ifr) == -1)
-    return(0); /* Unknown for this device */  
+    return(0); /* Unknown for this device */
   else
     return(ifr.ifr_mtu);
 }
@@ -813,183 +813,3 @@ int32_t gmt_to_local(time_t t) {
   return (dt);
 }
 
-/* ****************************************************** */
-
-char* sysdig_event2name(u_int event_type) {
-  static char unknown[32];
-
-  switch(event_type) {
-  case 0: return("GENERIC_E");
-  case 1: return("GENERIC_X");
-  case 2: return("SYSCALL_OPEN_E");
-  case 3: return("SYSCALL_OPEN_X");
-  case 4: return("SYSCALL_CLOSE_E");
-  case 5: return("SYSCALL_CLOSE_X");
-  case 6: return("SYSCALL_READ_E");
-  case 7: return("SYSCALL_READ_X");
-  case 8: return("SYSCALL_WRITE_E");
-  case 9: return("SYSCALL_WRITE_X");
-  case 10: return("SYSCALL_BRK_1_E");
-  case 11: return("SYSCALL_BRK_1_X");
-  case 12: return("SYSCALL_EXECVE_8_E");
-  case 13: return("SYSCALL_EXECVE_8_X");
-  case 14: return("CLONE_11_E");
-  case 15: return("CLONE_11_X");
-  case 16: return("PROCEXIT_E");
-  case 17: return("PROCEXIT_X");
-  case 18: return("SOCKET_SOCKET_E");
-  case 19: return("SOCKET_SOCKET_X");
-  case 20: return("SOCKET_BIND_E");
-  case 21: return("SOCKET_BIND_X");
-  case 22: return("SOCKET_CONNECT_E");
-  case 23: return("SOCKET_CONNECT_X");
-  case 24: return("SOCKET_LISTEN_E");
-  case 25: return("SOCKET_LISTEN_X");
-  case 26: return("SOCKET_ACCEPT_E");
-  case 27: return("SOCKET_ACCEPT_X");
-  case 28: return("SOCKET_SEND_E");
-  case 29: return("SOCKET_SEND_X");
-  case 30: return("SOCKET_SENDTO_E");
-  case 31: return("SOCKET_SENDTO_X");
-  case 32: return("SOCKET_RECV_E");
-  case 33: return("SOCKET_RECV_X");
-  case 34: return("SOCKET_RECVFROM_E");
-  case 35: return("SOCKET_RECVFROM_X");
-  case 36: return("SOCKET_SHUTDOWN_E");
-  case 37: return("SOCKET_SHUTDOWN_X");
-  case 38: return("SOCKET_GETSOCKNAME_E");
-  case 39: return("SOCKET_GETSOCKNAME_X");
-  case 40: return("SOCKET_GETPEERNAME_E");
-  case 41: return("SOCKET_GETPEERNAME_X");
-  case 42: return("SOCKET_SOCKETPAIR_E");
-  case 43: return("SOCKET_SOCKETPAIR_X");
-  case 44: return("SOCKET_SETSOCKOPT_E");
-  case 45: return("SOCKET_SETSOCKOPT_X");
-  case 46: return("SOCKET_GETSOCKOPT_E");
-  case 47: return("SOCKET_GETSOCKOPT_X");
-  case 48: return("SOCKET_SENDMSG_E");
-  case 49: return("SOCKET_SENDMSG_X");
-  case 50: return("SOCKET_SENDMMSG_E");
-  case 51: return("SOCKET_SENDMMSG_X");
-  case 52: return("SOCKET_RECVMSG_E");
-  case 53: return("SOCKET_RECVMSG_X");
-  case 54: return("SOCKET_RECVMMSG_E");
-  case 55: return("SOCKET_RECVMMSG_X");
-  case 56: return("SOCKET_ACCEPT4_E");
-  case 57: return("SOCKET_ACCEPT4_X");
-  case 58: return("SYSCALL_CREAT_E");
-  case 59: return("SYSCALL_CREAT_X");
-  case 60: return("SYSCALL_PIPE_E");
-  case 61: return("SYSCALL_PIPE_X");
-  case 62: return("SYSCALL_EVENTFD_E");
-  case 63: return("SYSCALL_EVENTFD_X");
-  case 64: return("SYSCALL_FUTEX_E");
-  case 65: return("SYSCALL_FUTEX_X");
-  case 66: return("SYSCALL_STAT_E");
-  case 67: return("SYSCALL_STAT_X");
-  case 68: return("SYSCALL_LSTAT_E");
-  case 69: return("SYSCALL_LSTAT_X");
-  case 70: return("SYSCALL_FSTAT_E");
-  case 71: return("SYSCALL_FSTAT_X");
-  case 72: return("SYSCALL_STAT64_E");
-  case 73: return("SYSCALL_STAT64_X");
-  case 74: return("SYSCALL_LSTAT64_E");
-  case 75: return("SYSCALL_LSTAT64_X");
-  case 76: return("SYSCALL_FSTAT64_E");
-  case 77: return("SYSCALL_FSTAT64_X");
-  case 78: return("SYSCALL_EPOLLWAIT_E");
-  case 79: return("SYSCALL_EPOLLWAIT_X");
-  case 80: return("SYSCALL_POLL_E");
-  case 81: return("SYSCALL_POLL_X");
-  case 82: return("SYSCALL_SELECT_E");
-  case 83: return("SYSCALL_SELECT_X");
-  case 84: return("SYSCALL_NEWSELECT_E");
-  case 85: return("SYSCALL_NEWSELECT_X");
-  case 86: return("SYSCALL_LSEEK_E");
-  case 87: return("SYSCALL_LSEEK_X");
-  case 88: return("SYSCALL_LLSEEK_E");
-  case 89: return("SYSCALL_LLSEEK_X");
-  case 90: return("SYSCALL_IOCTL_E");
-  case 91: return("SYSCALL_IOCTL_X");
-  case 92: return("SYSCALL_GETCWD_E");
-  case 93: return("SYSCALL_GETCWD_X");
-  case 94: return("SYSCALL_CHDIR_E");
-  case 95: return("SYSCALL_CHDIR_X");
-  case 96: return("SYSCALL_FCHDIR_E");
-  case 97: return("SYSCALL_FCHDIR_X");
-  case 98: return("SYSCALL_MKDIR_E");
-  case 99: return("SYSCALL_MKDIR_X");
-  case 100: return("SYSCALL_RMDIR_E");
-  case 101: return("SYSCALL_RMDIR_X");
-  case 102: return("SYSCALL_OPENAT_E");
-  case 103: return("SYSCALL_OPENAT_X");
-  case 104: return("SYSCALL_LINK_E");
-  case 105: return("SYSCALL_LINK_X");
-  case 106: return("SYSCALL_LINKAT_E");
-  case 107: return("SYSCALL_LINKAT_X");
-  case 108: return("SYSCALL_UNLINK_E");
-  case 109: return("SYSCALL_UNLINK_X");
-  case 110: return("SYSCALL_UNLINKAT_E");
-  case 111: return("SYSCALL_UNLINKAT_X");
-  case 112: return("SYSCALL_PREAD_E");
-  case 113: return("SYSCALL_PREAD_X");
-  case 114: return("SYSCALL_PWRITE_E");
-  case 115: return("SYSCALL_PWRITE_X");
-  case 116: return("SYSCALL_READV_E");
-  case 117: return("SYSCALL_READV_X");
-  case 118: return("SYSCALL_WRITEV_E");
-  case 119: return("SYSCALL_WRITEV_X");
-  case 120: return("SYSCALL_PREADV_E");
-  case 121: return("SYSCALL_PREADV_X");
-  case 122: return("SYSCALL_PWRITEV_E");
-  case 123: return("SYSCALL_PWRITEV_X");
-  case 124: return("SYSCALL_DUP_E");
-  case 125: return("SYSCALL_DUP_X");
-  case 126: return("SYSCALL_SIGNALFD_E");
-  case 127: return("SYSCALL_SIGNALFD_X");
-  case 128: return("SYSCALL_KILL_E");
-  case 129: return("SYSCALL_KILL_X");
-  case 130: return("SYSCALL_TKILL_E");
-  case 131: return("SYSCALL_TKILL_X");
-  case 132: return("SYSCALL_TGKILL_E");
-  case 133: return("SYSCALL_TGKILL_X");
-  case 134: return("SYSCALL_NANOSLEEP_E");
-  case 135: return("SYSCALL_NANOSLEEP_X");
-  case 136: return("SYSCALL_TIMERFD_CREATE_E");
-  case 137: return("SYSCALL_TIMERFD_CREATE_X");
-  case 138: return("SYSCALL_INOTIFY_INIT_E");
-  case 139: return("SYSCALL_INOTIFY_INIT_X");
-  case 140: return("SYSCALL_GETRLIMIT_E");
-  case 141: return("SYSCALL_GETRLIMIT_X");
-  case 142: return("SYSCALL_SETRLIMIT_E");
-  case 143: return("SYSCALL_SETRLIMIT_X");
-  case 144: return("SYSCALL_PRLIMIT_E");
-  case 145: return("SYSCALL_PRLIMIT_X");
-  case 146: return("SCHEDSWITCH_1_E");
-  case 147: return("SCHEDSWITCH_1_X");
-  case 148: return("DROP_E");
-  case 149: return("DROP_X");
-  case 150: return("SYSCALL_FCNTL_E");
-  case 151: return("SYSCALL_FCNTL_X");
-  case 152: return("SCHEDSWITCH_6_E");
-  case 153: return("SCHEDSWITCH_6_X");
-  case 154: return("SYSCALL_EXECVE_13_E");
-  case 155: return("SYSCALL_EXECVE_13_X");
-  case 156: return("CLONE_16_E");
-  case 157: return("CLONE_16_X");
-  case 158: return("SYSCALL_BRK_4_E");
-  case 159: return("SYSCALL_BRK_4_X");
-  case 160: return("SYSCALL_MMAP_E");
-  case 161: return("SYSCALL_MMAP_X");
-  case 162: return("SYSCALL_MMAP2_E");
-  case 163: return("SYSCALL_MMAP2_X");
-  case 164: return("SYSCALL_MUNMAP_E");
-  case 165: return("SYSCALL_MUNMAP_X");
-  case 166: return("SYSCALL_SPLICE_E");
-  case 167: return("SYSCALL_SPLICE_X");
-  default:
-    snprintf(unknown, sizeof(unknown), "%u", event_type);
-  }
-
-  return("???"); /* NOTREACHED */
-};

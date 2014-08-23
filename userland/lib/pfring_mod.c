@@ -1,6 +1,6 @@
 /*
  *
- * (C) 2005-13 - ntop.org
+ * (C) 2005-14 - ntop.org
  *
  *
  * This program is free software; you can redistribute it and/or modify
@@ -935,7 +935,7 @@ u_int16_t pfring_mod_get_slot_header_len(pfring *ring) {
 
 /* **************************************************** */
 
-int pfring_mod_set_bpf_filter(pfring *ring, char *filter_buffer){
+int pfring_mod_set_bpf_filter(pfring *ring, char *filter_buffer) {
   int                rc = -1;
 #ifdef ENABLE_BPF
   struct bpf_program filter;
@@ -982,7 +982,7 @@ int pfring_mod_set_bpf_filter(pfring *ring, char *filter_buffer){
 
 /* **************************************************** */
 
-int pfring_mod_remove_bpf_filter(pfring *ring){
+int pfring_mod_remove_bpf_filter(pfring *ring) {
   int rc = -1;
 #ifdef ENABLE_BPF 
   int dummy = 0;
