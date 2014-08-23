@@ -168,7 +168,6 @@ struct __pfring {
   u_int8_t initialized, enabled, long_header, rss_mode;
   u_int8_t force_timestamp:1, strip_hw_timestamp:1, disable_parsing:1,
     disable_timestamp:1, ixia_timestamp_enabled:1,
-    cpacket_timestamp_enabled:1,
     chunk_mode_enabled:1, userspace_bpf:1;
   packet_direction direction; /* Specify the capture direction for packets */
   socket_mode mode;
@@ -347,7 +346,6 @@ struct __pfring {
 #define PF_RING_DO_NOT_TIMESTAMP     1 << 10 /**< pfring_open() flag: Disable packet timestamping also when 1-copy is used. (sw timestamp already disabled in zero-copy) */
 #define PF_RING_CHUNK_MODE           1 << 11 /**< pfring_open() flag: Enable chunk mode operations. This mode is supported only by specific adapters and it's not for general purpose. */
 #define PF_RING_IXIA_TIMESTAMP	     1 << 12 /**< pfring_open() flag: Enable ixiacom.com hardware timestemp support+stripping. */
-#define PF_RING_CPACKET_TIMESTAMP    1 << 13 /**< pfring_open() flag: Enable cpacket.com hardware timestemp support+stripping. */
 
 /* ********************************* */
 
@@ -1283,8 +1281,22 @@ int pfring_recv_chunk(pfring *ring, void **chunk, u_int32_t *chunk_len, u_int8_t
  */
 int pfring_set_bound_dev_name(pfring *ring, char *custom_dev_name);
 
+ /**
+ * Reads a IXIA-formatted timestamp from an incoming packet and puts it into the timestamp variable.
+ * @param buffer            Incoming packet buffer.
+ * @param buffer_len        Incoming packet buffer length.
+ * @param ts                If found the hardware timestamp will be placed here
+ * @return The length of the IXIA timestamp (hence 0 means that the timestamp has not been found).
+ */
 int pfring_read_ixia_hw_timestamp(u_char *buffer, u_int32_t buffer_len, struct timespec *ts);
 
+ /**
+ * Strip a IXIA-formatted timestamp from an incoming packet. If the timestamp is found, the
+ * hdr parameter (caplen and len fields) are decreased by the size of the timestamp.
+ * @param buffer            Incoming packet buffer.
+ * @param hdr               This is an in/out parameter: it is used to read the original packet len, and it is updated (size decreased) if the hw timestamp is found
+ * @return 0 on success, a negative value otherwise.
+ */
 void pfring_handle_ixia_hw_timestamp(u_char* buffer, struct pfring_pkthdr *hdr);
 
 /* ********************************* */
