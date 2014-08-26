@@ -500,17 +500,51 @@ u16 igb_read_pci_cfg_word(struct e1000_hw *hw, u32 reg)
 
 /* ********************************** */
 
+#define CACHE_LINE_SIZE 64
+
+int gcd(int a, int b) {
+  int c;
+  while (a != 0) {
+    c = a; 
+    a = b % a;
+    b = c;
+  }
+  return b;
+}
+
+u32 compute_buffer_padding(u32 size, u32 channels, u32 ranks) {
+  u32 padded_size = (size + CACHE_LINE_SIZE - 1) / CACHE_LINE_SIZE;
+  while (gcd(padded_size, channels * ranks) != 1 || gcd(channels, padded_size) != 1)
+    padded_size++;
+  padded_size *= CACHE_LINE_SIZE;
+  return padded_size;
+}
+
+/* ********************************** */
+
 void dna_igb_alloc_rx_buffers(struct igb_ring *rx_ring, struct pfring_hooks *hook) {
   union e1000_adv_rx_desc *rx_desc, *shadow_rx_desc;
   struct igb_rx_buffer *bi;
   u16 i;
   struct igb_adapter 	*adapter = netdev_priv(rx_ring->netdev);
   struct e1000_hw	*hw = &adapter->hw;
-  u16			cache_line_size;
   struct igb_ring	*tx_ring = adapter->tx_ring[rx_ring->queue_index];
   mem_ring_info         rx_info = {0};
   mem_ring_info         tx_info = {0};
   int                   num_slots_per_page;
+#if 0
+  u16			cache_line_size;
+
+  cache_line_size = cpu_to_le16(igb_read_pci_cfg_word(hw, IGB_PCI_DEVICE_CACHE_LINE_SIZE));
+  cache_line_size &= 0x00FF;
+  cache_line_size *= PCI_DEVICE_CACHE_LINE_SIZE_BYTES;
+  if(cache_line_size == 0) cache_line_size = 64;
+
+  if(unlikely(enable_debug))
+    printk("%s(): pci cache line size %d\n",__FUNCTION__, cache_line_size);
+
+  rx_ring->dna.packet_slot_len  = ALIGN(rx_ring->rx_buffer_len, cache_line_size);
+#endif
 
   /* Check if the memory has been already allocated */
   if(rx_ring->dna.memory_allocated) return;
@@ -527,15 +561,9 @@ void dna_igb_alloc_rx_buffers(struct igb_ring *rx_ring, struct pfring_hooks *hoo
 
   init_waitqueue_head(&rx_ring->dna.rx_tx.rx.packet_waitqueue);
 
-  cache_line_size = cpu_to_le16(igb_read_pci_cfg_word(hw, IGB_PCI_DEVICE_CACHE_LINE_SIZE));
-  cache_line_size &= 0x00FF;
-  cache_line_size *= PCI_DEVICE_CACHE_LINE_SIZE_BYTES;
-  if(cache_line_size == 0) cache_line_size = 64;
-
-  if(unlikely(enable_debug))
-    printk("%s(): pci cache line size %d\n",__FUNCTION__, cache_line_size);
-
-  rx_ring->dna.packet_slot_len  = ALIGN(rx_ring->rx_buffer_len, cache_line_size);
+  /* Optimising slot len for most common systems adding padding at the end. Please note 
+   * that some Intel chipset has three channels, in this case no padding is required. */
+  rx_ring->dna.packet_slot_len  = compute_buffer_padding(rx_ring->rx_buffer_len, 4, 4);
   rx_ring->dna.packet_num_slots = rx_ring->count;
 
   rx_ring->dna.tot_packet_memory = PAGE_SIZE << DNA_MAX_CHUNK_ORDER;
