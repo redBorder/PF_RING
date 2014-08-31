@@ -305,8 +305,7 @@ struct __pfring {
   } rdi;
 
   filtering_mode ft_mode;
-  pfring_device_type ft_device_type;
-  void *qat; /* Intel QAT PM */
+  pfring_device_type ft_device_type;  
 
   /* All devices */
   char *buffer, *slots, *device_name;
@@ -314,7 +313,7 @@ struct __pfring {
   u_int16_t slot_header_len, mtu_len /* 0 = unknown */;
   u_int32_t sampling_rate;
   u_int8_t kernel_packet_consumer, is_shutting_down, socket_default_accept_policy;
-  int fd;
+  int fd, device_id;
   FlowSlotInfo *slots_info;
   u_int poll_sleep;
   u_int16_t poll_duration;

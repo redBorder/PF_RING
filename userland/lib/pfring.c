@@ -220,6 +220,7 @@ pfring* pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags) 
   if(ring->mtu_len == 0) ring->mtu_len =  9000 /* Jumbo MTU */;
   ring->mtu_len += sizeof(struct ether_header) + sizeof(struct eth_vlan_hdr);
 
+  pfring_get_bound_device_ifindex(ring, &ring->device_id);
   ring->initialized = 1;
 
 #ifdef RING_DEBUG
@@ -616,7 +617,7 @@ recv_next:
 #endif
 
     rc = ring->recv(ring, buffer, buffer_len, hdr, wait_for_incoming_packet);
-    hdr->caplen = min_val(hdr->caplen, ring->caplen);
+    hdr->caplen = min_val(hdr->caplen, ring->caplen), hdr->extended_hdr.if_index = ring->device_id;
 
     if(unlikely(ring->ixia_timestamp_enabled))
       pfring_handle_ixia_hw_timestamp(*buffer, hdr);
@@ -1129,6 +1130,8 @@ int pfring_get_bound_device_address(pfring *ring, u_char mac_address[6]) {
 }
 
 /* **************************************************** */
+
+/* TODO: Optimize the call below as ring->device_id initializes the id */
 
 int pfring_get_bound_device_ifindex(pfring *ring, int *if_index) {
   if(ring && ring->get_bound_device_ifindex)
