@@ -387,7 +387,7 @@ int main(int argc, char* argv[]) {
   u_int16_t watermark = 0;
   bundle_read_policy bundle_policy = pick_round_robin;
   u_int32_t version;
-  int bind_core = -1;
+  int bind_core = -1, flags = PF_RING_PROMISC;
 
   startTime.tv_sec = 0;
   thiszone = gmt_to_local(0);
@@ -413,6 +413,8 @@ int main(int argc, char* argv[]) {
       bind_core = atoi(optarg);
       break;
     case 'v':
+      flags |= PF_RING_LONG_HEADER;
+      watermark = 1;
       verbose = 1;
       break;
       /*
@@ -441,7 +443,7 @@ int main(int argc, char* argv[]) {
   while(dev != NULL) {
     printf("Adding %s to bundle\n", dev);
 
-    ring[num_ring] = pfring_open(dev, snaplen, PF_RING_PROMISC);
+    ring[num_ring] = pfring_open(dev, snaplen, flags);
 
     if(ring[num_ring] == NULL) {
       printf("pfring_open error [%s] (perhaps you use quick mode and have already a socket bound to %s ?)\n", 
