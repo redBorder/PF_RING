@@ -43,7 +43,7 @@
 
 #define ALARM_SLEEP             1
 #define MAX_CARD_SLOTS      32768
-#define PREFETCH_BUFFERS       32
+#define PREFETCH_BUFFERS     4096
 #define QUEUE_LEN            8192
 
 #define VERY_VERBOSE
