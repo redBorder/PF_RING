@@ -135,17 +135,6 @@ void sigproc(int sig) {
   if (bidirectional) pfring_zc_queue_breakloop(dir[1].inzq);
 }
 
-/* ******************************** */
-
-void my_sigalarm(int sig) {
-  if(do_shutdown) return;
-
-  print_stats();
-
-  alarm(ALARM_SLEEP);
-  signal(SIGALRM, my_sigalarm);
-}
-
 /* *************************************** */
 
 void printHelp(void) {
@@ -328,13 +317,13 @@ int main(int argc, char* argv[]) {
   signal(SIGTERM, sigproc);
   signal(SIGINT,  sigproc);
 
-  if (!verbose) { /* periodic stats */
-    signal(SIGALRM, my_sigalarm);
-    alarm(ALARM_SLEEP);
-  }
-
   pthread_create(&dir[0].thread, NULL, packet_consumer_thread, (void *) &dir[0]);
   if (bidirectional) pthread_create(&dir[1].thread, NULL, packet_consumer_thread, (void *) &dir[1]);
+
+  if (!verbose) while (!do_shutdown) {
+    sleep(ALARM_SLEEP);
+    print_stats();
+  }
 
   pthread_join(dir[0].thread, NULL);
   if (bidirectional) pthread_join(dir[1].thread, NULL);

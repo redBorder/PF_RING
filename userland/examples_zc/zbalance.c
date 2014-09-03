@@ -157,17 +157,6 @@ void sigproc(int sig) {
   }
 }
 
-/* ******************************** */
-
-void my_sigalarm(int sig) {
-  if(do_shutdown) return;
-
-  print_stats();
-
-  alarm(ALARM_SLEEP);
-  signal(SIGALRM, my_sigalarm);
-}
-
 /* *************************************** */
 
 void printHelp(void) {
@@ -364,8 +353,6 @@ int main(int argc, char* argv[]) {
   signal(SIGINT,  sigproc);
   signal(SIGTERM, sigproc);
   signal(SIGINT,  sigproc);
-  signal(SIGALRM, my_sigalarm);
-  alarm(ALARM_SLEEP);
 
   printf("Starting balancer with %d consumer threads..\n", num_threads);
 
@@ -422,6 +409,12 @@ int main(int argc, char* argv[]) {
 
   for (i = 0; i < num_threads; i++)
     pthread_create(&threads[i], NULL, consumer_thread, (void*) i);
+
+
+  while (!do_shutdown) {
+    sleep(ALARM_SLEEP);
+    print_stats();
+  }
   
   for (i = 0; i < num_threads; i++)
     pthread_join(threads[i], NULL);

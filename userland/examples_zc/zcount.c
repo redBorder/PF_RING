@@ -134,17 +134,6 @@ void sigproc(int sig) {
   pfring_zc_queue_breakloop(zq);
 }
 
-/* ******************************** */
-
-void my_sigalarm(int sig) {
-  if(do_shutdown) return;
-
-  print_stats();
-
-  alarm(ALARM_SLEEP);
-  signal(SIGALRM, my_sigalarm);
-}
-
 /* *************************************** */
 
 void printHelp(void) {
@@ -319,12 +308,13 @@ int main(int argc, char* argv[]) {
   signal(SIGTERM, sigproc);
   signal(SIGINT,  sigproc);
 
-  if (!verbose) { /* periodic stats */
-    signal(SIGALRM, my_sigalarm);
-    alarm(ALARM_SLEEP);
+  pthread_create(&my_thread, NULL, packet_consumer_thread, (void*) NULL);
+
+  if (!verbose) while (!do_shutdown) {
+    sleep(ALARM_SLEEP);
+    print_stats();
   }
 
-  pthread_create(&my_thread, NULL, packet_consumer_thread, (void*) NULL);
   pthread_join(my_thread, NULL);
 
   sleep(1);

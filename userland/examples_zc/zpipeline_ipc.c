@@ -151,17 +151,6 @@ void sigproc(int sig) {
   if (out_device) pfring_zc_queue_breakloop(forwarder[TX_FWDR].inzq);
 }
 
-/* ******************************** */
-
-void my_sigalarm(int sig) {
-  if(do_shutdown) return;
-
-  print_stats();
-
-  alarm(ALARM_SLEEP);
-  signal(SIGALRM, my_sigalarm);
-}
-
 /* *************************************** */
 
 void printHelp(void) {
@@ -371,18 +360,19 @@ int main(int argc, char* argv[]) {
   signal(SIGINT,  sigproc);
   signal(SIGTERM, sigproc);
   signal(SIGINT,  sigproc);
-  signal(SIGALRM, my_sigalarm);
-  alarm(ALARM_SLEEP);
 
   printf("Starting master with %d queues..\n", num_ipc_queues);
 
   if (out_device != NULL) pthread_create(&forwarder[TX_FWDR].thread, NULL, forwarder_thread, &forwarder[TX_FWDR]);
   if (in_device  != NULL) pthread_create(&forwarder[RX_FWDR].thread, NULL, forwarder_thread, &forwarder[RX_FWDR]);
+
+  while (!do_shutdown) {
+    sleep(ALARM_SLEEP);
+    print_stats();
+  }
   
   if (out_device != NULL) pthread_join(forwarder[TX_FWDR].thread, NULL);
   if (in_device  != NULL) pthread_join(forwarder[RX_FWDR].thread, NULL);
-
-  do sleep(1); while (!do_shutdown);
 
   pfring_zc_destroy_cluster(zc);
 

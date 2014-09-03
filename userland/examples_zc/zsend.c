@@ -303,17 +303,6 @@ void sigproc(int sig) {
 
 /* *************************************** */
 
-void my_sigalarm(int sig) {
-  if(do_shutdown) return;
-
-  print_stats();
-
-  alarm(ALARM_SLEEP);
-  signal(SIGALRM, my_sigalarm);
-}
-
-/* *************************************** */
-
 void printHelp(void) {
   printf("zsend - (C) 2014 ntop.org\n");
   printf("Using PFRING_ZC v.%s\n", pfring_zc_version());
@@ -334,7 +323,7 @@ void printHelp(void) {
 
 /* *************************************** */
 
-void send_traffic() {
+void *send_traffic(void *user) {
   ticks hz, tick_start = 0, tick_delta = 0;
   u_int32_t buffer_id = 0;
   int sent_bytes;
@@ -446,12 +435,15 @@ void send_traffic() {
 
   if (!flush_packet) 
     pfring_zc_sync_queue(zq, tx_only);
+
+  return NULL;
 }
 
 /* *************************************** */
 
 int main(int argc, char* argv[]) {
   char *device = NULL, c;
+  pthread_t thread;
   int i;
 
   startTime.tv_sec = 0;
@@ -589,10 +581,15 @@ int main(int argc, char* argv[]) {
   signal(SIGINT,  sigproc);
   signal(SIGTERM, sigproc);
   signal(SIGINT,  sigproc);
-  signal(SIGALRM, my_sigalarm);
-  alarm(ALARM_SLEEP);
 
-  send_traffic();
+  pthread_create(&thread, NULL, send_traffic, NULL);
+
+  while (!do_shutdown) {
+    sleep(ALARM_SLEEP);
+    print_stats();
+  }
+
+  pthread_join(thread, NULL);
 
   print_stats();
 

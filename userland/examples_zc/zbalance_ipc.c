@@ -230,17 +230,6 @@ void sigproc(int sig) {
   print_stats();
 }
 
-/* ******************************** */
-
-void my_sigalarm(int sig) {
-  if(do_shutdown) return;
-
-  print_stats();
-
-  alarm(ALARM_SLEEP);
-  signal(SIGALRM, my_sigalarm);
-}
-
 /* *************************************** */
 
 void printHelp(void) {
@@ -520,8 +509,6 @@ int main(int argc, char* argv[]) {
   signal(SIGINT,  sigproc);
   signal(SIGTERM, sigproc);
   signal(SIGINT,  sigproc);
-  signal(SIGALRM, my_sigalarm);
-  alarm(ALARM_SLEEP);
 
   if (time_pulse) {
     pulse_timestamp_ns = calloc(CACHE_LINE_LEN/sizeof(u_int64_t), sizeof(u_int64_t));
@@ -591,7 +578,10 @@ int main(int argc, char* argv[]) {
     return -1;
   }
   
-  while (!do_shutdown) sleep(1);
+  while (!do_shutdown) {
+    sleep(ALARM_SLEEP);
+    print_stats();
+  }
 
   if (time_pulse)
     pthread_join(time_thread, NULL);

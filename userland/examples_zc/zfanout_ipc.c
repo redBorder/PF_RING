@@ -186,17 +186,6 @@ void sigproc(int sig) {
 
 /* ******************************** */
 
-void my_sigalarm(int sig) {
-  if(globals->do_shutdown) return;
-
-  print_stats();
-
-  alarm(ALARM_SLEEP);
-  signal(SIGALRM, my_sigalarm);
-}
-
-/* *************************************** */
-
 void printHelp(void) {
   printf("zfanout_ipc - (C) 2014 ntop.org\n");
   printf("Using PFRING_ZC v.%s\n", pfring_zc_version());
@@ -404,8 +393,6 @@ int main(int argc, char* argv[]) {
   signal(SIGINT,  sigproc);
   signal(SIGTERM, sigproc);
   signal(SIGINT,  sigproc);
-  signal(SIGALRM, my_sigalarm);
-  alarm(ALARM_SLEEP);
 
   if (globals->time_pulse) {
     globals->pulse_timestamp_ns = calloc(CACHE_LINE_LEN/sizeof(u_int64_t), sizeof(u_int64_t));
@@ -423,6 +410,12 @@ int main(int argc, char* argv[]) {
   }
 
   pthread_create(&my_thread, NULL, packet_consumer_thread, (void*) NULL);
+
+  while (!globals->do_shutdown) {
+    sleep(ALARM_SLEEP);
+    print_stats();
+  }
+
   pthread_join(my_thread, NULL);
 
   if (globals->time_pulse)
