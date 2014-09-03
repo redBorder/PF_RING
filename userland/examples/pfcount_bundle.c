@@ -342,7 +342,7 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h, const u_char *p, long th
 void printHelp(void) {
   printf("pfcount\n(C) 2005-14 ntop.org\n\n");
   printf("-h              Print this help\n");
-  printf("-i <device>     Device name. Use device@channel for channels\n");
+  printf("-i <device>     Device names (comma-separated list). Use device@channel for channels\n");
 
   /* printf("-f <filter>     [pfring filter]\n"); */
 
