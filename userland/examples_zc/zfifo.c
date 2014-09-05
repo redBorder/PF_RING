@@ -314,7 +314,7 @@ int main(int argc, char* argv[]) {
     num_devices, 
     wsp,
     NULL /* idle callback */,
-    !wait_for_packet, 
+    1, /* active wait is mandatory here */ 
     bind_worker_core,
     bind_timer_core
   );
