@@ -60,7 +60,7 @@ static struct timeval startTime;
 unsigned long long numPkts = 0, numBytes = 0;
 int bind_core = -1;
 int buffer_len;
-u_int8_t wait_for_packet = 1, do_shutdown = 0, verbose = 0, add_filtering_rule = 0;
+u_int8_t wait_for_packet = 1, do_shutdown = 0, verbose = 0, add_filtering_rule = 0, high_stats_refresh = 0;
 
 /* ******************************** */
 
@@ -147,6 +147,7 @@ void printHelp(void) {
   printf("-g <core_id>    Bind this app to a core\n");
   printf("-a              Active packet wait\n");
   printf("-R              Test hw filters adding a rule (Intel 82599)\n");
+  printf("-H              High stats refresh rate (workaround for drop counter on 1G Intel cards)\n");
   printf("-v              Verbose\n");
   exit(-1);
 }
@@ -219,10 +220,12 @@ int main(int argc, char* argv[]) {
   char *device = NULL, c;
   int i, cluster_id = -1;
   pthread_t my_thread;
+  struct timeval timeNow, lastTime;
 
+  lastTime.tv_sec = 0;
   startTime.tv_sec = 0;
 
-  while((c = getopt(argc,argv,"ac:g:hi:vR")) != '?') {
+  while((c = getopt(argc,argv,"ac:g:hi:vRH")) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -243,6 +246,9 @@ int main(int argc, char* argv[]) {
       break;
     case 'R':
       add_filtering_rule = 1;
+      break;
+    case 'H':
+      high_stats_refresh = 1;
       break;
     case 'v':
       verbose = 1;
@@ -311,8 +317,19 @@ int main(int argc, char* argv[]) {
   pthread_create(&my_thread, NULL, packet_consumer_thread, (void*) NULL);
 
   if (!verbose) while (!do_shutdown) {
-    sleep(ALARM_SLEEP);
-    print_stats();
+    if (high_stats_refresh) {
+      pfring_zc_stat stats;
+      pfring_zc_stats(zq, &stats);
+      gettimeofday(&timeNow, NULL);
+      if (timeNow.tv_sec != lastTime.tv_sec) {
+        lastTime.tv_sec = timeNow.tv_sec;
+        print_stats();
+      }
+      usleep(1);
+    } else {
+      sleep(ALARM_SLEEP);
+      print_stats();
+    }
   }
 
   pthread_join(my_thread, NULL);
