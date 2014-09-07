@@ -61,6 +61,7 @@ pfring_zc_buffer_pool *wsp;
 u_int32_t num_devices = 0;
 u_int32_t num_apps = 0;
 u_int32_t num_consumer_queues = 0;
+u_int32_t queue_len = QUEUE_LEN;
 u_int32_t instances_per_app[MAX_NUM_APP];
 char **devices = NULL;
 
@@ -255,6 +256,7 @@ void printHelp(void) {
          "                3 - Fan-out (1st) + Round-Robin (2nd, 3rd, ..)\n");
   printf("-S <core id>    Enable Time Pulse thread and bind it to a core\n");
   printf("-g <core_id>    Bind this app to a core\n");
+  printf("-q <len>        Number of slots in each queue (default: %u)\n", QUEUE_LEN);
   printf("-N <num>        Producer for n2disk multi-thread (<num> threads)\n");
   printf("-a              Active packet wait\n");
   printf("-l <sock list>  Enable VM support (comma-separated list of QEMU monitor sockets)\n");
@@ -339,7 +341,7 @@ int main(int argc, char* argv[]) {
 
   start_time.tv_sec = 0;
 
-  while((c = getopt(argc,argv,"ac:g:hi:m:n:l:N:S:")) != '?') {
+  while((c = getopt(argc,argv,"ac:g:hi:m:n:l:q:N:S:")) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -367,6 +369,9 @@ int main(int argc, char* argv[]) {
     case 'l':
       enable_vm_support = 1;
       vm_sockets = strdup(optarg);
+      break;
+    case 'q':
+      queue_len = atoi(optarg);
       break;
     case 'N':
       n2disk_producer = 1;
@@ -413,7 +418,7 @@ int main(int argc, char* argv[]) {
     cluster_id, 
     max_packet_len(devices[0]),
     metadata_len,
-    (num_devices * MAX_CARD_SLOTS) + (num_consumer_queues * (QUEUE_LEN + POOL_SIZE)) + PREFETCH_BUFFERS + num_additional_buffers, 
+    (num_devices * MAX_CARD_SLOTS) + (num_consumer_queues * (queue_len + POOL_SIZE)) + PREFETCH_BUFFERS + num_additional_buffers, 
     numa_node_of_cpu(bind_worker_core),
     NULL /* auto hugetlb mountpoint */ 
   );
@@ -439,7 +444,7 @@ int main(int argc, char* argv[]) {
   }
 
   for (i = 0; i < num_consumer_queues; i++) { 
-    outzqs[i] = pfring_zc_create_queue(zc, QUEUE_LEN);
+    outzqs[i] = pfring_zc_create_queue(zc, queue_len);
 
     if(outzqs[i] == NULL) {
       fprintf(stderr, "pfring_zc_create_queue error [%s]\n", strerror(errno));
