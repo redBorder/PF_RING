@@ -1324,8 +1324,6 @@ typedef struct {
 #include "pfring_zero.h"
 #endif
 
-#include "pfring_mod_sysdig.h"
-
 #ifdef __cplusplus
 }
 #endif
