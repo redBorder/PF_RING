@@ -1,0 +1,37 @@
+all: install
+
+add: remove
+	\/bin/rm -rf /usr/src/@IGB@-dna-@IGB_VERSION@
+	mkdir /usr/src/@IGB@-dna-@IGB_VERSION@
+	cd @IGB@-@IGB_VERSION@-DNA/src ; make clean; cp -r * /usr/src/@IGB@-dna-@IGB_VERSION@
+	cd @IGB@-@IGB_VERSION@-DNA/src ; cp ../../../../kernel/linux/pf_ring.h /usr/src/@IGB@-dna-@IGB_VERSION@
+	sed -i -e 's|../../../../kernel/linux/pf_ring.h|pf_ring.h|g' /usr/src/@IGB@-dna-@IGB_VERSION@/*.c
+	sed -i -e 's|../../../../kernel/linux/pf_ring.h|pf_ring.h|g' /usr/src/@IGB@-dna-@IGB_VERSION@/*.h
+	sed -i -e 's|DRIVER_NAME=@IGB@|DRIVER_NAME=@IGB@-dna|g' /usr/src/@IGB@-dna-@IGB_VERSION@/Makefile
+	cp dkms.conf.@IGB@ /usr/src/@IGB@-dna-@IGB_VERSION@/dkms.conf
+	dkms add -m @IGB@-dna -v @IGB_VERSION@
+
+build: add
+	dkms build -m @IGB@-dna -v @IGB_VERSION@
+
+install: build
+	dkms install -m @IGB@-dna -v @IGB_VERSION@
+
+deb: add add_deb install
+	dkms mkdeb -m @IGB@-dna -v @IGB_VERSION@ --source-only
+
+rpm: add add_rpm install
+	dkms mkrpm -m @IGB@-dna -v @IGB_VERSION@ --source-only
+
+add_rpm:
+	cp -r @IGB@-dna-dkms-*.spec /usr/src/@IGB@-dna-@IGB_VERSION@/
+
+add_deb:
+	cp -r dna-dkms-mkdeb /usr/src/@IGB@-dna-@IGB_VERSION@/@IGB@-dna-dkms-mkdeb
+
+remove:
+	-dkms remove -m @IGB@-dna -v @IGB_VERSION@ --all
+
+veryclean: remove
+	\/bin/rm -fr /usr/src/@IGB@-dna-@IGB_VERSION@
+	

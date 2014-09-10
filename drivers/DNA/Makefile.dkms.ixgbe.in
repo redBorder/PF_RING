@@ -1,0 +1,37 @@
+all: install
+
+add: veryclean
+	\/bin/rm -rf /usr/src/@IXGBE@-dna-@IXGBE_VERSION@
+	mkdir /usr/src/@IXGBE@-dna-@IXGBE_VERSION@
+	cd @IXGBE@-@IXGBE_VERSION@-DNA/src ; make clean; cp -r * /usr/src/@IXGBE@-dna-@IXGBE_VERSION@
+	cd @IXGBE@-@IXGBE_VERSION@-DNA/src ; cp ../../../../kernel/linux/pf_ring.h /usr/src/@IXGBE@-dna-@IXGBE_VERSION@
+	sed -i -e 's|../../../../kernel/linux/pf_ring.h|pf_ring.h|g' /usr/src/@IXGBE@-dna-@IXGBE_VERSION@/*.c
+	sed -i -e 's|../../../../kernel/linux/pf_ring.h|pf_ring.h|g' /usr/src/@IXGBE@-dna-@IXGBE_VERSION@/*.h
+	sed -i -e 's|DRIVER_NAME=@IXGBE@|DRIVER_NAME=@IXGBE@-dna|g' /usr/src/@IXGBE@-dna-@IXGBE_VERSION@/Makefile
+	cp dkms.conf.@IXGBE@ /usr/src/@IXGBE@-dna-@IXGBE_VERSION@/dkms.conf 
+	dkms add -m @IXGBE@-dna -v @IXGBE_VERSION@
+
+build: add
+	dkms build -m @IXGBE@-dna -v @IXGBE_VERSION@
+
+install: build
+	dkms install -m @IXGBE@-dna -v @IXGBE_VERSION@
+
+deb: add add_deb install
+	dkms mkdeb -m @IXGBE@-dna -v @IXGBE_VERSION@ --source-only
+
+rpm: add add_rpm install
+	dkms mkrpm -m @IXGBE@-dna -v @IXGBE_VERSION@ --source-only
+
+add_rpm:
+	cp -r @IXGBE@-dna-dkms-*.spec /usr/src/@IXGBE@-dna-@IXGBE_VERSION@/
+
+add_deb:
+	cp -r dna-dkms-mkdeb /usr/src/@IXGBE@-dna-@IXGBE_VERSION@/@IXGBE@-dna-dkms-mkdeb
+
+remove:
+	-dkms remove -m @IXGBE@-dna -v @IXGBE_VERSION@ --all
+
+veryclean: remove
+	\/bin/rm -fr /usr/src/@IXGBE@-dna-@IXGBE_VERSION@
+	

@@ -1,0 +1,37 @@
+all: install
+
+add: veryclean
+	\/bin/rm -rf /usr/src/@E1000E@-dna-@E1000E_VERSION@
+	mkdir /usr/src/@E1000E@-dna-@E1000E_VERSION@
+	cd @E1000E@-@E1000E_VERSION@-DNA/src ; make clean; cp -r * /usr/src/@E1000E@-dna-@E1000E_VERSION@
+	cd @E1000E@-@E1000E_VERSION@-DNA/src ; cp ../../../../kernel/linux/pf_ring.h /usr/src/@E1000E@-dna-@E1000E_VERSION@
+	sed -i -e 's|../../../../kernel/linux/pf_ring.h|pf_ring.h|g' /usr/src/@E1000E@-dna-@E1000E_VERSION@/*.c
+	sed -i -e 's|../../../../kernel/linux/pf_ring.h|pf_ring.h|g' /usr/src/@E1000E@-dna-@E1000E_VERSION@/*.h
+	sed -i -e 's|DRIVER_NAME = @E1000E@|DRIVER_NAME = @E1000E@-dna|g' /usr/src/@E1000E@-dna-@E1000E_VERSION@/Makefile
+	cp dkms.conf.@E1000E@ /usr/src/@E1000E@-dna-@E1000E_VERSION@/dkms.conf
+	dkms add -m @E1000E@-dna -v @E1000E_VERSION@
+
+build: add
+	dkms build -m @E1000E@-dna -v @E1000E_VERSION@
+
+install: build
+	dkms install -m @E1000E@-dna -v @E1000E_VERSION@
+
+deb: add add_deb install
+	dkms mkdeb -m @E1000E@-dna -v @E1000E_VERSION@ --source-only
+
+rpm: add add_rpm install
+	dkms mkrpm -m @E1000E@-dna -v @E1000E_VERSION@ --source-only
+
+add_rpm:
+	cp -r @E1000E@-dna-dkms-*.spec /usr/src/@E1000E@-dna-@E1000E_VERSION@/
+
+add_deb:
+	cp -r dna-dkms-mkdeb /usr/src/@E1000E@-dna-@E1000E_VERSION@/@E1000E@-dna-dkms-mkdeb
+
+remove:
+	-dkms remove -m @E1000E@-dna -v @E1000E_VERSION@ --all
+
+veryclean: remove
+	\/bin/rm -fr /usr/src/@E1000E@-dna-@E1000E_VERSION@
+	
