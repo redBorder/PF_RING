@@ -2335,13 +2335,13 @@ static int parse_raw_pkt(u_char *data, u_int data_len,
 
 static int parse_pkt(struct sk_buff *skb,
 		     u_int8_t real_skb,
-		     u_int16_t skb_displ,
+		     int skb_displ,
 		     struct pfring_pkthdr *hdr,
 		     u_int16_t *ip_id) 
 {
   int rc;
   u_char buffer[128]; /* Enough for standard and tunneled headers */
-  u_int16_t data_len = min((u_int16_t)(skb->len + skb_displ), (u_int16_t)sizeof(buffer));
+  int data_len = min((u_int16_t)(skb->len + skb_displ), (u_int16_t)sizeof(buffer));
 
   skb_copy_bits(skb, -skb_displ, buffer, data_len);
 
@@ -2948,13 +2948,13 @@ static inline int copy_data_to_ring(struct sk_buff *skb,
         skb_copy_bits(skb, -displ, &ring_bucket[pfr->slot_header_len + offset], displ);
         b = (u_int16_t*)&ring_bucket[pfr->slot_header_len + offset+12];
         b[0] = ntohs(ETH_P_8021Q), b[1] = ntohs(vlan_tci), b[2] = v->h_vlan_proto;
-        if(skb_copy_bits(skb, 0, &ring_bucket[pfr->slot_header_len + offset + 18], hdr->caplen-14) < 0)
-          printk("[PF_RING] --> FAULT [skb->len=%u][len=%u]\n", skb->len, hdr->caplen-16);
+        if(skb_copy_bits(skb, 0, &ring_bucket[pfr->slot_header_len + offset + 18], (int) hdr->caplen-14) < 0)
+          printk("[PF_RING] FAULT [skb->len=%u][len=%u]\n", skb->len, hdr->caplen-16);
 
 	hdr->len += sizeof(struct eth_vlan_hdr);
 	hdr->caplen = min_val(pfr->bucket_len - offset, hdr->caplen + sizeof(struct eth_vlan_hdr));
       } else
-        skb_copy_bits(skb, -displ, &ring_bucket[pfr->slot_header_len + offset], hdr->caplen);
+        skb_copy_bits(skb, -displ, &ring_bucket[pfr->slot_header_len + offset], (int) hdr->caplen);
     } else {
       if(hdr->extended_hdr.parsed_header_len >= pfr->bucket_len) {
 	static u_char print_once = 0;
