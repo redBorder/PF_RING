@@ -48,6 +48,18 @@ Note that
 
   insmod ./ixgbe.ko numa_cpu_affinity=0,0,0,0
 
+Packaging
+---------
+
+# ./configure
+
+- Ubuntu
+# make dkms-deb
+
+- CentoOS/Fedora/RedHat
+# make dkms-rpm
+
+
 Testing DNA
 -----------
 Supposing that you have cross-connected the DNA interfaces dnaX and dnaY, you can send packet 

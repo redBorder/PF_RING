@@ -16,7 +16,6 @@ Building dkms packages
 # sudo visudo
 XXXXXX ALL=NOPASSWD: /usr/bin/make
 
-
 - As standard user (no sudo) do 
 # configure
 

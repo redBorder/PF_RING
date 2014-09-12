@@ -14,8 +14,16 @@ PF_RING_HOME=$(HERE)/../../
 
 all: clean pre build
 
-pre-kernel:
+pre-kernel: pre-dna pre-zc
 	cd ../../kernel; ./configure; sudo make -f Makefile.dkms deb
+
+pre-dna:
+	cd ../../drivers/DNA/; ./configure; make dkms-deb
+	cp ../../drivers/DNA/*.deb .
+
+pre-zc:
+	cd ../../drivers/PF_RING_aware/intel/; ./configure; make dkms-deb
+	cp ../../drivers/PF_RING_aware/intel/*.deb .
 
 pre: pre-kernel
 	-mv *.deb packages
@@ -35,7 +43,6 @@ pre: pre-kernel
 	@find $(HERE)/debian -name "*~" -exec /bin/rm {} ';' 
 
 build:
-	@\rm -f ./*.deb
 	dpkg-buildpackage -rfakeroot -b -us -uc #-d
 	@\rm -f ../pf_ring_*dsc ../pf_ring_*.gz ../pf_ring_*changes 
 	@/bin/mv ../pfring_*deb . 
@@ -51,6 +58,7 @@ build:
 
 
 clean:
+	@\rm -f ./*.deb
 	-rm -rf debian/tmp
 	-rm -rf debian/usr
 	-rm -rf debian/lib

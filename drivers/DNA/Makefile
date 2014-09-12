@@ -30,3 +30,15 @@ clean:
 	cd $(IGB)-DNA/src; make clean
 	cd $(IXGBE)-DNA/src; make clean
 
+dkms-deb:
+	sudo make -f Makefile.dkms.e1000e deb
+	cp /var/lib/dkms/e1000e-dna/*/deb/*.deb .
+	sudo make -f Makefile.dkms.igb deb
+	cp /var/lib/dkms/igb-dna/*/deb/*.deb .
+	sudo make -f Makefile.dkms.ixgbe deb
+	cp /var/lib/dkms/ixgbe-dna/*/deb/*.deb .
+
+dkms-rpm:
+	sudo make -f Makefile.dkms.e1000e rpm	
+	sudo make -f Makefile.dkms.igb rpm
+	sudo make -f Makefile.dkms.ixgbe rpm
