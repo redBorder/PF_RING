@@ -38,8 +38,11 @@ check_pf_ring() {
        RETVAL=1
    elif [ $1 == "stop" ] && [ `lsmod | grep ${PFRING} | wc -l ` -le 0 ]; then
        MSG="PF_RING already unloaded Exiting"
-       ERROR=1 
-       RETVAL=1
+       ERROR=0 
+       RETVAL=0
+       [ ${DISTRO} == "debian" ] && log_end_msg $ERROR
+       [ ${DISTRO} == "centos" ] && echo_success && echo
+       exit 0
    fi
 
    if [ ${ERROR} -gt 0 ]; then
