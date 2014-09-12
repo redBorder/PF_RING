@@ -24,7 +24,7 @@ rpm: add add_rpm install
 	dkms mkrpm -m @IGB@-zc -v @IGB_VERSION@ --source-only
 
 add_rpm:
-	cp -r @IGB@-zc-dkms-*.spec /usr/src/@IGB@-zc-@IGB_VERSION@/
+	cp -r zc-dkms*.spec /usr/src/@IGB@-zc-@IGB_VERSION@/
 
 add_deb:
 	cp -r zc-dkms-mkdeb /usr/src/@IGB@-zc-@IGB_VERSION@/@IGB@-zc-dkms-mkdeb

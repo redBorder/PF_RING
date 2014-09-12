@@ -24,7 +24,7 @@ rpm: add add_rpm install
 	dkms mkrpm -m @E1000E@-zc -v @E1000E_VERSION@ --source-only
 
 add_rpm:
-	cp -r @E1000E@-zc-dkms-*.spec /usr/src/@E1000E@-zc-@E1000E_VERSION@/
+	cp -r zc-dkms*.spec /usr/src/@E1000E@-zc-@E1000E_VERSION@/
 
 add_deb:
 	cp -r zc-dkms-mkdeb /usr/src/@E1000E@-zc-@E1000E_VERSION@/@E1000E@-zc-dkms-mkdeb
