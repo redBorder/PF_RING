@@ -8,6 +8,6 @@ AC_SUBST(SVN_RELEASE)
 
 AC_CONFIG_FILES(Makefile.dkms)
 AC_CONFIG_FILES(dkms.conf)
-AC_CONFIG_FILES(pf_ring-dkms-mkrpm.spec)
+AC_CONFIG_FILES(pfring-dkms-mkrpm.spec)
 
 AC_OUTPUT

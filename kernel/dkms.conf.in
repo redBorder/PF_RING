@@ -1,4 +1,4 @@
-PACKAGE_NAME="pf_ring"
+PACKAGE_NAME="pfring"
 PACKAGE_VERSION="@VERS@"
 MAKE[0]="make"
 CLEAN="make clean"
