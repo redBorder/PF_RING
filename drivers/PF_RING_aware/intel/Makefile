@@ -14,14 +14,15 @@ clean:
 #	cd $(E1000E)/src; make clean
 	cd $(IGB)/src; make clean
 	cd $(IXGBE)/src; make clean
+	/bin/rm *.deb *.rpm
 
 dkms-deb:
 	sudo make -f Makefile.dkms.e1000e deb
-	cp /var/lib/dkms/e1000e-dna/*/deb/*.deb .
+	cp /var/lib/dkms/e1000e-zc/*/deb/*.deb .
 	sudo make -f Makefile.dkms.igb deb
-	cp /var/lib/dkms/igb-dna/*/deb/*.deb .
+	cp /var/lib/dkms/igb-zc/*/deb/*.deb .
 	sudo make -f Makefile.dkms.ixgbe deb
-	cp /var/lib/dkms/ixgbe-dna/*/deb/*.deb .
+	cp /var/lib/dkms/ixgbe-zc/*/deb/*.deb .
 
 dkms-rpm:
 	sudo make -f Makefile.dkms.e1000e rpm
