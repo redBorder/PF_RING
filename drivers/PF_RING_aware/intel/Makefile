@@ -17,6 +17,7 @@ clean:
 	/bin/rm *.deb *.rpm
 
 dkms-deb:
+	dpkg-deb -b pfring-drivers-zc .
 	sudo make -f Makefile.dkms.e1000e deb
 	cp /var/lib/dkms/e1000e-zc/*/deb/*.deb .
 	sudo make -f Makefile.dkms.igb deb

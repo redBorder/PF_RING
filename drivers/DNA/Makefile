@@ -31,6 +31,7 @@ clean:
 	cd $(IXGBE)-DNA/src; make clean
 
 dkms-deb:
+	dpkg-deb -b pfring-drivers-dna .
 	sudo make -f Makefile.dkms.e1000e deb
 	cp /var/lib/dkms/e1000e-dna/*/deb/*.deb .
 	sudo make -f Makefile.dkms.igb deb
