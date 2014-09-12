@@ -1,6 +1,9 @@
 
 This directory contains:
 
+drivers                         PF_RING optimized drivers
+drivers/PF_RING_aware           PF_RING-aware/ZC drivers (suggested option)
+drivers/DNA                     DNA drivers (obsoleted by ZC drivers)
 userland/			User space code
 userland/lib/			User space library
 userland/libpcap-XXX-ring/	Libpcap enhanced with PF_RING support
