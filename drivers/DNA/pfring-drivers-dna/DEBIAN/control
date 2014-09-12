@@ -2,7 +2,7 @@ Section: misc
 Priority: optional
 Maintainer: Luca Deri <deri@ntop.org>
 Version: 1.0
-Package: pfring-drivers-zc
+Package: pfring-drivers-dna
 Architecture: all
-Depends: e1000e-zc, igb-zc, ixgbe-zc
-Description: Viirtual package for ZC drivers in DKMS format (http://www.ntop.org/pf_ring/).
+Depends: e1000e-dna, igb-dna, ixgbe-dna
+Description: Viirtual package for DNA drivers in DKMS format (http://www.ntop.org/pf_ring/).
