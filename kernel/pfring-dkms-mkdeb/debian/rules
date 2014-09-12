@@ -35,6 +35,7 @@ install: build
 	dh_installdirs
 	$(MAKE) DESTDIR=$(CURDIR)/debian/$(DEB_NAME)-dkms NAME=$(NAME) VERSION=$(VERSION) install
 	cp -a $(HOME)/PF_RING/package/etc ./debian/$(DEB_NAME)-dkms/
+	rm -f ./debian/$(DEB_NAME)-dkms/etc/init.d/cluster
 
 binary-arch: build install
 

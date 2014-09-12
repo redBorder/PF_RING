@@ -44,6 +44,7 @@ binary-arch: build install
 	-find ./debian/tmp -name "\.svn" -type d -exec /bin/rm -rf {} ';'
 	-find ./debian/tmp -name "*~" -type d -exec /bin/rm -rf {} ';'
 	rm -rf ./debian/tmp/etc/init
+	rm -rf ./debian/tmp/etc/init.d/pf_ring
 	dh_link
 	dh_strip
 	dh_compress
