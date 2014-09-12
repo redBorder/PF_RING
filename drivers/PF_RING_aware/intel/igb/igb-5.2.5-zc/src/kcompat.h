@@ -4007,7 +4007,8 @@ extern int __kc_dma_set_mask_and_coherent(struct device *dev, u64 mask);
 #endif
 
 /*****************************************************************************/
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0) )
+//#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0) )
+#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0) ) /* HAVE_PF_RING patch (ubutu kernel >=3.13.0-30) */
 
 #if ( !(RHEL_RELEASE_CODE && RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,0)) )
 /* it isn't expected that this would be a #define unless we made it so */
