@@ -991,7 +991,7 @@ struct pf_userspace_ring {
   u_int32_t  bucket_len;
 
   u_int32_t  tot_mem;
-  char      *ring_memory;
+  u_char      *ring_memory;
 
   atomic_t   users[2]; /* producers/consumers */
 
@@ -1029,12 +1029,12 @@ struct dna_cluster {
   struct dma_memory_info *extra_dma_memory;
 
   u_int64_t slave_shared_memory_len; /* per slave len */
-  char *shared_memory;
+  u_char *shared_memory;
 
   char hugepages_dir[DNA_CLUSTER_MAX_HP_DIR_LEN];
 
   u_int32_t master_persistent_memory_len;
-  char *master_persistent_memory;
+  u_char *master_persistent_memory;
   struct dna_cluster_global_stats *stats;
 
   wait_queue_head_t *slave_waitqueue[DNA_CLUSTER_MAX_NUM_SLAVES];
@@ -1159,11 +1159,11 @@ struct pf_ring_socket {
   do_rehash_rss rehash_rss;
 
   /* Ring Slots */
-  char *ring_memory;
+  u_char *ring_memory;
   u_int16_t slot_header_len;
   u_int32_t bucket_len, slot_tot_mem;
   FlowSlotInfo *slots_info; /* Points to ring_memory */
-  char *ring_slots;         /* Points to ring_memory+sizeof(FlowSlotInfo) */
+  u_char *ring_slots;       /* Points to ring_memory+sizeof(FlowSlotInfo) */
 
   /* Packet Sampling */
   u_int32_t pktToSample, sample_rate;
@@ -1459,7 +1459,7 @@ extern int bpctl_kernel_ioctl(unsigned int ioctl_num, void *ioctl_param);
 /* *************************************************************** */
 
 extern void pf_ring_add_module_dependency(void);
-extern int pf_ring_inject_packet_to_ring(int if_index, int channel_id, char *data, int data_len, struct pfring_pkthdr *hdr);
+extern int pf_ring_inject_packet_to_ring(int if_index, int channel_id, u_char *data, int data_len, struct pfring_pkthdr *hdr);
 
 #ifdef PF_RING_PLUGIN
 static struct pfring_plugin_registration plugin_reg;

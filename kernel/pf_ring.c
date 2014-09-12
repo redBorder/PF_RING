@@ -679,7 +679,7 @@ void term_lockless_list(lockless_list *l, u_int8_t free_memory) {
 
 /* ************************************************** */
 
-static inline char *get_slot(struct pf_ring_socket *pfr, u_int64_t off) { return(&(pfr->ring_slots[off])); }
+static inline u_char *get_slot(struct pf_ring_socket *pfr, u_int64_t off) { return(&(pfr->ring_slots[off])); }
 
 /* ********************************** */
 
@@ -1644,10 +1644,10 @@ static void ring_proc_term(void)
 
 /* ********************************** */
 
-static char *allocate_shared_memory(u_int64_t *mem_len)
+static u_char *allocate_shared_memory(u_int64_t *mem_len)
 {
   u_int64_t tot_mem = *mem_len;
-  char *shared_mem;
+  u_char *shared_mem;
 
   tot_mem = PAGE_ALIGN(tot_mem);
 
@@ -1697,7 +1697,7 @@ static int ring_alloc_mem(struct sock *sk)
 
     pfr->ring_memory     = pfr->userspace_ring->ring_memory;
     pfr->slots_info      = (FlowSlotInfo *) pfr->ring_memory;
-    pfr->ring_slots      = (char *) (pfr->ring_memory + sizeof(FlowSlotInfo));
+    pfr->ring_slots      = (u_char *) (pfr->ring_memory + sizeof(FlowSlotInfo));
 
     pfr->insert_page_id = 1, pfr->insert_slot_id = 0;
     pfr->sw_filtering_rules_default_accept_policy = 1;
@@ -1756,7 +1756,7 @@ static int ring_alloc_mem(struct sock *sk)
   }
 
   pfr->slots_info = (FlowSlotInfo *) pfr->ring_memory;
-  pfr->ring_slots = (char *)(pfr->ring_memory + sizeof(FlowSlotInfo));
+  pfr->ring_slots = (u_char *)(pfr->ring_memory + sizeof(FlowSlotInfo));
 
   pfr->slots_info->version = RING_FLOWSLOT_VERSION;
   pfr->slots_info->slot_len = the_slot_len;
@@ -2857,7 +2857,7 @@ static inline int copy_data_to_ring(struct sk_buff *skb,
 			     int displ, int offset, void *plugin_mem,
 			     void *raw_data, uint raw_data_len,
 			     int *clone_id) {
-  char *ring_bucket;
+  u_char *ring_bucket;
   u_int64_t off;
   u_short do_lock = (
     (enable_tx_capture && pfr->direction != rx_only_direction) ||
@@ -4764,7 +4764,10 @@ static int buffer_ring_handler(struct net_device *dev, char *data, int len)
   //  printk("[PF_RING] buffer_ring_handler: [dev=%s][len=%d]\n",
   //         dev->name == NULL ? "<NULL>" : dev->name, len);
 
-  skb.dev = dev, skb.len = len, skb.data = data, skb.data_len = len;
+  skb.dev = dev;
+  skb.len = len;
+  skb.data = (u_char *) data;
+  skb.data_len = len;
 
   /* BD - API changed for time keeping */
 #if(LINUX_VERSION_CODE < KERNEL_VERSION(2,6,14))
@@ -6501,7 +6504,7 @@ static int ring_mmap(struct file *file,
         printk("[PF_RING] mmap [slot_len=%d][tot_slots=%d] for ring on device %s\n",
 	       pfr->slots_info->slot_len, pfr->slots_info->min_num_slots, pfr->ring_netdev->dev->name);
 
-      if((rc = do_memory_mmap(vma, 0, size, pfr->ring_memory, 0, VM_LOCKED, 0)) < 0)
+      if((rc = do_memory_mmap(vma, 0, size, (void *) pfr->ring_memory, 0, VM_LOCKED, 0)) < 0)
         return(rc);
 
       break;
@@ -6513,7 +6516,7 @@ static int ring_mmap(struct file *file,
         return(-EINVAL);
       }
 
-      if((rc = do_memory_mmap(vma, 0, size, (void *)pfr->dna_device->rx_descr_packet_memory, 0, VM_LOCKED, 1)) < 0)
+      if((rc = do_memory_mmap(vma, 0, size, (void *) pfr->dna_device->rx_descr_packet_memory, 0, VM_LOCKED, 1)) < 0)
 	return(rc);
 
       break;
@@ -6525,7 +6528,7 @@ static int ring_mmap(struct file *file,
         return(-EINVAL);
       }
 
-      if((rc = do_memory_mmap(vma, 0, size, (void *)pfr->dna_device->phys_card_memory, 0, (
+      if((rc = do_memory_mmap(vma, 0, size, (void *) pfr->dna_device->phys_card_memory, 0, (
 #if(LINUX_VERSION_CODE < KERNEL_VERSION(3,7,0))
                                                                                            VM_IO | VM_RESERVED
 #else
@@ -6543,7 +6546,7 @@ static int ring_mmap(struct file *file,
         return(-EINVAL);
       }
 
-      if((rc = do_memory_mmap(vma, 0, size, (void *)pfr->dna_device->tx_descr_packet_memory, 0, VM_LOCKED, 1)) < 0)
+      if((rc = do_memory_mmap(vma, 0, size, (void *) pfr->dna_device->tx_descr_packet_memory, 0, VM_LOCKED, 1)) < 0)
 	return(rc);
 
       break;
@@ -6568,7 +6571,7 @@ static int ring_mmap(struct file *file,
         return(-EINVAL);
       }
 
-      if((rc = do_memory_mmap(vma, 0, size, pfr->dna_cluster->shared_memory, 0, VM_LOCKED, 0)) < 0)
+      if((rc = do_memory_mmap(vma, 0, size, (void *) pfr->dna_cluster->shared_memory, 0, VM_LOCKED, 0)) < 0)
         return(rc);
 
       break;
@@ -6593,7 +6596,7 @@ static int ring_mmap(struct file *file,
         return(-EINVAL);
       }
 
-      if((rc = do_memory_mmap(vma, 0, size, pfr->dna_cluster->shared_memory,
+      if((rc = do_memory_mmap(vma, 0, size, (void *) pfr->dna_cluster->shared_memory,
 		 (pfr->dna_cluster->slave_shared_memory_len / PAGE_SIZE) * pfr->dna_cluster_slave_id,
 		 VM_LOCKED, 0)) < 0)
         return(rc);
@@ -6614,7 +6617,7 @@ static int ring_mmap(struct file *file,
         return(-EINVAL);
       }
 
-      if((rc = do_memory_mmap(vma, 0, size, pfr->dna_cluster->master_persistent_memory, 0, VM_LOCKED, 0)) < 0)
+      if((rc = do_memory_mmap(vma, 0, size, (void *) pfr->dna_cluster->master_persistent_memory, 0, VM_LOCKED, 0)) < 0)
         return(rc);
 
       break;
@@ -8706,7 +8709,7 @@ static int ring_getsockopt(struct socket *sock,
 
   case SO_GET_FILTERING_RULE_STATS:
     {
-      char *buffer = NULL;
+      u_char *buffer = NULL;
       int rc = -EFAULT;
       struct list_head *ptr, *tmp_ptr;
       u_int16_t rule_id;
@@ -9436,7 +9439,7 @@ EXPORT_SYMBOL(pf_ring_add_module_dependency);
 
 /* ************************************ */
 
-int pf_ring_inject_packet_to_ring(int if_index, int channel_id, char *data, int data_len, struct pfring_pkthdr *hdr) {
+int pf_ring_inject_packet_to_ring(int if_index, int channel_id, u_char *data, int data_len, struct pfring_pkthdr *hdr) {
   struct sock* sk = NULL;
   u_int32_t last_list_idx;
   struct pf_ring_socket *pfr;

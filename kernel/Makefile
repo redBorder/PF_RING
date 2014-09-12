@@ -13,7 +13,7 @@ BUILD_KERNEL=$(shell uname -r)
 endif
 
 PWD := $(shell pwd)
-EXTRA_CFLAGS += -I${PWD} $(SVNDEF)
+EXTRA_CFLAGS += -I${PWD} $(SVNDEF) -Wpointer-sign
 
 HERE=${PWD}
 
