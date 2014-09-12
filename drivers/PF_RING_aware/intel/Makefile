@@ -14,3 +14,9 @@ clean:
 #	cd $(E1000E)/src; make clean
 	cd $(IGB)/src; make clean
 	cd $(IXGBE)/src; make clean
+
+dkms:
+	./configure
+	sudo make -f Makefile.dkms.ixgbe deb
+	sudo make -f Makefile.dkms.igb deb
+	sudo make -f Makefile.dkms.e1000e deb
