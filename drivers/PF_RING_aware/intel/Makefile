@@ -16,8 +16,15 @@ clean:
 	cd $(IXGBE)/src; make clean
 	/bin/rm *.deb *.rpm
 
-dkms-deb:
-	dpkg-deb -b pfring-drivers-zc-dkms .
+
+dkms-deb-virtual:
+	/bin/rm -rf tmp
+	mkdir tmp
+	cp -r pfring-drivers-zc-dkms tmp
+	find tmp -name .svn|xargs /bin/rm -rf	
+	cd tmp; dpkg-deb -b pfring-drivers-zc-dkms .; mv *.deb ..
+
+dkms-deb: dkms-deb-virtual
 	sudo make -f Makefile.dkms.e1000e deb
 	cp /var/lib/dkms/e1000e-zc/*/deb/*.deb .
 	sudo make -f Makefile.dkms.igb deb
