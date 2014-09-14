@@ -9083,7 +9083,9 @@ void dna_device_handler(dna_device_operation operation,
     printk("[PF_RING] dna_device_handler(%s@%u [operation=%s])\n",
 	   netdev->name, channel_id,
 	   operation == add_device_mapping ? "add_device_mapping" : "remove_device_mapping");
-    printk("[PF_RING] RX=%u/TX=%u\n", rx_info->packet_memory_num_chunks, tx_info->packet_memory_num_chunks);
+    printk("[PF_RING] RX=%u/TX=%u\n", 
+           rx_info != NULL ? rx_info->packet_memory_num_chunks : 0, 
+           tx_info != NULL ? tx_info->packet_memory_num_chunks : 0); 
   }
 
   if(operation == add_device_mapping) {
