@@ -32,7 +32,12 @@ dkms-deb: dkms-deb-virtual
 	sudo make -f Makefile.dkms.ixgbe deb
 	cp /var/lib/dkms/ixgbe-zc/*/deb/*.deb .
 
-dkms-rpm:
+dkms-rpm: dkms-rpm-virtual
 	sudo make -f Makefile.dkms.e1000e rpm
 	sudo make -f Makefile.dkms.igb rpm
 	sudo make -f Makefile.dkms.ixgbe rpm
+
+dkms-rpm-virtual:
+	rpmbuild -ba pfring-zc-rpm.spec
+	cp ~/rpmbuild/RPMS/noarch/pfring-drivers-zc-dkms-1.0-0.noarch.rpm .
+
