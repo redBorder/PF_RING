@@ -44,6 +44,7 @@
 #define POW2(n) ((n & (n - 1)) == 0)
 
 #define ALARM_SLEEP             1
+#define CACHE_LINE_LEN         64
 #define MAX_CARD_SLOTS      32768
 #define QUEUE_LEN            8192
 
@@ -61,7 +62,7 @@ struct timeval startTime;
 unsigned long long numPkts = 0, numBytes = 0;
 int cluster_id = -1, bind_core = -1, pps = -1, packet_len = 60, num_ips = 0, metadata_len = 0;
 u_int64_t num_to_send = 0;
-u_int8_t active = 0, do_shutdown = 0, flush_packet = 0;
+u_int8_t active = 0, do_shutdown = 0, flush_packet = 0, append_timestamp = 0;
 #ifdef BURST_API
 u_int8_t use_pkt_burst_api = 0;
 #endif
@@ -73,6 +74,9 @@ int stdin_packet_len = 0;
 
 u_int32_t num_queue_buffers, num_consumer_buffers = 0;
 
+int bind_time_pulse_core = -1;
+volatile u_int64_t *pulse_timestamp_ns_n;
+
 /* *************************************** */
 
 typedef u_int64_t ticks;
@@ -81,6 +85,33 @@ static __inline__ ticks getticks(void) {
   u_int32_t a, d;
   asm volatile("rdtsc" : "=a" (a), "=d" (d));
   return (((ticks)a) | (((ticks)d) << 32));
+}
+
+/* ******************************************* */
+
+#define SET_TS_FROM_PULSE(ts, t) { u_int64_t __pts = t; ts->tv_sec = __pts >> 32; ts->tv_nsec = __pts & 0xffffffff; }
+
+void *time_pulse_thread(void *data) {
+  struct timespec tn;
+
+  bind2core(bind_time_pulse_core);
+
+  while (likely(!do_shutdown)) {
+    /* clock_gettime takes up to 30 nsec to get the time */
+    clock_gettime(CLOCK_REALTIME, &tn);
+    *pulse_timestamp_ns_n = ((u_int64_t) ((u_int64_t) htonl(tn.tv_sec) << 32) | htonl(tn.tv_nsec));
+  }
+
+  return NULL;
+}
+
+/* ******************************************* */
+
+static inline u_int32_t append_packet_ts(u_char *buffer, u_int32_t buffer_len) {
+  struct timespec *ts = (struct timespec *) &buffer[buffer_len];
+  SET_TS_FROM_PULSE(ts, *pulse_timestamp_ns_n);
+  buffer[buffer_len + 8] = 0xC3;
+  return buffer_len + 9;
 }
 
 /* ******************************************* */
@@ -316,6 +347,7 @@ void printHelp(void) {
   printf("-n <num>        Number of packets\n");
   printf("-b <num>        Number of different IPs\n");
   printf("-N <num>        Simulate a producer for n2disk multi-thread (<num> threads)\n");
+  printf("-S <core_id>    Append timestamp to packets, bind time-pulse thread to a core\n");
   printf("-z              Use burst API\n");
   printf("-a              Active packet wait\n");
   exit(-1);
@@ -411,6 +443,9 @@ void *send_traffic(void *user) {
     }
 #endif
 
+    if (append_timestamp)
+      buffers[buffer_id]->len = append_packet_ts(pfring_zc_pkt_buff_data(buffers[buffer_id], zq), buffers[buffer_id]->len);
+
     while (unlikely((sent_bytes = pfring_zc_send_pkt(zq, &buffers[buffer_id], flush_packet)) < 0)) {
       if (unlikely(do_shutdown)) break;
       if (!active) usleep(1);
@@ -444,11 +479,12 @@ void *send_traffic(void *user) {
 int main(int argc, char* argv[]) {
   char *device = NULL, c;
   pthread_t thread;
+  pthread_t time_thread;
   int i;
 
   startTime.tv_sec = 0;
 
-  while((c = getopt(argc,argv,"ab:c:g:hi:n:p:l:zN:")) != '?') {
+  while((c = getopt(argc,argv,"ab:c:g:hi:n:p:l:zN:S:")) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -487,6 +523,10 @@ int main(int argc, char* argv[]) {
     case 'N':
       n2disk_producer = 1;
       n2disk_threads = atoi(optarg);
+      break;
+    case 'S':
+      append_timestamp = 1;
+      bind_time_pulse_core = atoi(optarg);
       break;
     }
   }
@@ -582,6 +622,12 @@ int main(int argc, char* argv[]) {
   signal(SIGTERM, sigproc);
   signal(SIGINT,  sigproc);
 
+  if (append_timestamp) {
+    pulse_timestamp_ns_n = calloc(CACHE_LINE_LEN/sizeof(u_int64_t), sizeof(u_int64_t));
+    pthread_create(&time_thread, NULL, time_pulse_thread, NULL);
+    while (!*pulse_timestamp_ns_n && !do_shutdown); /* wait for ts */
+  }
+
   pthread_create(&thread, NULL, send_traffic, NULL);
 
   while (!do_shutdown) {
@@ -592,6 +638,9 @@ int main(int argc, char* argv[]) {
   pthread_join(thread, NULL);
 
   print_stats();
+
+  if (append_timestamp)
+    pthread_join(time_thread, NULL);
 
   pfring_zc_destroy_cluster(zc);
 
