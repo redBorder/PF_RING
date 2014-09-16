@@ -371,7 +371,7 @@ int main(int argc, char* argv[]) {
       vm_sockets = strdup(optarg);
       break;
     case 'q':
-      queue_len = atoi(optarg);
+      queue_len = upper_power_of_2(atoi(optarg));
       break;
     case 'N':
       n2disk_producer = 1;

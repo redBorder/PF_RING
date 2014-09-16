@@ -84,6 +84,20 @@ int max_packet_len(char *device) {
 
 /* *************************************** */
 
+static inline int64_t upper_power_of_2(int64_t x) {
+  x--;
+  x |= x >> 1;
+  x |= x >> 2;
+  x |= x >> 4;
+  x |= x >> 8;
+  x |= x >> 16;
+  x |= x >> 32;
+  x++;
+  return x;
+}
+
+/* *************************************** */
+
 double delta_time (struct timeval * now, struct timeval * before) {
   time_t delta_seconds;
   time_t delta_microseconds;
