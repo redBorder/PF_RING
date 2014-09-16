@@ -75,6 +75,15 @@ volatile u_int8_t do_shutdown = 0;
 
 struct stats consumers_stats;
 
+//#define DEBUG
+#ifdef DEBUG
+#define INITIAL_PKTS 20000000
+#define HUGE_DIFF 70000
+struct timespec prev = { 0 };
+u_int32_t roll_back = 0, huge_roll_back = 0;
+u_int64_t max_roll_back_nsec = 0;
+#endif
+
 /* ******************************** */
 
 void print_stats() {
@@ -97,7 +106,6 @@ void print_stats() {
       tot_recv += stats.recv, tot_drop += stats.drop;
 
   tot_bytes = consumers_stats.tot_bytes;
-
 
   if(startTime.tv_sec == 0) {
     gettimeofday(&startTime, NULL);
@@ -190,6 +198,17 @@ void* consumer_thread(void *user) {
       for(i = 0; i < b->len; i++)
         printf("%02X ", pfring_zc_pkt_buff_data(b, outzq)[i]);
       printf("\n");
+#endif
+
+#ifdef DEBUG
+      if(consumers_stats.tot_recv > INITIAL_PKTS && /* skip initial pkts, we need to flush the card ring containing "old" packets */
+         b->ts.tv_sec == prev.tv_sec && b->ts.tv_nsec < prev.tv_nsec) {
+        u_int64_t diff = prev.tv_nsec - b->ts.tv_nsec;
+        if (diff > max_roll_back_nsec) max_roll_back_nsec = diff;
+        roll_back++;
+        if (diff > HUGE_DIFF) huge_roll_back++;
+      }
+      prev.tv_sec = b->ts.tv_sec, prev.tv_nsec = b->ts.tv_nsec;
 #endif
 
       consumers_stats.tot_recv++;
@@ -336,6 +355,11 @@ int main(int argc, char* argv[]) {
   pfring_zc_kill_worker(zw);
 
   pfring_zc_destroy_cluster(zc);
+
+#ifdef DEBUG
+  if (roll_back) printf("%d Out-Of-Order packets found [%d packets >%unsec] [max roll back %ju nsec]\n", roll_back, huge_roll_back, HUGE_DIFF, max_roll_back_nsec);
+  else printf("No Out-Of-Order packets :-)\n");
+#endif
 
   return 0;
 }
