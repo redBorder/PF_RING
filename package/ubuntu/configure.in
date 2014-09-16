@@ -1,5 +1,10 @@
 AC_INIT([Makefile.in], 1.0)
 
+UBUNTU_RELEASE=`lsb_release -r|cut -f 2`
+
+/bin/rm -f debian/control.in
+cp debian/control.$UBUNTU_RELEASE.in debian/control.in
+
 VERS=`cat ../../kernel/linux/pf_ring.h | grep RING_VERSION | head -1 | cut -d '"' -f 2`
 MACHINE=`uname -m`
 SVN_RELEASE=`svn info . | grep "^Revision" | cut -d " " -f 2`
