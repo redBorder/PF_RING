@@ -35,7 +35,7 @@ fi
 mkdir -p $RPM_BUILD_ROOT/%{_srcdir}
 mkdir -p $RPM_BUILD_ROOT/%{_datarootdir}/%{module_name}
 mkdir -p $RPM_BUILD_ROOT/etc/init.d/
-cp -a ${HOME}/PF_RING/package/etc/init.d/* $RPM_BUILD_ROOT/etc/init.d
+cp -a /home/${SUDO_USER}/PF_RING/package/etc/init.d/* $RPM_BUILD_ROOT/etc/init.d
 
 if [ -d %{_sourcedir}/%{module_name}-%{version} ]; then
         cp -Lpr %{_sourcedir}/%{module_name}-%{version} $RPM_BUILD_ROOT/%{_srcdir}
