@@ -83,8 +83,14 @@ start_pf_ring() {
 
     if [ -f $PF_RING_MOD ]; then
         /sbin/insmod $PF_RING_MOD $PARAM
-    else
+    elif [ -f $PF_RING_MOD_LOCAL ]; then
         /sbin/insmod $PF_RING_MOD_LOCAL $PARAM
+    else
+	if [ ! `/sbin/modinfo pf_ring|wc -l` -gt 1 ]; then
+	   # try building dkms
+	   /usr/sbin/dkms autoinstall
+	fi
+	/sbin/modprobe pf_ring $PARAM
     fi
    
     if [ `lsmod | grep ${PFRING} | wc -l ` -le 0 ] ; then
@@ -120,12 +126,43 @@ start_pf_ring() {
 		    if [ $NUM -gt 0 ]; then
 		        /sbin/rmmod $D
 		    fi
-		    /sbin/insmod $DNA_DRIVERS_DIR/$D.ko $PARAM
+		    if [ -f $DNA_DRIVERS_DIR/$D.ko ]; then
+		        /sbin/insmod $DNA_DRIVERS_DIR/$D.ko $PARAM
+		    else
+		  	# trying with dkms
+			/sbin/modprobe $D-dna $PARAM
+		    fi
 	        fi
 	    fi
         done
     else
-        echo "DNA drivers not found in the expected path"
+	# dkms
+	DNA_DKMS_DRIVERS=('e1000e' 'igb' 'ixgbe')
+	INSTALLED_DNA_DRIVER=0
+	for D in ${DNA_DKMS_DRIVERS[@]} ; do
+	    DRIVER_CONFIG="/etc/pf_ring/dna-$D.conf"
+	    if [ `dpkg -l |grep ${D}-dna-dkms |wc -l` -gt 0 ]; then
+	        if [ -f $DRIVER_CONFIG ]; then
+                    ADAPTERS_LISTED="$(grep adapters_to_enable $DRIVER_CONFIG|wc -l)"
+                    if [ "$D" == "$MGMT_INTERFACE_DRIVER" ] && [ $ADAPTERS_LISTED -eq 0 ]; then
+                        echo "Unable to replace $D as it is used by the management interface"
+                    else
+                        PARAM="$(cat $DRIVER_CONFIG)"
+                        # Remove the driver first as the original vanilla driver might be the one we want to overwrite          
+                        NUM="$(grep $D /proc/modules|wc -l)"
+                        if [ $NUM -gt 0 ]; then
+                        /sbin/modprobe -r $D
+                    fi
+                        # trying with dkms
+                        /sbin/modprobe $D-dna $PARAM
+			INSTALLED_DNA_DRIVER=1
+                    fi
+		fi	
+	    fi	
+	done
+	if [ $INSTALLED_DNA_DRIVER -eq 0 ]; then
+           echo "DNA drivers not found or installed"
+	fi
     fi
 
     sleep 1
@@ -173,6 +210,8 @@ stop_pf_ring() {
 	sleep 2
     fi
 
+    if [ -d "/usr/local/pfring/drivers/DNA/" ]; then
+        
     DNA_DRIVERS="$(/bin/ls /usr/local/pfring/drivers/DNA/|cut -d '.' -f 1)"
     for D in $DNA_DRIVERS ; do
 	DRIVER_CONFIG="/etc/pf_ring/dna-$D.conf"
@@ -188,6 +227,7 @@ stop_pf_ring() {
 	    fi
 	fi
     done
+    fi
 
     NUM="$(grep pf_ring /proc/modules|wc -l)"
     if [ $NUM -gt 0 ]; then
