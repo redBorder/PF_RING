@@ -151,6 +151,12 @@ ifeq ($(ARCH),ppc64)
   LDFLAGS += -melf64ppc
 endif
 
+# check for ubuntu kernel 3.13.0-24
+IS_UBUNTU_3_13_PRE := $(shell uname -a | grep 3.13.0-24 | wc -l)
+ifeq (1,$(IS_UBUNTU_3_13_PRE))
+  EXTRA_CFLAGS += -DUBUNTU_3_13_PRE
+endif
+
 # extra flags for module builds
 EXTRA_CFLAGS += -DDRIVER_$(shell echo $(DRIVER_NAME) | tr '[a-z]' '[A-Z]')
 EXTRA_CFLAGS += -DDRIVER_NAME=$(DRIVER_NAME)
