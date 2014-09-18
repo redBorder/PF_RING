@@ -573,6 +573,12 @@ e1000_receive_skb(struct e1000_adapter *adapter,
 	u16 tag = le16_to_cpu(vlan);
 #endif
 
+#ifdef HAVE_HW_TIME_STAMP
+	e1000e_rx_hwtstamp(adapter, staterr, skb);
+#endif
+
+	skb->protocol = eth_type_trans(skb, netdev);
+
 #ifdef HAVE_PF_RING
 	{
 	  int debug = 0;
@@ -608,12 +614,6 @@ e1000_receive_skb(struct e1000_adapter *adapter,
 	  }
 	}
 #endif
-
-#ifdef HAVE_HW_TIME_STAMP
-	e1000e_rx_hwtstamp(adapter, staterr, skb);
-#endif
-
-	skb->protocol = eth_type_trans(skb, netdev);
 
 #ifdef CONFIG_E1000E_NAPI
 #ifdef HAVE_VLAN_RX_REGISTER
