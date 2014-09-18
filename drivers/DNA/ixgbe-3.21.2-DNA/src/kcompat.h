@@ -4094,9 +4094,6 @@ extern int __kc_pci_enable_msix_range(struct pci_dev *dev,
 #define u64_stats_fetch_retry_bh u64_stats_fetch_retry_irq /* HAVE_PF_RING patch (ubutu kernel >=3.13.0-30) */
 #endif
 
-#define u64_stats_fetch_begin_bh u64_stats_fetch_begin_irq /* ENABLE_DNA patch (ubutu kernel >=3.13.0-30) */
-#define u64_stats_fetch_retry_bh u64_stats_fetch_retry_irq /* ENABLE_DNA patch (ubutu kernel >=3.13.0-30) */
-
 /* for ndo_dfwd_ ops add_station, del_station and _start_xmit */
 #ifndef HAVE_NDO_DFWD_OPS
 #define HAVE_NDO_DFWD_OPS
