@@ -27,6 +27,7 @@ fi
 MGMT_INTERFACE="eth0"
 MGMT_INTERFACE_DRIVER="$(/sbin/ethtool -i $MGMT_INTERFACE | grep driver | cut -d ' ' -f 2)"
 PFRING="pf_ring"
+DNA_DRIVERS_DIR="/usr/local/pfring/drivers/DNA"
 ERROR=0
 
 check_pf_ring() {
@@ -108,11 +109,8 @@ start_pf_ring() {
       fi
     fi
 
-    DNA_DRIVERS_DIR="/usr/local/pfring/drivers/DNA"
-
     if [ -d $DNA_DRIVERS_DIR ]; then
         DNA_DRIVERS="$(/bin/ls $DNA_DRIVERS_DIR|cut -d '.' -f 1)"
-
         for D in $DNA_DRIVERS ; do
 	    DRIVER_CONFIG="/etc/pf_ring/dna-$D.conf"
 	    if [ -f $DRIVER_CONFIG ]; then
@@ -151,8 +149,9 @@ start_pf_ring() {
                         # Remove the driver first as the original vanilla driver might be the one we want to overwrite          
                         NUM="$(grep $D /proc/modules|wc -l)"
                         if [ $NUM -gt 0 ]; then
-                        /sbin/modprobe -r $D
-                    fi
+                            /sbin/modprobe -r $D
+                            /sbin/modprobe -r $D-dna
+                        fi
                         # trying with dkms
                         /sbin/modprobe $D-dna $PARAM
 			INSTALLED_DNA_DRIVER=1
@@ -210,23 +209,44 @@ stop_pf_ring() {
 	sleep 2
     fi
 
-    if [ -d "/usr/local/pfring/drivers/DNA/" ]; then
-        
-    DNA_DRIVERS="$(/bin/ls /usr/local/pfring/drivers/DNA/|cut -d '.' -f 1)"
-    for D in $DNA_DRIVERS ; do
-	DRIVER_CONFIG="/etc/pf_ring/dna-$D.conf"
-	if [ -f $DRIVER_CONFIG ]; then
-	    NUM="$(grep $D /proc/modules |wc -l)"
-	    if [ $NUM -gt 0 ]; then
-	        ADAPTERS_LISTED="$(grep adapters_to_enable $DRIVER_CONFIG|wc -l)"
-	        if [ "$D" == "$MGMT_INTERFACE_DRIVER" ] && [ $ADAPTERS_LISTED -eq 0 ]; then
-		    echo "Unable to replace $D as it is used by the management interface"
-		else
-		    /sbin/rmmod $D
-		fi
+    if [ -d $DNA_DRIVERS_DIR ]; then
+        DNA_DRIVERS="$(/bin/ls /usr/local/pfring/drivers/DNA/|cut -d '.' -f 1)"
+        for D in $DNA_DRIVERS ; do
+            DRIVER_CONFIG="/etc/pf_ring/dna-$D.conf"
+            if [ -f $DRIVER_CONFIG ]; then
+	        NUM="$(grep $D /proc/modules |wc -l)"
+	        if [ $NUM -gt 0 ]; then
+	            ADAPTERS_LISTED="$(grep adapters_to_enable $DRIVER_CONFIG|wc -l)"
+	            if [ "$D" == "$MGMT_INTERFACE_DRIVER" ] && [ $ADAPTERS_LISTED -eq 0 ]; then
+		        echo "Unable to replace $D as it is used by the management interface"
+		    else
+		        if [ -f $DNA_DRIVERS_DIR/$D.ko ]; then
+		            /sbin/rmmod $D
+		        else
+		      	    # trying with dkms
+		    	    /sbin/rmmod $D-dna
+		        fi
+		    fi
+	        fi
 	    fi
-	fi
-    done
+        done
+    else
+	# dkms
+	DNA_DKMS_DRIVERS=('e1000e' 'igb' 'ixgbe')
+	INSTALLED_DNA_DRIVER=0
+	for D in ${DNA_DKMS_DRIVERS[@]} ; do
+	    DRIVER_CONFIG="/etc/pf_ring/dna-$D.conf"
+	    if [ `dpkg -l |grep ${D}-dna-dkms |wc -l` -gt 0 ]; then
+	        if [ -f $DRIVER_CONFIG ]; then
+	            ADAPTERS_LISTED="$(grep adapters_to_enable $DRIVER_CONFIG|wc -l)"
+	            if [ "$D" == "$MGMT_INTERFACE_DRIVER" ] && [ $ADAPTERS_LISTED -eq 0 ]; then
+		        echo "Unable to replace $D as it is used by the management interface"
+		    else
+		        /sbin/rmmod $D-dna
+		    fi
+                fi	
+	    fi	
+	done
     fi
 
     NUM="$(grep pf_ring /proc/modules|wc -l)"
