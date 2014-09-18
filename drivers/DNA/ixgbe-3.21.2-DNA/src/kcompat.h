@@ -4055,7 +4055,7 @@ extern int __kc_dma_set_mask_and_coherent(struct device *dev, u64 mask);
 
 /*****************************************************************************/
 //#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0) )
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0) )  /* ENABLE_DNA patch (ubutu kernel >=3.13.0-30) */
+#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0) ) || defined(UBUNTU_3_13_PRE) /* ENABLE_DNA patch (ubutu kernel >=3.13.0-30) */
 
 #if ( !(RHEL_RELEASE_CODE && RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,0)) )
 /* it isn't expected that this would be a #define unless we made it so */
@@ -4088,6 +4088,11 @@ extern int __kc_pci_enable_msix_range(struct pci_dev *dev,
 
 #endif //#else /* >= 3.14.0 */
 #if ( LINUX_VERSION_CODE >= KERNEL_VERSION(3,13,0) )  /* ENABLE_DNA patch */
+
+#ifndef UBUNTU_3_13_PRE  /* HAVE_PF_RING patch */
+#define u64_stats_fetch_begin_bh u64_stats_fetch_begin_irq /* HAVE_PF_RING patch (ubutu kernel >=3.13.0-30) */
+#define u64_stats_fetch_retry_bh u64_stats_fetch_retry_irq /* HAVE_PF_RING patch (ubutu kernel >=3.13.0-30) */
+#endif
 
 #define u64_stats_fetch_begin_bh u64_stats_fetch_begin_irq /* ENABLE_DNA patch (ubutu kernel >=3.13.0-30) */
 #define u64_stats_fetch_retry_bh u64_stats_fetch_retry_irq /* ENABLE_DNA patch (ubutu kernel >=3.13.0-30) */

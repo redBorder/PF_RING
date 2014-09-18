@@ -134,6 +134,12 @@ ifeq (,$(CC))
   $(error Compiler not found)
 endif
 
+# check for ubuntu kernel 3.13.0-24
+IS_UBUNTU_3_13_PRE := $(shell uname -a | grep 3.13.0-24 | wc -l)
+ifeq (1,$(IS_UBUNTU_3_13_PRE))
+  EXTRA_CFLAGS += -DUBUNTU_3_13_PRE
+endif
+
 # we need to know what platform the driver is being built on
 # some additional features are only built on Intel platforms
 ARCH := $(shell uname -m | sed 's/i.86/i386/')
@@ -149,12 +155,6 @@ endif
 ifeq ($(ARCH),ppc64)
   EXTRA_CFLAGS += -m64 -msoft-float
   LDFLAGS += -melf64ppc
-endif
-
-# check for ubuntu kernel 3.13.0-24
-IS_UBUNTU_3_13_PRE := $(shell uname -a | grep 3.13.0-24 | wc -l)
-ifeq (1,$(IS_UBUNTU_3_13_PRE))
-  EXTRA_CFLAGS += -DUBUNTU_3_13_PRE
 endif
 
 # extra flags for module builds
