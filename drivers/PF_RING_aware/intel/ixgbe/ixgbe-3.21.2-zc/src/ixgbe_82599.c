@@ -36,6 +36,10 @@
 
 #ifdef HAVE_PF_RING
 #include "../../../../../../kernel/linux/pf_ring.h"
+
+static unsigned int allow_tap_1g = 0;
+module_param(allow_tap_1g, uint, 0644);
+MODULE_PARM_DESC(allow_tap_1g, "Allow 1Gbit/s TAP disabling atonegotiation on 82599 based adapters");
 #endif
 
 static s32 ixgbe_setup_copper_link_82599(struct ixgbe_hw *hw,
@@ -1074,7 +1078,11 @@ s32 ixgbe_setup_mac_link_82599(struct ixgbe_hw *hw,
 		if ((speed == IXGBE_LINK_SPEED_1GB_FULL) &&
 		    (pma_pmd_1g == IXGBE_AUTOC_1G_SFI)) {
 			autoc &= ~IXGBE_AUTOC_LMS_MASK;
+#ifdef HAVE_PF_RING
+			if (!allow_tap_1g && autoneg)
+#else
 			if (autoneg)
+#endif
 				autoc |= IXGBE_AUTOC_LMS_1G_AN;
 			else
 				autoc |= IXGBE_AUTOC_LMS_1G_LINK_NO_AN;
