@@ -56,6 +56,25 @@ static const char rcsid[] _U_ =
 #include <sys/param.h>
 #endif
 
+#ifdef __linux__
+#include <linux/filter.h>
+/* Macros SKF_AD_VLAN_TAG, SKF_AD_VLAN_TAG_PRESENT are defined here
+ * in case they are not defined in linux/filter.h
+ */
+#ifndef SKF_AD_OFF
+ #define SKF_AD_OFF    (-0x1000)
+#endif
+#if !defined(SKF_AD_VLAN_TAG) && !defined(SKF_AD_VLAN_TAG_PRESENT)
+ #define SKF_AD_VLAN_TAG        44
+ #define SKF_AD_VLAN_TAG_PRESENT 48
+ #if defined(SKF_AD_MAX)
+  #undef SKF_AD_MAX
+ #endif
+ #define SKF_AD_MAX     52
+#endif
+#undef BPF_MAJOR_VERSION
+#endif
+
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
@@ -118,9 +137,9 @@ static pcap_t *bpf_pcap;
 
 /* Hack for updating VLAN, MPLS, and PPPoE offsets. */
 #ifdef WIN32
-static u_int	orig_linktype = (u_int)-1, orig_nl = (u_int)-1, label_stack_depth = (u_int)-1;
+static u_int	orig_linktype = (u_int)-1, orig_nl = (u_int)-1, label_stack_depth = (u_int)-1,  vlan_stack_depth = (u_int)-1;
 #else
-static u_int	orig_linktype = -1U, orig_nl = -1U, label_stack_depth = -1U;
+static u_int	orig_linktype = -1U, orig_nl = -1U, label_stack_depth = -1U, vlan_stack_depth = -1U;
 #endif
 
 /* XXX */
@@ -941,6 +960,7 @@ init_linktype(p)
 	orig_linktype = -1;
 	orig_nl = -1;
         label_stack_depth = 0;
+	vlan_stack_depth = 0;
 
 	reg_off_ll = -1;
 	reg_off_macpl = -1;
@@ -7811,24 +7831,62 @@ gen_vlan(vlan_num)
 	switch (linktype) {
 
 	case DLT_EN10MB:
-		/* check for VLAN */
-		b0 = gen_cmp(OR_LINK, off_linktype, BPF_H,
-		    (bpf_int32)ETHERTYPE_8021Q);
+#if defined(SKF_AD_VLAN_TAG) && defined(SKF_AD_VLAN_TAG_PRESENT)
+               /* vlan_stack_depth keeps track of the first tag which is in the
+                * packet metadata. The second tag onwards is within the packet data
+                * itself and should work exactly like before
+                */
+               if (bpf_pcap->vlan_tag_in_pkt_meta_op &&
+                   bpf_pcap->vlan_tag_in_pkt_meta_op(bpf_pcap) &&
+                   !vlan_stack_depth)
+               {
+                       /* generate new filter code based on extracting packet
+                        * metadata */
+                       struct slist *s;
+			struct slist *s0;
+         		struct slist *s1;
+                       s = new_stmt(BPF_LD|BPF_B|BPF_ABS);
+                       s->s.k = SKF_AD_OFF + SKF_AD_VLAN_TAG_PRESENT;
+                       b0 = new_block(JMP(BPF_JEQ));
+                       b0->stmts = s;
+                       b0->s.k = 1; //true
 
-		/* If a specific VLAN is requested, check VLAN id */
-		if (vlan_num >= 0) {
-			b1 = gen_mcmp(OR_MACPL, 0, BPF_H,
-			    (bpf_int32)vlan_num, 0x0fff);
-			gen_and(b0, b1);
-			b0 = b1;
-		}
+                       if (vlan_num >= 0) {
+				s0 = new_stmt(BPF_LD|BPF_B|BPF_ABS);
+	        	        s0->s.k = SKF_AD_OFF + SKF_AD_VLAN_TAG;
 
-		off_macpl += 4;
-		off_linktype += 4;
+		                s1 = new_stmt(BPF_ALU|BPF_AND|BPF_K);
+		                s1->s.k = 0x0fff;
+		                sappend(s0,s1);
+
+		                b1 = new_block(JMP(BPF_JEQ));
+		                b1->stmts = s0;
+		                b1->s.k = (bpf_int32)vlan_num;
+		                gen_and(b0,b1);
+		                b0 = b1;
+                       }
+               } else
+#endif
+               {
+			/* check for VLAN */
+			b0 = gen_cmp(OR_LINK, off_linktype, BPF_H,
+			    (bpf_int32)ETHERTYPE_8021Q);
+
+			/* If a specific VLAN is requested, check VLAN id */
+			if (vlan_num >= 0) {
+				b1 = gen_mcmp(OR_MACPL, 0, BPF_H,
+				    (bpf_int32)vlan_num, 0x0fff);
+				gen_and(b0, b1);
+				b0 = b1;
+			}
+
+			off_macpl += 4;
+			off_linktype += 4;
 #if 0
 		off_nl_nosnap += 4;
 		off_nl += 4;
 #endif
+		}
 		break;
 
 	default:
@@ -7836,6 +7894,8 @@ gen_vlan(vlan_num)
 		      linktype);
 		/*NOTREACHED*/
 	}
+
+	vlan_stack_depth++;
 
 	return (b0);
 }

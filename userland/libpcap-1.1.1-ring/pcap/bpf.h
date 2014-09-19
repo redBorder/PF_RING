@@ -1049,8 +1049,12 @@ struct bpf_insn {
 /*
  * Macros for insn array initializers.
  */
+#ifndef BPF_STMT
 #define BPF_STMT(code, k) { (u_short)(code), 0, 0, k }
+#endif
+#ifndef BPF_JUMP
 #define BPF_JUMP(code, k, jt, jf) { (u_short)(code), jt, jf, k }
+#endif
 
 #if __STDC__ || defined(__cplusplus)
 extern int bpf_validate(const struct bpf_insn *, int);

@@ -149,6 +149,7 @@ struct pcap_md {
 	char	*mondevice;	/* mac80211 monitor device we created */
 	u_char	*mmapbuf;	/* memory-mapped region pointer */
 	size_t	mmapbuflen;	/* size of region */
+	int     vlan_offset;    /* offset at which to insert vlan tags; if -1, don't insert */
 	u_int	tp_version;	/* version of tpacket_hdr for mmaped ring */
 	u_int	tp_hdrlen;	/* hdrlen of tpacket_hdr for mmaped ring */
 	u_char	*oneshot_buffer; /* buffer for copy of packet */
@@ -245,6 +246,7 @@ typedef int	(*setmode_op_t)(pcap_t *, int);
 typedef int	(*setmintocopy_op_t)(pcap_t *, int);
 #endif
 typedef void	(*cleanup_op_t)(pcap_t *);
+typedef int    (*vlan_tag_in_pkt_meta_op_t)(pcap_t *);
 
 struct pcap {
 #ifdef WIN32
@@ -327,6 +329,9 @@ struct pcap {
 	setmintocopy_op_t setmintocopy_op;
 #endif
 	cleanup_op_t cleanup_op;
+
+	/* is the vlan tag in packet metadata? */
+        vlan_tag_in_pkt_meta_op_t vlan_tag_in_pkt_meta_op;
 
 	/*
 	 * Placeholder for filter code if bpf not in kernel.

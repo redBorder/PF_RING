@@ -231,6 +231,7 @@ static const char rcsid[] _U_ =
 #  endif /* PACKET_AUXDATA */
 # endif /* PACKET_HOST */
 
+#undef HAVE_PACKET_AUXDATA /* with ntop vlan patch */
 
  /* check for memory mapped access avaibility. We assume every needed
   * struct is defined if the macro TPACKET_HDRLEN is defined, because it
@@ -278,6 +279,17 @@ typedef int		socklen_t;
 
 #define MAX_LINKHEADER_SIZE	256
 
+/* these are the magic kernel versions that started
+ * supporting BPF packet filtering
+ * based on vlan tags that are present in the skb metadata
+ */
+#define BPF_VLAN_KVER 3
+#define BPF_VLAN_KPATCHLEVEL 8
+#define BPF_VLAN_KSUBLEVEL 0
+
+/* prototype for external function and methods */
+u_int  bpf_filter_linux(const struct bpf_insn *, const u_char *, u_int16_t, u_int, u_int);
+
 /*
  * When capturing on all interfaces we use this as the buffer size.
  * Should be bigger then all MTUs that occur in real life.
@@ -304,6 +316,7 @@ static int pcap_stats_linux(pcap_t *, struct pcap_stat *);
 static int pcap_setfilter_linux(pcap_t *, struct bpf_program *);
 static int pcap_setdirection_linux(pcap_t *, pcap_direction_t);
 static void pcap_cleanup_linux(pcap_t *);
+static int pcap_vlan_tag_in_pkt_linux(pcap_t *);
 
 union thdr {
 	struct tpacket_hdr	*h1;
@@ -320,8 +333,10 @@ static int prepare_tpacket_socket(pcap_t *handle);
 static void pcap_cleanup_linux_mmap(pcap_t *);
 static int pcap_read_linux_mmap(pcap_t *, int, pcap_handler , u_char *);
 static int pcap_setfilter_linux_mmap(pcap_t *, struct bpf_program *);
+#endif
 static int pcap_setnonblock_mmap(pcap_t *p, int nonblock, char *errbuf);
 static int pcap_getnonblock_mmap(pcap_t *p, char *errbuf);
+#ifdef HAVE_PACKET_RING
 static void pcap_oneshot_mmap(u_char *user, const struct pcap_pkthdr *h,
     const u_char *bytes);
 #endif
@@ -356,6 +371,50 @@ static struct sock_filter	total_insn
 static struct sock_fprog	total_fcode
 	= { 1, &total_insn };
 #endif
+
+static int
+vlan_tag_in_pkt_auxdata(int sup_version,
+                       int sup_patchlevel, int sup_sublevel)
+{
+       struct utsname u;
+       char *saveptr, *rel, *tok;
+       int i  = 0;
+#define VERLEN 3
+       union kernver {
+               struct {
+                       int version;
+                       int patchlevel;
+                       int sublevel;
+               }_v;
+                int _n[VERLEN];
+       };
+       union kernver v;
+
+       if (uname(&u)) {
+               perror("uname");
+               return 0;
+       }
+       rel = u.release;
+       while((tok = strtok_r(rel,".",&saveptr))!=NULL) {
+               rel = NULL;
+               if (i < VERLEN)
+                       v._n[i] = atoi(tok);
+               i++;
+       }
+       return  (v._v.version == sup_version)?                          \
+               (v._v.patchlevel == sup_patchlevel)?                    \
+               (v._v.sublevel == sup_sublevel)?                        \
+               1 : v._v.sublevel > sup_sublevel                        \
+               : v._v.patchlevel > sup_patchlevel                      \
+               : v._v.version > sup_version;
+}
+
+static int
+pcap_vlan_tag_in_pkt_linux(pcap_t *p) {
+       return vlan_tag_in_pkt_auxdata(BPF_VLAN_KVER,
+                               BPF_VLAN_KPATCHLEVEL,
+                               BPF_VLAN_KSUBLEVEL);
+}
 
 #ifdef HAVE_PF_RING
 u_int8_t pf_ring_active_poll = 0;
@@ -1139,6 +1198,7 @@ pcap_activate_linux(pcap_t *handle)
 	handle->cleanup_op = pcap_cleanup_linux;
 	handle->read_op = pcap_read_linux;
 	handle->stats_op = pcap_stats_linux;
+	handle->vlan_tag_in_pkt_meta_op = pcap_vlan_tag_in_pkt_linux;
 
 	/*
 	 * The "any" device is a special device which causes us not
@@ -1371,6 +1431,21 @@ pcap_read_linux(pcap_t *handle, int max_packets, pcap_handler callback, u_char *
 	return pcap_read_packet(handle, callback, user);
 }
 
+/* push a vlan tag extracted from the auxdata into the packet */
+static void
+insert_vlan_tag_into_packet(pcap_t *handle, u_char **bp, __u16 tp_vlan_tci)
+{
+       struct vlan_tag *tag;
+
+       *bp -= VLAN_TAG_LEN;
+       memmove(*bp, *bp + VLAN_TAG_LEN, handle->md.vlan_offset);
+
+       tag = (struct vlan_tag *)(*bp + handle->md.vlan_offset);
+       tag->vlan_tpid = htons(ETH_P_8021Q);
+       tag->vlan_tci = htons(tp_vlan_tci);
+       return;
+}
+
 static int vlan_offset(pcap_t *handle)
 {
 	switch (handle->linktype) {
@@ -1415,6 +1490,7 @@ pcap_read_packet(pcap_t *handle, pcap_handler callback, u_char *userdata)
 #else
 	struct pcap_pkthdr	pcap_header;
 #endif
+	__u16			tp_vlan_tci = 0;	
 
 #ifdef HAVE_PF_RING
 	if(handle->ring) {
@@ -1678,7 +1754,7 @@ pcap_read_packet(pcap_t *handle, pcap_handler callback, u_char *userdata)
 		tag->vlan_tpid = htons(ETH_P_8021Q);
 		tag->vlan_tci = htons(aux->tp_vlan_tci);
 
-		packet_len += VLAN_TAG_LEN;
+		packet_len += VLAN_TAG_LEN; 
 	}
 #endif /* defined(HAVE_PACKET_AUXDATA) && defined(HAVE_LINUX_TPACKET_AUXDATA_TP_VLAN_TCI) */
 #endif /* HAVE_PF_PACKET_SOCKETS */
@@ -1721,13 +1797,20 @@ pcap_read_packet(pcap_t *handle, pcap_handler callback, u_char *userdata)
 
 	/* Run the packet filter if not using kernel filter */
 	if (!handle->md.use_bpf && handle->fcode.bf_insns) {
-		if (bpf_filter(handle->fcode.bf_insns, bp,
-		                packet_len, caplen) == 0)
+		if (bpf_filter_linux(handle->fcode.bf_insns, bp, tp_vlan_tci,
+                       packet_len, caplen) == 0)
 		{
 			/* rejected by filter */
 			return 0;
 		}
 	}
+
+	/* insert the vlan tag information back into the packet after we have run our
+        * filter */
+       if (tp_vlan_tci) {
+               insert_vlan_tag_into_packet(handle, &bp, tp_vlan_tci);
+               packet_len += VLAN_TAG_LEN;
+       }
 
 	/* Fill in our own header data */
 #ifdef HAVE_PF_RING
@@ -3468,6 +3551,7 @@ pcap_cleanup_linux_mmap( pcap_t *handle )
 	pcap_cleanup_linux(handle);
 }
 
+#endif
 
 static int
 pcap_getnonblock_mmap(pcap_t *p, char *errbuf)
@@ -3504,6 +3588,8 @@ pcap_setnonblock_mmap(pcap_t *p, int nonblock, char *errbuf)
 	}
 	return 0;
 }
+
+#ifdef HAVE_PACKET_RING
 
 static inline union thdr *
 pcap_get_ring_frame(pcap_t *handle, int status)
@@ -3634,6 +3720,7 @@ pcap_read_linux_mmap(pcap_t *handle, int max_packets, pcap_handler callback,
 		unsigned int tp_snaplen;
 		unsigned int tp_sec;
 		unsigned int tp_usec;
+		__u16 tp_vlan_tci = 0;
 
 		h.raw = pcap_get_ring_frame(handle, TP_STATUS_USER);
 		if (!h.raw)
@@ -3671,23 +3758,6 @@ pcap_read_linux_mmap(pcap_t *handle, int max_packets, pcap_handler callback,
 			return -1;
 		}
 
-		/* run filter on received packet
-		 * If the kernel filtering is enabled we need to run the
-		 * filter until all the frames present into the ring
-		 * at filter creation time are processed.
-		 * In such case md.use_bpf is used as a counter for the
-		 * packet we need to filter.
-		 * Note: alternatively it could be possible to stop applying
-		 * the filter when the ring became empty, but it can possibly
-		 * happen a lot later... */
-		bp = (unsigned char*)h.raw + tp_mac;
-		run_bpf = (!handle->md.use_bpf) ||
-			((handle->md.use_bpf>1) && handle->md.use_bpf--);
-		if (run_bpf && handle->fcode.bf_insns &&
-				(bpf_filter(handle->fcode.bf_insns, bp,
-					tp_len, tp_snaplen) == 0))
-			goto skip;
-
 		/*
 		 * Do checks based on packet direction.
 		 */
@@ -3722,66 +3792,83 @@ pcap_read_linux_mmap(pcap_t *handle, int max_packets, pcap_handler callback,
 		pcaphdr.caplen = tp_snaplen;
 		pcaphdr.len = tp_len;
 
-		/* if required build in place the sll header*/
-		if (handle->md.cooked) {
-			struct sll_header *hdrp;
+#ifdef HAVE_TPACKET2
+		if (handle->md.tp_version == TPACKET_V2 && 
+			h.h2->tp_vlan_tci &&   
+	               	handle->md.vlan_offset != -1 &&
+       		       	tp_snaplen >= (unsigned int) handle->md.vlan_offset) {
+                       		tp_vlan_tci = h.h2->tp_vlan_tci;
+                }
+#endif
+               /* run filter on received packet
+                * If the kernel filtering is enabled we need to run the
+                * filter until all the frames present into the ring
+                * at filter creation time are processed.
+                * In such case md.use_bpf is used as a counter for the
+                * packet we need to filter.
+                * Note: alternatively it could be possible to stop applying
+                * the filter when the ring became empty, but it can possibly
+                * happen a lot later... */
+               bp = (unsigned char*)h.raw + tp_mac;
+               run_bpf = (!handle->md.use_bpf) ||
+                       ((handle->md.use_bpf>1) && handle->md.use_bpf--);
+               if (run_bpf && handle->fcode.bf_insns) {
+                       if(bpf_filter_linux(handle->fcode.bf_insns, bp, tp_vlan_tci,
+                                           tp_len, tp_snaplen) == 0)
+                               goto skip;
+               }
 
-			/*
-			 * The kernel should have left us with enough
-			 * space for an sll header; back up the packet
-			 * data pointer into that space, as that'll be
-			 * the beginning of the packet we pass to the
-			 * callback.
-			 */
-			bp -= SLL_HDR_LEN;
+                /* if required build in place the sll header*/
+                if (handle->md.cooked) {
+                        struct sll_header *hdrp;
 
-			/*
-			 * Let's make sure that's past the end of
-			 * the tpacket header, i.e. >=
-			 * ((u_char *)thdr + TPACKET_HDRLEN), so we
-			 * don't step on the header when we construct
-			 * the sll header.
-			 */
-			if (bp < (u_char *)h.raw +
-					   TPACKET_ALIGN(handle->md.tp_hdrlen) +
-					   sizeof(struct sockaddr_ll)) {
-				snprintf(handle->errbuf, PCAP_ERRBUF_SIZE,
-					"cooked-mode frame doesn't have room for sll header");
-				return -1;
-			}
+                        /*
+                         * The kernel should have left us with enough
+                         * space for an sll header; back up the packet
+                         * data pointer into that space, as that'll be
+                         * the beginning of the packet we pass to the
+                         * callback.
+                         */
+                        bp -= SLL_HDR_LEN;
 
-			/*
-			 * OK, that worked; construct the sll header.
-			 */
-			hdrp = (struct sll_header *)bp;
-			hdrp->sll_pkttype = map_packet_type_to_sll_type(
-							sll->sll_pkttype);
-			hdrp->sll_hatype = htons(sll->sll_hatype);
-			hdrp->sll_halen = htons(sll->sll_halen);
-			memcpy(hdrp->sll_addr, sll->sll_addr, SLL_ADDRLEN);
-			hdrp->sll_protocol = sll->sll_protocol;
+                        /*
+                         * Let's make sure that's past the end of
+                         * the tpacket header, i.e. >=
+                         * ((u_char *)thdr + TPACKET_HDRLEN), so we
+                         * don't step on the header when we construct
+                         * the sll header.
+                         */
+                        if (bp < (u_char *)h.raw +
+                                           TPACKET_ALIGN(handle->md.tp_hdrlen) +
+                                           sizeof(struct sockaddr_ll)) {
+                                snprintf(handle->errbuf, PCAP_ERRBUF_SIZE,
+                                        "cooked-mode frame doesn't have room for sll header");
+                                return -1;
+                        }
 
-			/* update packet len */
-			pcaphdr.caplen += SLL_HDR_LEN;
-			pcaphdr.len += SLL_HDR_LEN;
-		}
+                        /*
+                         * OK, that worked; construct the sll header.
+                         */
+                        hdrp = (struct sll_header *)bp;
+                        hdrp->sll_pkttype = map_packet_type_to_sll_type(
+                                                        sll->sll_pkttype);
+                        hdrp->sll_hatype = htons(sll->sll_hatype);
+                        hdrp->sll_halen = htons(sll->sll_halen);
+                        memcpy(hdrp->sll_addr, sll->sll_addr, SLL_ADDRLEN);
+                        hdrp->sll_protocol = sll->sll_protocol;
+
+                        /* update packet len */
+                        pcaphdr.caplen += SLL_HDR_LEN;
+                        pcaphdr.len += SLL_HDR_LEN;
+                }
+
 
 #ifdef HAVE_TPACKET2
-		if (handle->md.tp_version == TPACKET_V2 && h.h2->tp_vlan_tci) {
-			struct vlan_tag *tag;
-			int vlan_off;
-
-			vlan_off = vlan_offset(handle);
-			if (vlan_off != -1 && tp_snaplen >= (unsigned int) vlan_off) {
-				bp -= VLAN_TAG_LEN;
-				memmove(bp, bp + VLAN_TAG_LEN, vlan_off);
-
-				tag = (struct vlan_tag *)(bp + vlan_off);
-				tag->vlan_tpid = htons(ETH_P_8021Q);
-				tag->vlan_tci = htons(h.h2->tp_vlan_tci);
-				pcaphdr.caplen += VLAN_TAG_LEN;
-				pcaphdr.len += VLAN_TAG_LEN;
-			}
+               /* insert the vlan tag into the packet now */
+               if (tp_vlan_tci) {
+                        insert_vlan_tag_into_packet(handle, &bp, tp_vlan_tci);				
+			pcaphdr.caplen += VLAN_TAG_LEN;
+			pcaphdr.len += VLAN_TAG_LEN;
 		}
 #endif
 

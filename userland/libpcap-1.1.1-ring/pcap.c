@@ -210,6 +210,10 @@ initialize_ops(pcap_t *p)
 	 */
 	p->cleanup_op = pcap_cleanup_live_common;
 
+        /* this is only implemented for Linux for now. For other platforms it can be
+         * set to NULL  */
+         p->vlan_tag_in_pkt_meta_op = NULL;
+
 	/*
 	 * In most cases, the standard one-short callback can
 	 * be used for pcap_next()/pcap_next_ex().

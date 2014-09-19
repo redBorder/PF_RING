@@ -339,6 +339,18 @@ fi
 AC_MSG_RESULT($V_PCAP)
 
 #
+# add custom filter execution modules
+#
+AC_MSG_NOTICE(adding custom $V_PCAP filter execution module if it exists ...)
+case "$V_PCAP" in
+linux)
+       BPF_FILTER_P=bpf_filter_linux.c
+       AC_MSG_RESULT(yes)
+       ;;
+esac
+AC_SUBST(BPF_FILTER_P)
+
+#
 # Do capture-mechanism-dependent tests.
 #
 case "$V_PCAP" in

@@ -82,7 +82,7 @@ YACC = @V_YACC@
 	@rm -f $@
 	$(CC) $(CFLAGS) -c $(srcdir)/$*.c
 
-PSRC =	pcap-@V_PCAP@.c @USB_SRC@ @BT_SRC@ @CAN_SRC@
+PSRC =	pcap-@V_PCAP@.c @USB_SRC@ @BT_SRC@ @CAN_SRC@ @BPF_FILTER_P@
 FSRC =  fad-@V_FINDALLDEVS@.c
 SSRC =  @SSRC@
 CSRC =	pcap.c inet.c gencode.c optimize.c nametoaddr.c etherent.c \
@@ -283,6 +283,7 @@ EXTRA_DIST = \
 	pcap-int.h \
 	pcap-libdlpi.c \
 	pcap-linux.c \
+	bpf_filter_linux.c \
 	pcap-namedb.h \
 	pcap-nit.c \
 	pcap-null.c \
