@@ -211,6 +211,11 @@ enum {
        BPF_S_ANC_VLAN_TAG_PRESENT,
 };
 
+/* ntop */
+#ifndef TP_STATUS_VLAN_VALID  
+#define TP_STATUS_VLAN_VALID            (1 << 4) /* auxdata has valid tp_vlan_tci */
+#endif
+
 /*
  * Execute the filter program starting at pc on the packet p
  * wirelen is the length of the original packet
