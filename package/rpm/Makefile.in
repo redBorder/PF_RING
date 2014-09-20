@@ -24,7 +24,7 @@ dkms:
 	cd ../../drivers/PF_RING_aware/intel/; ./configure; make dkms-rpm
 	cp /var/lib/dkms/*-zc/*/rpm/*.noarch.rpm .
 	cp ../../drivers/PF_RING_aware/intel/*.rpm .
-
+	/bin/ls *.rpm | xargs ./rpm-sign.exp
 
 build-rpm: 
 # Do NOT build package as root (http://wiki.centos.org/HowTos/SetupRpmBuildEnvironment)
