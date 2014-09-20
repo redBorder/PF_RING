@@ -89,8 +89,6 @@ static __inline__ ticks getticks(void) {
 
 /* ******************************************* */
 
-#define SET_TS_FROM_PULSE(ts, t) { u_int64_t __pts = t; ts->tv_sec = __pts >> 32; ts->tv_nsec = __pts & 0xffffffff; }
-
 void *time_pulse_thread(void *data) {
   struct timespec tn;
 
@@ -108,8 +106,11 @@ void *time_pulse_thread(void *data) {
 /* ******************************************* */
 
 static inline u_int32_t append_packet_ts(u_char *buffer, u_int32_t buffer_len) {
-  struct timespec *ts = (struct timespec *) &buffer[buffer_len];
-  SET_TS_FROM_PULSE(ts, *pulse_timestamp_ns_n);
+  u_int32_t *sec  = (u_int32_t *) &buffer[buffer_len];
+  u_int32_t *nsec = (u_int32_t *) &buffer[buffer_len + 4];
+  u_int64_t ts = *pulse_timestamp_ns_n;
+  *sec  = ts >> 32; 
+  *nsec = ts & 0xffffffff;
   buffer[buffer_len + 8] = 0xC3;
   return buffer_len + 9;
 }
