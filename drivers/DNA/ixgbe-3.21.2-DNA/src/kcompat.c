@@ -1173,6 +1173,7 @@ void _kc_netif_set_real_num_tx_queues(struct net_device *dev, unsigned int txq)
 #endif /* CONFIG_NETDEVICES_MULTIQUEUE */
 #endif /* !(RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(6,0)) */
 #endif /* HAVE_TX_MQ */
+#endif /* defined(DRIVER_IXGBE) || defined(DRIVER_IGB) || defined(DRIVER_I40E) */
 
 ssize_t _kc_simple_write_to_buffer(void *to, size_t available, loff_t *ppos,
 				   const void __user *from, size_t count)
@@ -1194,7 +1195,6 @@ ssize_t _kc_simple_write_to_buffer(void *to, size_t available, loff_t *ppos,
         return count;
 }
 
-#endif /* defined(DRIVER_IXGBE) || defined(DRIVER_IGB) || defined(DRIVER_I40E) */
 #endif /* < 2.6.35 */
 
 /*****************************************************************************/
