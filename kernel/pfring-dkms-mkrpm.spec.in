@@ -8,7 +8,7 @@
 %{?!_datarootdir: %define _datarootdir %{_datadir}}
 
 Summary:	%{module_name} %{version} dkms package
-Name:		%{module_name}
+Name:		%{module_name}-dkms
 Version:	%{version}
 License:	%license
 Release:	dkms
@@ -34,8 +34,6 @@ if [ "$RPM_BUILD_ROOT" != "/" ]; then
 fi
 mkdir -p $RPM_BUILD_ROOT/%{_srcdir}
 mkdir -p $RPM_BUILD_ROOT/%{_datarootdir}/%{module_name}
-mkdir -p $RPM_BUILD_ROOT/etc/init.d/
-cp -a /home/${SUDO_USER}/PF_RING/package/etc/init.d/* $RPM_BUILD_ROOT/etc/init.d
 
 if [ -d %{_sourcedir}/%{module_name}-%{version} ]; then
         cp -Lpr %{_sourcedir}/%{module_name}-%{version} $RPM_BUILD_ROOT/%{_srcdir}
@@ -78,7 +76,6 @@ exit 0
 %defattr(-,root,root)
 %{_srcdir}
 %{_datarootdir}/%{module_name}/
-/etc/
 
 %changelog
 * %(date "+%a %b %d %Y") %packager %{version}-%{release}
