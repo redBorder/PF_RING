@@ -715,6 +715,37 @@ int igb_ptp_hwtstamp_ioctl(struct net_device *netdev,
 	/* define which PTP packets are time stamped */
 	E1000_WRITE_REG(hw, E1000_TSYNCRXCFG, tsync_rx_cfg);
 
+#ifdef HAVE_PF_RING /* PER PACKET HW TIMESTAMP (ns) */ 
+	printk("[PF_RING] ioctl pre-ts\n");
+        if (hw->mac.type >= e1000_82580) {
+		int i, reg_idx;
+		u32 reg;
+
+        	for (i = 0; i < adapter->num_q_vectors; i++) {
+			reg_idx = adapter->q_vector[i]->rx.ring->reg_idx;
+			reg = E1000_READ_REG(hw, E1000_SRRCTL(reg_idx));
+
+        		/* Enable Timestamp Received packet
+			 * Timestamp is placed only in buffers of received packets that meet 
+			 * the criteria defined in the TSYNCRXCTL.Type field, 2-tuple filters 
+			 * or ETQF registers. A 40 bit timestamp generated from the value in 
+			 * SYSTIMH and SYSTIML registers is placed in the receive buffer. */
+			if (tsync_rx_ctl != 0) /* enabling rx ts (Timestamp Reserved bit) */
+				reg |= 0x40000000;
+			else /* disabling rx ts */
+				reg &= ~0x40000000;
+				  
+  			E1000_WRITE_REG(hw, E1000_SRRCTL(reg_idx), reg);
+           
+			//if (unlikely(enable_debug))
+				printk("[PF_RING] [tsync_tx_ctl=%d][tsync_rx_ctl=%d][rx_queue=%d][TSAUXC=%u][SRRCTL=%08X]\n",
+			               tsync_tx_ctl, tsync_rx_ctl, reg_idx,
+			               E1000_READ_REG(hw, E1000_TSAUXC),
+			               E1000_READ_REG(hw, E1000_SRRCTL(reg_idx)));
+		}
+        }
+#endif
+
 	/* define ethertype filter for timestamped packets */
 	if (is_l2)
 		E1000_WRITE_REG(hw, E1000_ETQF(3),
