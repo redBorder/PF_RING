@@ -29,6 +29,8 @@
  82576 and 82580 code
 ******************************************************************************/
 
+#ifdef HAVE_PTP_1588_CLOCK /* HAVE_PF_RING */
+
 #include "igb.h"
 
 #include <linux/module.h>
@@ -972,3 +974,5 @@ void igb_ptp_reset(struct igb_adapter *adapter)
 				 ktime_to_ns(ktime_get_real()));
 	}
 }
+
+#endif
