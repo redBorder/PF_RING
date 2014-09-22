@@ -3616,11 +3616,11 @@ extern void _kc_skb_add_rx_frag(struct sk_buff *, int, struct page *,
 /*****************************************************************************/
 #if defined(E1000E_PTP) || defined(IGB_PTP) || defined(IXGBE_PTP) || defined(I40E_PTP)
 #if ( ( LINUX_VERSION_CODE >= KERNEL_VERSION(3,0,0) ) || \
-     ( RHEL_RELEASE_CODE && ( RHEL_RELEASE_CODE > RHEL_RELEASE_VERSION(6,4) ) ) ) && \
+     ( RHEL_RELEASE_CODE && ( RHEL_RELEASE_CODE > RHEL_RELEASE_VERSION(6,5) ) ) ) && \
     IS_ENABLED(CONFIG_PTP_1588_CLOCK)
 #define HAVE_PTP_1588_CLOCK
 #else
-#error Cannot enable PTP Hardware Clock support due to a pre-3.0 kernel version or CONFIG_PTP_1588_CLOCK not enabled in the kernel
+//#error Cannot enable PTP Hardware Clock support due to a pre-3.0 kernel version or CONFIG_PTP_1588_CLOCK not enabled in the kernel
 #endif /* > 3.0.0 && IS_ENABLED(CONFIG_PTP_1588_CLOCK) */
 #endif /* E1000E_PTP || IGB_PTP || IXGBE_PTP || I40E_PTP */
 
