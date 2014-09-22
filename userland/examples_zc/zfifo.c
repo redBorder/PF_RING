@@ -77,10 +77,8 @@ struct stats consumers_stats;
 
 //#define DEBUG
 #ifdef DEBUG
-#define INITIAL_PKTS 20000000
-#define HUGE_DIFF 70000
 struct timespec prev = { 0 };
-u_int32_t roll_back = 0, huge_roll_back = 0;
+u_int32_t roll_back = 0;
 u_int64_t max_roll_back_nsec = 0;
 #endif
 
@@ -137,6 +135,11 @@ void print_stats() {
 
     fprintf(stderr, " (%s Gbps)\n", pfring_format_numbers(((double)diff_bytes/(double)(delta_msec/1000)),  buf1, sizeof(buf1), 1));
 
+#ifdef DEBUG
+    fprintf(stderr, "%d Out-Of-Order packets (max roll back %ju nsec)\n",
+      roll_back, max_roll_back_nsec);
+#endif
+
     fprintf(stderr, "Actual FIFO Stats: %s pps (%s drops)",
 	    pfring_format_numbers(((double)diff_recv/(double)(delta_msec/1000)),  buf1, sizeof(buf1), 1),
 	    pfring_format_numbers(((double)diff_drop/(double)(delta_msec/1000)),  buf2, sizeof(buf2), 1));
@@ -183,38 +186,40 @@ void printHelp(void) {
 
 /* *************************************** */
 
-void* consumer_thread(void *user) {
+int32_t processing_func(pfring_zc_pkt_buff *b, pfring_zc_queue *in_queue, void *user) {
+#if 0
+  int i;
+
+  for(i = 0; i < b->len; i++)
+    printf("%02X ", pfring_zc_pkt_buff_data(b, outzq)[i]);
+  printf("\n");
+#endif
+
+#ifdef DEBUG
+  if (b->ts.tv_sec == prev.tv_sec && b->ts.tv_nsec < prev.tv_nsec) {
+    u_int64_t diff = prev.tv_nsec - b->ts.tv_nsec;
+    if (diff > max_roll_back_nsec) max_roll_back_nsec = diff;
+    roll_back++;
+  }
+  prev.tv_sec = b->ts.tv_sec, prev.tv_nsec = b->ts.tv_nsec;
+#endif
+
+  consumers_stats.tot_recv++;
+  consumers_stats.tot_bytes += b->len + 24; /* 8 Preamble + 4 CRC + 12 IFG */
+
+  return 0;
+}
+
+/* *************************************** */
+
+void *consumer_thread(void *user) {
   pfring_zc_pkt_buff *b = buffer;
 
   bind2core(bind_consumer_core);
 
-  while(!do_shutdown) {
-
-    if(pfring_zc_recv_pkt(outzq, &b, wait_for_packet) > 0) {
-
-#if 0
-      int i;
-
-      for(i = 0; i < b->len; i++)
-        printf("%02X ", pfring_zc_pkt_buff_data(b, outzq)[i]);
-      printf("\n");
-#endif
-
-#ifdef DEBUG
-      if(consumers_stats.tot_recv > INITIAL_PKTS && /* skip initial pkts, we need to flush the card ring containing "old" packets */
-         b->ts.tv_sec == prev.tv_sec && b->ts.tv_nsec < prev.tv_nsec) {
-        u_int64_t diff = prev.tv_nsec - b->ts.tv_nsec;
-        if (diff > max_roll_back_nsec) max_roll_back_nsec = diff;
-        roll_back++;
-        if (diff > HUGE_DIFF) huge_roll_back++;
-      }
-      prev.tv_sec = b->ts.tv_sec, prev.tv_nsec = b->ts.tv_nsec;
-#endif
-
-      consumers_stats.tot_recv++;
-      consumers_stats.tot_bytes += b->len + 24; /* 8 Preamble + 4 CRC + 12 IFG */
-    }
-
+  while (!do_shutdown) {
+    if (pfring_zc_recv_pkt(outzq, &b, wait_for_packet) > 0)
+      processing_func(b, outzq, NULL);
   }
 
   pfring_zc_sync_queue(outzq, rx_only);
@@ -329,10 +334,12 @@ int main(int argc, char* argv[]) {
 
   zw = pfring_zc_run_fifo(
     inzq, 
-    outzq, 
+    NULL, //outzq, 
     num_devices, 
     wsp,
     NULL /* idle callback */,
+    processing_func,
+    NULL /* used data */,
     1, /* active wait is mandatory here */ 
     bind_worker_core,
     bind_timer_core
@@ -355,11 +362,6 @@ int main(int argc, char* argv[]) {
   pfring_zc_kill_worker(zw);
 
   pfring_zc_destroy_cluster(zc);
-
-#ifdef DEBUG
-  if (roll_back) printf("%d Out-Of-Order packets found [%d packets >%unsec] [max roll back %ju nsec]\n", roll_back, huge_roll_back, HUGE_DIFF, max_roll_back_nsec);
-  else printf("No Out-Of-Order packets :-)\n");
-#endif
 
   return 0;
 }
