@@ -40,6 +40,7 @@ pre: pre-kernel
 	cd $(PF_RING_HOME)/userland/lib; make install DESTDIR=$(HERE)/debian
 	cd $(PF_RING_HOME)/userland/examples; cp pfcount pfsend pfwrite $(HERE)/debian/usr/local/bin
 	cd $(PF_RING_HOME)/userland/examples_libzero; cp pfdnacluster_master $(HERE)/debian/usr/local/bin
+	cd $(PF_RING_HOME)/userland/examples_zc; cp zbalance zsend zcount zcount_ipc $(HERE)/debian/usr/local/bin
 	@find $(HERE)/debian -name "*~" -exec /bin/rm {} ';' 
 
 build:
