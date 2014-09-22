@@ -3614,7 +3614,7 @@ extern void _kc_skb_add_rx_frag(struct sk_buff *, int, struct page *,
 #endif /* >= 3.4.0 */
 
 /*****************************************************************************/
-#if defined(HAVE_PF_RING) && LINUX_VERSION_CODE >= KERNEL_VERSION(3,0,0)
+#if defined(IGB_PTP) && defined(HAVE_PF_RING) && LINUX_VERSION_CODE >= KERNEL_VERSION(3,0,0)
 #define HAVE_PTP_1588_CLOCK
 #else
 #if defined(E1000E_PTP) || defined(IGB_PTP) || defined(IXGBE_PTP) || defined(I40E_PTP)
