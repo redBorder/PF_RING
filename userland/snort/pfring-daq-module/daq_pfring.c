@@ -57,7 +57,7 @@
 #define DAQ_PF_RING_DEFAULT_WATERMARK 128
 #define DAQ_PF_RING_DEFAULT_IDLE_RULES_TIMEOUT 300 /* 5 minutes */
 
-#define DAQ_PF_RING_MAX_NUM_DEVICES 16
+#define DAQ_PF_RING_MAX_NUM_DEVICES 64
 #define DAQ_PF_RING_PASSIVE_DEV_IDX  0
 
 typedef struct _pfring_context
@@ -312,7 +312,6 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
 
     dev = strtok_r(context->devices[DAQ_PF_RING_PASSIVE_DEV_IDX], ",", &dev_pos);
     while(dev != NULL) {
-
       if(context->num_devices >= DAQ_PF_RING_MAX_NUM_DEVICES){
         snprintf(errbuf, len, "%s: too many interfaces!", __FUNCTION__);
         free(context);
