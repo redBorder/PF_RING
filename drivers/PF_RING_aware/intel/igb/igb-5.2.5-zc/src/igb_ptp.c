@@ -29,9 +29,9 @@
  82576 and 82580 code
 ******************************************************************************/
 
-#ifdef HAVE_PTP_1588_CLOCK /* HAVE_PF_RING */
-
 #include "igb.h"
+
+#ifdef HAVE_PTP_1588_CLOCK /* HAVE_PF_RING */
 
 #include <linux/module.h>
 #include <linux/device.h>
@@ -737,12 +737,13 @@ int igb_ptp_hwtstamp_ioctl(struct net_device *netdev,
 				reg &= ~0x40000000;
 				  
   			E1000_WRITE_REG(hw, E1000_SRRCTL(reg_idx), reg);
-           
-			if (unlikely(enable_debug))
-				printk("[PF_RING] [tsync_tx_ctl=%d][tsync_rx_ctl=%d][rx_queue=%d][TSAUXC=%u][SRRCTL=%08X]\n",
-			               tsync_tx_ctl, tsync_rx_ctl, reg_idx,
-			               E1000_READ_REG(hw, E1000_TSAUXC),
-			               E1000_READ_REG(hw, E1000_SRRCTL(reg_idx)));
+         
+#if 0
+			printk("[PF_RING] [tsync_tx_ctl=%d][tsync_rx_ctl=%d][rx_queue=%d][TSAUXC=%u][SRRCTL=%08X]\n",
+			       tsync_tx_ctl, tsync_rx_ctl, reg_idx,
+			       E1000_READ_REG(hw, E1000_TSAUXC),
+			       E1000_READ_REG(hw, E1000_SRRCTL(reg_idx)));
+#endif
 		}
         }
 #endif
