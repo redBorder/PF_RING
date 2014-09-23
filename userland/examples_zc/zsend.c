@@ -512,6 +512,7 @@ int main(int argc, char* argv[]) {
       break;
     case 'p':
       pps = atoi(optarg);
+      flush_packet = 1;
       break;
     case 'g':
       bind_core = atoi(optarg);
