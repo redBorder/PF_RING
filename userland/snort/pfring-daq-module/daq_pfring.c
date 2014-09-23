@@ -137,6 +137,7 @@ typedef struct _pfring_context
   u_int16_t software_bypass_sampling_rate;
   u_int16_t software_bypass_upper_threshold;
   u_int16_t software_bypass_lower_threshold;
+  char *software_bypass_log;
 #endif
   DAQ_State state;
 #ifdef HAVE_REDIS
@@ -176,6 +177,14 @@ static uint64_t pfring_daq_total_queued(Pfring_Context_t *context) {
   return total_queued;
 }
 
+static void software_bypass_log(const char *filename,const char *line){
+  FILE *f = fopen(filename,"a");
+  if(f){
+    fprintf(f,"[%tu] %s\n",time(NULL),line);
+    fclose(f);
+  }
+}
+
 static void update_soft_bypass_status(Pfring_Context_t *context){
   const uint32_t num_queued_packets = pfring_daq_total_queued(context);
   printf("%tu Number of queued packets: %u\n",time(NULL),num_queued_packets);
@@ -183,15 +192,16 @@ static void update_soft_bypass_status(Pfring_Context_t *context){
   if(!is_bypass_enabled(context)){ /* bypass off. Should we set it on? */
     if(num_queued_packets > context->software_bypass_upper_threshold){
       enable_bypass(context);
-      printf("%tu: Enabling soft bypass\n",time(NULL));
+      software_bypass_log(context->software_bypass_log,"Enabling soft bypass");
     }
   }else{ /* We are in bypass time. Should we set it off? */
     if(num_queued_packets < context->software_bypass_lower_threshold){
       disable_bypass(context);
-      printf("%tu: Disabling soft bypass\n",time(NULL));
+      software_bypass_log(context->software_bypass_log,"Disable soft bypass");
     }
   }
 }
+
 #endif
 
 static int pfring_daq_open(Pfring_Context_t *context, int id) {
@@ -599,6 +609,8 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
 		 __FUNCTION__, entry->value);
 	return DAQ_ERROR;
       }
+    } else if(!strcmp(entry->key,"sbypasslogfile")){
+      context->software_bypass_log = strdup(entry->value);
     } else {
       snprintf(errbuf, len,
 	       "%s: unsupported variable(%s=%s)\n",
@@ -1416,6 +1428,9 @@ static void pfring_daq_shutdown(void *handle) {
   if(context->redis_ctx != NULL)
     redisFree(context->redis_ctx);
 #endif
+
+  if(context->software_bypass_log)
+    free(context->software_bypass_log);
 
   free(context);
 }
