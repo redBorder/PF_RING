@@ -206,8 +206,8 @@ struct __pfring {
     
     dna_device dna_dev;
     dna_indexes *indexes_ptr;
-    u_int32_t *rx_reg_ptr, *tx_reg_ptr, *mpc_reg_ptr, *qprdc_reg_ptr, 
-	*rnbc_reg_ptr, *rqdpc_reg_ptr, *gorc_reg_ptr;
+    volatile u_int32_t *rx_reg_ptr, *tx_reg_ptr,
+      *mpc_reg_ptr, *qprdc_reg_ptr, *rnbc_reg_ptr, *rqdpc_reg_ptr, *gorc_reg_ptr;
     dna_device_operation last_dna_operation;
   } dna;
 
