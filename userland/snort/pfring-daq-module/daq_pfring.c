@@ -91,14 +91,6 @@ typedef struct _pfring_queue
 } Pfring_Queue_t;
 #endif
 
-#ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
-#define RING_SIZE                             16386
-#define PKT_QUEUE_SOFT_BYPASS_UPPER_THRESHOLD (0.9f*14336) // Threshold to enable soft bypass
-#define PKT_QUEUE_SOFT_BYPASS_LOWER_THRESHOLD (0.1f*8192)  // Threshold to disable soft bypass 
-#define PKT_QUEUE_SOFT_BYPASS_SAMPLING        1024  // Packets sampling interval to ask drop stats
-
-#endif
-
 typedef struct _pfring_context
 {
   DAQ_Mode mode;
@@ -142,6 +134,9 @@ typedef struct _pfring_context
 #endif
 #ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
   u_int8_t software_bypass;
+  u_int16_t software_bypass_sampling_rate;
+  u_int16_t software_bypass_upper_threshold;
+  u_int16_t software_bypass_lower_threshold;
 #endif
   DAQ_State state;
 #ifdef HAVE_REDIS
@@ -156,6 +151,48 @@ static void pfring_daq_reset_stats(void *handle);
 static int pfring_daq_set_filter(void *handle, const char *filter);
 static void update_best_effort_stats(Pfring_Context_t *context);
 
+#ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
+static int is_bypass_enabled(const Pfring_Context_t *context){
+  return context->software_bypass;
+}
+
+static void disable_bypass(Pfring_Context_t *context){
+  context->software_bypass = 0;
+}
+
+static void enable_bypass(Pfring_Context_t *context){
+  context->software_bypass = 1;
+}
+
+static uint64_t pfring_daq_total_queued(Pfring_Context_t *context) {
+  int i;
+  uint64_t total_queued = 0;
+
+  for (i = 0; i < context->num_devices; i++){
+    if(context->ring_handles[i])
+       total_queued += pfring_get_num_queued_pkts(context->ring_handles[i]);
+  }
+
+  return total_queued;
+}
+
+static void update_soft_bypass_status(Pfring_Context_t *context){
+  const uint32_t num_queued_packets = pfring_daq_total_queued(context);
+  printf("%tu Number of queued packets: %u\n",time(NULL),num_queued_packets);
+
+  if(!is_bypass_enabled(context)){ /* bypass off. Should we set it on? */
+    if(num_queued_packets > context->software_bypass_upper_threshold){
+      enable_bypass(context);
+      printf("%tu: Enabling soft bypass\n",time(NULL));
+    }
+  }else{ /* We are in bypass time. Should we set it off? */
+    if(num_queued_packets < context->software_bypass_lower_threshold){
+      disable_bypass(context);
+      printf("%tu: Disabling soft bypass\n",time(NULL));
+    }
+  }
+}
+#endif
 
 static int pfring_daq_open(Pfring_Context_t *context, int id) {
   uint32_t default_net = 0xFFFFFF00;
@@ -538,7 +575,31 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
       }
     }
 #endif
-    else {
+    else if(!strcmp(entry->key,"sbypassupperthreshold")) {
+      char* end = entry->value;
+      context->software_bypass_upper_threshold = strtol(entry->value, &end, 0);
+      if(end==NULL){
+	snprintf(errbuf, len, "%s: bad software bypass upper threshold(%s)\n",
+		 __FUNCTION__, entry->value);
+	return DAQ_ERROR;
+      }
+    } else if(!strcmp(entry->key,"sbypasslowerthreshold")) {
+      char* end = entry->value;
+      context->software_bypass_lower_threshold = strtol(entry->value, &end, 0);
+      if(end==NULL){
+	snprintf(errbuf, len, "%s: bad software bypass lower threshold(%s)\n",
+		 __FUNCTION__, entry->value);
+	return DAQ_ERROR;
+      }
+    } else if(!strcmp(entry->key,"sbypasssamplingrate")) {
+      char* end = entry->value;
+      context->software_bypass_sampling_rate = strtol(entry->value, &end, 0);
+      if(end==NULL){
+	snprintf(errbuf, len, "%s: bad software bypass sampling rate(%s)\n",
+		 __FUNCTION__, entry->value);
+	return DAQ_ERROR;
+      }
+    } else {
       snprintf(errbuf, len,
 	       "%s: unsupported variable(%s=%s)\n",
 	       __FUNCTION__, entry->key, entry->value);
@@ -631,6 +692,9 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
     }
     free(clusters);
   }
+
+  if(context->software_bypass_upper_threshold == 0 || context->software_bypass_lower_threshold == 0)
+    context->software_bypass_sampling_rate = 0; // Disable
 
   /* catching the SIGRELOAD signal, replacing the default snort handler */
   if ((default_sig_reload_handler = signal(SIGHUP, pfring_daq_sig_reload)) == SIG_ERR)
@@ -898,6 +962,7 @@ static inline Pfring_Queue_SlotHdr_t *pfring_daq_dequeue(Pfring_Queue_t *q) {
   return qhdr;
 }
 
+/// @TODO merge with main pfring_daq_process
 static inline void pfring_daq_process(Pfring_Context_t *context, Pfring_Queue_SlotHdr_t *qhdr) {
   DAQ_PktHdr_t hdr;
   DAQ_Verdict verdict;
@@ -915,7 +980,19 @@ static inline void pfring_daq_process(Pfring_Context_t *context, Pfring_Queue_Sl
 #endif
   hdr.flags = 0;
 
-  verdict = context->analysis_func(qhdr->user, &hdr, qhdr->pkt_buffer);
+#ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
+  if(context->software_bypass_sampling_rate >0 && 
+    context->stats.packets_received%context->software_bypass_sampling_rate == 0){
+    update_soft_bypass_status(context);
+  }
+
+  if(!is_bypass_enabled(context))
+#endif
+    verdict = context->analysis_func(qhdr->user, &hdr,(u_char*)qhdr->pkt_buffer);
+#ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
+  else
+    verdict = DAQ_VERDICT_PASS;
+#endif
 
   if(verdict >= MAX_DAQ_VERDICT)
     verdict = DAQ_VERDICT_PASS;
@@ -1008,7 +1085,7 @@ static int pfring_daq_acquire_best_effort(void *handle, int cnt, DAQ_Analysis_Fu
     while(!(ret = pfring_daq_in_packets(context, &rx_ring_idx_clone)) && pfring_daq_queue_check_packet(context->q) && !context->breakloop) {
       /* no incoming pkts, queued pkts available -> processing enqueued pkts */
       Pfring_Queue_SlotHdr_t *qhdr = pfring_daq_dequeue(context->q); 
-      // pfring_daq_process(context, qhdr);
+      pfring_daq_process(context, qhdr);
       c++;
     }
 
@@ -1034,49 +1111,6 @@ static int pfring_daq_acquire_best_effort(void *handle, int cnt, DAQ_Analysis_Fu
   }
 
   return 0;
-}
-#endif
-
-#ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
-static int is_bypass_enabled(const Pfring_Context_t *context){
-  return context->software_bypass;
-}
-
-static void disable_bypass(Pfring_Context_t *context){
-  context->software_bypass = 0;
-}
-
-static void enable_bypass(Pfring_Context_t *context){
-  context->software_bypass = 1;
-}
-
-static uint64_t pfring_daq_total_queued(Pfring_Context_t *context) {
-  int i;
-  uint64_t total_queued = 0;
-
-  for (i = 0; i < context->num_devices; i++){
-    if(context->ring_handles[i])
-       total_queued += pfring_get_num_queued_pkts(context->ring_handles[i]);
-  }
-
-  return total_queued;
-}
-
-static void update_soft_bypass_status(Pfring_Context_t *context){
-  const uint32_t num_queued_packets = pfring_daq_total_queued(context);
-  printf("%tu Number of queued packets: %u\n",time(NULL),num_queued_packets);
-
-  if(!is_bypass_enabled(context)){ /* bypass off. Should we set it on? */
-    if(num_queued_packets > PKT_QUEUE_SOFT_BYPASS_UPPER_THRESHOLD){
-      enable_bypass(context);
-      printf("%tu: Enabling soft bypass until\n",time(NULL));
-    }
-  }else{ /* We are in bypass time. Should we set it off? */
-    if(num_queued_packets < PKT_QUEUE_SOFT_BYPASS_LOWER_THRESHOLD){
-      disable_bypass(context);
-      printf("%tu: Disabling soft bypass\n",time(NULL));
-    }
-  }
 }
 #endif
 
@@ -1168,8 +1202,9 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
       context->stats.packets_received++;
 
 #ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
-      if(PKT_QUEUE_SOFT_BYPASS_SAMPLING>0 && context->stats.packets_received%PKT_QUEUE_SOFT_BYPASS_SAMPLING == 0){
-      	update_soft_bypass_status(context);
+      if(context->software_bypass_sampling_rate >0 && 
+    context->stats.packets_received%context->software_bypass_sampling_rate == 0){
+  update_soft_bypass_status(context);
       }
 
       if(!is_bypass_enabled(context))
@@ -1177,9 +1212,8 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
         verdict = context->analysis_func(user, &hdr,(u_char*)context->pkt_buffer);
 #ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
       else
-      	verdict = DAQ_VERDICT_PASS;
+        verdict = DAQ_VERDICT_PASS;
 #endif
-
 
 #if 0
       printf("[DEBUG] %d.%d.%d.%d:%d -> %d.%d.%d.%d:%d Verdict=%d\n",
