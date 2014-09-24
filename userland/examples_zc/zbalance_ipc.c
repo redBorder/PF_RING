@@ -246,14 +246,15 @@ void printHelp(void) {
   printf("-h              Print this help\n");
   printf("-i <device>     Device (comma-separated list)\n");
   printf("-c <cluster id> Cluster id\n");
-  printf("-n <num inst>   Number of application instances\n");
+  printf("-n <num inst>   Number of application instances\n"
+         "                In case of '-m 1' or '-m 4' it is possible to spread packets across multiple\n"
+         "                instances of multiple applications, using a comma-separated list\n");
   printf("-m <hash mode>  Hashing modes:\n"
          "                0 - No hash: Round-Robin (default)\n"
-         "                1 - IP hash (with the ability to spread packets across multiple instances\n"
-         "                    of multiple applications, using a comma-separated list in -n) or\n"
-	 "                    TID (thread id) in case of '-i sysdig'\n"
+         "                1 - IP hash, or TID (thread id) in case of '-i sysdig'\n"
          "                2 - Fan-out\n"
-         "                3 - Fan-out (1st) + Round-Robin (2nd, 3rd, ..)\n");
+         "                3 - Fan-out (1st) + Round-Robin (2nd, 3rd, ..)\n"
+         "                4 - GTP hash (Inner IP/Port or Seq-Num)\n");
   printf("-S <core id>    Enable Time Pulse thread and bind it to a core\n");
   printf("-g <core_id>    Bind this app to a core\n");
   printf("-q <len>        Number of slots in each queue (default: %u)\n", QUEUE_LEN);
@@ -269,6 +270,14 @@ int32_t ip_distribution_func(pfring_zc_pkt_buff *pkt_handle, pfring_zc_queue *in
   long num_out_queues = (long) user;
   if (time_pulse) SET_TS_FROM_PULSE(pkt_handle, *pulse_timestamp_ns);
   return pfring_zc_builtin_ip_hash(pkt_handle, in_queue) % num_out_queues;
+}
+
+/* *************************************** */
+
+int32_t gtp_distribution_func(pfring_zc_pkt_buff *pkt_handle, pfring_zc_queue *in_queue, void *user) {
+  long num_out_queues = (long) user;
+  if (time_pulse) SET_TS_FROM_PULSE(pkt_handle, *pulse_timestamp_ns);
+  return pfring_zc_builtin_gtp_hash(pkt_handle, in_queue) % num_out_queues;
 }
 
 /* *************************************** */
@@ -316,6 +325,24 @@ int32_t fo_multiapp_ip_distribution_func(pfring_zc_pkt_buff *pkt_handle, pfring_
   if (time_pulse) SET_TS_FROM_PULSE(pkt_handle, *pulse_timestamp_ns);
 
   hash = pfring_zc_builtin_ip_hash(pkt_handle, in_queue);
+
+  for (i = 0; i < num_apps; i++) {
+    app_instance = hash % instances_per_app[i];
+    consumers_mask |= (1 << (offset + app_instance));
+    offset += instances_per_app[i];
+  }
+
+  return consumers_mask;
+}
+
+/* *************************************** */
+
+int32_t fo_multiapp_gtp_distribution_func(pfring_zc_pkt_buff *pkt_handle, pfring_zc_queue *in_queue, void *user) {
+  int32_t i, offset = 0, app_instance, consumers_mask = 0, hash;
+
+  if (time_pulse) SET_TS_FROM_PULSE(pkt_handle, *pulse_timestamp_ns);
+
+  hash = pfring_zc_builtin_gtp_hash(pkt_handle, in_queue);
 
   for (i = 0; i < num_apps; i++) {
     app_instance = hash % instances_per_app[i];
@@ -412,7 +439,7 @@ int main(int argc, char* argv[]) {
   }
 
   if (num_apps == 0) printHelp();
-  if (num_apps != 1 && hash_mode != 1) printHelp();
+  if (num_apps != 1 && hash_mode != 1 && hash_mode != 4) printHelp();
 
   zc = pfring_zc_create_cluster(
     cluster_id, 
@@ -529,13 +556,17 @@ int main(int argc, char* argv[]) {
       printf("\tpfcount -i zc:%d@%lu\n", cluster_id, off++);
   }
 
-  if (hash_mode == 0 || (hash_mode == 1 && num_apps == 1)) { /* balancer */
-    pfring_zc_distribution_func func;
+  if (hash_mode == 0 || ((hash_mode == 1 || hash_mode == 4) && num_apps == 1)) { /* balancer */
+    pfring_zc_distribution_func func = NULL;
 
-    if(strcmp(device, "sysdig") == 0)
-      func = (hash_mode == 0) ? rr_distribution_func : sysdig_distribution_func;
-    else
-      func = hash_mode == 0 ? rr_distribution_func : (time_pulse ? ip_distribution_func : NULL /* built-in IP-based  */);
+    switch (hash_mode) {
+    case 0: func = rr_distribution_func;
+      break;
+    case 1: if (strcmp(device, "sysdig") == 0) func = sysdig_distribution_func; else if (time_pulse) func = ip_distribution_func; /* else built-in IP-based */
+      break;
+    case 4: if (strcmp(device, "sysdig") == 0) func = sysdig_distribution_func; else func =  gtp_distribution_func;
+      break;
+    }
 
     zw = pfring_zc_run_balancer(
       inzqs, 
@@ -552,12 +583,24 @@ int main(int argc, char* argv[]) {
     );
 
   } else { /* fanout */
+    pfring_zc_distribution_func func = NULL;
     
     outzmq = pfring_zc_create_multi_queue(outzqs, num_consumer_queues);
 
     if(outzmq == NULL) {
       fprintf(stderr, "pfring_zc_create_multi_queue error [%s]\n", strerror(errno));
       return -1;
+    }
+
+    switch (hash_mode) {
+    case 1: func = fo_multiapp_ip_distribution_func;
+      break;
+    case 2: if (time_pulse) func = fo_distribution_func; /* else built-in send-to-all */
+      break;
+    case 3: func = fo_rr_distribution_func;
+      break;
+    case 4: func = fo_multiapp_gtp_distribution_func;
+      break;
     }
 
     zw = pfring_zc_run_fanout(
@@ -567,10 +610,7 @@ int main(int argc, char* argv[]) {
       wsp,
       round_robin_bursts_policy, 
       NULL /* idle callback */,
-      hash_mode == 3 ? fo_rr_distribution_func : (
-      hash_mode == 1 ? fo_multiapp_ip_distribution_func : (
-      time_pulse     ? fo_distribution_func : 
-      NULL /* built-in send-to-all */)), 
+      func,
       (void *) ((long) num_consumer_queues),
       !wait_for_packet, 
       bind_worker_core

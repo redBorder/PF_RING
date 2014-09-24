@@ -608,6 +608,18 @@ pfring_zc_builtin_ip_hash(
   pfring_zc_queue *queue
 );
 
+/**
+ * Computes a GTP-C Seq-based packet hash and a GTP-U Inner-IP/Port-based packet hash, Outer-IP/Port-based packet hash otherwise.
+ * @param pkt_handle The pointer to the buffer handle.
+ * @param queue      The queue from which the packet is arrived or destined.
+ * @return           The packet hash.
+ */
+u_int32_t
+pfring_zc_builtin_gtp_hash(
+  pfring_zc_pkt_buff *pkt_handle,
+  pfring_zc_queue *queue
+);
+
 /* **************************************************************************************** */
 
 /**
