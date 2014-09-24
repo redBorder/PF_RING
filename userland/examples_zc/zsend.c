@@ -353,7 +353,7 @@ void printHelp(void) {
   printf("-b <num>        Number of different IPs\n");
   printf("-N <num>        Simulate a producer for n2disk multi-thread (<num> threads)\n");
   printf("-S <core_id>    Append timestamp to packets, bind time-pulse thread to a core\n");
-  printf("-P <core_id>    Use time-pulse thread to control transmission rate,  bind time-pulse thread to a core\n");
+  printf("-P <core_id>    Use a time-pulse thread to control transmission rate, bind the thread to a core\n");
   printf("-z              Use burst API\n");
   printf("-a              Active packet wait\n");
   exit(-1);
