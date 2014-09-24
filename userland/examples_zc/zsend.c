@@ -424,7 +424,7 @@ void *send_traffic(void *user) {
     if(pps > 0) {
       u_int8_t synced = 0;
       if (use_pulse_time) {
-        while(*pulse_timestamp_ns - ts_ns_start < numPkts * ns_delta)
+        while(*pulse_timestamp_ns - ts_ns_start < numPkts * ns_delta && !do_shutdown)
           if (!synced) pfring_zc_sync_queue(zq, tx_only), synced = 1;
       } else {
         while((getticks() - tick_start) < (numPkts * tick_delta))
@@ -477,7 +477,7 @@ void *send_traffic(void *user) {
     if(pps > 0) {
       u_int8_t synced = 0;
       if (use_pulse_time) {
-        while(*pulse_timestamp_ns - ts_ns_start < numPkts * ns_delta)
+        while(*pulse_timestamp_ns - ts_ns_start < numPkts * ns_delta && !do_shutdown)
           if (!synced) pfring_zc_sync_queue(zq, tx_only), synced = 1;
       } else {
         while((getticks() - tick_start) < (numPkts * tick_delta))
