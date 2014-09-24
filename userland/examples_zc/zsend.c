@@ -62,7 +62,7 @@ struct timeval startTime;
 unsigned long long numPkts = 0, numBytes = 0;
 int cluster_id = -1, bind_core = -1, pps = -1, packet_len = 60, num_ips = 0, metadata_len = 0;
 u_int64_t num_to_send = 0;
-u_int8_t active = 0, do_shutdown = 0, flush_packet = 0, append_timestamp = 0;
+u_int8_t active = 0, do_shutdown = 0, flush_packet = 0, append_timestamp = 0, use_pulse_time = 0;
 #ifdef BURST_API
 u_int8_t use_pkt_burst_api = 0;
 #endif
@@ -75,6 +75,7 @@ int stdin_packet_len = 0;
 u_int32_t num_queue_buffers, num_consumer_buffers = 0;
 
 int bind_time_pulse_core = -1;
+volatile u_int64_t *pulse_timestamp_ns;
 volatile u_int64_t *pulse_timestamp_ns_n;
 
 /* *************************************** */
@@ -97,7 +98,8 @@ void *time_pulse_thread(void *data) {
   while (likely(!do_shutdown)) {
     /* clock_gettime takes up to 30 nsec to get the time */
     clock_gettime(CLOCK_REALTIME, &tn);
-    *pulse_timestamp_ns_n = ((u_int64_t) ((u_int64_t) htonl(tn.tv_sec) << 32) | htonl(tn.tv_nsec));
+    if (append_timestamp) *pulse_timestamp_ns_n = ((u_int64_t) ((u_int64_t) htonl(tn.tv_sec) << 32) | htonl(tn.tv_nsec));
+    if (use_pulse_time)   *pulse_timestamp_ns   = ((u_int64_t) ((u_int64_t) tn.tv_sec * 1000000000) + tn.tv_nsec);
   }
 
   return NULL;
@@ -349,6 +351,7 @@ void printHelp(void) {
   printf("-b <num>        Number of different IPs\n");
   printf("-N <num>        Simulate a producer for n2disk multi-thread (<num> threads)\n");
   printf("-S <core_id>    Append timestamp to packets, bind time-pulse thread to a core\n");
+  printf("-P <core_id>    Use time-pulse thread to control transmission rate,  bind time-pulse thread to a core\n");
   printf("-z              Use burst API\n");
   printf("-a              Active packet wait\n");
   exit(-1);
@@ -358,6 +361,7 @@ void printHelp(void) {
 
 void *send_traffic(void *user) {
   ticks hz, tick_start = 0, tick_delta = 0;
+  u_int64_t ts_ns_start = 0, ns_delta = 0;
   u_int32_t buffer_id = 0;
   int sent_bytes;
 #ifdef BURST_API
@@ -368,19 +372,24 @@ void *send_traffic(void *user) {
     bind2core(bind_core);
 
   if(pps > 0) {
-    /* cumputing usleep delay */
-    tick_start = getticks();
-    usleep(1);
-    tick_delta = getticks() - tick_start;
+    if (use_pulse_time) {
+      ts_ns_start = *pulse_timestamp_ns;
+      ns_delta = (double) (1000000000 / pps);
+    } else {
+      /* cumputing usleep delay */
+      tick_start = getticks();
+      usleep(1);
+      tick_delta = getticks() - tick_start;
 
-    /* cumputing CPU freq */
-    tick_start = getticks();
-    usleep(1001);
-    hz = (getticks() - tick_start - tick_delta) * 1000 /*kHz -> Hz*/;
-    printf("Estimated CPU freq: %lu Hz\n", (long unsigned int) hz);
+      /* cumputing CPU freq */
+      tick_start = getticks();
+      usleep(1001);
+      hz = (getticks() - tick_start - tick_delta) * 1000 /*kHz -> Hz*/;
+      printf("Estimated CPU freq: %lu Hz\n", (long unsigned int) hz);
 
-    tick_delta = (double) (hz / pps);
-    tick_start = getticks();
+      tick_delta = (double) (hz / pps);
+      tick_start = getticks();
+    }
   }
 
 #ifdef BURST_API  
@@ -412,8 +421,13 @@ void *send_traffic(void *user) {
 
     if(pps > 0) {
       u_int8_t synced = 0;
-      while((getticks() - tick_start) < (numPkts * tick_delta))
-        if (!synced) pfring_zc_sync_queue(zq, tx_only), synced = 1;
+      if (use_pulse_time) {
+        while(*pulse_timestamp_ns - ts_ns_start < numPkts * ns_delta)
+          if (!synced) pfring_zc_sync_queue(zq, tx_only), synced = 1;
+      } else {
+        while((getticks() - tick_start) < (numPkts * tick_delta))
+          if (!synced) pfring_zc_sync_queue(zq, tx_only), synced = 1;
+      }
     }
 
   } 
@@ -460,8 +474,13 @@ void *send_traffic(void *user) {
 
     if(pps > 0) {
       u_int8_t synced = 0;
-      while((getticks() - tick_start) < (numPkts * tick_delta))
-        if (!synced) pfring_zc_sync_queue(zq, tx_only), synced = 1;
+      if (use_pulse_time) {
+        while(*pulse_timestamp_ns - ts_ns_start < numPkts * ns_delta)
+          if (!synced) pfring_zc_sync_queue(zq, tx_only), synced = 1;
+      } else {
+        while((getticks() - tick_start) < (numPkts * tick_delta))
+          if (!synced) pfring_zc_sync_queue(zq, tx_only), synced = 1;
+      }
     }
   }
 
@@ -485,7 +504,7 @@ int main(int argc, char* argv[]) {
 
   startTime.tv_sec = 0;
 
-  while((c = getopt(argc,argv,"ab:c:g:hi:n:p:l:zN:S:")) != '?') {
+  while((c = getopt(argc,argv,"ab:c:g:hi:n:p:l:zN:S:P:")) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -512,7 +531,7 @@ int main(int argc, char* argv[]) {
       break;
     case 'p':
       pps = atoi(optarg);
-      flush_packet = 1;
+      /* auto flush on wait flush_packet = 1; */
       break;
     case 'g':
       bind_core = atoi(optarg);
@@ -528,6 +547,10 @@ int main(int argc, char* argv[]) {
       break;
     case 'S':
       append_timestamp = 1;
+      bind_time_pulse_core = atoi(optarg);
+      break;
+    case 'P':
+      use_pulse_time = 1;
       bind_time_pulse_core = atoi(optarg);
       break;
     }
@@ -625,9 +648,11 @@ int main(int argc, char* argv[]) {
   signal(SIGINT,  sigproc);
 
   if (append_timestamp) {
-    pulse_timestamp_ns_n = calloc(CACHE_LINE_LEN/sizeof(u_int64_t), sizeof(u_int64_t));
+    if (use_pulse_time)   pulse_timestamp_ns   = calloc(CACHE_LINE_LEN/sizeof(u_int64_t), sizeof(u_int64_t));
+    if (append_timestamp) pulse_timestamp_ns_n = calloc(CACHE_LINE_LEN/sizeof(u_int64_t), sizeof(u_int64_t));
     pthread_create(&time_thread, NULL, time_pulse_thread, NULL);
-    while (!*pulse_timestamp_ns_n && !do_shutdown); /* wait for ts */
+    if (use_pulse_time)   while (!*pulse_timestamp_ns   && !do_shutdown); /* wait for ts */
+    if (append_timestamp) while (!*pulse_timestamp_ns_n && !do_shutdown); /* wait for ts */
   }
 
   pthread_create(&thread, NULL, send_traffic, NULL);
