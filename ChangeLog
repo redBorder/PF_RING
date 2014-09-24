@@ -1,4 +1,69 @@
 ---------------------------------------                                                                                                                                                                             
+2014-09-24 PF_RING 6.0.2
+
+* PF_RING Library
+ - New Ixia hw timestamp support
+ - New sysdig module
+ - Userspace bpf filtering with pfring_set_bpf_filter() when kernel-bypass is used (DNA/Libzero/ZC)
+ - Fixed fd leak
+
+* ZC Library
+ - New API to add/remove hw filters: pfring_zc_add_hw_rule()/pfring_zc_remove_hw_rule()
+ - New API to check tx queue status: pfring_zc_queue_is_full()
+ - New API to sort traffic based on hw ts: pfring_zc_run_fifo()
+ - New API to export stats in /proc: pfring_zc_set_proc_stats()
+ - New API to hash packets based on GTP: pfring_zc_builtin_gtp_hash()
+ - Hw ts support: new PF_RING_ZC_DEVICE_HW_TIMESTAMP, PF_RING_ZC_DEVICE_STRIP_HW_TIMESTAMP flags
+ - Ixia ts support: new PF_RING_ZC_DEVICE_IXIA_TIMESTAMP flag
+ - PPPoE support in pfring_zc_builtin_ip_hash()
+ - Fix for huge memory allocation
+ - Fix for stack injection
+ - Fix for ZC cluster destroy
+
+* PF_RING kernel module
+ - MPLS support
+ - Support for huge rings (new ring version 16)
+ - Fixed send for packet len = max frame size + vlan
+ - Fix for huge memory allocation with standard pf_ring/libzero
+ - Fixed 64 bit division on 32 bit systems
+ - Fixed cluster hash
+ - Fix for multichannel devices
+ - DKMS support
+
+* PF_RING-aware/ZC Drivers
+ - Hw filtering support in ixgbe-ZC driver (Intel 82599-based cards)
+ - e1000e driver update v.3.0.4.1
+ - ixgbe  driver update v.3.21.2
+   - numa node fix
+   - new parameter allow_tap_1g to handle 1gbit/s TAP
+ - DKMS support
+
+* DNA Drivers
+ - e1000e driver v.2.5.4 vlan stripping disabled
+ - DKMS support
+
+* PF_RING-aware Libpcap
+ - New PCAP_PF_RING_RECV_ONLY env var to open socket in rx only
+ - Fix for libpcap VLAN issues with LINUX_SLL
+ - Fix for cpu spinning on pcap_read_packet()
+ - Fix for userspace bpf with libzero/zc virtual interfaces
+ - Fix for VLAN filtering
+
+* Examples
+ - pfcount: userspace bpf fix
+ - pfsend: fixed division by 0 with empty pcaps
+ - pfbridge: added bpf support
+ - pfdnacluster_master: added PPPoE support to hash
+ - New zfifo example
+ - zbalance: round-robin mode fix
+ - zbalance_ipc
+   - ability to spread packets across multiple instances of multiple applications in IP and GTP hash mode
+   - ability to configure queue len
+   - added support for n2disk10g multithread
+ - Added zbalance_ipc zsend zcount zcount_ipc to the Ubuntu package
+ - Added zbalance_ipc zsend zcount zcount_ipc to the RPM package
+
+---------------------------------------                                                                                                                                                                             
 2014-05-06 PF_RING 6.0.1
 
 * PF_RING ZC
