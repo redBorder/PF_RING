@@ -62,7 +62,7 @@ struct timeval startTime;
 unsigned long long numPkts = 0, numBytes = 0;
 int cluster_id = -1, bind_core = -1, pps = -1, packet_len = 60, num_ips = 0, metadata_len = 0;
 u_int64_t num_to_send = 0;
-u_int8_t active = 0, do_shutdown = 0, flush_packet = 0, append_timestamp = 0, use_pulse_time = 0;
+u_int8_t active = 0, flush_packet = 0, append_timestamp = 0, use_pulse_time = 0;
 #ifdef BURST_API
 u_int8_t use_pkt_burst_api = 0;
 #endif
@@ -73,6 +73,8 @@ u_char stdin_packet[9000];
 int stdin_packet_len = 0;
 
 u_int32_t num_queue_buffers, num_consumer_buffers = 0;
+
+volatile int do_shutdown = 0;
 
 int bind_time_pulse_core = -1;
 volatile u_int64_t *pulse_timestamp_ns;
@@ -647,13 +649,11 @@ int main(int argc, char* argv[]) {
   signal(SIGTERM, sigproc);
   signal(SIGINT,  sigproc);
 
-  if (append_timestamp) {
-    if (use_pulse_time)   pulse_timestamp_ns   = calloc(CACHE_LINE_LEN/sizeof(u_int64_t), sizeof(u_int64_t));
-    if (append_timestamp) pulse_timestamp_ns_n = calloc(CACHE_LINE_LEN/sizeof(u_int64_t), sizeof(u_int64_t));
-    pthread_create(&time_thread, NULL, time_pulse_thread, NULL);
-    if (use_pulse_time)   while (!*pulse_timestamp_ns   && !do_shutdown); /* wait for ts */
-    if (append_timestamp) while (!*pulse_timestamp_ns_n && !do_shutdown); /* wait for ts */
-  }
+  if (use_pulse_time)   pulse_timestamp_ns   = calloc(CACHE_LINE_LEN/sizeof(u_int64_t), sizeof(u_int64_t));
+  if (append_timestamp) pulse_timestamp_ns_n = calloc(CACHE_LINE_LEN/sizeof(u_int64_t), sizeof(u_int64_t));
+  if (append_timestamp || use_pulse_time) pthread_create(&time_thread, NULL, time_pulse_thread, NULL);
+  if (use_pulse_time)   while (!*pulse_timestamp_ns   && !do_shutdown); /* wait for ts */
+  if (append_timestamp) while (!*pulse_timestamp_ns_n && !do_shutdown); /* wait for ts */
 
   pthread_create(&thread, NULL, send_traffic, NULL);
 
@@ -666,7 +666,7 @@ int main(int argc, char* argv[]) {
 
   print_stats();
 
-  if (append_timestamp)
+  if (append_timestamp || use_pulse_time)
     pthread_join(time_thread, NULL);
 
   pfring_zc_destroy_cluster(zc);
