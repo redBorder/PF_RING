@@ -3284,6 +3284,10 @@ static void ixgbe_check_sfp_event(struct ixgbe_adapter *adapter, u32 eicr)
 		/* Clear the interrupt */
 		IXGBE_WRITE_REG(hw, IXGBE_EICR, eicr_mask);
 		if (!test_bit(__IXGBE_DOWN, &adapter->state)) {
+#ifdef HAVE_PF_RING
+			if (!((hw->subsystem_vendor_id == 0x1374 || hw->subsystem_vendor_id == 0x1304) &&
+			      SIL2BP9_IF_SERIES(hw->subsystem_device_id)))
+#endif
 			adapter->flags2 |= IXGBE_FLAG2_SFP_NEEDS_RESET;
 			ixgbe_service_event_schedule(adapter);
 		}
@@ -6024,6 +6028,10 @@ static void ixgbe_sfp_link_config(struct ixgbe_adapter *adapter)
 	if (adapter->hw.mac.type == ixgbe_mac_82598EB)
 		adapter->flags2 |= IXGBE_FLAG2_SEARCH_FOR_SFP;
 
+#ifdef HAVE_PF_RING
+	if (!((adapter->hw.subsystem_vendor_id == 0x1374 || adapter->hw.subsystem_vendor_id == 0x1304) &&
+	      SIL2BP9_IF_SERIES(adapter->hw.subsystem_device_id)))
+#endif
 	adapter->flags2 |= IXGBE_FLAG2_SFP_NEEDS_RESET;
 }
 
@@ -8158,6 +8166,10 @@ static void ixgbe_sfp_detection_subtask(struct ixgbe_adapter *adapter)
 	if (err == IXGBE_ERR_SFP_NOT_PRESENT) {
 		/* If no cable is present, then we need to reset
 		 * the next time we find a good cable. */
+#ifdef HAVE_PF_RING
+		if (!((hw->subsystem_vendor_id == 0x1374 || hw->subsystem_vendor_id == 0x1304) &&
+		      SIL2BP9_IF_SERIES(hw->subsystem_device_id)))
+#endif
 		adapter->flags2 |= IXGBE_FLAG2_SFP_NEEDS_RESET;
 	}
 

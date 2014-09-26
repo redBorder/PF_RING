@@ -113,6 +113,51 @@
 #define IXGBE_DEV_ID_X540T			0x1528
 #define IXGBE_DEV_ID_X540T1			0x1560
 
+#ifdef HAVE_PF_RING
+#define SILICOM_PE210G2BPi9LRD_SSID        0x125
+#define SILICOM_PE210G2BPi9SRD_SSID        0x124
+#define SILICOM_M1E210G2BPi9SRD_SSID       0x484
+#define SILICOM_M1E210G2BPi9LRD_SSID       0x485
+
+#define SILICOM_PE310G4BPi9SRD_SSID        0x134
+#define SILICOM_PE310G4BPi9LRD_SSID        0x135
+
+#define SILICOM_M1E210G2BPI9SRDJP_SSID    0x1E00
+#define SILICOM_M1E210G2BPI9SRDJP1_SSID   0x1E10
+#define SILICOM_M1E210G2BPI9LRDJP_SSID    0x1F00
+#define SILICOM_M1E210G2BPI9LRDJP1_SSID   0x1F10
+
+#define SILSRD_IF_SERIES(pid) \
+           ((pid==SILICOM_PE310G4BPi9SRD_SSID) || \
+           (pid==SILICOM_PE310G4BPi9LRD_SSID) || \
+           (pid==SILICOM_PE210G2BPi9SRD_SSID) || \
+           (pid==SILICOM_M1E210G2BPi9SRD_SSID) || \
+           (pid==SILICOM_M1E210G2BPi9LRD_SSID) || \
+           (pid==SILICOM_M1E210G2BPI9SRDJP_SSID)|| \
+           (pid==SILICOM_M1E210G2BPI9SRDJP1_SSID)|| \
+           (pid==SILICOM_M1E210G2BPI9LRDJP_SSID)|| \
+           (pid==SILICOM_M1E210G2BPI9LRDJP1_SSID)|| \
+           (pid==SILICOM_PE210G2BPi9LRD_SSID))
+
+#define SIL2BP9_IF_SERIES(pid) \
+           ((pid==0x120) || \
+           (pid==0x121) || \
+	   (pid==0x122) || \
+	   (pid==0x123) || \
+	   (pid==0x480) || \
+	   (pid==0x481) || \
+	   (pid==0x482) || \
+	   (pid==0x483) || \
+           (pid==SILICOM_PE210G2BPi9SRD_SSID) || \
+           (pid==SILICOM_M1E210G2BPi9SRD_SSID) || \
+           (pid==SILICOM_M1E210G2BPi9LRD_SSID) || \
+           (pid==SILICOM_M1E210G2BPI9SRDJP_SSID)|| \
+           (pid==SILICOM_M1E210G2BPI9SRDJP1_SSID)|| \
+           (pid==SILICOM_M1E210G2BPI9LRDJP_SSID)|| \
+           (pid==SILICOM_M1E210G2BPI9LRDJP1_SSID)|| \
+           (pid==SILICOM_PE210G2BPi9LRD_SSID))
+#endif /* HAVE_PF_RING */
+
 /* General Registers */
 #define IXGBE_CTRL		0x00000
 #define IXGBE_STATUS		0x00008

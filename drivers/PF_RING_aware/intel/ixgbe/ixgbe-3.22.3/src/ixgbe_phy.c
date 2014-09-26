@@ -1262,6 +1262,13 @@ out:
 	return status;
 
 err_read_i2c_eeprom:
+
+#ifdef HAVE_PF_RING
+	if ((hw->subsystem_vendor_id == 0x1374 || hw->subsystem_vendor_id == 0x1304) &&
+	      SILSRD_IF_SERIES(hw->subsystem_device_id))
+		hw->phy.multispeed_fiber = true;
+#endif
+
 	hw->phy.sfp_type = ixgbe_sfp_type_not_present;
 	if (hw->phy.type != ixgbe_phy_nl) {
 		hw->phy.id = 0;
