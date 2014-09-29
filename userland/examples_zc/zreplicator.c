@@ -113,7 +113,9 @@ void print_stats() {
     if(pfring_zc_stats(inzqs[i], &stats) == 0) {
       tot_if_recv += stats.recv, tot_if_drop += stats.drop;
       fprintf(stderr, "                %s RX %lu pkts Dropped %lu pkts (%.1f %%)\n",
-	      in_devices[i], stats.recv, stats.drop,
+	      in_devices[i], 
+	      (long unsigned int)stats.recv,
+	      (long unsigned int)stats.drop,
 	      stats.recv == 0 ? 0 : ((double)(stats.drop*100)/(double)(stats.recv + stats.drop)));
     }
   }
@@ -212,7 +214,6 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  if((in_devices == NULL) || (out_devices == NULL)) printHelp();
   if(cluster_id < 0) printHelp();
 
   dev = strtok(ingress_devices, ",");
@@ -260,7 +261,7 @@ int main(int argc, char* argv[]) {
   }
 
   for(i = 0; i < num_out_devices; i++) {
-    outzqs[i] = pfring_zc_open_device(zc, out_devices[i], rx_only, 0);
+    outzqs[i] = pfring_zc_open_device(zc, out_devices[i], tx_only, 0);
 
     if(outzqs[i] == NULL) {
       fprintf(stderr, "[TX] pfring_zc_open_device error [%s] Please check that %s is up and not already used\n",
@@ -287,18 +288,16 @@ int main(int argc, char* argv[]) {
     return -1;
   }
 
-  zw = pfring_zc_run_fanout(
-			    inzqs,
+  zw = pfring_zc_run_fanout(inzqs,
 			    outzmq,
 			    num_in_devices,
 			    wsp,
 			    round_robin_bursts_policy,
 			    NULL /* idle callback */,
 			    NULL /* fanout */,
-			    (void *) ((long) num_out_devices),
+			    NULL,
 			    !wait_for_packet,
-			    bind_worker_core
-			    );
+			    bind_worker_core);
 
 
   if(zw == NULL) {
