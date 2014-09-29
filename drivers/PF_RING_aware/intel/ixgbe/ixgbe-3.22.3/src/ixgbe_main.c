@@ -66,6 +66,10 @@ module_param_array(numa_cpu_affinity, int, NULL, 0444);
 MODULE_PARM_DESC(numa_cpu_affinity,
                  "Comma separated list of core ids where per-adapter memory will be allocated");
 
+static unsigned int low_latency_tx = 0;
+module_param(low_latency_tx, uint, 0644);
+MODULE_PARM_DESC(low_latency_tx, "Set to 1 to reduce transmission latency, minimize PCIe overhead otherwise");
+
 static unsigned int enable_debug = 0;
 module_param(enable_debug, uint, 0644);
 MODULE_PARM_DESC(enable_debug, "Set to 1 to enable debug tracing into the syslog");
@@ -3910,6 +3914,15 @@ void ixgbe_configure_tx_ring(struct ixgbe_adapter *adapter,
 	 */
 	txdctl |= (1 << 8) |	/* HTHRESH = 1 */
 		   32;		/* PTHRESH = 32 */
+
+#ifdef HAVE_PF_RING
+	if (low_latency_tx) {
+		txdctl = IXGBE_TXDCTL_ENABLE;
+		txdctl |= 36 & 0x7F;		/* PTHRESH = 36 */
+		txdctl |= ((0 & 0x7F) << 8);	/* HTHRESH = 0 */
+		txdctl |= ((0 & 0x7F) << 16);	/* WTHRESH = 0 */
+	}
+#endif
 
 	/* reinitialize flowdirector state */
 	if (adapter->flags & IXGBE_FLAG_FDIR_HASH_CAPABLE) {
