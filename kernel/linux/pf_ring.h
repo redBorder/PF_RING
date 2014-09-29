@@ -776,9 +776,13 @@ typedef struct {
   dna_device_notify usage_notification;
 } dna_device;
 
+#ifndef IFNAMSIZ
+#define IFNAMSIZ 16
+#endif
+
 typedef struct {
   dna_device_operation operation;
-  char device_name[8];
+  char device_name[IFNAMSIZ];
   int32_t channel_id;
 } dna_device_mapping;
 
