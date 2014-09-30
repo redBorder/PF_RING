@@ -44,6 +44,7 @@
 #define ALARM_SLEEP             1
 #define MAX_CARD_SLOTS      32768
 #define MIN_BUFFER_LEN       1536
+#define CACHE_LINE_LEN         64
 
 #define NBUFF      256 /* pow */
 #define NBUFFMASK 0xFF /* 256-1 */
@@ -56,11 +57,35 @@ pfring_zc_queue *zq;
 pfring_zc_pkt_buff *buffers[NBUFF];
 u_int32_t lru = 0;
 
-static struct timeval startTime;
+struct timeval startTime;
 unsigned long long numPkts = 0, numBytes = 0;
 int bind_core = -1;
+int bind_time_pulse_core = -1;
 int buffer_len;
-u_int8_t wait_for_packet = 1, do_shutdown = 0, verbose = 0, add_filtering_rule = 0, high_stats_refresh = 0;
+u_int8_t wait_for_packet = 1, do_shutdown = 0, verbose = 0, add_filtering_rule = 0;
+u_int8_t high_stats_refresh = 0, time_pulse = 0;
+
+u_int64_t prev_ns = 0;
+u_int64_t threshold_min = 1500, threshold_max = 2500; /* TODO parameters */
+u_int64_t threshold_min_count = 0, threshold_max_count = 0;
+
+volatile u_int64_t *pulse_timestamp_ns;
+
+/* ******************************** */
+
+void *time_pulse_thread(void *data) {
+  struct timespec tn;
+
+  bind2core(bind_time_pulse_core);
+
+  while (likely(!do_shutdown)) {
+    /* clock_gettime takes up to 30 nsec to get the time */
+    clock_gettime(CLOCK_REALTIME, &tn);
+    *pulse_timestamp_ns = ((u_int64_t) ((u_int64_t) tn.tv_sec * 1000000000) + tn.tv_nsec);
+  }
+
+  return NULL;
+}
 
 /* ******************************** */
 
@@ -106,6 +131,11 @@ void print_stats() {
     bytesDiff = nBytes - lastBytes;
     bytesDiff /= (1000*1000*1000)/8;
 
+    if (time_pulse)
+      fprintf(stderr, "Thresholds: %ju pkts <%.3fusec %ju pkts >%.3fusec\n", 
+        threshold_min_count, (double) threshold_min/1000, 
+        threshold_max_count, (double) threshold_max/1000);
+
     snprintf(buf, sizeof(buf),
 	     "Actual Stats: %s pps (%s drops) - %s Gbps",
 	     pfring_format_numbers(((double)pktsDiff/(double)(deltaMillisec/1000)),  buf1, sizeof(buf1), 1),
@@ -144,10 +174,11 @@ void printHelp(void) {
   printf("-h              Print this help\n");
   printf("-i <device>     Device name\n");
   printf("-c <cluster id> Cluster id\n");
-  printf("-g <core_id>    Bind this app to a core\n");
+  printf("-g <core id>    Bind this app to a core\n");
   printf("-a              Active packet wait\n");
   printf("-R              Test hw filters adding a rule (Intel 82599)\n");
   printf("-H              High stats refresh rate (workaround for drop counter on 1G Intel cards)\n");
+  printf("-S <core id>    Pulse-time thread for inter-packet time check\n");
   printf("-v              Verbose\n");
   exit(-1);
 }
@@ -182,7 +213,26 @@ void *packet_consumer_thread(void *user) {
 
   while(!do_shutdown) {
 
-#ifdef USE_BURST_API
+#ifndef USE_BURST_API
+    if(pfring_zc_recv_pkt(zq, &buffers[lru], wait_for_packet) > 0) {
+
+      if (unlikely(time_pulse)) {
+        u_int64_t now_ns = *pulse_timestamp_ns;
+        u_int64_t diff_ns = now_ns - prev_ns;
+        if (diff_ns < threshold_min) threshold_min_count++;
+        else if (diff_ns > threshold_max) threshold_max_count++;
+        prev_ns = now_ns;
+      }
+
+      if (unlikely(verbose))
+        print_packet(buffers[lru]);
+
+      numPkts++;
+      numBytes += buffers[lru]->len + 24; /* 8 Preamble + 4 CRC + 12 IFG */
+
+      lru++; lru &= NBUFFMASK;
+    }
+#else
     if((n = pfring_zc_recv_pkt_burst(zq, buffers, BURST_LEN, wait_for_packet)) > 0) {
 
       if (unlikely(verbose))
@@ -193,17 +243,6 @@ void *packet_consumer_thread(void *user) {
         numPkts++;
         numBytes += buffers[i]->len + 24; /* 8 Preamble + 4 CRC + 12 IFG */
       }
-    }
-#else
-    if(pfring_zc_recv_pkt(zq, &buffers[lru], wait_for_packet) > 0) {
-
-      if (unlikely(verbose))
-        print_packet(buffers[lru]);
-
-      numPkts++;
-      numBytes += buffers[lru]->len + 24; /* 8 Preamble + 4 CRC + 12 IFG */
-
-      lru++; lru &= NBUFFMASK;
     }
 #endif
 
@@ -221,11 +260,12 @@ int main(int argc, char* argv[]) {
   int i, cluster_id = -1;
   pthread_t my_thread;
   struct timeval timeNow, lastTime;
+  pthread_t time_thread;
 
   lastTime.tv_sec = 0;
   startTime.tv_sec = 0;
 
-  while((c = getopt(argc,argv,"ac:g:hi:vRH")) != '?') {
+  while((c = getopt(argc,argv,"ac:g:hi:vRHS:")) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -249,6 +289,10 @@ int main(int argc, char* argv[]) {
       break;
     case 'H':
       high_stats_refresh = 1;
+      break;
+    case 'S':
+      time_pulse = 1;
+      bind_time_pulse_core = atoi(optarg);
       break;
     case 'v':
       verbose = 1;
@@ -314,6 +358,12 @@ int main(int argc, char* argv[]) {
   signal(SIGTERM, sigproc);
   signal(SIGINT,  sigproc);
 
+  if (time_pulse) {
+    pulse_timestamp_ns = calloc(CACHE_LINE_LEN/sizeof(u_int64_t), sizeof(u_int64_t));
+    pthread_create(&time_thread, NULL, time_pulse_thread, NULL);
+    while (!*pulse_timestamp_ns && !do_shutdown); /* wait for ts */
+  }
+
   pthread_create(&my_thread, NULL, packet_consumer_thread, (void*) NULL);
 
   if (!verbose) while (!do_shutdown) {
@@ -335,6 +385,9 @@ int main(int argc, char* argv[]) {
   pthread_join(my_thread, NULL);
 
   sleep(1);
+
+  if (time_pulse)
+    pthread_join(time_thread, NULL);
 
   pfring_zc_destroy_cluster(zc);
 
