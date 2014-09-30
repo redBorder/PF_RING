@@ -60,6 +60,34 @@
 #define DAQ_PF_RING_MAX_NUM_DEVICES 64
 #define DAQ_PF_RING_PASSIVE_DEV_IDX  0
 
+#define DAQ_PF_RING_BEST_EFFORT_BOOST
+
+#ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
+#define DAQ_PF_RING_BEST_EFFORT_BOOST_MIN_NUM_SLOTS 4096
+
+typedef struct _pfring_queue_slothdr
+{
+  u_int32_t caplen;
+  u_int32_t pktlen;
+  int device_index;
+  struct timeval ts;
+  void *user;
+  u_char pkt_buffer[];
+} Pfring_Queue_SlotHdr_t;
+
+typedef struct _pfring_queue 
+{
+  u_char *buffer;
+  u_int64_t buffer_len;
+  u_int64_t insert_off;
+  u_int64_t remove_off;
+  u_int32_t tot_read;
+  u_int32_t tot_insert;
+  u_int32_t max_slot_len;
+  u_int32_t min_num_slots;
+} Pfring_Queue_t;
+#endif
+
 typedef struct _pfring_context
 {
   DAQ_Mode mode;
@@ -68,6 +96,9 @@ typedef struct _pfring_context
   pfring *ring_handles[DAQ_PF_RING_MAX_NUM_DEVICES];
   int num_devices;
   int snaplen;
+#ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
+  Pfring_Queue_t *q;
+#endif
   char *filter_string;
   char errbuf[1024];
   u_char *pkt_buffer;
@@ -75,6 +106,7 @@ typedef struct _pfring_context
   int promisc_flag;
   int timeout;
   int watermark;
+  int best_effort;
   u_int16_t filter_count;
   DAQ_Analysis_Func_t analysis_func;
   uint32_t netmask;
@@ -395,6 +427,8 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
 		 __FUNCTION__, entry->value);
 	return DAQ_ERROR;
       }
+    } else if(!strcmp(entry->key, "besteffort")) {
+      context->best_effort = 1;
     } else if(!strcmp(entry->key, "watermark")) {
       char* end = entry->value;
       context->watermark = (int) strtol(entry->value, &end, 0);
@@ -494,6 +528,27 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
     }
   }
 #endif
+
+#ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
+  if (context->mode == DAQ_MODE_PASSIVE && context->best_effort == 1) {
+    context->q = (Pfring_Queue_t *) calloc(1, sizeof(Pfring_Queue_t));
+    if(!context->q) {
+      snprintf(errbuf, len, "%s: Couldn't allocate memory for the new PF_RING context!", __FUNCTION__);
+      return DAQ_ERROR_NOMEM;
+    }
+
+    context->q->min_num_slots = DAQ_PF_RING_BEST_EFFORT_BOOST_MIN_NUM_SLOTS;
+    context->q->max_slot_len = sizeof(Pfring_Queue_SlotHdr_t) + context->snaplen;
+    context->q->buffer_len = context->q->min_num_slots * context->q->max_slot_len;
+
+    context->q->buffer = (u_char *) malloc(context->q->buffer_len);
+    if(!context->q->buffer) {
+      snprintf(errbuf, len, "%s: Couldn't allocate memory for best-effort IDS bridge support (queue)!", __FUNCTION__);
+      return DAQ_ERROR_NOMEM;
+    }
+  }
+#endif
+
 
   context->state = DAQ_STATE_INITIALIZED;
 
@@ -633,6 +688,208 @@ int pfring_daq_redis_insert_to_set(redisContext *redis_ctx, const char *set_name
 }
 #endif
 
+#ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
+static inline int pfring_daq_queue_check_room(Pfring_Queue_t *q) {
+  if (q->insert_off == q->remove_off) {
+    if ((q->tot_insert - q->tot_read) >= q->min_num_slots)
+      return 0;
+  } else {
+    if (q->insert_off < q->remove_off) {
+      if ((q->remove_off - q->insert_off) < q->max_slot_len)
+        return 0;
+    } else {
+      if ((q->buffer_len - q->insert_off) < q->max_slot_len && q->remove_off == 0)
+        return 0;
+    }
+  }
+
+  return 1;
+}
+
+static inline int pfring_daq_queue_next_slot_offset(Pfring_Queue_t *q, 
+  u_int32_t off) {
+  Pfring_Queue_SlotHdr_t *qhdr = (Pfring_Queue_SlotHdr_t *) &q->buffer[off];
+  u_int32_t real_slot_size;
+
+  real_slot_size = sizeof(Pfring_Queue_SlotHdr_t) + qhdr->caplen;
+
+  if((off + real_slot_size + q->max_slot_len) > q->buffer_len)
+    return 0;
+
+  return (off + real_slot_size);
+}
+
+#define min(_a, _b) ((_a) < (_b) ? (_a) : (_b))
+
+static inline void pfring_daq_enqueue(Pfring_Queue_t *q,
+  struct pfring_pkthdr *phdr, u_char* pkt_buffer, u_int32_t ifindex, void *user) {
+
+  if (pfring_daq_queue_check_room(q)) {
+    Pfring_Queue_SlotHdr_t *qhdr = (Pfring_Queue_SlotHdr_t *) &q->buffer[q->insert_off];
+
+    qhdr->caplen = min(phdr->caplen, q->max_slot_len - sizeof(Pfring_Queue_SlotHdr_t));
+    qhdr->pktlen = phdr->len;
+    qhdr->ts = phdr->ts;
+    qhdr->device_index = ifindex;
+
+    memcpy(qhdr->pkt_buffer, pkt_buffer, qhdr->caplen);
+
+    q->insert_off = pfring_daq_queue_next_slot_offset(q, q->insert_off);
+    q->tot_insert++;
+  }
+}
+
+static inline int pfring_daq_queue_check_packet(Pfring_Queue_t *q) {
+  return q->tot_insert != q->tot_read;
+}
+
+static inline Pfring_Queue_SlotHdr_t *pfring_daq_dequeue(Pfring_Queue_t *q) { 
+  Pfring_Queue_SlotHdr_t *qhdr = (Pfring_Queue_SlotHdr_t *) &q->buffer[q->remove_off];
+  q->remove_off = pfring_daq_queue_next_slot_offset(q, q->remove_off);
+  q->tot_read++;
+  return qhdr;
+}
+
+static inline void pfring_daq_process(Pfring_Context_t *context, Pfring_Queue_SlotHdr_t *qhdr) {
+  DAQ_PktHdr_t hdr;
+  DAQ_Verdict verdict;
+
+  hdr.caplen = qhdr->caplen;
+  hdr.pktlen = qhdr->pktlen;
+  hdr.ts = qhdr->ts;
+#if (DAQ_API_VERSION >= 0x00010002)
+  hdr.ingress_index = qhdr->device_index;
+  hdr.egress_index = -1;
+  hdr.ingress_group = -1;
+  hdr.egress_group = -1;
+#else
+  hdr.device_index = qhdr->device_index;
+#endif
+  hdr.flags = 0;
+
+  verdict = context->analysis_func(qhdr->user, &hdr, qhdr->pkt_buffer);
+
+  if(verdict >= MAX_DAQ_VERDICT)
+    verdict = DAQ_VERDICT_PASS;
+
+  switch(verdict) {
+    case DAQ_VERDICT_BLACKLIST: /* Block the packet and block all future packets in the same flow systemwide. */
+      /* TODO handle hw filters */
+      break;
+    case DAQ_VERDICT_WHITELIST: /* Pass the packet and fastpath all future packets in the same flow systemwide. */
+    case DAQ_VERDICT_IGNORE:    /* Pass the packet and fastpath all future packets in the same flow for this application. */
+    case DAQ_VERDICT_PASS:      /* Pass the packet */
+    case DAQ_VERDICT_REPLACE:   /* Pass a packet that has been modified in-place.(No resizing allowed!) */
+    case DAQ_VERDICT_BLOCK:     /* Block the packet. */
+      /* Nothing to do really */
+      break;
+    case MAX_DAQ_VERDICT:
+      /* No way we can reach this point */
+      break;
+  }
+
+  context->stats.packets_received++;
+  context->stats.verdicts[verdict]++;
+}
+
+static inline int pfring_daq_in_packets(Pfring_Context_t *context, u_int32_t *rx_ring_idx) {
+  int i;
+  
+  for (i = 0; i < context->num_devices; i++) {
+    *rx_ring_idx = ((*rx_ring_idx) + 1) % context->num_devices;
+    if (context->ring_handles[*rx_ring_idx]->is_pkt_available(context->ring_handles[*rx_ring_idx]) > 0) 
+      return 1;
+  }
+
+  return 0;
+}
+
+static int pfring_daq_acquire_best_effort(void *handle, int cnt, DAQ_Analysis_Func_t callback,
+#if (DAQ_API_VERSION >= 0x00010002)
+                              DAQ_Meta_Func_t metaback,
+#endif
+                              void *user) {
+  Pfring_Context_t *context = (Pfring_Context_t *) handle;
+  int ret = 0, i, rc, poll_duration = 0, c = 0;
+  u_int32_t rx_ring_idx = context->num_devices - 1, rx_ring_idx_clone;
+  struct pollfd pfd[DAQ_PF_RING_MAX_NUM_DEVICES];
+  struct pfring_pkthdr phdr;
+
+  context->analysis_func = callback;
+  context->breakloop = 0;
+
+  for (i = 0; i < context->num_devices; i++) {
+    //pfring_enable_ring(context->ring_handles[i]);
+    pfd[i].fd = pfring_get_selectable_fd(context->ring_handles[i]);
+  }
+
+  while((!context->breakloop) && ((cnt <= 0) || (c < cnt))) {
+
+    memset(&phdr, 0, sizeof(phdr));
+
+    if(pfring_daq_reload_requested)
+      pfring_daq_reload(context);
+
+    while(pfring_daq_in_packets(context, &rx_ring_idx) && !context->breakloop) {
+
+      pfring_recv(context->ring_handles[rx_ring_idx], &context->pkt_buffer, 0, &phdr, 0);
+#if 0
+      if(!pfring_daq_in_packets(context, &rx_ring_idx)) { /* optimization (?): no enqueue */
+        pfring_daq_process(..);
+        c++;
+      } else
+#endif
+
+#ifdef ENABLE_BPF
+      if (!context->bpf_filter || bpf_filter(context->filter.bf_insns, context->pkt_buffer, phdr.caplen, phdr.len) != 0) { /* accept */
+#endif
+      /* enqueueing pkt (and don't care of no room available) */
+      pfring_daq_enqueue(context->q, &phdr, context->pkt_buffer, context->ifindexes[rx_ring_idx], user);
+#ifdef ENABLE_BPF
+      } else {
+        context->stats.packets_received++;
+        context->stats.verdicts[DAQ_VERDICT_PASS]++;
+      }
+#endif
+
+      pfring_daq_send_packet(context, context->ring_handles[rx_ring_idx ^ 0x1], phdr.caplen,
+        context->ring_handles[rx_ring_idx], context->ifindexes[rx_ring_idx ^ 0x1]);
+    }
+
+    rx_ring_idx_clone = rx_ring_idx;
+    while(!(ret = pfring_daq_in_packets(context, &rx_ring_idx_clone)) && pfring_daq_queue_check_packet(context->q) && !context->breakloop) {
+      /* no incoming pkts, queued pkts available -> processing enqueued pkts */
+      Pfring_Queue_SlotHdr_t *qhdr = pfring_daq_dequeue(context->q); 
+      pfring_daq_process(context, qhdr);
+      c++;
+    }
+
+    if(!ret) {
+      /* no packet to read: poll */
+
+      for (i = 0; i < context->num_devices; i++) {
+        pfring_sync_indexes_with_kernel(context->ring_handles[i]);
+        pfd[i].events = POLLIN;
+        pfd[i].revents = 0;
+      }
+
+      errno = 0;
+      rc = poll(pfd, context->num_devices, poll_duration < context->timeout ? poll_duration += 10 : poll_duration);
+
+      if(rc < 0) {
+        if(errno == EINTR)
+          break;
+
+        DPE(context->errbuf, "%s: Poll failed: %s(%d)", __FUNCTION__, strerror(errno), errno);
+        return DAQ_ERROR;
+      } else if (rc > 0) poll_duration = 0;
+    }
+  }
+
+  return 0;
+}
+#endif
+
 static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callback, 
 #if (DAQ_API_VERSION >= 0x00010002)
                               DAQ_Meta_Func_t metaback,
@@ -650,6 +907,15 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
 
   for (i = 0; i < context->num_devices; i++)
     pfring_enable_ring(context->ring_handles[i]);
+
+#ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
+  if (context->mode == DAQ_MODE_PASSIVE && context->best_effort == 1)
+    return pfring_daq_acquire_best_effort(handle, cnt, callback, 
+#if (DAQ_API_VERSION >= 0x00010002)
+      metaback,
+#endif 
+      user);
+#endif
 
   while((cnt <= 0) || (c < cnt)) {
     struct pfring_pkthdr phdr;
