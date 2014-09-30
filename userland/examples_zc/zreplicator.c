@@ -237,7 +237,7 @@ int main(int argc, char* argv[]) {
   zc = pfring_zc_create_cluster(cluster_id,
 				max_packet_len(in_devices[0]),
 				metadata_len,
-				(num_in_devices + (num_out_devices) * MAX_CARD_SLOTS) + PREFETCH_BUFFERS,
+				((num_in_devices + num_out_devices) * MAX_CARD_SLOTS) + PREFETCH_BUFFERS,
 				numa_node_of_cpu(bind_worker_core),
 				NULL /* auto hugetlb mountpoint */);
 				
