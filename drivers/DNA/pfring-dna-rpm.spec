@@ -1,6 +1,6 @@
 Summary: PF_RING DNA dkms kernel drivers
 Name: pfring-drivers-dna-dkms
-Version: 1.0
+Version: 1.1
 Release: 0
 License: GPL
 Group: Networking/Utilities
@@ -8,7 +8,7 @@ URL: http://www.ntop.org/products/pf_ring/
 Packager: Luca Deri <deri@ntop.org>
 BuildArch: noarch
 # Temporary location where the RPM will be built
-Requires: e1000e-dna-dkms, igb-dna-dkms, ixgbe-dna-dkms
+Requires: e1000e-dna, igb-dna, ixgbe-dna
 # 
 
 
