@@ -52,4 +52,4 @@ dkms-rpm: dkms-rpm-virtual
 
 dkms-rpm-virtual:
 	rpmbuild -ba pfring-dna-rpm.spec
-	cp ~/rpmbuild/RPMS/noarch/pfring-drivers-dna-dkms-1.0-0.noarch.rpm .
+	cp ~/rpmbuild/RPMS/noarch/pfring-drivers-dna-dkms-*.noarch.rpm .
