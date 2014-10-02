@@ -24,7 +24,7 @@ rpm: add add_rpm install
 	dkms mkrpm -m @IGB@-dna -v @IGB_VERSION@ --source-only
 
 add_rpm:
-	cp -f pfring-dna-rpm.spec /usr/src/@IGB@-dna-@IGB_VERSION@/
+	cp -f dna.spec /usr/src/@IGB@-dna-@IGB_VERSION@/@IGB@-dna-dkms-mkrpm.spec
 
 add_deb:
 	cp -r dna-dkms-mkdeb /usr/src/@IGB@-dna-@IGB_VERSION@/@IGB@-dna-dkms-mkdeb
