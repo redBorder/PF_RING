@@ -914,6 +914,11 @@ else
 	AC_MSG_RESULT(yes)
 fi
 
+# simple trick to include NT lib
+if test -f "../lib/pfring_mod_nt.o"; then
+	LIBS="$LIBS -L/opt/napatech3/lib -lntapi"
+fi
+
 AC_ARG_WITH(septel,
 AC_HELP_STRING([--with-septel@<:@=DIR@:>@],[include Septel support (located in directory DIR, if supplied).  @<:@default=yes, on Linux, if present@:>@]),
 [

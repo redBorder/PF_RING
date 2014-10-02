@@ -6270,6 +6270,11 @@ else
 $as_echo "yes" >&6; }
 fi
 
+# simple trick to include NT lib
+if test -f "../lib/pfring_mod_nt.o"; then
+	LIBS="$LIBS -L/opt/napatech3/lib -lntapi"
+fi
+
 
 # Check whether --with-septel was given.
 if test "${with_septel+set}" = set; then :
