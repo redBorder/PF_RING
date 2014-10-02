@@ -135,6 +135,7 @@ pfring* pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags) 
   ring->disable_timestamp   = !!(flags & PF_RING_DO_NOT_TIMESTAMP);
   ring->chunk_mode_enabled  = !!(flags & PF_RING_CHUNK_MODE);
   ring->ixia_timestamp_enabled = !!(flags & PF_RING_IXIA_TIMESTAMP);
+  ring->force_userspace_bpf = !!(flags & PF_RING_USERSPACE_BPF);
 
 #ifdef RING_DEBUG
   printf("[PF_RING] pfring_open: device_name=%s\n", device_name);
@@ -1251,7 +1252,10 @@ int pfring_next_pkt_raw_timestamp(pfring *ring, u_int64_t *ts) {
 int pfring_set_bpf_filter(pfring *ring, char *filter_buffer) {
   int rc = PF_RING_ERROR_NOT_SUPPORTED;
 
-  if (ring && ring->set_bpf_filter)
+  if(!ring)
+    return -1;
+
+  if (!ring->force_userspace_bpf && ring->set_bpf_filter)
     return ring->set_bpf_filter(ring, filter_buffer);
 
   /* no in-kernel bpf support, setting up userspace bpf */
