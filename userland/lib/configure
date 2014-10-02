@@ -3728,7 +3728,7 @@ fi
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_dag_dag_get_stream_erf_types" >&5
 $as_echo "$ac_cv_lib_dag_dag_get_stream_erf_types" >&6; }
 if test "x$ac_cv_lib_dag_dag_get_stream_erf_types" = xyes; then :
-  HAVE_DAG="-D HAVE_DAG"; DAG_OBJS="pfring_mod_dag.o"; DAG_LIB="-L/usr/local/lib -ldag"
+  HAVE_DAG="-D HAVE_DAG"; DAG_OBJS="pfring_mod_dag.o"; DAG_LIB="-L/usr/local/lib -ldag -lm"
 fi
 
 
