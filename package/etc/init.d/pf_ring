@@ -30,6 +30,19 @@ PFRING="pf_ring"
 DNA_DRIVERS_DIR="/usr/local/pfring/drivers/DNA"
 ERROR=0
 
+function dkms_installed {
+  if [ ${DISTRO} == "debian" ]; then
+    if [ `dpkg -l |grep $1-dna-dkms |wc -l` -gt 0 ]; then
+      return 1
+    fi
+  elif [ ${DISTRO} == "centos" ]; then
+    if [ `rpm -qa | grep $1-dna | wc -l` -gt 0 ]; then
+      return 1
+    fi
+  fi
+  return 0
+}
+
 check_pf_ring() {
    # check the module status
    RETVAL=0
@@ -109,7 +122,7 @@ start_pf_ring() {
       fi
     fi
 
-    if [ -d $DNA_DRIVERS_DIR ]; then
+    if [ -d $DNA_DRIVERS_DIR ] && [ `ls -A $DNA_DRIVERS_DIR` ]; then
         DNA_DRIVERS="$(/bin/ls $DNA_DRIVERS_DIR|cut -d '.' -f 1)"
         for D in $DNA_DRIVERS ; do
 	    DRIVER_CONFIG="/etc/pf_ring/dna-$D.conf"
@@ -139,7 +152,8 @@ start_pf_ring() {
 	INSTALLED_DNA_DRIVER=0
 	for D in ${DNA_DKMS_DRIVERS[@]} ; do
 	    DRIVER_CONFIG="/etc/pf_ring/dna-$D.conf"
-	    if [ `dpkg -l |grep ${D}-dna-dkms |wc -l` -gt 0 ]; then
+	    dkms_installed $D
+	    if [ $? -gt 0 ]; then
 	        if [ -f $DRIVER_CONFIG ]; then
                     ADAPTERS_LISTED="$(grep adapters_to_enable $DRIVER_CONFIG|wc -l)"
                     if [ "$D" == "$MGMT_INTERFACE_DRIVER" ] && [ $ADAPTERS_LISTED -eq 0 ]; then
@@ -236,7 +250,8 @@ stop_pf_ring() {
 	INSTALLED_DNA_DRIVER=0
 	for D in ${DNA_DKMS_DRIVERS[@]} ; do
 	    DRIVER_CONFIG="/etc/pf_ring/dna-$D.conf"
-	    if [ `dpkg -l |grep ${D}-dna-dkms |wc -l` -gt 0 ]; then
+	    dkms_installed $D
+	    if [ $? -gt 0 ]; then
 	        if [ -f $DRIVER_CONFIG ]; then
 	            ADAPTERS_LISTED="$(grep adapters_to_enable $DRIVER_CONFIG|wc -l)"
 	            if [ "$D" == "$MGMT_INTERFACE_DRIVER" ] && [ $ADAPTERS_LISTED -eq 0 ]; then
