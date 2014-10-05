@@ -1,6 +1,12 @@
 AC_INIT([Makefile.in], 1.0)
 
-UBUNTU_RELEASE=`lsb_release -r|cut -f 2`
+SUB_DISTRO=`lsb_release -i|cut -f 2`	
+
+if test "$SUB_DISTRO" = "Debian"; then
+   UBUNTU_RELEASE="debian"
+else
+   UBUNTU_RELEASE=`lsb_release -r|cut -f 2`
+fi
 
 /bin/rm -f debian/control.in
 cp debian/control.$UBUNTU_RELEASE.in debian/control.in
