@@ -3918,11 +3918,10 @@ void ixgbe_configure_tx_ring(struct ixgbe_adapter *adapter,
 #ifdef HAVE_PF_RING
 	if (low_latency_tx) {
 		txdctl = IXGBE_TXDCTL_ENABLE;
-		txdctl |= 36 & 0x7F;		/* PTHRESH */
-		if (low_latency_tx != 2) { /* else HTHRESH = WTHRESH = 0 */
-			txdctl |= ((1 & 0x7F) << 8);	/* HTHRESH */
-			txdctl |= ((1 & 0x7F) << 16);	/* WTHRESH */
-		}
+		txdctl |=  (36 & 0x7F);		/* PTHRESH */
+		txdctl |= (( 0 & 0x7F) << 8);	/* HTHRESH */
+		txdctl |= (( 0 & 0x7F) << 16);	/* WTHRESH */
+		printk("[IXGBE] Card configured for low latency TX\n");
 	}
 #endif
 

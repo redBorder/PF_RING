@@ -19,7 +19,10 @@ insmod ../../../../../../kernel/pf_ring.ko
 #insmod ./ixgbe.ko RSS=0,0,0,0
 
 # Disable multiqueue
-insmod ./ixgbe.ko RSS=1,1,1,1
+insmod ./ixgbe.ko RSS=1,1,1,1 
+
+# Low-latency precise transmission rate
+#insmod ./ixgbe.ko RSS=1,1,1,1 low_latency_tx=1
 
 # Enable 16 queues
 #insmod ./ixgbe.ko MQ=1,1,1,1 RSS=16,16,16,16
