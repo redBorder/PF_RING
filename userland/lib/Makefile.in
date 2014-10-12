@@ -51,9 +51,9 @@ OBJS      = pfring.o pfring_mod.o pfring_utils.o pfring_mod_stack.o pfring_mod_u
 # CROSS_COMPILE=arm-mv5sft-linux-gnueabi-
 #
 CC        = ${CROSS_COMPILE}gcc
-CFLAGS    =  @CFLAGS@ -Wall -fPIC ${INCLUDE} @HAVE_ZERO@ @HAVE_DNA@ @HAVE_PF_RING_ZC@ @HAVE_DAG@ @NT_INC@ @HAVE_BPF@ @HAVE_REDIRECTOR@ @HAVE_HW_TIMESTAMP@ @HAVE_LIBNUMA@ -O2 # -g
+CFLAGS    =  @CFLAGS@ -Wall -fPIC ${INCLUDE} @HAVE_ZERO@ @HAVE_DNA@ @HAVE_PF_RING_ZC@ @HAVE_DAG@ @NT_INC@ @HAVE_BPF@ @HAVE_REDIRECTOR@ @HAVE_HW_TIMESTAMP@ @HAVE_LIBNUMA@ @HAVE_NT@ -O2 # -g
 LDFLAGS   = -g -shared
-SYSLIBS   = -lpthread @SYSLIBS@
+SYSLIBS   = -lpthread @SYSLIBS@ @NT_LIB@
 
 # How to make an object file
 %.o: %.c %.h Makefile
@@ -70,12 +70,12 @@ RING_H     = ../../kernel/linux/pf_ring.h
 
 all: ${TARGETS}
 
-${STATICLIB}: Makefile @ZERO_DEP@ @DNA_DEP@ @PF_RING_ZC_DEP@ ${OBJS} pfring.h ${RING_H}
+${STATICLIB}: Makefile @ZERO_DEP@ @DNA_DEP@ @PF_RING_ZC_DEP@ @NT_DEP@ ${OBJS} pfring.h ${RING_H}
 	@echo "=*= making library $@ =*="
 	ar rs $@ ${OBJS}
 	ranlib $@
 
-${DYNAMICLIB}: ${OBJS} @ZERO_DEP@ @DNA_DEP@ @PF_RING_ZC_DEP@ pfring.h ${RING_H} Makefile
+${DYNAMICLIB}: ${OBJS} @ZERO_DEP@ @DNA_DEP@ @PF_RING_ZC_DEP@ @NT_DEP@ pfring.h ${RING_H} Makefile
 	@echo "=*= making library $@ =*="
 	${CC} ${LDFLAGS} ${OBJS} ${SYSLIBS} -o $@
 
@@ -90,6 +90,9 @@ extract_pfring_zc_lib:
 
 extract_userspace_ring_lib:
 	ar x @USERSPACE_RING_LIB@
+
+extract_nt_lib:
+	ar x @MOD_NT_LIB@
 
 install: install-static install-shared
 
