@@ -179,7 +179,7 @@ npcap_offline_read(pcap_t *p, int cnt, pcap_handler callback, u_char *user)
 	u_char *data;
 
 	while (status == 0) {
-		struct pcap_pkthdr h;
+		struct pcap_pkthdr *h;
 
 		if (p->break_loop) {
 			if (n == 0) {
@@ -189,13 +189,13 @@ npcap_offline_read(pcap_t *p, int cnt, pcap_handler callback, u_char *user)
 				return (n);
 		}
 
-		status = npcap_read_next(p->npcapfd, (struct pcap_disk_pkthdr *) &h, &data);
+		status = npcap_read_next(p->npcapfd, (struct pcap_disk_pkthdr **) &h, &data);
 		if (status < 0)
 			return (status);
 
 		if ((fcode = p->fcode.bf_insns) == NULL ||
-		    bpf_filter(fcode, data, h.len, h.caplen)) {
-			(*callback)(user, &h, data);
+		    bpf_filter(fcode, data, h->len, h->caplen)) {
+			(*callback)(user, h, data);
 			if (++n >= cnt && cnt > 0)
 				break;
 		}
@@ -293,7 +293,7 @@ pcap_open_offline(const char *fname, char *errbuf)
 	}
 #ifdef HAVE_NPCAP
 	else if (strstr(fname, ".npcap") != NULL) {
-		return (npcap_open_offline(fname));
+		return (npcap_open_offline(fname, errbuf));
 	}
 #endif
 	else {
