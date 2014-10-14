@@ -170,6 +170,10 @@ sf_cleanup(pcap_t *p)
 }
 
 #ifdef HAVE_NPCAP
+
+#define LT_LINKTYPE(x)		((x) & 0x03FFFFFF)
+#define LT_LINKTYPE_EXT(x)	((x) & 0xFC000000)
+
 int
 npcap_offline_read(pcap_t *p, int cnt, pcap_handler callback, u_char *user)
 {
