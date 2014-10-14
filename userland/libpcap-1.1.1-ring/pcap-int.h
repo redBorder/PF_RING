@@ -66,7 +66,7 @@ extern CRITICAL_SECTION g_PcapCompileCriticalSection;
 #endif
 
 #ifdef HAVE_NPCAP
-#include "npcap_compact.h"
+#include "npcap.h"
 #endif
 
 #if (defined(_MSC_VER) && (_MSC_VER <= 1200)) /* we are compiling with Visual Studio 6, that doesn't support the LL suffix*/
