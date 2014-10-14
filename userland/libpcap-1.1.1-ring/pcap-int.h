@@ -345,7 +345,10 @@ struct pcap {
 	struct pcap_pkthdr pcap_header;	/* This is needed for the pcap_next_ex() to work */
 
 #ifdef HAVE_PF_RING
-  pfring *ring;
+	pfring *ring;
+#endif
+#ifdef HAVE_NPCAP
+	npcap_fd_t *npcapfd;
 #endif
 };
 
