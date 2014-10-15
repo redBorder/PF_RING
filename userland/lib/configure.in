@@ -150,12 +150,12 @@ AC_CHECK_LIB( [dag],
 
 AC_ARG_ENABLE([nt], AS_HELP_STRING([--enable-nt], [Enable Napatech support in PF_RING]))
 AS_IF([test "x$enable_nt" = "xyes"], [
+OLD_LIBS=$LIBS
 
-  OLD_LIBS=$LIBS
-  LIBS="-L/opt/napatech3/lib $LIBS"
-  AC_CHECK_LIB([ntapi], [NT_Init], )
-  AC_MSG_CHECKING([if ntapi is present])
-  if test "x$ac_cv_lib_ntapi_NT_Init" = xyes; then :
+LIBS="-L/opt/napatech3/lib $LIBS"
+AC_CHECK_LIB([ntapi], [NT_Init], )
+AC_MSG_CHECKING([if ntapi is present])
+if test "x$ac_cv_lib_ntapi_NT_Init" = xyes; then :
     AC_MSG_RESULT([yes])
 
     AC_MSG_CHECKING([Napatech support])
@@ -164,7 +164,7 @@ AS_IF([test "x$enable_nt" = "xyes"], [
       NT_INC="-I/opt/napatech3/include"
       NT_LIB="-L/opt/napatech3/lib -lntapi"
       HAVE_NT="-D HAVE_NT"
-      NT_OBJS=`ar t $MOD_NT_LIB | tr '\n' ' '`
+      NT_OBJS=`ar t $MOD_NT_LIB | grep .o\$ | tr '\n' ' '`
       NT_DEP="extract_nt_lib"
     else
       AC_MSG_RESULT(no)
@@ -172,13 +172,13 @@ AS_IF([test "x$enable_nt" = "xyes"], [
       exit
     fi
 
-  else
+else
     AC_MSG_RESULT(no)
     echo "Please install Napatech driver/library"
     exit
-  fi
+fi
 
-  LIBS=$OLD_LIBS
+LIBS=$OLD_LIBS
 ])
 
 dnl BPF - Default disabled
