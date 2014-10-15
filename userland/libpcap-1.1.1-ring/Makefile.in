@@ -51,7 +51,9 @@ PF_RING_INCLUDES=-I ../../kernel -I ../lib
 PF_RING_LIBS= ../lib/libpfring.a -lpthread -lnuma
 INCLS = -I. $(PF_RING_INCLUDES) @V_INCLS@
 DEFS = @DEFS@ @V_DEFS@ -DHAVE_PF_RING -DHAVE_NPCAP
-NPCAPOBJS = $(shell ar t libnpcap.a | grep .o)
+MACHINE   = $(shell uname -m)
+LIBNPCAP = libnpcap_$(MACHINE).a
+NPCAPOBJS = $(shell ar t $(LIBNPCAP) | grep .o)
 ADDLOBJS = @ADDLOBJS@
 ADDLARCHIVEOBJS = @ADDLARCHIVEOBJS@
 LIBS = $(PF_RING_LIBS) @LIBS@
@@ -414,7 +416,7 @@ libpcap.shareda: $(OBJ)
 libpcap.none:
 
 extract_libnpcap:
-	ar x libnpcap.a
+	ar x $(LIBNPCAP)
 
 scanner.c: $(srcdir)/scanner.l
 	@rm -f $@
