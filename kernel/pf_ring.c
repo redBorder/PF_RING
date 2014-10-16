@@ -1764,7 +1764,6 @@ static int ring_alloc_mem(struct sock *sk)
   actual_min_num_slots = tot_mem - sizeof(FlowSlotInfo);
   do_div(actual_min_num_slots, the_slot_len);
   pfr->slots_info->min_num_slots = actual_min_num_slots;
-  printk("slots: %llu\n", actual_min_num_slots);
   pfr->slots_info->tot_mem = tot_mem;
   pfr->slots_info->sample_rate = 1;
 
