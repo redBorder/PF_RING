@@ -312,6 +312,13 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
 
     dev = strtok_r(context->devices[DAQ_PF_RING_PASSIVE_DEV_IDX], ",", &dev_pos);
     while(dev != NULL) {
+
+      if(context->num_devices >= DAQ_PF_RING_MAX_NUM_DEVICES){
+        snprintf(errbuf, len, "%s: too many interfaces!", __FUNCTION__);
+        free(context);
+        return DAQ_ERROR_NOMEM;
+      }
+
       context->devices[context->num_devices++] = dev;
       dev = strtok_r(NULL, ",", &dev_pos);
     }
