@@ -1,8 +1,7 @@
-We encourage you to use pfring-daq-module/ for snort 2.9.x
+This folder contains various DAQ modules for PF_RING
 
-Stable distributions of PF_RING-DAQ module can be found at 
-http://www.snort.org/snort-downloads/external-daq/ (search for
-PFRING External DAQ).
+pfring-daq-module - for standard/pf_ring-aware drivers
+pfring-daq-module-zc - for kernel-bypass (ZC) drivers
 
--------------------------------------
-July 2011 - Luca Deri <deri@ntop.org>
+We encourage you to use these DAQ modules with snort 2.9.x
+
