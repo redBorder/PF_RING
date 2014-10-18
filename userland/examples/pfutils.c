@@ -35,7 +35,9 @@
 #include <pwd.h>
 #include <sys/stat.h>
 
+#ifdef HAVE_LIBNUMA
 #include <numa.h>
+#endif
 
 #define TRACE_ERROR     0, __FILE__, __LINE__
 #define TRACE_WARNING   1, __FILE__, __LINE__
@@ -209,6 +211,7 @@ char *msec2dhmsm(u_int64_t msec, char *buf, u_int buf_len) {
 /* *************************************** */
 
 int bind2node(int core_id) {
+#ifdef HAVE_LIBNUMA
   char node_str[8];
 
   if (core_id < 0 || numa_available() == -1)
@@ -216,6 +219,7 @@ int bind2node(int core_id) {
 
   snprintf(node_str, sizeof(node_str), "%u", numa_node_of_cpu(core_id));
   numa_bind(numa_parse_nodestring(node_str));
+#endif
 
   return 0;
 }
