@@ -648,6 +648,10 @@ V_CCOPT
 RANLIB
 V_YACC
 V_LEX
+HAVE_LIBNUMA
+HAVE_NPCAP
+EXTRACT_LIBNPCAP
+NPCAPOBJS
 HAVE_LINUX_TPACKET_AUXDATA
 BPF_FILTER_P
 LIBOBJS
@@ -6274,6 +6278,23 @@ fi
 if test -f "../lib/pfring_mod_nt.o"; then
 	LIBS="$LIBS -L/opt/napatech3/lib -lntapi"
 fi
+
+SHORT_MACHINE=`uname -m | cut -b1-3`
+if test "$SHORT_MACHINE" != "arm"; then
+	NPCAPOBJS=$(shell ar t libnpcap_`uname -m`.a | grep .o)
+	EXTRACT_LIBNPCAP="extract_libnpcap"
+	HAVE_NPCAP="-DHAVE_NPCAP"
+	HAVE_LIBNUMA="-lnuma"
+else
+	NPCAPOBJS=""
+	EXTRACT_LIBNPCAP=""
+	HAVE_NPCAP=""
+	HAVE_LIBNUMA=""
+fi
+
+
+
+
 
 
 # Check whether --with-septel was given.

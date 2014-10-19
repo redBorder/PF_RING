@@ -919,6 +919,23 @@ if test -f "../lib/pfring_mod_nt.o"; then
 	LIBS="$LIBS -L/opt/napatech3/lib -lntapi"
 fi
 
+SHORT_MACHINE=`uname -m | cut -b1-3`
+if test "$SHORT_MACHINE" != "arm"; then
+	NPCAPOBJS=$(shell ar t libnpcap_`uname -m`.a | grep .o)
+	EXTRACT_LIBNPCAP="extract_libnpcap"
+	HAVE_NPCAP="-DHAVE_NPCAP"
+	HAVE_LIBNUMA="-lnuma"
+else
+	NPCAPOBJS=""
+	EXTRACT_LIBNPCAP=""
+	HAVE_NPCAP=""
+	HAVE_LIBNUMA=""
+fi
+AC_SUBST(NPCAPOBJS)
+AC_SUBST(EXTRACT_LIBNPCAP)
+AC_SUBST(HAVE_NPCAP)
+AC_SUBST(HAVE_LIBNUMA)
+
 AC_ARG_WITH(septel,
 AC_HELP_STRING([--with-septel@<:@=DIR@:>@],[include Septel support (located in directory DIR, if supplied).  @<:@default=yes, on Linux, if present@:>@]),
 [

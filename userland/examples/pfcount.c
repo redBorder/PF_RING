@@ -342,7 +342,7 @@ void print_packet(const struct pfring_pkthdr *h, const u_char *p, u_int8_t dump_
     struct sysdig_event_header *ev = (struct sysdig_event_header*)p;
 
     snprintf(&dump_str[strlen(dump_str)], sizeof(dump_str)-strlen(dump_str), "[cpu_id=%u][tid=%lu][%u|%s]",
-	     h->extended_hdr.if_index, ev->thread_id, 
+	     h->extended_hdr.if_index, (long unsigned int)ev->thread_id, 
 	     ev->event_type, sysdig_event2name(ev->event_type));
     printf("%s\n", dump_str);
     return;

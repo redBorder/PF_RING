@@ -48,12 +48,10 @@ LD = /usr/bin/ld
 CC = @CC@
 CCOPT = @V_CCOPT@
 PF_RING_INCLUDES=-I ../../kernel -I ../lib
-PF_RING_LIBS= ../lib/libpfring.a -lpthread -lnuma
+PF_RING_LIBS= ../lib/libpfring.a -lpthread @HAVE_LIBNUMA@
 INCLS = -I. $(PF_RING_INCLUDES) @V_INCLS@
-DEFS = @DEFS@ @V_DEFS@ -DHAVE_PF_RING -DHAVE_NPCAP
-MACHINE   = $(shell uname -m)
-LIBNPCAP = libnpcap_$(MACHINE).a
-NPCAPOBJS = $(shell ar t $(LIBNPCAP) | grep .o)
+DEFS = @DEFS@ @V_DEFS@ -DHAVE_PF_RING @HAVE_NPCAP@
+NPCAPOBJS = @NPCAPOBJS@
 ADDLOBJS = @ADDLOBJS@
 ADDLARCHIVEOBJS = @ADDLARCHIVEOBJS@
 LIBS = $(PF_RING_LIBS) @LIBS@
@@ -332,7 +330,7 @@ EXTRA_DIST = \
 
 all: libpcap.a shared pcap-config
 
-libpcap.a: extract_libnpcap $(OBJ)
+libpcap.a: @EXTRACT_LIBNPCAP@ $(OBJ)
 	@rm -f $@
 	ar rc $@ $(OBJ) $(ADDLARCHIVEOBJS)
 	$(RANLIB) $@

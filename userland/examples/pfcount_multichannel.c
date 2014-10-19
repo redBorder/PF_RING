@@ -112,7 +112,9 @@ void print_stats() {
 	      i, (unsigned int)threads[i].numPkts, (unsigned int)pfringStat.drop,
 	      (unsigned int)(threads[i].numPkts+pfringStat.drop),
 	      threads[i].numPkts == 0 ? 0 : (double)(pfringStat.drop*100)/(double)(threads[i].numPkts+pfringStat.drop));
-      fprintf(stderr, "%lu pkts - %lu bytes", threads[i].numPkts, threads[i].numBytes);
+      fprintf(stderr, "%lu pkts - %lu bytes", 
+	      (long unsigned int)threads[i].numPkts,
+	      (long unsigned int)threads[i].numBytes);
       fprintf(stderr, " [%.1f pkt/sec - %.2f Mbit/sec]\n", (double)(threads[i].numPkts*1000)/deltaMillisec, thpt);
       pkt_dropped += pfringStat.drop;
 
