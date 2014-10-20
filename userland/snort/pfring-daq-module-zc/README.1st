@@ -62,6 +62,16 @@ PF_RING DAQ Specific Options
 
    --daq-var idsbridge=2
 
+Napatech Streams and IPS/IDS-Bridge
+-----------------------------------
+
+Napatech streams are not network interfaces, this means in case of IPS or IDS bridge mode 
+you also need to specify the corresponding port for packet transmission (syntax: <rx port>-<tx port>).
+
+# snort --daq-dir=/usr/local/lib/daq --daq pfring_zc  -i nt:streamX-nt:Z+nt:streamY-nt:W -e -Q
+
+Where Z is the port bound to stream X and W is the port bound to stream Y.
+
 Example of Symmetric RSS + Core Binding
 ---------------------------------------
 

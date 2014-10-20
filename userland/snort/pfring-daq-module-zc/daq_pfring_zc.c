@@ -62,6 +62,7 @@ typedef struct _pfring_context
 {
   DAQ_Mode mode;
   char *devices[DAQ_PF_RING_MAX_NUM_DEVICES];
+  char *tx_devices[DAQ_PF_RING_MAX_NUM_DEVICES];
   int ifindexes[DAQ_PF_RING_MAX_NUM_DEVICES];
   pfring *qs[DAQ_PF_RING_MAX_NUM_DEVICES];
   pfring_zc_queue* rx_queues[DAQ_PF_RING_MAX_NUM_DEVICES];
@@ -115,7 +116,7 @@ static int max_packet_len(Pfring_Context_t *context, char *device, int id) {
   } else {
     max_len = pfring_get_mtu_size(ring);
     if (max_len == 0) max_len = 9000;
-    max_len += 14;
+    max_len += 14 + 4;
   }
 
   pfring_close(ring);
@@ -125,7 +126,7 @@ static int max_packet_len(Pfring_Context_t *context, char *device, int id) {
 
 static int pfring_zc_daq_open(Pfring_Context_t *context, int id) {
   uint32_t default_net = 0xFFFFFF00;
-  char *device = context->devices[id];
+  char *device = context->devices[id], *tx_device = context->tx_devices[id];
   pfring_zc_queue *q = NULL;
 
   if (device == NULL) {
@@ -135,12 +136,12 @@ static int pfring_zc_daq_open(Pfring_Context_t *context, int id) {
  
   if (context->mode == DAQ_MODE_INLINE || (context->mode == DAQ_MODE_PASSIVE && context->ids_bridge)) {
     q = pfring_zc_open_device(context->cluster,
-                              device,
+                              tx_device,
                               tx_only,
                               (context->promisc_flag ? PF_RING_PROMISC : 0));
 
     if (q == NULL) {
-      DPE(context->errbuf, "pfring_zc_open_device(): unable to open device '%s' (TX)", device);
+      DPE(context->errbuf, "pfring_zc_open_device(): unable to open device '%s' (TX)", tx_device);
       return -1;
     }
 
@@ -308,11 +309,11 @@ static int pfring_zc_daq_initialize(const DAQ_Config_t *config,
 
     twins = strtok_r(context->devices[DAQ_PF_RING_PASSIVE_DEV_IDX], ",", &twins_pos);
     while(twins != NULL) {
-      char *dev, *dev_pos = NULL;
+      char *dev, *dev_pos = NULL, *tx_dev;
       int last_twin = 0;
 
       dev = strtok_r(twins, "+", &dev_pos);
-      while(dev != NULL) {
+      while (dev != NULL) {
 
         if (context->num_devices >= DAQ_PF_RING_MAX_NUM_DEVICES) {
           snprintf(errbuf, len, "%s: Maximum num of devices reached (%d), you should increase "
@@ -323,7 +324,18 @@ static int pfring_zc_daq_initialize(const DAQ_Config_t *config,
 
         last_twin = context->num_devices;
 
-	context->devices[context->num_devices++] = dev;
+	context->devices[context->num_devices] = dev;
+
+        tx_dev = strchr(dev, "-");
+        if (tx_dev != NULL) { /* use the specified device for tx */
+          tx_dev[0] = '\0';
+          tx_dev++;
+	  context->tx_devices[context->num_devices] = tx_dev;
+        } else {
+	  context->tx_devices[context->num_devices] = dev;
+        }
+
+        context->num_devices++;
 
         dev = strtok_r(NULL, "+", &dev_pos);
       }
@@ -358,18 +370,23 @@ static int pfring_zc_daq_initialize(const DAQ_Config_t *config,
     default_sig_reload_handler = NULL;
 #endif
 
-  for (i = 0; i < context->num_devices; i++) {
-    max_buffer_len = max_packet_len(context, context->devices[i], i);
-    if (max_buffer_len > context->max_buffer_len) context->max_buffer_len = max_buffer_len;
-  }
+  num_buffers = 2 /* buffer, buffer_inject */;
 
-  num_buffers = (context->num_devices * MAX_CARD_SLOTS) + 2 /* buffer, buffer_inject */;
-  if (context->mode == DAQ_MODE_INLINE || (context->mode == DAQ_MODE_PASSIVE && context->ids_bridge))
-    num_buffers += (context->num_devices * MAX_CARD_SLOTS);
 #ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
   if (context->mode == DAQ_MODE_PASSIVE && context->ids_bridge == 2)
     num_buffers += QUEUE_LEN;
 #endif
+
+  for (i = 0; i < context->num_devices; i++) {
+    max_buffer_len = max_packet_len(context, context->devices[i], i);
+    if (max_buffer_len > context->max_buffer_len) context->max_buffer_len = max_buffer_len;
+    if (strstr(context->devices[i], "zc:") != NULL) num_buffers += MAX_CARD_SLOTS;
+    if (context->tx_devices[i] != NULL) {
+      max_buffer_len = max_packet_len(context, context->tx_devices[i], i);
+      if (max_buffer_len > context->max_buffer_len) context->max_buffer_len = max_buffer_len;
+      if (strstr(context->tx_devices[i], "zc:") != NULL) num_buffers += MAX_CARD_SLOTS;
+    }
+  }
 
   context->cluster = pfring_zc_create_cluster(context->clusterid, context->max_buffer_len, 0, num_buffers,
                                               context->bindcpu == 0 ? -1 : numa_node_of_cpu(context->bindcpu), NULL);
