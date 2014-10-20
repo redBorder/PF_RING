@@ -47,6 +47,7 @@
 #define QUEUE_LEN            8192
 
 #define VERY_VERBOSE
+//#ifdef USE_QUEUE
 
 struct stats {
   u_int64_t __cache_line_padding_p[8];
@@ -58,7 +59,9 @@ struct stats {
 pfring_zc_cluster *zc;
 pfring_zc_worker *zw;
 pfring_zc_queue **inzq;
+#ifdef USE_QUEUE
 pfring_zc_queue *outzq;
+#endif
 pfring_zc_buffer_pool *wsp;
 
 pfring_zc_pkt_buff *buffer;
@@ -162,7 +165,9 @@ void sigproc(int sig) {
 
   print_stats();
   
+#ifdef USE_QUEUE
   pfring_zc_queue_breakloop(outzq);
+#endif
 }
 
 /* ******************************** */
@@ -212,6 +217,7 @@ int32_t processing_func(pfring_zc_pkt_buff *b, pfring_zc_queue *in_queue, void *
 
 /* *************************************** */
 
+#ifdef USE_QUEUE
 void *consumer_thread(void *user) {
   pfring_zc_pkt_buff *b = buffer;
 
@@ -226,6 +232,7 @@ void *consumer_thread(void *user) {
 
   return NULL;
 }
+#endif
 
 /* *************************************** */
 
@@ -233,7 +240,9 @@ int main(int argc, char* argv[]) {
   char *device = NULL, *dev, c;
   long i;
   int cluster_id = -1;
+#ifdef USE_QUEUE
   pthread_t thread;
+#endif
 
   startTime.tv_sec = 0;
 
@@ -312,12 +321,14 @@ int main(int argc, char* argv[]) {
     }
   }
 
+#ifdef USE_QUEUE
   outzq = pfring_zc_create_queue(zc, QUEUE_LEN);
 
   if(outzq == NULL) {
     fprintf(stderr, "pfring_zc_create_queue error [%s]\n", strerror(errno));
     return -1;
   }
+#endif
 
   wsp = pfring_zc_create_buffer_pool(zc, num_devices * PREFETCH_BUFFERS);
 
@@ -334,11 +345,19 @@ int main(int argc, char* argv[]) {
 
   zw = pfring_zc_run_fifo(
     inzq, 
-    NULL, //outzq, 
+#ifdef USE_QUEUE
+    outzq,
+#else
+    NULL,
+#endif
     num_devices, 
     wsp,
     NULL /* idle callback */,
+#ifdef USE_QUEUE
+   NULL,
+#else
     processing_func,
+#endif
     NULL /* used data */,
     1, /* active wait is mandatory here */ 
     bind_worker_core,
@@ -350,14 +369,18 @@ int main(int argc, char* argv[]) {
     return -1;
   }
 
+#ifdef USE_QUEUE
   pthread_create(&thread, NULL, consumer_thread, (void *) i);
+#endif
 
   while (!do_shutdown) {
     sleep(ALARM_SLEEP);
     print_stats();
   }
   
+#ifdef USE_QUEUE
   pthread_join(thread, NULL);
+#endif
 
   pfring_zc_kill_worker(zw);
 
