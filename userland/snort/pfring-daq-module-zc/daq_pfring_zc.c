@@ -326,7 +326,7 @@ static int pfring_zc_daq_initialize(const DAQ_Config_t *config,
 
 	context->devices[context->num_devices] = dev;
 
-        tx_dev = strchr(dev, "-");
+        tx_dev = strchr(dev, '-');
         if (tx_dev != NULL) { /* use the specified device for tx */
           tx_dev[0] = '\0';
           tx_dev++;
