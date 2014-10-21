@@ -964,9 +964,11 @@ int pfring_mod_set_bpf_filter(pfring *ring, char *filter_buffer) {
   }
 
   fcode.len    = filter.bf_len;
-  fcode.filter = (struct sock_filter*)filter.bf_insns;
+  fcode.filter = (struct sock_filter *) filter.bf_insns;
 
   rc = setsockopt(ring->fd, 0, SO_ATTACH_FILTER, &fcode, sizeof(fcode));
+
+  pcap_freecode(&filter);
 
   if(rc == -1)
     pfring_mod_remove_bpf_filter(ring);

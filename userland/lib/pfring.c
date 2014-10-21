@@ -1277,10 +1277,14 @@ int pfring_set_bpf_filter(pfring *ring, char *filter_buffer) {
 /* **************************************************** */
 
 int pfring_remove_bpf_filter(pfring *ring) {
-  if (ring && ring->remove_bpf_filter)
+  if(!ring)
+    return -1;
+
+  if (!ring->force_userspace_bpf && ring->remove_bpf_filter)
     return ring->remove_bpf_filter(ring);
 
   if (ring->userspace_bpf) {
+    pfring_free_bpf_filter(&ring->userspace_bpf_filter); 
     ring->userspace_bpf = 0;
     return 0;
   }

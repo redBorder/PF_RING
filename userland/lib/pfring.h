@@ -1314,6 +1314,14 @@ int pfring_parse_bpf_filter(char *filter_buffer, u_int caplen,
 #endif
                             *filter);
 
+void pfring_free_bpf_filter(
+#ifdef BPF_RELEASE
+                            struct bpf_program
+#else
+                            struct pfring_bpf_program
+#endif
+                            *filter);
+
 /* ********************************* */
 
 /* pfring_utils.h */
