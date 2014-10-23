@@ -9192,7 +9192,7 @@ static void bpctl_notifier(char *if_name) {
       struct list_head *ptr, *tmp_ptr;
       list_for_each_safe(ptr, tmp_ptr, &ring_aware_device_list) {
         ring_device_element *dev_ptr = list_entry(ptr, ring_device_element, device_list);
-        if(strcmp(dev_ptr->device_name, bypass_interfaces[i & ~0x1]) == 0) { /* master found */
+        if(strcmp(dev_ptr->device_name, bypass_interfaces[i | ~0x1]) == 0) { /* master found */
 
           memset(&bpctl_cmd, 0, sizeof(bpctl_cmd));
           bpctl_cmd.in_param[1] = dev_ptr->dev->ifindex;
