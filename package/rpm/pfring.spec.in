@@ -8,7 +8,7 @@ URL: http://www.ntop.org/products/pf_ring/
 Packager: Luca Deri <deri@ntop.org>
 # Temporary location where the RPM will be built
 BuildRoot:  %{_tmppath}/%{name}-%{version}-root
-Requires: kernel-uname-r = @KERNEL@, pfring-dkms = @VERS@
+Requires: pfring-dkms = @VERS@, numactl-libs
 # 
 
 
