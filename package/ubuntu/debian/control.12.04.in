@@ -8,5 +8,5 @@ Build-Conflicts:
 
 Package: pfring
 Architecture: @EXTN@
-Depends: linux-image-@KERNEL@, linux-headers-@KERNEL@, pfring-dkms
+Depends: pfring-dkms
 Description: PF_RING (http://www.ntop.org/pf_ring/)
