@@ -183,7 +183,7 @@ start_pf_ring() {
     # /sbin/ifup -a
     
     # Enable all interfaces DNA and non DNA
-    INTERFACES="$(cat /proc/net/dev | grep ':' | cut -d ':' -f 1|grep -v 'lo' | tr -d '\n' | sed 's/^  //'| sed 's/  / /')"
+    INTERFACES="$(cat /proc/net/dev | grep ':' | cut -d ':' -f 1|grep -v 'lo' | tr '\n' ' '| sed 's/  / /g')"
     for D in $INTERFACES ; do
         /sbin/ifconfig $D up
         if [ "$D" != "$MGMT_INTERFACE" ]; then
