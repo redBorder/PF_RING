@@ -7609,7 +7609,12 @@ static int ring_setsockopt(struct socket *sock,
     if(optlen == sizeof(struct sock_fprog)) {
       unsigned int fsize;
       struct sock_fprog fprog;
-      struct sk_filter *filter, *old_filter;
+#if(LINUX_VERSION_CODE >= KERNEL_VERSION(3,17,0))
+      struct bpf_prog
+#else
+      struct sk_filter 
+#endif
+        *filter, *old_filter;
 
       ret = -EFAULT;
 
@@ -7629,7 +7634,13 @@ static int ring_setsockopt(struct socket *sock,
 
       /* Fix below courtesy of Noam Dev <noamdev@gmail.com> */
       fsize  = sizeof(struct sock_filter) * fprog.len;
-      filter = kmalloc(fsize + sizeof(struct sk_filter), GFP_KERNEL);
+      filter = kmalloc(fsize + sizeof(
+#if(LINUX_VERSION_CODE >= KERNEL_VERSION(3,17,0))
+        struct bpf_prog
+#else
+        struct sk_filter
+#endif
+        ), GFP_KERNEL);
 
       if(filter == NULL) {
 	ret = -ENOMEM;
