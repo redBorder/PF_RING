@@ -3940,8 +3940,10 @@ int bpf_filter_skb(struct sk_buff *skb,
       sk_run_filter(skb, pfr->bpfFilter->insns, pfr->bpfFilter->len);
 #elif(LINUX_VERSION_CODE < KERNEL_VERSION(3,15,0))
       sk_run_filter(skb, pfr->bpfFilter->insns);
-#else
+#elif(LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0))
       SK_RUN_FILTER(pfr->bpfFilter, skb);
+#else
+      BPF_PROG_RUN(pfr->bpfFilter, skb);
 #endif
 
     rcu_read_unlock_bh();
@@ -7654,7 +7656,13 @@ static int ring_setsockopt(struct socket *sock,
 
       filter->len = fprog.len;
 
-      if(sk_chk_filter(filter->insns, filter->len) != 0) {
+      if(
+#if(LINUX_VERSION_CODE >= KERNEL_VERSION(3,17,0))
+         bpf_check_classic
+#else
+         sk_chk_filter
+#endif
+           (filter->insns, filter->len) != 0) {
 	/* Bad filter specified */
 	kfree(filter);
 	break;
