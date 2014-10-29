@@ -4947,13 +4947,6 @@ void ixgbe_vlan_stripping_disable(struct ixgbe_adapter *adapter)
 	u32 vlnctrl;
 	int i;
 
-#ifdef HAVE_PF_RING
-	/* TODO
-	if(atomic_read(&adapter->pfring_zc.usage_counter) > 0)
-		return;
-	*/
-#endif
-
 	/* leave vlan tag stripping enabled for DCB */
 	if (adapter->flags & IXGBE_FLAG_DCB_ENABLED)
 		return;
@@ -4988,13 +4981,6 @@ void ixgbe_vlan_stripping_enable(struct ixgbe_adapter *adapter)
 	struct ixgbe_hw *hw = &adapter->hw;
 	u32 vlnctrl;
 	int i;
-
-#ifdef HAVE_PF_RING
-	/* TODO
-	if(atomic_read(&adapter->pfring_zc.usage_counter) > 0)
-		return;
-	*/
-#endif
 
 	switch (hw->mac.type) {
 	case ixgbe_mac_82598EB:

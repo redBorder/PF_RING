@@ -52,6 +52,9 @@ for IF in $INTERFACES ; do
 		# Max number of TX slots
 		ethtool -G $IF tx 32768
 
+		# Disabling VLAN stripping
+		ethtool -K $IF rxvlan off
+
 		# Flow Control automatically disabled by the driver (no need to use the following commands)
 		#ethtool -A $IF autoneg off
 		#ethtool -A $IF rx off
