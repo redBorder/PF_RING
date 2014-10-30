@@ -260,7 +260,7 @@ void printHelp(void) {
   printf("-q <len>        Number of slots in each queue (default: %u)\n", QUEUE_LEN);
   printf("-N <num>        Producer for n2disk multi-thread (<num> threads)\n");
   printf("-a              Active packet wait\n");
-  printf("-l <sock list>  Enable VM support (comma-separated list of QEMU monitor sockets)\n");
+  printf("-Q <sock list>  Enable VM support (comma-separated list of QEMU monitor sockets)\n");
   exit(-1);
 }
 
@@ -368,7 +368,7 @@ int main(int argc, char* argv[]) {
 
   start_time.tv_sec = 0;
 
-  while((c = getopt(argc,argv,"ac:g:hi:m:n:l:q:N:S:")) != '?') {
+  while((c = getopt(argc,argv,"ac:g:hi:m:n:Q:q:N:S:")) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -393,7 +393,7 @@ int main(int argc, char* argv[]) {
     case 'g':
       bind_worker_core = atoi(optarg);
       break;
-    case 'l':
+    case 'Q':
       enable_vm_support = 1;
       vm_sockets = strdup(optarg);
       break;

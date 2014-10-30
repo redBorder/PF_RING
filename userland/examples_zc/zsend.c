@@ -62,7 +62,7 @@ struct timeval startTime;
 unsigned long long numPkts = 0, numBytes = 0;
 int cluster_id = -1, bind_core = -1, pps = -1, packet_len = 60, num_ips = 0, metadata_len = 0;
 u_int64_t num_to_send = 0;
-u_int8_t active = 0, flush_packet = 0, append_timestamp = 0, use_pulse_time = 0;
+u_int8_t active = 0, flush_packet = 0, append_timestamp = 0, use_pulse_time = 0, enable_vm_support = 0;
 #ifdef BURST_API
 u_int8_t use_pkt_burst_api = 0;
 #endif
@@ -356,6 +356,7 @@ void printHelp(void) {
   printf("-P <core_id>    Use a time-pulse thread to control transmission rate, bind the thread to a core\n");
   printf("-z              Use burst API\n");
   printf("-a              Active packet wait\n");
+  printf("-Q <sock>       Enable VM support to attach a consumer from a VM (<sock> is a QEMU monitor sockets)\n");
   exit(-1);
 }
 
@@ -502,11 +503,12 @@ int main(int argc, char* argv[]) {
   char *device = NULL, c;
   pthread_t thread;
   pthread_t time_thread;
-  int i;
+  char *vm_sock;
+  int i, rc;
 
   startTime.tv_sec = 0;
 
-  while((c = getopt(argc,argv,"ab:c:g:hi:n:p:l:zN:S:P:")) != '?') {
+  while((c = getopt(argc,argv,"ab:c:g:hi:n:p:l:zN:S:P:Q:")) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -537,6 +539,10 @@ int main(int argc, char* argv[]) {
       break;
     case 'g':
       bind_core = atoi(optarg);
+      break;
+    case 'Q':
+      enable_vm_support = 1;
+      vm_sock = strdup(optarg);
       break;
 #ifdef BURST_API
     case 'z':
@@ -643,6 +649,22 @@ int main(int argc, char* argv[]) {
       fprintf(stderr, "Run n2disk with: --cluster-ipc-attach --cluster-id %d --cluster-ipc-queues %s --cluster-ipc-pool 0\n", cluster_id, queues_list);
     }
 
+  }
+
+  if (enable_vm_support) {
+    rc = pfring_zc_vm_register(zc, vm_sock);
+
+    if (rc < 0) {
+      fprintf(stderr, "pfring_zc_vm_register(%s) error\n", vm_sock);
+      return -1;
+    }
+
+    rc = pfring_zc_vm_backend_enable(zc);
+
+    if (rc < 0) {
+      fprintf(stderr, "pfring_zc_vm_backend_enable error\n");
+      return -1;
+    }
   }
 
   signal(SIGINT,  sigproc);
