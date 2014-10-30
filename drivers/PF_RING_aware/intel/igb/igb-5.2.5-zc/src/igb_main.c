@@ -5829,10 +5829,18 @@ netdev_tx_t igb_xmit_frame_ring(struct sk_buff *skb,
 	skb_tx_timestamp(skb);
 
 #ifdef HAVE_PTP_1588_CLOCK
+#if (RHEL_RELEASE_CODE && RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,6))
+	if (unlikely(skb_shinfo(skb)->tx_flags.flags & SKBTX_HW_TSTAMP)) {
+#else
 	if (unlikely(skb_shinfo(skb)->tx_flags & SKBTX_HW_TSTAMP)) {
+#endif
 		struct igb_adapter *adapter = netdev_priv(tx_ring->netdev);
 		if (!adapter->ptp_tx_skb) {
+#if (RHEL_RELEASE_CODE && RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,6))
+			skb_shinfo(skb)->tx_flags.flags |= SKBTX_IN_PROGRESS;
+#else
 			skb_shinfo(skb)->tx_flags |= SKBTX_IN_PROGRESS;
+#endif
 			tx_flags |= IGB_TX_FLAGS_TSTAMP;
 
 			adapter->ptp_tx_skb = skb_get(skb);
