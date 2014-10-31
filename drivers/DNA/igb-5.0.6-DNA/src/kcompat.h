@@ -3457,7 +3457,7 @@ static inline void __kc_skb_frag_unref(skb_frag_t *frag)
 #endif
 /*****************************************************************************/
 #if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,3,0) )
-#if !(RHEL_RELEASE_CODE && RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,5))
+#if !(RHEL_RELEASE_CODE && ((RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,5)) || (RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,6))))
 typedef u32 netdev_features_t;
 #endif
 #undef PCI_EXP_TYPE_RC_EC
@@ -3576,7 +3576,7 @@ extern void _kc_skb_add_rx_frag(struct sk_buff *, int, struct page *,
  * A small helper function that translates MMD EEE Capability (3.20) bits
  * to ethtool supported settings.
  */
-#if !(RHEL_RELEASE_CODE && RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,5))
+#if !(RHEL_RELEASE_CODE && ((RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,5)) || (RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,6))))
 static inline u32 mmd_eee_cap_to_ethtool_sup_t(u16 eee_cap)
 {
 	u32 supported = 0;
@@ -3605,7 +3605,7 @@ static inline u32 mmd_eee_cap_to_ethtool_sup_t(u16 eee_cap)
  * and MMD EEE Link Partner Ability (7.61) bits to ethtool advertisement
  * settings.
  */
-#if !(RHEL_RELEASE_CODE && RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,5))
+#if !(RHEL_RELEASE_CODE && ((RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,5)) || (RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,6))))
 static inline u32 mmd_eee_adv_to_ethtool_adv_t(u16 eee_adv)
 {
 	u32 adv = 0;
@@ -3634,7 +3634,7 @@ static inline u32 mmd_eee_adv_to_ethtool_adv_t(u16 eee_adv)
  * to EEE advertisements for the MMD EEE Advertisement (7.60) and
  * MMD EEE Link Partner Ability (7.61) registers.
  */
-#if !(RHEL_RELEASE_CODE && RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,5))
+#if !(RHEL_RELEASE_CODE && ((RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,5)) || (RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,6))))
 static inline u16 ethtool_adv_to_mmd_eee_adv_t(u32 adv)
 {
 	u16 reg = 0;
@@ -3688,7 +3688,7 @@ int __kc_pcie_capability_clear_and_set_word(struct pci_dev *dev, int pos,
 
 #define PCI_EXP_LNKSTA2		50	/* Link Status 2 */
 
-#if !(RHEL_RELEASE_CODE && RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,5))
+#if !(RHEL_RELEASE_CODE && ((RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,5)) || (RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,6))))
 static inline int pcie_capability_clear_word(struct pci_dev *dev, int pos,
 					     u16 clear)
 {
@@ -3719,7 +3719,7 @@ static inline int pcie_capability_clear_word(struct pci_dev *dev, int pos,
 static const u8 eth_reserved_addr_base[ETH_ALEN] __aligned(2) = {
 	0x01, 0x80, 0xc2, 0x00, 0x00, 0x00 };
 #if !(SLE_VERSION_CODE && SLE_VERSION_CODE >= SLE_VERSION(11,3,0))
-#if !(RHEL_RELEASE_CODE && RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,5))
+#if !(RHEL_RELEASE_CODE && ((RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,5)) || (RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,6))))
 static inline bool is_link_local_ether_addr(const u8 *addr)
 {
 	__be16 *a = (__be16 *)addr;

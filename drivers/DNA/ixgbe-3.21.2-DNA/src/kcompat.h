@@ -4057,7 +4057,9 @@ extern int __kc_dma_set_mask_and_coherent(struct device *dev, u64 mask);
 //#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0) )
 #if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0) ) || defined(UBUNTU_3_13_PRE) /* ENABLE_DNA patch (ubutu kernel >=3.13.0-30) */
 
-#if ( !(RHEL_RELEASE_CODE && RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,0)) )
+#if ( !(RHEL_RELEASE_CODE && RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,0) ))
+
+#if(RHEL_RELEASE_CODE != RHEL_RELEASE_VERSION(6,6)) /* Latest RH 6.5 with new kernel */
 /* it isn't expected that this would be a #define unless we made it so */
 #ifndef skb_set_hash
 enum pkt_hash_types {
@@ -4077,6 +4079,9 @@ static inline void __kc_skb_set_hash(struct sk_buff *skb, u32 hash, int type)
 #endif
 }
 #endif /* !skb_set_hash */
+#else
+#undef CONFIG_NET_RX_BUSY_POLL
+#endif
 #endif /* !(RHEL_RELEASE_CODE&&RHEL_RELEASE_CODE>=RHEL_RELEASE_VERSION(7,0)) */
 
 #ifndef pci_enable_msix_range
