@@ -17,6 +17,9 @@ clean:
 	/bin/rm *.deb *.rpm
 
 
+cleanup:
+	sudo rm -rf /var/lib/dkms/*-zc
+
 dkms-deb-virtual:
 	/bin/rm -rf tmp
 	mkdir tmp
@@ -24,7 +27,7 @@ dkms-deb-virtual:
 	find tmp -name .svn|xargs /bin/rm -rf	
 	cd tmp; dpkg-deb -b pfring-drivers-zc-dkms .; mv *.deb ..
 
-dkms-deb: dkms-deb-virtual
+dkms-deb: cleanup dkms-deb-virtual
 	sudo make -f Makefile.dkms.e1000e deb
 	cp /var/lib/dkms/e1000e-zc/*/deb/*.deb .
 	sudo make -f Makefile.dkms.igb deb
@@ -32,7 +35,7 @@ dkms-deb: dkms-deb-virtual
 	sudo make -f Makefile.dkms.ixgbe deb
 	cp /var/lib/dkms/ixgbe-zc/*/deb/*.deb .
 
-dkms-rpm: dkms-rpm-virtual
+dkms-rpm: cleanup dkms-rpm-virtual
 	sudo make -f Makefile.dkms.e1000e rpm
 	sudo make -f Makefile.dkms.igb rpm
 	sudo make -f Makefile.dkms.ixgbe rpm
