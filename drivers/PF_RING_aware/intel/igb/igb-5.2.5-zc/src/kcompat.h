@@ -4048,4 +4048,96 @@ extern int __kc_pci_enable_msix_range(struct pci_dev *dev,
 #define HAVE_NDO_SELECT_QUEUE_ACCEL_FALLBACK
 #endif /* 3.14.0 */
 
+/*****************************************************************************/
+#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,15,0) )
+#define u64_stats_fetch_begin_irq u64_stats_fetch_begin_bh
+#define u64_stats_fetch_retry_irq u64_stats_fetch_retry_bh
+#endif /* 3.15.0 */
+
+/*****************************************************************************/
+#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,16,0) )
+#ifndef __dev_uc_sync
+#ifdef HAVE_SET_RX_MODE
+#ifdef NETDEV_HW_ADDR_T_UNICAST
+int __kc_hw_addr_sync_dev(struct netdev_hw_addr_list *list,
+		struct net_device *dev,
+		int (*sync)(struct net_device *, const unsigned char *),
+		int (*unsync)(struct net_device *, const unsigned char *));
+void __kc_hw_addr_unsync_dev(struct netdev_hw_addr_list *list,
+		struct net_device *dev,
+		int (*unsync)(struct net_device *, const unsigned char *));
+#endif
+#ifndef NETDEV_HW_ADDR_T_MULTICAST
+int __kc_dev_addr_sync_dev(struct dev_addr_list **list, int *count,
+		struct net_device *dev,
+		int (*sync)(struct net_device *, const unsigned char *),
+		int (*unsync)(struct net_device *, const unsigned char *));
+void __kc_dev_addr_unsync_dev(struct dev_addr_list **list, int *count,
+		struct net_device *dev,
+		int (*unsync)(struct net_device *, const unsigned char *));
+#endif
+#endif /* HAVE_SET_RX_MODE */
+
+static inline int __kc_dev_uc_sync(struct net_device *dev,
+		int (*sync)(struct net_device *, const unsigned char *),
+		int (*unsync)(struct net_device *, const unsigned char *))
+{
+#ifdef NETDEV_HW_ADDR_T_UNICAST
+	return __kc_hw_addr_sync_dev(&dev->uc, dev, sync, unsync);
+#elif defined(HAVE_SET_RX_MODE)
+	return __kc_dev_addr_sync_dev(&dev->uc_list, &dev->uc_count,
+				      dev, sync, unsync);
+#else
+	return 0;
+#endif
+}
+#define __dev_uc_sync __kc_dev_uc_sync
+
+static inline void __kc_dev_uc_unsync(struct net_device *dev,
+		int (*unsync)(struct net_device *, const unsigned char *))
+{
+#ifdef HAVE_SET_RX_MODE
+#ifdef NETDEV_HW_ADDR_T_UNICAST
+	__kc_hw_addr_unsync_dev(&dev->uc, dev, unsync);
+#else /* NETDEV_HW_ADDR_T_MULTICAST */
+	__kc_dev_addr_unsync_dev(&dev->uc_list, &dev->uc_count, dev, unsync);
+#endif /* NETDEV_HW_ADDR_T_UNICAST */
+#endif /* HAVE_SET_RX_MODE */
+}
+#define __dev_uc_unsync __kc_dev_uc_unsync
+
+static inline int __kc_dev_mc_sync(struct net_device *dev,
+		int (*sync)(struct net_device *, const unsigned char *),
+		int (*unsync)(struct net_device *, const unsigned char *))
+{
+#ifdef NETDEV_HW_ADDR_T_MULTICAST
+	return __kc_hw_addr_sync_dev(&dev->mc, dev, sync, unsync);
+#elif defined(HAVE_SET_RX_MODE)
+	return __kc_dev_addr_sync_dev(&dev->mc_list, &dev->mc_count,
+				      dev, sync, unsync);
+#else
+	return 0;
+#endif
+	
+}
+#define __dev_mc_sync __kc_dev_mc_sync
+
+static inline void __kc_dev_mc_unsync(struct net_device *dev,
+		int (*unsync)(struct net_device *, const unsigned char *))
+{
+#ifdef HAVE_SET_RX_MODE
+#ifdef NETDEV_HW_ADDR_T_MULTICAST
+	__kc_hw_addr_unsync_dev(&dev->mc, dev, unsync);
+#else /* NETDEV_HW_ADDR_T_MULTICAST */
+	__kc_dev_addr_unsync_dev(&dev->mc_list, &dev->mc_count, dev, unsync);
+#endif /* NETDEV_HW_ADDR_T_MULTICAST */
+#endif /* HAVE_SET_RX_MODE */
+}
+#define __dev_mc_unsync __kc_dev_mc_unsync
+#endif /* __dev_uc_sync */
+#else
+#define HAVE_NDO_SET_VF_MIN_MAX_TX_RATE
+#define HAVE_DCBNL_OPS_SETAPP_RETURN_INT
+#endif /* 3.16.0 */
+
 #endif /* _KCOMPAT_H_ */

@@ -199,7 +199,12 @@ static int igb_ndo_set_vf_vlan(struct net_device *netdev,
 static int igb_ndo_set_vf_spoofchk(struct net_device *netdev, int vf,
 				bool setting);
 #endif
-static int igb_ndo_set_vf_bw(struct net_device *netdev, int vf, int tx_rate);
+#ifdef HAVE_NDO_SET_VF_MIN_MAX_TX_RATE
+int igb_ndo_set_vf_bw(struct net_device *netdev, int vf, int min_tx_rate,
+		      int tx_rate);
+#else
+int igb_ndo_set_vf_bw(struct net_device *netdev, int vf, int tx_rate);
+#endif /* HAVE_NDO_SET_VF_MIN_MAX_TX_RATE */
 static int igb_ndo_get_vf_config(struct net_device *netdev, int vf,
 				 struct ifla_vf_info *ivi);
 static void igb_check_vf_rate_limit(struct igb_adapter *);
@@ -2596,7 +2601,11 @@ static const struct net_device_ops igb_netdev_ops = {
 #ifdef IFLA_VF_MAX
 	.ndo_set_vf_mac		= igb_ndo_set_vf_mac,
 	.ndo_set_vf_vlan	= igb_ndo_set_vf_vlan,
+#ifdef HAVE_NDO_SET_VF_MIN_MAX_TX_RATE
+	.ndo_set_vf_rate	= igb_ndo_set_vf_bw,
+#else
 	.ndo_set_vf_tx_rate	= igb_ndo_set_vf_bw,
+#endif /* HAVE_NDO_SET_VF_MIN_MAX_TX_RATE */
 	.ndo_get_vf_config	= igb_ndo_get_vf_config,
 #ifdef HAVE_VF_SPOOFCHK_CONFIGURE
 	.ndo_set_vf_spoofchk	= igb_ndo_set_vf_spoofchk,
@@ -7806,7 +7815,9 @@ static inline void igb_rx_hash(struct igb_ring *ring,
 			       struct sk_buff *skb)
 {
 	if (netdev_ring(ring)->features & NETIF_F_RXHASH)
-		skb->rxhash = le32_to_cpu(rx_desc->wb.lower.hi_dword.rss);
+		skb_set_hash(skb,
+			     le32_to_cpu(rx_desc->wb.lower.hi_dword.rss),
+			     PKT_HASH_TYPE_L3);
 }
 
 #endif
@@ -9967,7 +9978,12 @@ static void igb_check_vf_rate_limit(struct igb_adapter *adapter)
 	}
 }
 
-static int igb_ndo_set_vf_bw(struct net_device *netdev, int vf, int tx_rate)
+#ifdef HAVE_NDO_SET_VF_MIN_MAX_TX_RATE
+int igb_ndo_set_vf_bw(struct net_device *netdev, int vf, int min_tx_rate,
+		      int max_tx_rate)
+#else
+int igb_ndo_set_vf_bw(struct net_device *netdev, int vf, int tx_rate)
+#endif /* HAVE_NDO_SET_VF_MIN_MAX_TX_RATE */
 {
 	struct igb_adapter *adapter = netdev_priv(netdev);
 	struct e1000_hw *hw = &adapter->hw;
@@ -9979,12 +9995,21 @@ static int igb_ndo_set_vf_bw(struct net_device *netdev, int vf, int tx_rate)
 	actual_link_speed = igb_link_mbps(adapter->link_speed);
 	if ((vf >= adapter->vfs_allocated_count) ||
 		(!(E1000_READ_REG(hw, E1000_STATUS) & E1000_STATUS_LU)) ||
+#ifdef HAVE_NDO_SET_VF_MIN_MAX_TX_RATE
+		(max_tx_rate < 0) || (max_tx_rate > actual_link_speed))
+#else
 		(tx_rate < 0) || (tx_rate > actual_link_speed))
+#endif /* HAVE_NDO_SET_VF_MIN_MAX_TX_RATE */
 		return -EINVAL;
 
 	adapter->vf_rate_link_speed = actual_link_speed;
+#ifdef HAVE_NDO_SET_VF_MIN_MAX_TX_RATE
+	adapter->vf_data[vf].tx_rate = (u16)max_tx_rate;
+	igb_set_vf_rate_limit(hw, vf, max_tx_rate, actual_link_speed);
+#else
 	adapter->vf_data[vf].tx_rate = (u16)tx_rate;
 	igb_set_vf_rate_limit(hw, vf, tx_rate, actual_link_speed);
+#endif /* HAVE_NDO_SET_VF_MIN_MAX_TX_RATE */
 
 	return 0;
 }
@@ -9997,7 +10022,12 @@ static int igb_ndo_get_vf_config(struct net_device *netdev,
 		return -EINVAL;
 	ivi->vf = vf;
 	memcpy(&ivi->mac, adapter->vf_data[vf].vf_mac_addresses, ETH_ALEN);
+#ifdef HAVE_NDO_SET_VF_MIN_MAX_TX_RATE
+	ivi->max_tx_rate = adapter->vf_data[vf].tx_rate;
+	ivi->min_tx_rate = 0;
+#else
 	ivi->tx_rate = adapter->vf_data[vf].tx_rate;
+#endif /* HAVE_NDO_SET_VF_MIN_MAX_TX_RATE */
 	ivi->vlan = adapter->vf_data[vf].pf_vlan;
 	ivi->qos = adapter->vf_data[vf].pf_qos;
 #ifdef HAVE_VF_SPOOFCHK_CONFIGURE
