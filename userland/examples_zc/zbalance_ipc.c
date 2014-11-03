@@ -513,7 +513,7 @@ int main(int argc, char* argv[]) {
       return -1;
     }
 
-    fprintf(stderr, "Run n2disk with: --cluster-ipc-attach --cluster-id %d -i <queue id> --cluster-ipc-queues %s --cluster-ipc-pool %d --reader-threads <%d core ids>\n", cluster_id, queues_list, num_consumer_queues + 1, n2disk_threads);
+    fprintf(stderr, "Run n2disk10gzc with: -i %d@<queue id> --cluster-ipc-queues %s --cluster-ipc-pool %d --reader-threads <%d core ids>\n", cluster_id, queues_list, num_consumer_queues + 1, n2disk_threads);
   }
 
   if (enable_vm_support) {
