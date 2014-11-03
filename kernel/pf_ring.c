@@ -2932,7 +2932,7 @@ static inline int copy_data_to_ring(struct sk_buff *skb,
       //         hdr->caplen, hdr->len, displ, hdr->extended_hdr.parsed_header_len, pfr->bucket_len,
       //         pfr->slot_header_len);
 
-      if((vlan_get_tag(skb, &vlan_tci) == 0) /* The packet is tagged... */
+      if((__vlan_hwaccel_get_tag(skb, &vlan_tci) == 0) /* The packet is tagged (hw offload)... */
 	 && (hdr->extended_hdr.parsed_pkt.offset.vlan_offset == 0) /* but we have seen no tag -> it has been stripped */) {
 	/* VLAN-tagged packet with stripped VLAN tag */
         u_int16_t *b;
