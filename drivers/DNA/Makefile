@@ -31,7 +31,7 @@ clean:
 	cd $(IXGBE)-DNA/src; make clean
 
 cleanup:
-	sudo rm -rf /var/lib/dkms/*-dna
+	sudo rm -rf /var/lib/dkms/*-dna /lib/modules/`uname -r`/extra/*-dna.ko
 
 dkms-deb-virtual:
 	/bin/rm -rf tmp

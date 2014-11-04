@@ -18,7 +18,7 @@ clean:
 
 
 cleanup:
-	sudo rm -rf /var/lib/dkms/*-zc
+	sudo rm -rf /var/lib/dkms/*_zc  /lib/modules/`uname -r`/extra/*_zc.ko
 
 dkms-deb-virtual:
 	/bin/rm -rf tmp
