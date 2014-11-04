@@ -2940,6 +2940,7 @@ static int ixgbe_clean_rx_irq(struct ixgbe_q_vector *q_vector,
 
 #endif /* CONFIG_IXGBE_DISABLE_PACKET_SPLIT */
 #ifdef CONFIG_NET_RX_BUSY_POLL
+#if (! (RHEL_RELEASE_CODE && RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,6)) )
 /* must be called with local_bh_disable()d */
 static int ixgbe_busy_poll_recv(struct napi_struct *napi)
 {
@@ -2971,7 +2972,7 @@ static int ixgbe_busy_poll_recv(struct napi_struct *napi)
 
 	return found;
 }
-
+#endif
 #endif /* CONFIG_NET_RX_BUSY_POLL */
 /**
  * ixgbe_configure_msix - Configure MSI-X hardware
@@ -4947,13 +4948,6 @@ void ixgbe_vlan_stripping_disable(struct ixgbe_adapter *adapter)
 	u32 vlnctrl;
 	int i;
 
-#ifdef HAVE_PF_RING
-	/* TODO
-	if(atomic_read(&adapter->pfring_zc.usage_counter) > 0)
-		return;
-	*/
-#endif
-
 	/* leave vlan tag stripping enabled for DCB */
 	if (adapter->flags & IXGBE_FLAG_DCB_ENABLED)
 		return;
@@ -4988,13 +4982,6 @@ void ixgbe_vlan_stripping_enable(struct ixgbe_adapter *adapter)
 	struct ixgbe_hw *hw = &adapter->hw;
 	u32 vlnctrl;
 	int i;
-
-#ifdef HAVE_PF_RING
-	/* TODO
-	if(atomic_read(&adapter->pfring_zc.usage_counter) > 0)
-		return;
-	*/
-#endif
 
 	switch (hw->mac.type) {
 	case ixgbe_mac_82598EB:
@@ -9775,7 +9762,9 @@ static const struct net_device_ops ixgbe_netdev_ops = {
 	.ndo_poll_controller	= ixgbe_netpoll,
 #endif
 #ifdef CONFIG_NET_RX_BUSY_POLL
+#if (! (RHEL_RELEASE_CODE && RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,6)) )
 	.ndo_busy_poll		= ixgbe_busy_poll_recv,
+#endif
 #endif /* CONFIG_NET_RX_BUSY_POLL */
 #ifdef IXGBE_FCOE
 	.ndo_fcoe_ddp_setup = ixgbe_fcoe_ddp_get,

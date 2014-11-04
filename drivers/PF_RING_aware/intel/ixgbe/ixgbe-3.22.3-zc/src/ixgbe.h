@@ -599,7 +599,11 @@ static inline void ixgbe_qv_unlock_napi(struct ixgbe_q_vector *q_vector)
 
 	/* flush any outstanding Rx frames */
 	if (q_vector->napi.gro_list)
+#if (RHEL_RELEASE_CODE && RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,6))
+		napi_gro_flush(&q_vector->napi);
+#else
 		napi_gro_flush(&q_vector->napi, false);
+#endif
 
 	/* reset state to idle */
 	atomic_set(&q_vector->state, IXGBE_QV_STATE_IDLE);

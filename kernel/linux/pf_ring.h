@@ -1176,7 +1176,12 @@ struct pf_ring_socket {
   virtual_filtering_device_element *v_filtering_dev;
 
   /* BPF Filter */
-  struct sk_filter *bpfFilter;
+#if(LINUX_VERSION_CODE >= KERNEL_VERSION(3,17,0))
+  struct bpf_prog
+#else
+  struct sk_filter 
+#endif
+    *bpfFilter;
 
   /* Sw Filtering Rules */
   sw_filtering_hash_bucket **sw_filtering_hash;

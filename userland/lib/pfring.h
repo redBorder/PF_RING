@@ -171,9 +171,9 @@ struct pfring_bpf_program {
 
 struct __pfring {
   u_int8_t initialized, enabled, long_header, rss_mode;
-  u_int8_t force_timestamp:1, strip_hw_timestamp:1, disable_parsing:1,
-    disable_timestamp:1, ixia_timestamp_enabled:1,
-    chunk_mode_enabled:1, userspace_bpf:1, force_userspace_bpf:1;
+  u_int8_t force_timestamp, strip_hw_timestamp, disable_parsing,
+    disable_timestamp, ixia_timestamp_enabled,
+    chunk_mode_enabled, userspace_bpf, force_userspace_bpf;
   packet_direction direction; /* Specify the capture direction for packets */
   socket_mode mode;
 

@@ -2062,6 +2062,19 @@ static void ixgbe_diag_test(struct net_device *netdev,
 	bool if_running = netif_running(netdev);
 	struct ixgbe_hw *hw = &adapter->hw;
 
+#ifdef ENABLE_DNA
+	if(adapter->dna.dna_enabled) {
+		e_err(hw, "Adapter in DNA mode - test blocked\n");
+		data[0] = 1;
+		data[1] = 1;
+		data[2] = 1;
+		data[3] = 1;
+		data[4] = 1;
+		eth_test->flags |= ETH_TEST_FL_FAILED;
+		return;
+	}
+#endif
+
 	if (IXGBE_REMOVED(hw->hw_addr)) {
 		e_err(hw, "Adapter removed - test blocked\n");
 		data[0] = 1;

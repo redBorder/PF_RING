@@ -2932,7 +2932,7 @@ static inline int copy_data_to_ring(struct sk_buff *skb,
       //         hdr->caplen, hdr->len, displ, hdr->extended_hdr.parsed_header_len, pfr->bucket_len,
       //         pfr->slot_header_len);
 
-      if((vlan_get_tag(skb, &vlan_tci) == 0) /* The packet is tagged... */
+      if((__vlan_hwaccel_get_tag(skb, &vlan_tci) == 0) /* The packet is tagged (hw offload)... */
 	 && (hdr->extended_hdr.parsed_pkt.offset.vlan_offset == 0) /* but we have seen no tag -> it has been stripped */) {
 	/* VLAN-tagged packet with stripped VLAN tag */
         u_int16_t *b;
@@ -3940,8 +3940,10 @@ int bpf_filter_skb(struct sk_buff *skb,
       sk_run_filter(skb, pfr->bpfFilter->insns, pfr->bpfFilter->len);
 #elif(LINUX_VERSION_CODE < KERNEL_VERSION(3,15,0))
       sk_run_filter(skb, pfr->bpfFilter->insns);
-#else
+#elif(LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0))
       SK_RUN_FILTER(pfr->bpfFilter, skb);
+#else
+      BPF_PROG_RUN(pfr->bpfFilter, skb);
 #endif
 
     rcu_read_unlock_bh();
@@ -7609,7 +7611,12 @@ static int ring_setsockopt(struct socket *sock,
     if(optlen == sizeof(struct sock_fprog)) {
       unsigned int fsize;
       struct sock_fprog fprog;
-      struct sk_filter *filter, *old_filter;
+#if(LINUX_VERSION_CODE >= KERNEL_VERSION(3,17,0))
+      struct bpf_prog
+#else
+      struct sk_filter 
+#endif
+        *filter, *old_filter;
 
       ret = -EFAULT;
 
@@ -7629,7 +7636,13 @@ static int ring_setsockopt(struct socket *sock,
 
       /* Fix below courtesy of Noam Dev <noamdev@gmail.com> */
       fsize  = sizeof(struct sock_filter) * fprog.len;
-      filter = kmalloc(fsize + sizeof(struct sk_filter), GFP_KERNEL);
+      filter = kmalloc(fsize + sizeof(
+#if(LINUX_VERSION_CODE >= KERNEL_VERSION(3,17,0))
+        struct bpf_prog
+#else
+        struct sk_filter
+#endif
+        ), GFP_KERNEL);
 
       if(filter == NULL) {
 	ret = -ENOMEM;
@@ -7643,7 +7656,13 @@ static int ring_setsockopt(struct socket *sock,
 
       filter->len = fprog.len;
 
-      if(sk_chk_filter(filter->insns, filter->len) != 0) {
+      if(
+#if(LINUX_VERSION_CODE >= KERNEL_VERSION(3,17,0))
+         bpf_check_classic
+#else
+         sk_chk_filter
+#endif
+           (filter->insns, filter->len) != 0) {
 	/* Bad filter specified */
 	kfree(filter);
 	break;

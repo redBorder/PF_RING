@@ -23,7 +23,12 @@ In order to run a PF_RING ZC slave application on top of a QEMU/KVM Virtual Mach
 
 3. Run the PF_RING ZC master application in the host, listing the monitor sockets of all the running Virtual Machines:
 
-(H) $ ./zbalance_ipc -i zc:eth1 -c 99 -n 2 -m 0 -l /tmp/qmp0,/tmp/qmp1
+(H) $ ./zbalance_ipc -i zc:eth1 -c 99 -n 2 -m 0 -Q /tmp/qmp0,/tmp/qmp1
+
+Alternatively, run a traffic generator in the host, specifying the monitor socket of the running Virtual Machine 
+where a consumer application will receive the generated traffic:
+
+(H) $ ./zsend -c 99 -Q /tmp/qmp0
 
 4. Run the PF_RING ZC slave application in the guest (both read packets from the specified queues):
 

@@ -2279,11 +2279,11 @@ static const struct net_device_ops igb_netdev_ops = {
 	.ndo_vlan_rx_register	= igb_vlan_mode,
 #endif
 #ifdef NTF_SELF
-#if !(RHEL_RELEASE_CODE && RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,5))
+#if !(RHEL_RELEASE_CODE && ((RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,5)) || (RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,6))))
 	.ndo_fdb_add		= igb_ndo_fdb_add,
 #endif
 #ifndef USE_DEFAULT_FDB_DEL_DUMP
-#if !(RHEL_RELEASE_CODE && RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,5))
+#if !(RHEL_RELEASE_CODE && ((RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,5)) || (RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(6,6))))
 	.ndo_fdb_del		= igb_ndo_fdb_del,
 	.ndo_fdb_dump		= igb_ndo_fdb_dump,
 #endif

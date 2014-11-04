@@ -602,8 +602,11 @@ static int pfring_zc_daq_acquire_best_effort(void *handle, int cnt, DAQ_Analysis
       c++;
     }
 
-    if (!ret)
-      usleep(1);
+    if (!ret) {
+      if (usleep(1) == -1)
+        if (errno == EINTR)
+          break;
+    }
   }
 
   return 0;
@@ -651,7 +654,9 @@ static int pfring_zc_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t call
     }
 
     if (ret <= 0) {
-      usleep(1);
+      if (usleep(1) == -1)
+        if (errno == EINTR)
+          break;
       continue;
     }
 

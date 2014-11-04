@@ -1770,6 +1770,19 @@ static void igb_diag_test(struct net_device *netdev,
 	u8 forced_speed_duplex, autoneg;
 	bool if_running = netif_running(netdev);
 
+#ifdef ENABLE_DNA
+	if(adapter->dna.dna_enabled) {
+		dev_info(pci_dev_to_dev(adapter->pdev), "Adapter in DNA mode - test blocked\n");
+		data[0] = 1;
+		data[1] = 1;
+		data[2] = 1;
+		data[3] = 1;
+		data[4] = 1;
+		eth_test->flags |= ETH_TEST_FL_FAILED;
+		return;
+	}
+#endif
+
 	set_bit(__IGB_TESTING, &adapter->state);
 	if (eth_test->flags == ETH_TEST_FL_OFFLINE) {
 		/* Offline tests */
