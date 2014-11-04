@@ -166,7 +166,7 @@ void printHelp(void) {
   printf("-t <tx thread core> Bind the tx thread to a core\n");
   printf("-a                  Active packet wait\n");
   printf("-f                  Flush packets immediately to the destination queue/egress device (no buffering)\n");
-  printf("-l <sock list>      Enable VM support (comma-separated list of QEMU monitor sockets)\n");
+  printf("-Q <sock list>      Enable VM support (comma-separated list of QEMU monitor sockets)\n");
   exit(-1);
 }
 
@@ -200,7 +200,7 @@ int main(int argc, char* argv[]) {
 
   start_time.tv_sec = 0;
 
-  while((c = getopt(argc,argv,"ac:fhi:o:n:l:r:t:")) != '?') {
+  while((c = getopt(argc,argv,"ac:fhi:o:n:Q:r:t:")) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -231,7 +231,7 @@ int main(int argc, char* argv[]) {
     case 't':
       forwarder[TX_FWDR].bind_core = atoi(optarg);
       break;
-    case 'l':
+    case 'Q':
       enable_vm_support = 1;
       vm_sockets = strdup(optarg);
       break;
