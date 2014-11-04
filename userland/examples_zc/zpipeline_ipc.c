@@ -159,8 +159,8 @@ void printHelp(void) {
   printf("A master process sending packets from a source interface to a sw queue and from a sw queue to a destination interface (first and last stage of a pipeline)\n\n");
   printf("-h                  Print this help\n");
   printf("-n <num_queues>     Number of queues\n");
-  printf("-i <device>,<queue> Ingress device and destination queue\n");
-  printf("-o <device>,<queue> Egress device and source queue\n");
+  printf("-i <device>;<queue> Ingress device and destination queue\n");
+  printf("-o <device>;<queue> Egress device and source queue\n");
   printf("-c <cluster id>     Cluster id\n");
   printf("-r <rx thread core> Bind the rx thread to a core\n");
   printf("-t <tx thread core> Bind the tx thread to a core\n");
@@ -242,7 +242,7 @@ int main(int argc, char* argv[]) {
   if (num_ipc_queues < 1) printHelp();
 
   if (in_pair != NULL) {
-    char *q_id = strchr(in_pair, ',');
+    char *q_id = strchr(in_pair, ';');
     if (q_id == NULL) printHelp();
     q_id[0] = '\0'; q_id++;
     in_device = strdup(in_pair);
@@ -251,7 +251,7 @@ int main(int argc, char* argv[]) {
   }
 
   if (out_pair != NULL) {
-    char *q_id = strchr(out_pair, ',');
+    char *q_id = strchr(out_pair, ';');
     if (q_id == NULL) printHelp();
     q_id[0] = '\0'; q_id++;
     out_device = strdup(out_pair);
