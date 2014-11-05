@@ -625,6 +625,11 @@ int main(int argc, char* argv[]) {
       fprintf(stderr, "pfring_zc_create_queue error [%s]\n", strerror(errno));
       return -1;
     }
+
+    if (pfring_zc_create_buffer_pool(zc, n2disk_producer ? (N2DISK_PREFETCH_BUFFERS + n2disk_threads) : 1) == NULL) {
+      fprintf(stderr, "pfring_zc_create_buffer_pool error\n");
+      return -1;
+    }
    
     fprintf(stderr, "Sending packets to cluster %u queue %u\n", cluster_id, 0);
 
@@ -640,11 +645,6 @@ int main(int argc, char* argv[]) {
         sprintf(&queues_list[strlen(queues_list)], "%d,", i+1);
       }
       queues_list[strlen(queues_list)-1] = '\0';
-
-      if (pfring_zc_create_buffer_pool(zc, N2DISK_PREFETCH_BUFFERS + n2disk_threads) == NULL) {
-        fprintf(stderr, "pfring_zc_create_buffer_pool error\n");
-        return -1;
-      }
 
       fprintf(stderr, "Run n2disk with: --cluster-ipc-attach --cluster-id %d --cluster-ipc-queues %s --cluster-ipc-pool 0\n", cluster_id, queues_list);
     }
