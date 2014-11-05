@@ -699,7 +699,9 @@ int main(int argc, char* argv[]) {
 
   if (device == NULL) device = strdup(DEFAULT_DEVICE);
 
-  bind2node(rx_bind_core);
+#ifdef HAVE_PTHREAD_SETAFFINITY_NP
+  bind2node(rx_bind_core % numCPU);
+#endif
 
   if (daemon_mode)
     daemonize();
