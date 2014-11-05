@@ -3143,11 +3143,21 @@ static const struct ethtool_ops_ext igb_ethtool_ops_ext = {
 	.set_phys_id		= igb_set_phys_id,
 	.get_eee		= igb_get_eee,
 	.set_eee		= igb_set_eee,
+#ifdef ETHTOOL_GRXFHINDIR
 #ifdef HAVE_ETHTOOL_GRXFHINDIR_SIZE
 	.get_rxfh_indir_size	= igb_get_rxfh_indir_size,
 #endif /* HAVE_ETHTOOL_GRSFHINDIR_SIZE */
-	.get_rxfh_indir		= igb_get_rxfh_indir,
+#ifdef ETHTOOL_GRSSH
+        .get_rxfh               = igb_get_rxfh,
+#else
+        .get_rxfh_indir         = igb_get_rxfh_indir,
+#endif /* ETHTOOL_GRSSH */
+#endif /* ETHTOOL_GRXFHINDIR */
+#ifdef ETHTOOL_SRSSH
+        .set_rxfh               = igb_set_rxfh,
+#else
 	.set_rxfh_indir		= igb_set_rxfh_indir,
+#endif /* ETHTOOL_SRSSH */
 	.get_channels           = igb_get_channels,
 	.set_channels           = igb_set_channels,
 };
