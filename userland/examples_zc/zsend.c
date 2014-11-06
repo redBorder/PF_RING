@@ -604,8 +604,11 @@ int main(int argc, char* argv[]) {
     }
   }
 
+  if (n2disk_producer) 
+    device = NULL;
+
   /* checking if the interface is a queue allocated by an external cluster (ipc) */
-  if (device != NULL && is_a_queue(device, &cluster_id, &queue_id))
+  if (device != NULL && is_a_queue(device, &cluster_id, &queue_id)) 
     ipc_q_attach = 1;
 
   if (cluster_id < 0) printHelp();
@@ -614,7 +617,6 @@ int main(int argc, char* argv[]) {
 
   if (stdin_packet_len > 0)
     packet_len = stdin_packet_len;
-
 
   if (n2disk_producer) {
     if (device != NULL || ipc_q_attach) printHelp();
