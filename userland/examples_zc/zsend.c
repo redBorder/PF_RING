@@ -35,6 +35,7 @@
 #include <sched.h>
 #include <stdio.h>
 #include <numa.h>
+#include <ctype.h>
 
 #include "pfring.h"
 #include "pfring_zc.h"
@@ -56,11 +57,12 @@
 
 pfring_zc_cluster *zc;
 pfring_zc_queue *zq;
+pfring_zc_buffer_pool *zp;
 pfring_zc_pkt_buff *buffers[NBUFF];
 
 struct timeval startTime;
 unsigned long long numPkts = 0, numBytes = 0;
-int cluster_id = -1, bind_core = -1, pps = -1, packet_len = 60, num_ips = 0, metadata_len = 0;
+int cluster_id = -1, queue_id = -1, bind_core = -1, pps = -1, packet_len = 60, num_ips = 0, metadata_len = 0;
 u_int64_t num_to_send = 0;
 u_int8_t active = 0, flush_packet = 0, append_timestamp = 0, use_pulse_time = 0, enable_vm_support = 0;
 #ifdef BURST_API
@@ -88,6 +90,44 @@ static __inline__ ticks getticks(void) {
   u_int32_t a, d;
   asm volatile("rdtsc" : "=a" (a), "=d" (d));
   return (((ticks)a) | (((ticks)d) << 32));
+}
+
+/* ******************************************* */
+
+int is_a_queue(char *device, int *cluster_id, int *queue_id) {
+  char *tmp;
+  char c_id[32], q_id[32];
+  int i;
+
+  /* Syntax <number>@<number> or zc:<number>@<number> */
+
+  tmp = strstr(device, "zc:");
+  if (tmp != NULL) tmp = &tmp[3];
+  else tmp = device;
+
+  i = 0;
+  if (tmp[0] == '\0' || tmp[0] == '@') return 0;
+  while (tmp[0] != '@' && tmp[0] != '\0') {
+    if (!isdigit(tmp[0])) return 0;
+    c_id[i++] = tmp[0];
+    tmp++;
+  }
+  c_id[i] = '\0';
+
+  i = 0;
+  if (tmp[0] == '@') tmp++;
+  if (tmp[0] == '\0') return 0;
+  while (tmp[0] != '\0') {
+    if (!isdigit(tmp[0])) return 0;
+    q_id[i++] = tmp[0];
+    tmp++;
+  }
+  c_id[i] = '\0';
+
+  *cluster_id = atoi(c_id);
+  *queue_id = atoi(q_id);
+
+  return 1;
 }
 
 /* ******************************************* */
@@ -504,7 +544,7 @@ int main(int argc, char* argv[]) {
   pthread_t thread;
   pthread_t time_thread;
   char *vm_sock;
-  int i, rc;
+  int i, rc, ipc_q_attach = 0;
 
   startTime.tv_sec = 0;
 
@@ -564,107 +604,145 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  if (cluster_id < 0) printHelp();
+  /* checking if the interface is a queue allocated by an external cluster (ipc) */
+  if (device != NULL && is_a_queue(device, &cluster_id, &queue_id))
+    ipc_q_attach = 1;
 
-  if (n2disk_producer) {
-    if (device != NULL) printHelp();
-    if (n2disk_threads < 1) printHelp();
-    metadata_len = N2DISK_METADATA;
-    num_consumer_buffers += (n2disk_threads * (N2DISK_CONSUMER_QUEUE_LEN + 1)) + N2DISK_PREFETCH_BUFFERS;
-  }
-  
-  if (device) {
-    num_queue_buffers = MAX_CARD_SLOTS;
-  } else {
-    num_queue_buffers = QUEUE_LEN;
-  }
+  if (cluster_id < 0) printHelp();
 
   stdin_packet_len = read_packet_hex(stdin_packet, sizeof(stdin_packet));
 
   if (stdin_packet_len > 0)
     packet_len = stdin_packet_len;
 
-  zc = pfring_zc_create_cluster(
-    cluster_id, 
-    max_packet_len(device),
-    metadata_len, 
-    num_queue_buffers + NBUFF + num_consumer_buffers, 
-    numa_node_of_cpu(bind_core),
-    NULL /* auto hugetlb mountpoint */ 
-  );
 
-  if(zc == NULL) {
-    fprintf(stderr, "pfring_zc_create_cluster error [%s] Please check your hugetlb configuration\n",
-	    strerror(errno));
-    return -1;
+  if (n2disk_producer) {
+    if (device != NULL || ipc_q_attach) printHelp();
+    if (n2disk_threads < 1) printHelp();
+    metadata_len = N2DISK_METADATA;
+    num_consumer_buffers += (n2disk_threads * (N2DISK_CONSUMER_QUEUE_LEN + 1)) + N2DISK_PREFETCH_BUFFERS;
   }
+ 
+  if (!ipc_q_attach) {
 
-  for (i = 0; i < NBUFF; i++) {
-    buffers[i] = pfring_zc_get_packet_handle(zc);
+    if (device != NULL)
+      num_queue_buffers = MAX_CARD_SLOTS;
+    else
+      num_queue_buffers = QUEUE_LEN;
 
-    if (buffers[i] == NULL) {
-      fprintf(stderr, "pfring_zc_get_packet_handle error\n");
-      return -1;
-    }
-  }
+    zc = pfring_zc_create_cluster(
+      cluster_id, 
+      max_packet_len(device),
+      metadata_len, 
+      num_queue_buffers + NBUFF + num_consumer_buffers, 
+      numa_node_of_cpu(bind_core),
+      NULL /* auto hugetlb mountpoint */ 
+    );
 
-  if (device) {
-    zq = pfring_zc_open_device(zc, device, tx_only, 0);
-  
-    if(zq == NULL) {
-      fprintf(stderr, "pfring_zc_open_device error [%s] Please check that %s is up and not already used\n",
-	      strerror(errno), device);
-      return -1;
-    }
-
-    fprintf(stderr, "Sending packets to %s\n", device);
-  } else {
-    zq = pfring_zc_create_queue(zc, num_queue_buffers);
-
-    if(zq == NULL) {
-      fprintf(stderr, "pfring_zc_create_queue error [%s]\n", strerror(errno));
+    if(zc == NULL) {
+      fprintf(stderr, "pfring_zc_create_cluster error [%s] Please check your hugetlb configuration\n",
+  	      strerror(errno));
       return -1;
     }
 
-    if (pfring_zc_create_buffer_pool(zc, n2disk_producer ? (N2DISK_PREFETCH_BUFFERS + n2disk_threads) : 1) == NULL) {
-      fprintf(stderr, "pfring_zc_create_buffer_pool error\n");
-      return -1;
-    }
-   
-    fprintf(stderr, "Sending packets to cluster %u queue %u\n", cluster_id, 0);
+    for (i = 0; i < NBUFF; i++) {
+      buffers[i] = pfring_zc_get_packet_handle(zc);
 
-    if (n2disk_producer) {
-      char queues_list[256];
-      queues_list[0] = '\0';
-
-      for (i = 0; i < n2disk_threads; i++) {
-        if(pfring_zc_create_queue(zc, N2DISK_CONSUMER_QUEUE_LEN) == NULL) {
-          fprintf(stderr, "pfring_zc_create_queue error [%s]\n", strerror(errno));
-          return -1;
-        }
-        sprintf(&queues_list[strlen(queues_list)], "%d,", i+1);
+      if (buffers[i] == NULL) {
+        fprintf(stderr, "pfring_zc_get_packet_handle error\n");
+        return -1;
       }
-      queues_list[strlen(queues_list)-1] = '\0';
-
-      fprintf(stderr, "Run n2disk with: --cluster-ipc-attach --cluster-id %d --cluster-ipc-queues %s --cluster-ipc-pool 0\n", cluster_id, queues_list);
     }
 
-  }
+    if (device) {
+      zq = pfring_zc_open_device(zc, device, tx_only, 0);
+  
+      if(zq == NULL) {
+        fprintf(stderr, "pfring_zc_open_device error [%s] Please check that %s is up and not already used\n",
+	        strerror(errno), device);
+        return -1;
+      }
 
-  if (enable_vm_support) {
-    rc = pfring_zc_vm_register(zc, vm_sock);
+      fprintf(stderr, "Sending packets to %s\n", device);
+    } else {
+      zq = pfring_zc_create_queue(zc, num_queue_buffers);
 
-    if (rc < 0) {
-      fprintf(stderr, "pfring_zc_vm_register(%s) error\n", vm_sock);
+      if(zq == NULL) {
+        fprintf(stderr, "pfring_zc_create_queue error [%s]\n", strerror(errno));
+        return -1;
+      }
+
+      if (pfring_zc_create_buffer_pool(zc, n2disk_producer ? (N2DISK_PREFETCH_BUFFERS + n2disk_threads) : 1) == NULL) {
+        fprintf(stderr, "pfring_zc_create_buffer_pool error\n");
+        return -1;
+      }
+   
+      fprintf(stderr, "Sending packets to cluster %u queue %u\n", cluster_id, 0);
+
+      if (n2disk_producer) {
+        char queues_list[256];
+        queues_list[0] = '\0';
+
+        for (i = 0; i < n2disk_threads; i++) {
+          if(pfring_zc_create_queue(zc, N2DISK_CONSUMER_QUEUE_LEN) == NULL) {
+            fprintf(stderr, "pfring_zc_create_queue error [%s]\n", strerror(errno));
+            return -1;
+          }
+          sprintf(&queues_list[strlen(queues_list)], "%d,", i+1);
+        }
+        queues_list[strlen(queues_list)-1] = '\0';
+
+        fprintf(stderr, "Run n2disk with: --cluster-ipc-attach --cluster-id %d --cluster-ipc-queues %s --cluster-ipc-pool 0\n", cluster_id, queues_list);
+      }
+
+    }
+
+    if (enable_vm_support) {
+      rc = pfring_zc_vm_register(zc, vm_sock);
+
+      if (rc < 0) {
+        fprintf(stderr, "pfring_zc_vm_register(%s) error\n", vm_sock);
+        return -1;
+      }
+
+      rc = pfring_zc_vm_backend_enable(zc);
+
+      if (rc < 0) {
+        fprintf(stderr, "pfring_zc_vm_backend_enable error\n");
+        return -1;
+      }
+    }
+
+  } else { /* IPC */
+
+    fprintf(stderr, "Attaching to cluster %d queue %d (IPC)\n", cluster_id, queue_id);
+
+    zq = pfring_zc_ipc_attach_queue(cluster_id, queue_id, tx_only);
+
+    if(zq == NULL) {
+      fprintf(stderr, "pfring_zc_ipc_attach_queue error [%s] Please check that cluster %d is running\n",
+  	      strerror(errno), cluster_id);
       return -1;
     }
 
-    rc = pfring_zc_vm_backend_enable(zc);
+    num_queue_buffers = -1; /* TODO disable optimisations */
 
-    if (rc < 0) {
-      fprintf(stderr, "pfring_zc_vm_backend_enable error\n");
+    zp = pfring_zc_ipc_attach_buffer_pool(cluster_id, queue_id /* TODO specify a pool id != queue id */ );
+
+    if(zp == NULL) {
+      fprintf(stderr, "pfring_zc_ipc_attach_buffer_pool error [%s] Please check that cluster %d is running\n",
+  	      strerror(errno), cluster_id);
       return -1;
     }
+
+    for (i = 0; i < NBUFF; i++) {
+      buffers[i] = pfring_zc_get_packet_handle_from_pool(zp);
+
+      if (buffers[i] == NULL) {
+        fprintf(stderr, "pfring_zc_get_packet_handle_from_pool error\n");
+        return -1;
+      }
+    } 
   }
 
   signal(SIGINT,  sigproc);
@@ -691,6 +769,7 @@ int main(int argc, char* argv[]) {
   if (append_timestamp || use_pulse_time)
     pthread_join(time_thread, NULL);
 
+  if (!ipc_q_attach)
   pfring_zc_destroy_cluster(zc);
 
   return 0;
