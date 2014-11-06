@@ -12,6 +12,8 @@ echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
 mkdir /mnt/huge
 mount -t hugetlbfs nodev /mnt/huge
 
+# Note: for hw timestamping on supported adapters compile with make CFLAGS_EXTRA="-DIGB_PTP"
+
 # We assume that you have compiled PF_RING
 insmod ../../../../../../kernel/pf_ring.ko
 
