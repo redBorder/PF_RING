@@ -74,7 +74,7 @@ u_int32_t n2disk_threads;
 u_char stdin_packet[9000];
 int stdin_packet_len = 0;
 
-u_int32_t num_queue_buffers, num_consumer_buffers = 0;
+u_int32_t num_queue_buffers = 0, num_consumer_buffers = 0;
 
 volatile int do_shutdown = 0;
 
@@ -440,7 +440,7 @@ void *send_traffic(void *user) {
   if (use_pkt_burst_api) {
   while (likely(!do_shutdown && (!num_to_send || numPkts < num_to_send))) {
 
-    if (numPkts < num_queue_buffers + NBUFF || num_ips > 1) { /* forge all buffers 1 time */
+    if (!num_queue_buffers || numPkts < num_queue_buffers + NBUFF || num_ips > 1) { /* forge all buffers 1 time */
       for (i = 0; i < BURSTLEN; i++) {
         buffers[buffer_id + i]->len = packet_len;
         if (stdin_packet_len > 0)
@@ -484,7 +484,7 @@ void *send_traffic(void *user) {
     buffers[buffer_id]->len = packet_len;
 
 #if 1
-    if (numPkts < num_queue_buffers + NBUFF || num_ips > 1) { /* forge all buffers 1 time */
+    if (!num_queue_buffers || numPkts < num_queue_buffers + NBUFF || num_ips > 1) { /* forge all buffers 1 time */
       if (stdin_packet_len > 0)
         memcpy(pfring_zc_pkt_buff_data(buffers[buffer_id], zq), stdin_packet, stdin_packet_len);
       else
@@ -727,9 +727,7 @@ int main(int argc, char* argv[]) {
       return -1;
     }
 
-    num_queue_buffers = -1; /* TODO disable optimisations */
-
-    zp = pfring_zc_ipc_attach_buffer_pool(cluster_id, queue_id /* TODO specify a pool id != queue id */ );
+    zp = pfring_zc_ipc_attach_buffer_pool(cluster_id, queue_id);
 
     if(zp == NULL) {
       fprintf(stderr, "pfring_zc_ipc_attach_buffer_pool error [%s] Please check that cluster %d is running\n",
