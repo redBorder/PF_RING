@@ -122,7 +122,7 @@ int is_a_queue(char *device, int *cluster_id, int *queue_id) {
     q_id[i++] = tmp[0];
     tmp++;
   }
-  c_id[i] = '\0';
+  q_id[i] = '\0';
 
   *cluster_id = atoi(c_id);
   *queue_id = atoi(q_id);
@@ -384,7 +384,7 @@ void printHelp(void) {
   printf("Using PFRING_ZC v.%s\n", pfring_zc_version());
   printf("A traffic generator able to replay synthetic udp packets or hex from standard input.\n"); 
   printf("-h              Print this help\n");
-  printf("-i <device>     Device name (optional: do not specify a device to send to a sw queue)\n");
+  printf("-i <device>     Device name (optional: do not specify a device to create a cluster with a sw queue)\n");
   printf("-c <cluster id> Cluster id\n");
   printf("-g <core_id>    Bind this app to a core\n");
   printf("-p <pps>        Rate (packets/s)\n");
@@ -771,8 +771,14 @@ int main(int argc, char* argv[]) {
   if (append_timestamp || use_pulse_time)
     pthread_join(time_thread, NULL);
 
-  if (!ipc_q_attach)
-  pfring_zc_destroy_cluster(zc);
+  if (!ipc_q_attach) {
+    pfring_zc_destroy_cluster(zc);
+  } else {
+    for (i = 0; i < NBUFF; i++)
+      pfring_zc_release_packet_handle_to_pool(zp, buffers[i]);
+    pfring_zc_ipc_detach_queue(zq);
+    pfring_zc_ipc_detach_buffer_pool(zp);  
+  }
 
   return 0;
 }

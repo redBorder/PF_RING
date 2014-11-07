@@ -49,13 +49,13 @@
 #define POOL_SIZE              16
 #define CACHE_LINE_LEN         64
 #define MAX_NUM_APP	       32
+#define IN_POOL_SIZE          256
 
 pfring_zc_cluster *zc;
 pfring_zc_worker *zw;
 pfring_zc_queue **inzqs;
 pfring_zc_queue **outzqs;
 pfring_zc_multi_queue *outzmq; /* fanout */
-pfring_zc_buffer_pool **pools;
 pfring_zc_buffer_pool *wsp;
 
 u_int32_t num_devices = 0;
@@ -244,7 +244,7 @@ void printHelp(void) {
 	 "                     [-N <num>] [-a] ]-l <sock list>]\n");
 
   printf("-h              Print this help\n");
-  printf("-i <device>     Device (comma-separated list)\n");
+  printf("-i <device>     Device (comma-separated list) Note: use 'Q' as device name to create ingress sw queues\n");
   printf("-c <cluster id> Cluster id\n");
   printf("-n <num inst>   Number of application instances\n"
          "                In case of '-m 1' or '-m 4' it is possible to spread packets across multiple\n"
@@ -360,11 +360,12 @@ int main(int argc, char* argv[]) {
   char *device = NULL, *dev; 
   char *applications = NULL, *app, *app_pos = NULL;
   char *vm_sockets = NULL, *vm_sock; 
-  long i, j, off = 0;
+  long i, j, off;
   int hash_mode = 0;
   int num_additional_buffers = 0;
   pthread_t time_thread;
   int rc;
+  int num_real_devices = 0, num_in_queues = 0;
 
   start_time.tv_sec = 0;
 
@@ -441,11 +442,17 @@ int main(int argc, char* argv[]) {
   if (num_apps == 0) printHelp();
   if (num_apps != 1 && hash_mode != 1 && hash_mode != 4) printHelp();
 
+  for (i = 0; i < num_devices; i++) {
+    if (strcmp(devices[i], "Q") != 0) num_real_devices++;
+    else num_in_queues++;
+  }
+
   zc = pfring_zc_create_cluster(
     cluster_id, 
     max_packet_len(devices[0]),
     metadata_len,
-    (num_devices * MAX_CARD_SLOTS) + (num_consumer_queues * (queue_len + POOL_SIZE)) + PREFETCH_BUFFERS + num_additional_buffers, 
+    (num_real_devices * MAX_CARD_SLOTS) + (num_in_queues * (queue_len + IN_POOL_SIZE)) 
+     + (num_consumer_queues * (queue_len + POOL_SIZE)) + PREFETCH_BUFFERS + num_additional_buffers, 
     numa_node_of_cpu(bind_worker_core),
     NULL /* auto hugetlb mountpoint */ 
   );
@@ -458,15 +465,32 @@ int main(int argc, char* argv[]) {
 
   inzqs  = calloc(num_devices, sizeof(pfring_zc_queue *));
   outzqs = calloc(num_consumer_queues,  sizeof(pfring_zc_queue *));
-  pools  = calloc(num_consumer_queues,  sizeof(pfring_zc_buffer_pool *));
 
   for (i = 0; i < num_devices; i++) {
-    inzqs[i] = pfring_zc_open_device(zc, devices[i], rx_only, 0);
+    if (strcmp(devices[i], "Q") != 0) {
 
-    if(inzqs[i] == NULL) {
-      fprintf(stderr, "pfring_zc_open_device error [%s] Please check that %s is up and not already used\n",
-	      strerror(errno), devices[i]);
-      return -1;
+      inzqs[i] = pfring_zc_open_device(zc, devices[i], rx_only, 0);
+
+      if(inzqs[i] == NULL) {
+        fprintf(stderr, "pfring_zc_open_device error [%s] Please check that %s is up and not already used\n",
+	        strerror(errno), devices[i]);
+        return -1;
+      }
+
+    } else { /* create sw queue as ingress device */
+
+      inzqs[i] = pfring_zc_create_queue(zc, queue_len);
+
+      if(inzqs[i] == NULL) {                                                                                                
+        fprintf(stderr, "pfring_zc_create_queue error [%s]\n", strerror(errno));                                             
+        return -1;                                                                                                           
+      } 
+
+      if (pfring_zc_create_buffer_pool(zc, IN_POOL_SIZE) == NULL) {
+        fprintf(stderr, "pfring_zc_create_buffer_pool error\n");
+        return -1;
+      }
+
     }
   }
 
@@ -480,9 +504,7 @@ int main(int argc, char* argv[]) {
   }
 
   for (i = 0; i < num_consumer_queues; i++) { 
-    pools[i] = pfring_zc_create_buffer_pool(zc, POOL_SIZE);
-
-    if (pools[i] == NULL) {
+    if (pfring_zc_create_buffer_pool(zc, POOL_SIZE) == NULL) {
       fprintf(stderr, "pfring_zc_create_buffer_pool error\n");
       return -1;
     }
@@ -513,7 +535,8 @@ int main(int argc, char* argv[]) {
       return -1;
     }
 
-    fprintf(stderr, "Run n2disk10gzc with: -i %d@<queue id> --cluster-ipc-queues %s --cluster-ipc-pool %d --reader-threads <%d core ids>\n", cluster_id, queues_list, num_consumer_queues + 1, n2disk_threads);
+    fprintf(stderr, "Run n2disk10gzc with: -i %d@<queue id> --cluster-ipc-queues %s --cluster-ipc-pool %d --reader-threads <%d core ids>\n", 
+      cluster_id, queues_list, num_in_queues + num_consumer_queues + 1, n2disk_threads);
   }
 
   if (enable_vm_support) {
@@ -549,7 +572,16 @@ int main(int argc, char* argv[]) {
   }
 
   printf("Starting balancer with %d consumer queues..\n", num_consumer_queues);
-  printf("You can now attach to the balancer your application instances as follows:\n");
+
+  off = 0;
+
+  if (num_in_queues > 0) {
+    printf("Run your traffic generator as follows:\n");
+    for (i = 0; i < num_in_queues; i++)
+      printf("\tzsend -i zc:%d@%lu\n", cluster_id, off++);
+  }
+
+  printf("Run your application instances as follows:\n");
   for (i = 0; i < num_apps; i++) {
     if (num_apps > 1) printf("Application %lu\n", i);
     for (j = 0; j < instances_per_app[i]; j++)
