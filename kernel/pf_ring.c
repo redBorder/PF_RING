@@ -1056,7 +1056,8 @@ static int ring_proc_dev_get_info(struct seq_file *m, void *data_not_used)
 	       dev->perm_addr[0], dev->perm_addr[1], dev->perm_addr[2],
 	       dev->perm_addr[3], dev->perm_addr[4], dev->perm_addr[5]);
     
-    seq_printf(m, "Polling Mode:      %s\n", dev_ptr->is_dna_device == 1 ? "DNA" : "NAPI/TNAPI");
+    seq_printf(m, "Polling Mode:      %s\n", dev_ptr->is_dna_device == 1 ? "DNA" : 
+      (dev_ptr->is_dna_device == 2 ? "NAPI/ZC" : "NAPI"));
 
     switch(dev->type) {
     case 1:   strcpy(dev_buf, "Ethernet"); break;
@@ -1485,7 +1486,7 @@ static int ring_proc_get_info(struct seq_file *m, void *data_not_used)
       seq_printf(m, "\n");
 
       seq_printf(m, "Active             : %d\n", pfr->ring_active || pfr->dna_cluster);
-      seq_printf(m, "Breed              : %s\n", (pfr->dna_device_entry != NULL) ? "DNA" : "Non-DNA");
+      seq_printf(m, "Breed              : %s\n", (pfr->dna_device_entry != NULL) ? (pfr->ring_netdev->is_dna_device == 1 ? "DNA" : "ZC") : "Standard");
       seq_printf(m, "Sampling Rate      : %d\n", pfr->sample_rate);
       seq_printf(m, "Capture Direction  : %s\n", direction2string(pfr->direction));
       seq_printf(m, "Socket Mode        : %s\n", sockmode2string(pfr->mode));
