@@ -38,7 +38,6 @@
 #include <time.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
-#include <pcap.h>
 
 #include "pfring.h"
 #include "pfutils.c"
@@ -79,12 +78,15 @@ struct udp_header {
   u_int16_t	check;		/* udp checksum */
 };
 
-pfring  *pd;
-char *out_dev = NULL;
+static const size_t udp_data_off = sizeof(struct ether_header)+sizeof(struct ip_header)+sizeof(struct udp_header);
+
+pfring  *pdo,*pdi;
+char *out_dev = NULL,*in_dev = NULL;
 u_int8_t do_shutdown = 0;
 int reforge_mac = 0;
 char mac_address[6];
 int send_len = 60;
+int packets_to_send = 1,packets_sent=0,packets_received=0;
 int if_index = -1;
 
 #define DEFAULT_DEVICE     "eth0"
@@ -97,9 +99,6 @@ void sigproc(int sig) {
   fprintf(stdout, "Leaving...\n");
   if(called) return; else called = 1;
   do_shutdown = 1;
-  pfring_close(pd);
-
-  exit(0);
 }
 
 /* *************************************** */
@@ -107,9 +106,10 @@ void sigproc(int sig) {
 void printHelp(void) {
   printf("pflatency - Sends a packet and wait actively for the packet back, computing the rtt latency\n");
   printf("(C) 2012 ntop\n\n");
-  printf("-i <device>     Device name\n");
+  printf("-i <device>     Producer device name\n");
+  printf("-o <device>     Receiver device name (same as -i by default)\n");
   printf("-l <length>     Packet length to send. Ignored with -f\n");
-  printf("-f <.pcap file> Send the first packet of a pcap file\n");
+  printf("-c <count>      Number of packets to send\n");
   printf("-g <core_id>    Bind this app to a core\n");
   printf("-m <dst MAC>    Reforge destination MAC (format AA:BB:CC:DD:EE:FF)\n");
   printf("-z              Disable zero-copy, if supported (DNA only)\n");
@@ -117,7 +117,7 @@ void printHelp(void) {
   printf("-h              Print this help\n");
   printf("\nExample for testing the DNA bouncer latency:\n");
   printf("./pfdnabounce -i dna1 -m 0 -g 2 -f -a\n");
-  printf("./pfsend -i dna0 -l 60 -g 1\n");
+  printf("./pflatency -i dna0 -l 60 -g 1\n");
   exit(0);
 }
 
@@ -165,7 +165,7 @@ static u_int32_t wrapsum (u_int32_t sum) {
 
 /* ******************************************* */
 
-static void forge_udp_packet(char *buffer, u_int idx) {
+static void forge_udp_packet(char *buffer, u_int idx,ticks *sent_in) {
   int i;
   struct ip_header *ip_header;
   struct udp_header *udp_header;
@@ -200,50 +200,79 @@ static void forge_udp_packet(char *buffer, u_int idx) {
   udp_header->len = htons(send_len-sizeof(struct ether_header)-sizeof(struct ip_header));
   udp_header->check = 0; /* It must be 0 to compute the checksum */
 
+
+  char *payload = buffer + sizeof(struct ether_header) + sizeof(struct ip_header) + sizeof(struct udp_header);
+  *sent_in = getticks();
+  memcpy(payload,sent_in,sizeof(*sent_in));
+
   /*
     http://www.cs.nyu.edu/courses/fall01/G22.2262-001/class11.htm
     http://www.ietf.org/rfc/rfc0761.txt
     http://www.ietf.org/rfc/rfc0768.txt
   */
 
+  #if 0
   i = sizeof(struct ether_header) + sizeof(struct ip_header) + sizeof(struct udp_header);
+  /* Don't add latency */
   udp_header->check = wrapsum(in_cksum((unsigned char *)udp_header, sizeof(struct udp_header),
                                        in_cksum((unsigned char *)&buffer[i], send_len-i,
                                        in_cksum((unsigned char *)&ip_header->saddr,
                                                 2*sizeof(ip_header->saddr),
                                                 IPPROTO_UDP + ntohs(udp_header->len)))));
+  #endif
 }
 
 /* *************************************** */
 
+static void close_pd() {
+  pfring_close(pdo);
+  if(pdo != pdi)
+    pfring_close(pdi);
+}
+
+/* *************************************** */
+
+static ticks calc_lat(const u_char *buf,const ticks hz){
+  ticks send_tick;
+  memcpy(&send_tick,buf+udp_data_off,sizeof(send_tick));
+  const ticks curr_tick = getticks();
+  //printf("Packet received with %ld in time %ld. Difference: %ld",send_tick,curr_tick,curr_tick-send_tick);
+  //printf("\n%s usec\n", pfring_format_numbers((double) 1000000 /* us */ / ( hz / tick_delta ), buf1, sizeof(buf1), 1));
+  return curr_tick - send_tick;
+}
+
+static double ticks_to_us(ticks dtick,const ticks hz){
+  return ((double) 1000000 /* us */) / ( hz / dtick );
+}
+
 int main(int argc, char* argv[]) {
+  char buf1[64];
   struct packet packet_to_send = { 0 };
-  char c, *pcap_in = NULL;
+  char c;
   int disable_zero_copy = 0;
   int use_zero_copy_tx = 0;
   u_int mac_a, mac_b, mac_c, mac_d, mac_e, mac_f;
-  char buffer[MAX_PACKET_LEN];
   int bind_core = -1;
   ticks tick_start = 0, tick_delta = 0;
   ticks hz = 0;
-  u_int num_tx_slots = 0;
+  //u_int num_tx_slots = 0;
   int rc;
-  char buf1[64];
   u_char *pkt_buffer = NULL;
   struct pfring_pkthdr hdr;
   memset(&hdr, 0, sizeof(hdr));
 
+  ticks max_delay = 0,min_delay=(ticks)-1,sum_delay=0;
 
-  while((c = getopt(argc,argv,"hi:n:g:l:f:m:zx:")) != -1) {
+  while((c = getopt(argc,argv,"hi:o:g:l:m:zx:c:")) != -1) {
     switch(c) {
     case 'h':
       printHelp();
       break;
-    case 'i':
+    case 'o':
       out_dev = strdup(optarg);
       break;
-    case 'f':
-      pcap_in = strdup(optarg);
+    case 'i':
+      in_dev = strdup(optarg);
       break;
     case 'g':
       bind_core = atoi(optarg);
@@ -267,30 +296,41 @@ int main(int argc, char* argv[]) {
     case 'z':
       disable_zero_copy = 1;
       break;
-    }
+    case 'c':
+      packets_to_send = atoi(optarg);
+      break;
+    };
   }
 
   if(out_dev == NULL)  printHelp();
 
-  printf("Sending packets on %s\n", out_dev);
+  if(in_dev == NULL) out_dev = in_dev;
 
-  pd = pfring_open(out_dev, 1500, PF_RING_PROMISC);
-  if(pd == NULL) {
+  printf("Sending packets on %s. Receiving on %s\n", out_dev,in_dev);
+
+  pdo = pfring_open(out_dev, 1500, PF_RING_PROMISC);
+  pdi = in_dev ? pfring_open(in_dev, 1500, PF_RING_PROMISC) : pdo;
+  if(pdo == NULL) {
     printf("pfring_open %s error [%s]\n", out_dev, strerror(errno));
+    return(-1);
+  } else if(pdi == NULL){
+    printf("pfring_open %s error [%s]\n", in_dev, strerror(errno));
     return(-1);
   } else {
     u_int32_t version;
 
-    pfring_set_application_name(pd, "pfdnasend");
-    pfring_version(pd, &version);
+    pfring_set_application_name(pdo, "pfdnasend");
+    pfring_set_application_name(pdi, "pfdnasend");
+    pfring_version(pdo, &version);
+    pfring_version(pdi, &version);
 
     printf("Using PF_RING v.%d.%d.%d\n", (version & 0xFFFF0000) >> 16,
 	   (version & 0x0000FF00) >> 8, version & 0x000000FF);
   }
 
-  if (!pd->send && pd->send_ifindex && if_index == -1) {
+  if (!pdo->send && pdo->send_ifindex && if_index == -1) {
     printf("Please use -x <if index>\n");
-    pfring_close(pd);
+    close_pd();
     return -1;
   } 
 
@@ -313,117 +353,114 @@ int main(int argc, char* argv[]) {
 
   printf("Estimated CPU freq: %lu Hz\n", (long unsigned int)hz);
 
-  if(pcap_in) {
-    char ebuf[256];
-    u_char *pkt;
-    struct pcap_pkthdr *h;
-    pcap_t *pt = pcap_open_offline(pcap_in, ebuf);
+  if(bind_core >= 0) bind2core(bind_core);
 
-    if(!pt) {
-      printf("Unable to open file %s\n", pcap_in);
-      pfring_close(pd);
-      return(-1);
-    } else {
-      int rc = pcap_next_ex(pt, &h, (const u_char**) &pkt);
+  pfring_set_socket_mode(pdo, send_and_recv_mode);
+  pfring_set_socket_mode(pdi, send_and_recv_mode);
+  
+  pfring_set_direction(pdo, rx_and_tx_direction);
+  pfring_set_direction(pdi, rx_and_tx_direction);
 
-      if(rc <= 0) {
-        printf("Unable to read packet from pcap file %s\n", pcap_in);
-	pfring_close(pd);
-	return(-1);
-      }
+  pfring_set_poll_watermark(pdo, 0);
+  pfring_set_poll_watermark(pdi, 0);
 
-      packet_to_send.len = h->caplen;
-      packet_to_send.data = (char*) malloc(packet_to_send.len);
+  if(pfring_enable_ring(pdo) != 0 || pfring_enable_ring(pdi) != 0) {
+    printf("Unable to enable ring :-(\n");
+    close_pd();
+    return(-1);
+  }
 
-      if(packet_to_send.data == NULL) {
-        printf("Not enough memory\n");
-	pfring_close(pd);
-        return(-1);
-      } else {
-        memcpy(packet_to_send.data, pkt, packet_to_send.len);
-        if(reforge_mac) memcpy(packet_to_send.data, mac_address, 6);
-      }
+  ticks last_sent_tick = 0;
 
-      printf("Read %d bytes packet from pcap file %s\n", 
-	     packet_to_send.len, pcap_in);
+  while(packets_sent < packets_to_send || packets_received < packets_to_send) {
+    if(unlikely(do_shutdown))
+      break;
 
-      pcap_close(pt);
+    const int recv_rc = pfring_recv(pdi, &pkt_buffer, 0, &hdr, 0);
+    if(recv_rc > 0){
+      packets_received++;
+      
+      const ticks curr_ticks_diff = calc_lat(pkt_buffer,hz);
+      if(curr_ticks_diff > max_delay) max_delay = curr_ticks_diff;
+      if(curr_ticks_diff < min_delay) min_delay = curr_ticks_diff;
+      sum_delay += curr_ticks_diff;
+
+      continue;
     }
-  } else {
-    forge_udp_packet(buffer, 0);
+
+    if(!(packets_sent < packets_to_send)) /* We have sent all needed packets */
+      continue;
+
+    /* We generate packets faster than the latency => a part of latency is waiting to go out */
+    /* TODO check somehow if there are packet in the output queue is better */
+    /* TODO use pfring_send_get_time */
+    const ticks curr_tick = getticks();
+    if(ticks_to_us(curr_tick - last_sent_tick,hz) < 1000) /* 1ms between packets */
+      continue;
 
     packet_to_send.len = send_len;
     packet_to_send.data = (char*)malloc(packet_to_send.len);
 
     if (packet_to_send.data == NULL) {
       printf("Not enough memory\n");
-      pfring_close(pd);
-      return(-1);
+      usleep(1000);
+      continue;
     }
-      
-    memcpy(packet_to_send.data, buffer, packet_to_send.len);
-  }
-
-  if(bind_core >= 0)
-    bind2core(bind_core);
-
-  pfring_set_socket_mode(pd, send_and_recv_mode);
-  
-  pfring_set_direction(pd, rx_and_tx_direction);
-
-  pfring_set_poll_watermark(pd, 0);
-
-  if(pfring_enable_ring(pd) != 0) {
-    printf("Unable to enable ring :-(\n");
-    pfring_close(pd);
-    return(-1);
-  }
-
-  use_zero_copy_tx = 0;
-
-  if((!disable_zero_copy) 
-    && (pd->dna_copy_tx_packet_into_slot != NULL)) {
-
-    num_tx_slots = pd->dna_get_num_tx_slots(pd);
-
-    if(num_tx_slots > 0) {
-      int ret;
-
-      ret = pfring_copy_tx_packet_into_slot(pd, 0, packet_to_send.data, packet_to_send.len);
-      
-      if(ret >= 0)
-        use_zero_copy_tx = 1;
-    }
-  }
-  
-  printf("%s zero-copy TX\n", use_zero_copy_tx ? "Using" : "NOT using");
-
-redo:
-  tick_start = getticks();
-
-  if (if_index != -1)
-    rc = pfring_send_ifindex(pd, packet_to_send.data, packet_to_send.len, 1, if_index);
-  else if(use_zero_copy_tx)
-    /* We pre-filled the TX slots */
-    rc = pfring_send(pd, NULL, packet_to_send.len, 1);
-  else
-    rc = pfring_send(pd, packet_to_send.data, packet_to_send.len, 1);
-
-  if(rc == PF_RING_ERROR_INVALID_ARGUMENT) {
-    printf("Attempting to send invalid packet [len: %u][MTU: %u]%s\n",
-	   packet_to_send.len, pd->mtu_len,
-      	   if_index != -1 ? " or using a wrong interface id" : "");
-  } else if (rc < 0) {
-    goto redo;
-  }
     
-  while (pfring_recv(pd, &pkt_buffer, 0, &hdr, 0) <= 0);
-
-  tick_delta = getticks() - tick_start;
+    forge_udp_packet(packet_to_send.data, 1, &last_sent_tick);
   
-  printf("\n%s usec\n", pfring_format_numbers((double) 1000000 /* us */ / ( hz / tick_delta ), buf1, sizeof(buf1), 1));
+    use_zero_copy_tx = 0;
+  
+#if 0
+    if((!disable_zero_copy) 
+      && (pdo->dna_copy_tx_packet_into_slot != NULL)) {
+  
+      num_tx_slots = pdo->dna_get_num_tx_slots(pdo);
+  
+      if(num_tx_slots > 0) {
+        int ret;
+  
+        ret = pfring_copy_tx_packet_into_slot(pdo, 0, packet_to_send.data, packet_to_send.len);
+        
+        if(ret >= 0)
+          use_zero_copy_tx = 1;
+      }
+    }
+    
+    printf("%s zero-copy TX\n", use_zero_copy_tx ? "Using" : "NOT using");
+#endif
+  
+  redo:
+    if (if_index != -1)
+      rc = pfring_send_ifindex(pdo, packet_to_send.data, packet_to_send.len, 1, if_index);
+    else if(use_zero_copy_tx)
+      /* We pre-filled the TX slots */
+      rc = pfring_send(pdo, NULL, packet_to_send.len, 1);
+    else
+      rc = pfring_send(pdo, packet_to_send.data, packet_to_send.len, 1);
+  
+    if(rc == PF_RING_ERROR_INVALID_ARGUMENT) {
+      printf("Attempting to send invalid packet [len: %u][MTU: %u]%s\n",
+	     packet_to_send.len, pdo->mtu_len,
+      	     if_index != -1 ? " or using a wrong interface id" : "");
+    } else if (rc < 0) {
+      goto redo;
+    }
 
-  pfring_close(pd);
+    packets_sent++;
+  }
+
+  if(packets_received > 0) {
+    const double avg_delay = ((double)sum_delay)/packets_to_send;
+    printf("\nPackets received: %d\n", packets_received);
+    printf("Max delay: %s usec\n", pfring_format_numbers(ticks_to_us(max_delay,hz), buf1, sizeof(buf1), 1));
+    printf("Min delay: %s usec\n", pfring_format_numbers(ticks_to_us(min_delay,hz), buf1, sizeof(buf1), 1));
+    printf("Avg delay: %s usec\n", pfring_format_numbers(ticks_to_us(avg_delay,hz), buf1, sizeof(buf1), 1));
+  } else {
+    printf("\nNo packets received => no stats\n");
+  }
+
+  close_pd();
 
   return(0);
 }
