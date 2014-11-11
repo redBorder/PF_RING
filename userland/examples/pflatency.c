@@ -112,7 +112,6 @@ void printHelp(void) {
   printf("-c <count>      Number of packets to send\n");
   printf("-g <core_id>    Bind this app to a core\n");
   printf("-m <dst MAC>    Reforge destination MAC (format AA:BB:CC:DD:EE:FF)\n");
-  printf("-z              Disable zero-copy, if supported (DNA only)\n");
   printf("-x <if index>   Send to the selected interface, if supported\n");
   printf("-h              Print this help\n");
   printf("\nExample for testing the DNA bouncer latency:\n");
@@ -249,7 +248,6 @@ int main(int argc, char* argv[]) {
   char buf1[64];
   struct packet packet_to_send = { 0 };
   char c;
-  int disable_zero_copy = 0;
   int use_zero_copy_tx = 0;
   u_int mac_a, mac_b, mac_c, mac_d, mac_e, mac_f;
   int bind_core = -1;
@@ -292,9 +290,6 @@ int main(int argc, char* argv[]) {
 	mac_address[0] = mac_a, mac_address[1] = mac_b, mac_address[2] = mac_c;
 	mac_address[3] = mac_d, mac_address[4] = mac_e, mac_address[5] = mac_f;
       }
-      break;
-    case 'z':
-      disable_zero_copy = 1;
       break;
     case 'c':
       packets_to_send = atoi(optarg);
@@ -410,25 +405,6 @@ int main(int argc, char* argv[]) {
     forge_udp_packet(packet_to_send.data, 1, &last_sent_tick);
   
     use_zero_copy_tx = 0;
-  
-#if 0
-    if((!disable_zero_copy) 
-      && (pdo->dna_copy_tx_packet_into_slot != NULL)) {
-  
-      num_tx_slots = pdo->dna_get_num_tx_slots(pdo);
-  
-      if(num_tx_slots > 0) {
-        int ret;
-  
-        ret = pfring_copy_tx_packet_into_slot(pdo, 0, packet_to_send.data, packet_to_send.len);
-        
-        if(ret >= 0)
-          use_zero_copy_tx = 1;
-      }
-    }
-    
-    printf("%s zero-copy TX\n", use_zero_copy_tx ? "Using" : "NOT using");
-#endif
   
   redo:
     if (if_index != -1)
