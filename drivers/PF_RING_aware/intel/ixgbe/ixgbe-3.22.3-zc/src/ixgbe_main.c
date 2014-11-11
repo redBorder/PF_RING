@@ -4692,6 +4692,7 @@ static void ixgbe_set_rx_buffer_len(struct ixgbe_adapter *adapter)
 	 * max_frame
 	 */
 	hlreg0 |= IXGBE_HLREG0_JUMBOEN;
+#if 0
 #ifdef HAVE_PF_RING
 	/* TODO Check disable CRC strip */
 	if (unlikely(enable_debug))
@@ -4699,6 +4700,7 @@ static void ixgbe_set_rx_buffer_len(struct ixgbe_adapter *adapter)
 		       __FUNCTION__, netdev->mtu, max_frame, rx_buf_len);
 	
 	hlreg0 &= ~IXGBE_HLREG0_RXCRCSTRP; /* Disable CRC strip */
+#endif
 #endif
 	IXGBE_WRITE_REG(hw, IXGBE_HLREG0, hlreg0);
 
