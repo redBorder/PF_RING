@@ -159,14 +159,14 @@ void printHelp(void) {
   printf("A master process sending packets from a source interface to a sw queue and from a sw queue to a destination interface (first and last stage of a pipeline)\n\n");
   printf("-h                  Print this help\n");
   printf("-n <num_queues>     Number of queues\n");
-  printf("-i <device>,<queue> Ingress device and destination queue\n");
-  printf("-o <device>,<queue> Egress device and source queue\n");
+  printf("-i <device>;<queue> Ingress device and destination queue\n");
+  printf("-o <device>;<queue> Egress device and source queue\n");
   printf("-c <cluster id>     Cluster id\n");
   printf("-r <rx thread core> Bind the rx thread to a core\n");
   printf("-t <tx thread core> Bind the tx thread to a core\n");
   printf("-a                  Active packet wait\n");
   printf("-f                  Flush packets immediately to the destination queue/egress device (no buffering)\n");
-  printf("-l <sock list>      Enable VM support (comma-separated list of QEMU monitor sockets)\n");
+  printf("-Q <sock list>      Enable VM support (comma-separated list of QEMU monitor sockets)\n");
   exit(-1);
 }
 
@@ -200,7 +200,7 @@ int main(int argc, char* argv[]) {
 
   start_time.tv_sec = 0;
 
-  while((c = getopt(argc,argv,"ac:fhi:o:n:l:r:t:")) != '?') {
+  while((c = getopt(argc,argv,"ac:fhi:o:n:Q:r:t:")) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -231,7 +231,7 @@ int main(int argc, char* argv[]) {
     case 't':
       forwarder[TX_FWDR].bind_core = atoi(optarg);
       break;
-    case 'l':
+    case 'Q':
       enable_vm_support = 1;
       vm_sockets = strdup(optarg);
       break;
@@ -242,7 +242,7 @@ int main(int argc, char* argv[]) {
   if (num_ipc_queues < 1) printHelp();
 
   if (in_pair != NULL) {
-    char *q_id = strchr(in_pair, ',');
+    char *q_id = strchr(in_pair, ';');
     if (q_id == NULL) printHelp();
     q_id[0] = '\0'; q_id++;
     in_device = strdup(in_pair);
@@ -251,7 +251,7 @@ int main(int argc, char* argv[]) {
   }
 
   if (out_pair != NULL) {
-    char *q_id = strchr(out_pair, ',');
+    char *q_id = strchr(out_pair, ';');
     if (q_id == NULL) printHelp();
     q_id[0] = '\0'; q_id++;
     out_device = strdup(out_pair);

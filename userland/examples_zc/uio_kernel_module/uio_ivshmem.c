@@ -12,8 +12,8 @@
 #include <linux/module.h>
 #include <linux/pci.h>
 #include <linux/uio_driver.h>
-
 #include <asm/io.h>
+#include <linux/version.h>
 
 #define IntrStatus 0x04
 #define IntrMask 0x00
@@ -135,7 +135,11 @@ error:
 }
 #endif
 
-static int __devinit ivshmem_pci_probe(struct pci_dev *dev,
+static int 
+#if(LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
+__devinit
+#endif
+ivshmem_pci_probe(struct pci_dev *dev,
 					const struct pci_device_id *id)
 {
 	struct uio_info *info;
@@ -244,7 +248,11 @@ static void ivshmem_pci_remove(struct pci_dev *dev)
 	kfree (info);
 }
 
-static struct pci_device_id ivshmem_pci_ids[] __devinitdata = {
+static struct pci_device_id ivshmem_pci_ids[] 
+#if(LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
+__devinitdata 
+#endif
+= {
 	{
 		.vendor =	0x1af4,
 		.device =	0x1110,

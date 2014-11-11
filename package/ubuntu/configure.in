@@ -14,6 +14,7 @@ cp debian/control.$UBUNTU_RELEASE.in debian/control.in
 VERS=`cat ../../kernel/linux/pf_ring.h | grep RING_VERSION | head -1 | cut -d '"' -f 2`
 MACHINE=`uname -m`
 SVN_RELEASE=`svn info . | grep "^Revision" | cut -d " " -f 2`
+PFRING_VERS=`cat $HOME/PF_RING/kernel/linux/pf_ring.h | grep RING_VERSION | head -1 | cut -d '"' -f 2`
 
 if test $MACHINE = "x86_64"; then
    EXTN="amd64"
@@ -29,6 +30,7 @@ AC_SUBST(EXTN)
 AC_SUBST(DATE)
 AC_SUBST(KERNEL)
 AC_SUBST(SVN_RELEASE)
+AC_SUBST(PFRING_VERS)
 
 AC_CONFIG_FILES(Makefile)
 AC_CONFIG_FILES(debian/changelog)

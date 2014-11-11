@@ -8,5 +8,5 @@ Build-Conflicts:
 
 Package: pfring
 Architecture: @EXTN@
-Depends: pfring-dkms
+Depends: pfring-dkms (=@PFRING_VERS@)
 Description: PF_RING (http://www.ntop.org/pf_ring/)

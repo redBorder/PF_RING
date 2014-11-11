@@ -55,7 +55,7 @@ PF_RING/userland/examples_zc# ./zpipeline -i zc:eth2 -c 99 -g 2:3
 
 Example 5. Enqueue incoming packets to a queue, on another process forward packets from the queue to another queue, send packets from the second queue to an egress interface 
 
-PF_RING/userland/examples_zc# ./zpipeline_ipc -i zc:eth2,0 -o zc:eth3,1 -n 2 -c 99 -r 1 -t 2
+PF_RING/userland/examples_zc# ./zpipeline_ipc -i zc:eth2;0 -o zc:eth3;1 -n 2 -c 99 -r 1 -t 2
 
 PF_RING/userland/examples_zc# ./zbounce_ipc -c 99 -i 0 -o 1 -g 3
 
@@ -119,7 +119,7 @@ PF_RING/userland/examples_zc# ./zpipeline -i sysdig -c 99 -g 2:3
 
 Example 5. Enqueue incoming sysdig events to a queue, on another process forward packets from the queue to another queue, send packets from the second queue to an egress interface (perhaps we should first encapsulate the events into a ethernet frame for best results)
 
-PF_RING/userland/examples_zc# ./zpipeline_ipc -i sysdig,0 -o zc:eth3,1 -n 2 -c 99 -r 1 -t 2
+PF_RING/userland/examples_zc# ./zpipeline_ipc -i sysdig;0 -o zc:eth3;1 -n 2 -c 99 -r 1 -t 2
 
 PF_RING/userland/examples_zc# ./zbounce_ipc -c 99 -i 0 -o 1 -g 3
 
