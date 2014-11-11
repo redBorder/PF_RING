@@ -383,6 +383,9 @@ old_config_migration() {
 			fi
 		done
 	done
+	if [ `ls ${DRIVERS_CONFIG_DIR}/dna-*.conf 2>/dev/null| wc -l` -eq 0 ]; then
+		return
+	fi
 	for FILES in `ls ${DRIVERS_CONFIG_DIR}/dna-*.conf` ; do
 		DRV_FLAVOR=`echo ${FILES} | cut -d '-' -f 2 | tr -d '.conf'`
 		if [ -f ${FILES} ]; then # if it is not a link - migration already done
