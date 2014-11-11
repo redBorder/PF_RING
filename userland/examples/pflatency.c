@@ -261,7 +261,7 @@ int main(int argc, char* argv[]) {
 
   ticks max_delay = 0,min_delay=(ticks)-1,sum_delay=0;
 
-  while((c = getopt(argc,argv,"hi:o:g:l:m:zx:c:")) != -1) {
+  while((c = getopt(argc,argv,"hi:o:g:l:m:x:c:")) != -1) {
     switch(c) {
     case 'h':
       printHelp();
