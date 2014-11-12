@@ -183,7 +183,7 @@ load_driver() {
 	if [ `/sbin/modinfo ${1}-${2} | wc -l` -gt 1 ]; then
 		# driver is available
 		DRV_PARAM=`cat ${DRIVERS_CONFIG_DIR}/${2}/${1}/${1}.conf`
-		if [ ${MGMT_INTERFACE_DRIVER} == ${1} ] &&  [ ${2} == "dna" ] && [ ${FORCESTART} -eq 0 ] && [ ! -f ${FORCESTART_FILE} ]; then
+		if [ ${MGMT_INTERFACE_DRIVER} == ${1} ] && [ ${FORCESTART} -eq 0 ] && [ ! -f ${FORCESTART_FILE} ]; then
 			echo "Skipping driver ${1}: driver matches ${MGMT_INTERFACE}"
 			return
 		fi
@@ -264,14 +264,17 @@ unload_dna_zc() {
 }
 
 start_pf_ring() {
-    # Set CPU freq to performance useful in particular
-    # on CPUs with aggressive scaling such as Intel E5
-    
+
+    # Update driver directory structure
+
     old_config_migration
 
     [ ${DISTRO} == "debian" ] && log_daemon_msg "Starting PF_RING module"
     [ ${DISTRO} == "centos" ] && echo -n "Starting PF_RING module: "
 
+    # Set CPU freq to performance useful in particular
+    # on CPUs with aggressive scaling such as Intel E5
+    
     find /sys/devices/system/cpu/ -name scaling_governor -exec sh -c 'echo performance > {}' \;
 
     KERNEL_VERSION=$(uname -r)
@@ -383,7 +386,7 @@ old_config_migration() {
 			fi
 		done
 	done
-	if [ `ls ${DRIVERS_CONFIG_DIR}/dna-*.conf 2>/dev/null| wc -l` -eq 0 ]; then
+	if [ `ls ${DRIVERS_CONFIG_DIR}/dna-*.conf 2>/dev/null | wc -l` -eq 0 ]; then
 		return
 	fi
 	for FILES in `ls ${DRIVERS_CONFIG_DIR}/dna-*.conf` ; do
