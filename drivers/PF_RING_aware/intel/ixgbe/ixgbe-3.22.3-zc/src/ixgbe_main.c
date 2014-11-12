@@ -2665,14 +2665,19 @@ static int ixgbe_clean_rx_irq(struct ixgbe_q_vector *q_vector,
 		cleaned_count++;
 
 #ifdef HAVE_PF_RING
+		/* CRC strip (offload disabled) */
+		skb->tail -= 4, skb->len -= 4;
+#endif
+
+#ifdef HAVE_PF_RING
 		if (q_vector->adapter->hw.silicom.has_hw_ts_card) {
 			unsigned char sil_buf[9];
 			silicom_ts_t *signature;
 			u_int num_count = 0, ts_len;
 
-		STRIP_TS:
+		strip_ts:
 			skb_copy_bits(skb, skb->len - 9, sil_buf, 9);
-			signature = (silicom_ts_t *)sil_buf;
+			signature = (silicom_ts_t *) sil_buf;
 
 		  	if (signature->status == 0xC3) {
 				ts_len = 9;
@@ -2696,7 +2701,7 @@ static int ixgbe_clean_rx_irq(struct ixgbe_q_vector *q_vector,
 
 				if (num_count++ == 0) {
 					skb->tail -= 4, skb->len -= 4;
-					goto STRIP_TS;
+					goto strip_ts;
 				} else {
 					skb->tail += 4, skb->len += 4;
 				}
@@ -2880,6 +2885,11 @@ static int ixgbe_clean_rx_irq(struct ixgbe_q_vector *q_vector,
 			dev_kfree_skb_any(skb);
 			continue;
 		}
+
+#ifdef HAVE_PF_RING
+		/* CRC strip (offload disabled) */
+		skb->tail -= 4, skb->len -= 4;
+#endif
 
 		/* probably a little skewed due to removing CRC */
 		total_rx_bytes += skb->len;
@@ -4693,7 +4703,7 @@ static void ixgbe_set_rx_buffer_len(struct ixgbe_adapter *adapter)
 	 */
 	hlreg0 |= IXGBE_HLREG0_JUMBOEN;
 #ifdef HAVE_PF_RING
-	/* TODO Check disable CRC strip */
+	/* Check disable CRC strip */
 	if (unlikely(enable_debug))
 		printk("[PF_RING-ZC] %s(): RX +JUMBOEN mtu=%d max_frame=%d rx_buf_len=%d\n",
 		       __FUNCTION__, netdev->mtu, max_frame, rx_buf_len);
@@ -4741,9 +4751,8 @@ static void ixgbe_setup_rdrxctl(struct ixgbe_adapter *adapter)
 		rdrxctl |= (IXGBE_RDRXCTL_RSCACKC | IXGBE_RDRXCTL_FCOE_WRFIX);
 		rdrxctl |= IXGBE_RDRXCTL_CRCSTRIP;
 #ifdef HAVE_PF_RING
-		/* TODO Check disable CRC strip */
-		//if (atomic_read(&adapter->pfring_zc.usage_counter) > 0)
-			rdrxctl &= ~IXGBE_RDRXCTL_CRCSTRIP; /* Disable CRC strip */
+		/* Check disable CRC strip */
+		rdrxctl &= ~IXGBE_RDRXCTL_CRCSTRIP; /* Disable CRC strip */
 #endif
 		break;
 	case ixgbe_mac_82598EB:
