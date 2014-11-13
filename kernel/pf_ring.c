@@ -437,7 +437,8 @@ MODULE_PARM_DESC(bypass_interfaces,
 
 /* ***************** Legacy code ************************ */
 
-u_int get_num_rx_queues(struct net_device *dev) {
+u_int get_num_rx_queues(struct net_device *dev) 
+{
 #if(LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30))
   return(1);
 #else
@@ -455,15 +456,18 @@ u_int get_num_rx_queues(struct net_device *dev) {
 #else
 
 #if(LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23))
-static inline void skb_reset_network_header(struct sk_buff *skb) {
+static inline void skb_reset_network_header(struct sk_buff *skb)
+{
   /* skb->network_header = skb->data - skb->head; */
 }
 
-static inline void skb_reset_transport_header(struct sk_buff *skb) {
+static inline void skb_reset_transport_header(struct sk_buff *skb) 
+{
   /* skb->transport_header = skb->data - skb->head; */
 }
 
-static inline void skb_set_network_header(struct sk_buff *skb, const int offset) {
+static inline void skb_set_network_header(struct sk_buff *skb, const int offset) 
+{
   skb_reset_network_header(skb);
   /* skb->network_header += offset; */
 }
@@ -513,7 +517,8 @@ void msleep(unsigned int msecs)
 
 /* ************************************************** */
 
-void init_lockless_list(lockless_list *l) {
+void init_lockless_list(lockless_list *l) 
+{
   memset(l, 0, sizeof(lockless_list));
 
   l->list_lock =
@@ -528,7 +533,8 @@ void init_lockless_list(lockless_list *l) {
 /* ************************************************** */
 
 /* Return the index where the element has been add or -1 in case of no room left */
-int lockless_list_add(lockless_list *l, void *elem) {
+int lockless_list_add(lockless_list *l, void *elem) 
+{
   int i;
 
   if(unlikely(enable_debug))
@@ -590,7 +596,8 @@ int lockless_list_add(lockless_list *l, void *elem) {
 
   NOTE: NO MEMORY IS FREED
 */
-int lockless_list_remove(lockless_list *l, void *elem) {
+int lockless_list_remove(lockless_list *l, void *elem) 
+{
   int i, old_full_slot = -1;
 
   if(unlikely(enable_debug))
@@ -629,7 +636,8 @@ int lockless_list_remove(lockless_list *l, void *elem) {
 
 /* ************************************************** */
 
-void* lockless_list_get_next(lockless_list *l, u_int32_t *last_idx) {
+void *lockless_list_get_next(lockless_list *l, u_int32_t *last_idx) 
+{
   while(*last_idx <= l->top_element_id) {
     void *elem;
 
@@ -645,14 +653,16 @@ void* lockless_list_get_next(lockless_list *l, u_int32_t *last_idx) {
 
 /* ************************************************** */
 
-void* lockless_list_get_first(lockless_list *l, u_int32_t *last_idx) {
+void * lockless_list_get_first(lockless_list *l, u_int32_t *last_idx) 
+{
   *last_idx = 0;
   return(lockless_list_get_next(l, last_idx));
 }
 
 /* ************************************************** */
 
-void lockless_list_empty(lockless_list *l, u_int8_t free_memory) {
+void lockless_list_empty(lockless_list *l, u_int8_t free_memory) 
+{
   int i;
 
   if(free_memory) {
@@ -673,13 +683,17 @@ void lockless_list_empty(lockless_list *l, u_int8_t free_memory) {
 
 /* ************************************************** */
 
-void term_lockless_list(lockless_list *l, u_int8_t free_memory) {
+void term_lockless_list(lockless_list *l, u_int8_t free_memory) 
+{
   lockless_list_empty(l, free_memory);
 }
 
 /* ************************************************** */
 
-static inline u_char *get_slot(struct pf_ring_socket *pfr, u_int64_t off) { return(&(pfr->ring_slots[off])); }
+static inline u_char *get_slot(struct pf_ring_socket *pfr, u_int64_t off) 
+{ 
+  return(&(pfr->ring_slots[off])); 
+}
 
 /* ********************************** */
 
@@ -1089,7 +1103,8 @@ static int ring_proc_dev_get_info(struct seq_file *m, void *data_not_used)
 /* **************** 82599 ****************** */
 
 static int i82599_generic_handler(struct pf_ring_socket *pfr,
-				  hw_filtering_rule *rule, hw_filtering_rule_command request) {
+				  hw_filtering_rule *rule, hw_filtering_rule_command request) 
+{
   int rc = -1;
 
 #ifdef I82599_HW_FILTERING_SUPPORT
@@ -1210,7 +1225,8 @@ static int i82599_generic_handler(struct pf_ring_socket *pfr,
 
 static int handle_hw_filtering_rule(struct pf_ring_socket *pfr,
 				    hw_filtering_rule *rule,
-				    hw_filtering_rule_command command) {
+				    hw_filtering_rule_command command)
+{
 
   if(unlikely(enable_debug))
     printk("[PF_RING] --> handle_hw_filtering_rule(command=%d)\n", command);
@@ -1268,7 +1284,8 @@ static int ring_proc_dev_rule_read(struct seq_file *m, void *data_not_used)
 static void init_intel_82599_five_tuple_filter_hw_rule(u_int8_t queue_id, u_int8_t proto,
 						       u_int32_t s_addr, u_int32_t d_addr,
 						       u_int16_t s_port, u_int16_t d_port,
-						       intel_82599_five_tuple_filter_hw_rule *rule) {
+						       intel_82599_five_tuple_filter_hw_rule *rule) 
+{
 
   /* printk("init_intel_82599_five_tuple_filter_hw_rule()\n"); */
 
@@ -1286,7 +1303,8 @@ static void init_intel_82599_perfect_filter_hw_rule(u_int8_t queue_id,
 						    u_int32_t s_addr, u_int8_t s_mask,
 						    u_int32_t d_addr, u_int8_t d_mask,
 						    u_int16_t s_port, u_int16_t d_port,
-						    intel_82599_perfect_filter_hw_rule *rule) {
+						    intel_82599_perfect_filter_hw_rule *rule) 
+{
   u_int32_t netmask;
 
   /* printk("init_intel_82599_perfect_filter_hw_rule()\n"); */
@@ -1411,7 +1429,8 @@ static int ring_proc_dev_rule_write(struct file *file,
 
 /* ********************************** */
 
-static char* direction2string(packet_direction d) {
+static char* direction2string(packet_direction d) 
+{
   switch(d) {
   case rx_and_tx_direction: return("RX+TX");
   case rx_only_direction:   return("RX only");
@@ -1423,7 +1442,8 @@ static char* direction2string(packet_direction d) {
 
 /* ********************************** */
 
-static char* sockmode2string(socket_mode m) {
+static char* sockmode2string(socket_mode m) 
+{
   switch(m) {
   case send_and_recv_mode: return("RX+TX");
   case recv_only_mode:     return("RX only");
@@ -2807,7 +2827,8 @@ success:
 
 /* ********************************** */
 
-static inline void set_skb_time(struct sk_buff *skb, struct pfring_pkthdr *hdr) {
+static inline void set_skb_time(struct sk_buff *skb, struct pfring_pkthdr *hdr) 
+{
   /* BD - API changed for time keeping */
 #if(LINUX_VERSION_CODE < KERNEL_VERSION(2,6,14))
   if(skb->stamp.tv_sec == 0)
@@ -2856,7 +2877,8 @@ static inline int copy_data_to_ring(struct sk_buff *skb,
 			     struct pfring_pkthdr *hdr,
 			     int displ, int offset, void *plugin_mem,
 			     void *raw_data, uint raw_data_len,
-			     int *clone_id) {
+			     int *clone_id) 
+{
   u_char *ring_bucket;
   u_int64_t off;
   u_short do_lock = (
@@ -3034,7 +3056,8 @@ static inline int copy_data_to_ring(struct sk_buff *skb,
 
 static inline int copy_raw_data_to_ring(struct pf_ring_socket *pfr,
 				 struct pfring_pkthdr *dummy_hdr,
-				 void *raw_data, uint raw_data_len) {
+				 void *raw_data, uint raw_data_len) 
+{
   return(copy_data_to_ring(NULL, pfr, dummy_hdr, 0, 0, NULL, raw_data, raw_data_len, NULL));
 }
 
@@ -3918,7 +3941,8 @@ int check_wildcard_rules(struct sk_buff *skb,
  */
 int bpf_filter_skb(struct sk_buff *skb,
 		   struct pf_ring_socket *pfr,
-		   int displ) {
+		   int displ) 
+{
   if(pfr->bpfFilter != NULL) {
     unsigned res = 1;
     u8 *skb_head = skb->data;
@@ -3971,7 +3995,8 @@ int bpf_filter_skb(struct sk_buff *skb,
 
 /* ********************************** */
 
-u_int32_t default_rehash_rss_func(struct sk_buff *skb, struct pfring_pkthdr *hdr) {
+u_int32_t default_rehash_rss_func(struct sk_buff *skb, struct pfring_pkthdr *hdr) 
+{
   return hash_pkt_header(hdr, 0);
 }
 
@@ -4292,7 +4317,8 @@ int unregister_plugin(u_int16_t pfring_plugin_id)
 
 /* ********************************** */
 
-static inline int is_valid_skb_direction(packet_direction direction, u_char recv_packet) {
+static inline int is_valid_skb_direction(packet_direction direction, u_char recv_packet) 
+{
   switch(direction) {
   case rx_and_tx_direction:
     return(1);
@@ -4312,7 +4338,8 @@ static inline int is_valid_skb_direction(packet_direction direction, u_char recv
 static struct sk_buff* defrag_skb(struct sk_buff *skb,
 				  u_int16_t displ,
 				  struct pfring_pkthdr *hdr,
-				  int *defragmented_skb) {
+				  int *defragmented_skb) 
+{
   struct sk_buff *cloned = NULL;
   struct iphdr *iphdr = NULL;
   struct sk_buff *skk = NULL;
@@ -4821,7 +4848,8 @@ static int packet_rcv(struct sk_buff *skb, struct net_device *dev,
 
 /* ********************************** */
 
-void register_device_handler(void) {
+void register_device_handler(void) 
+{
   if(transparent_mode != standard_linux_path && !enable_tx_capture)
     return;
 
@@ -4832,7 +4860,8 @@ void register_device_handler(void) {
 
 /* ********************************** */
 
-void unregister_device_handler(void) {
+void unregister_device_handler(void) 
+{
   if(transparent_mode != standard_linux_path && !enable_tx_capture)
     return;
 
@@ -4961,7 +4990,8 @@ static int ring_proc_virtual_filtering_dev_get_info(struct seq_file *m, void *da
 
 /* ********************************** */
 
-static int ring_proc_virtual_filtering_open(struct inode *inode, struct file *file) {
+static int ring_proc_virtual_filtering_open(struct inode *inode, struct file *file) 
+{
   return single_open(file, ring_proc_virtual_filtering_dev_get_info, PDE_DATA(inode)); 
 }
 
@@ -5059,7 +5089,8 @@ static int remove_virtual_filtering_device(struct sock *sock, char *device_name)
 
 static struct pf_userspace_ring* userspace_ring_create(char *u_dev_name, 
 						       userspace_ring_client_type type,
-                                                       wait_queue_head_t *consumer_ring_slots_waitqueue) {
+                                                       wait_queue_head_t *consumer_ring_slots_waitqueue) 
+{
   char *c_p;
   long id;
   struct list_head *ptr, *tmp_ptr;
@@ -6665,7 +6696,8 @@ static int ring_recvmsg(struct kiocb *iocb, struct socket *sock,
 
 /* ************************************* */
 
-static int pf_ring_inject_packet_to_stack(struct net_device *netdev, struct msghdr *msg, size_t len) {
+static int pf_ring_inject_packet_to_stack(struct net_device *netdev, struct msghdr *msg, size_t len) 
+{
   int err = 0;
   struct sk_buff *skb = __netdev_alloc_skb(netdev, len, GFP_KERNEL);
   if(skb == NULL)
@@ -7531,7 +7563,8 @@ static int ring_proc_stats_read(struct seq_file *m, void *data_not_used)
 
 /* ********************************** */
 
-static int ring_proc_stats_open(struct inode *inode, struct file *file) { 
+static int ring_proc_stats_open(struct inode *inode, struct file *file) 
+{ 
   return single_open(file, ring_proc_stats_read, PDE_DATA(inode)); 
 }
 
@@ -7545,7 +7578,8 @@ static const struct file_operations ring_proc_stats_fops = {
 
 /* ************************************* */
 
-int setSocketStats(struct pf_ring_socket *s) {
+int setSocketStats(struct pf_ring_socket *s) 
+{
   /* 1 - Check if the /proc entry exists otherwise create it */
   if((ring_proc_stats_dir != NULL)
      && (s->sock_proc_stats_name[0] == '\0')) {
@@ -9203,7 +9237,8 @@ void dna_device_handler(dna_device_operation operation,
 /* ************************************* */
 
 #ifdef REDBORDER_PATCH
-static void bpctl_notifier(char *if_name) {
+static void bpctl_notifier(char *if_name) 
+{
   struct bpctl_cmd bpctl_cmd;
   int i = 0, rc;
 
@@ -9334,7 +9369,8 @@ static struct pfring_hooks ring_hooks = {
 
 /* ************************************ */
 
-void remove_device_from_ring_list(struct net_device *dev) {
+void remove_device_from_ring_list(struct net_device *dev) 
+{
   struct list_head *ptr, *tmp_ptr;
   u_int32_t last_list_idx;
   struct sock *sk;
@@ -9376,7 +9412,10 @@ void remove_device_from_ring_list(struct net_device *dev) {
 
 /* ********************************** */
 
-static int ring_proc_dev_open(struct inode *inode, struct file *file) { return single_open(file, ring_proc_dev_get_info, PDE_DATA(inode)); }
+static int ring_proc_dev_open(struct inode *inode, struct file *file) 
+{ 
+  return single_open(file, ring_proc_dev_get_info, PDE_DATA(inode));
+ }
 
 static const struct file_operations ring_proc_dev_fops = {
   .owner = THIS_MODULE,
@@ -9388,7 +9427,8 @@ static const struct file_operations ring_proc_dev_fops = {
 
 /* ************************************ */
 
-int add_device_to_ring_list(struct net_device *dev) {
+int add_device_to_ring_list(struct net_device *dev) 
+{
   ring_device_element *dev_ptr;
 
   if((dev_ptr = kmalloc(sizeof(ring_device_element), GFP_KERNEL)) == NULL)
@@ -9453,14 +9493,16 @@ int add_device_to_ring_list(struct net_device *dev) {
 
 /* ************************************ */
 
-void pf_ring_add_module_dependency(void) {
+void pf_ring_add_module_dependency(void) 
+{
   /* Don't actually do anything */
 }
 EXPORT_SYMBOL(pf_ring_add_module_dependency);
 
 /* ************************************ */
 
-int pf_ring_inject_packet_to_ring(int if_index, int channel_id, u_char *data, int data_len, struct pfring_pkthdr *hdr) {
+int pf_ring_inject_packet_to_ring(int if_index, int channel_id, u_char *data, int data_len, struct pfring_pkthdr *hdr) 
+{
   struct sock* sk = NULL;
   u_int32_t last_list_idx;
   struct pf_ring_socket *pfr;
@@ -9498,7 +9540,8 @@ EXPORT_SYMBOL(pf_ring_inject_packet_to_ring);
 /* ********************************** */
 
 #ifdef ENABLE_PROC_WRITE_RULE
-static int ring_proc_dev_ruleopen(struct inode *inode, struct file *file) { 
+static int ring_proc_dev_ruleopen(struct inode *inode, struct file *file) 
+{ 
   return single_open(file, ring_proc_dev_rule_read, PDE_DATA(inode)); 
 }
 
