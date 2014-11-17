@@ -811,34 +811,6 @@ int pfring_send_ifindex(pfring *ring, char *pkt, u_int pkt_len, u_int8_t flush_p
 
 /* **************************************************** */
 
-int pfring_send_parsed(pfring *ring, char *pkt, struct pfring_pkthdr *hdr, u_int8_t flush_packet) {
-  int rc;
-
-  if(likely(ring
-	    && ring->enabled
-	    && (!ring->is_shutting_down)
-	    && ring->send_parsed
-	    && (ring->mode != recv_only_mode))) {
-
-    if(unlikely(ring->reentrant))
-      pthread_rwlock_wrlock(&ring->tx_lock);
-
-    rc =  ring->send_parsed(ring, pkt, hdr, flush_packet);
-
-    if(unlikely(ring->reentrant))
-      pthread_rwlock_unlock(&ring->tx_lock);
-
-    return rc;
-  }
-
-  if(!ring->enabled)
-    return(PF_RING_ERROR_RING_NOT_ENABLED);
-
-  return(PF_RING_ERROR_NOT_SUPPORTED);
-}
-
-/* **************************************************** */
-
 int pfring_send_get_time(pfring *ring, char *pkt, u_int pkt_len, struct timespec *ts) {
   int rc;
 

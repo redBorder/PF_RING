@@ -232,7 +232,6 @@ struct __pfring {
   int       (*bind)                         (pfring *, char *);
   int       (*send)                         (pfring *, char *, u_int, u_int8_t);
   int       (*send_ifindex)                 (pfring *, char *, u_int, u_int8_t, int);
-  int       (*send_parsed)                  (pfring *, char *, struct pfring_pkthdr *, u_int8_t);
   int       (*send_get_time)                (pfring *, char *, u_int, struct timespec *);
   u_int8_t  (*get_num_rx_channels)          (pfring *);
   int       (*set_sampling_rate)            (pfring *, u_int32_t);
@@ -602,16 +601,6 @@ int pfring_send(pfring *ring, char *pkt, u_int pkt_len, u_int8_t flush_packet);
  * @return The number of bytes sent if success, a negative value otherwise.
  */
 int pfring_send_ifindex(pfring *ring, char *pkt, u_int pkt_len, u_int8_t flush_packet, int if_index);
-
-/**
- * Same as pfring_send(), but also insert the packet header into a ring (userspace ring only).
- * @param ring
- * @param pkt
- * @param hdr          The packet header. 
- * @param flush_packet
- * @return The number of bytes sent if success, a negative value otherwise.
- */
-int pfring_send_parsed(pfring *ring, char *pkt, struct pfring_pkthdr *hdr, u_int8_t flush_packet);
 
 /**
  * Same as pfring_send(), but this function allows to send a raw packet returning the exact time (ns) it has been sent on the wire. 
