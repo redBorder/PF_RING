@@ -37,6 +37,7 @@ HUGEPAGES_CONFIG="/etc/pf_ring/hugepages"
 HUGEPAGES_SIZE=`grep Hugepagesize /proc/meminfo | cut -d ':' -f 2|sed 's/kB//g'|sed 's/ //g'` # KB
 LOAD_HUGEPAGES=0
 HUGEPAGES_MOUNTPOINT="/mnt/hugepages"
+MTU_CONFIG="/etc/pf_ring/mtu.conf"
 FORCESTART=0
 FORCESTART_FILE="/etc/pf_ring/forcestart"
 
@@ -135,8 +136,8 @@ load_hugepages() {
 		return
 		#hugepages already loaded
 	else
-		if [ -f ${HUGEPAGES_CONFIG} ]; then
-			cat ${HUGEPAGES_CONFIG} | while read node ; do
+		if [ -f ${HUGEPAGES_CONFIG}.conf ]; then
+			cat ${HUGEPAGES_CONFIG}.conf | while read node ; do
 				HUGEPAGES_NODE=`echo ${node} | cut -d ' ' -f 1 | cut -d '=' -f 2` # entry should contain node=yy hugepagenumber=XXX
 				HUGEPAGES_NUMBER=`echo ${node} | cut -d ' ' -f 2 | cut -d '=' -f 2` # entry should contain node=yy hugepagenumber=XXX
 				if [ ${HUGEPAGES_NUMBER} -gt 0 ] && [ -f /sys/devices/system/node/node${HUGEPAGES_NODE}/hugepages/hugepages-${HUGEPAGES_SIZE}kB/nr_hugepages ]; then
@@ -162,6 +163,17 @@ load_hugepages() {
 	fi
 }
 
+set_interface_mtu() {
+	MTU=""
+	if [ -f ${MTU_CONFIG} ]; then 
+		HWADDR=`ifconfig ${1} |grep -w HWaddr |awk '{print $5}'`
+		MTU=`grep -w ${HWADDR} | cut -d ' ' -f 2`
+		if [ ${MTU} != "" ]; then
+			/sbin/ifconfig ${1} mtu ${MTU} > /dev/null 2>&1
+		fi
+	fi
+}
+
 start_interfaces() {
     # Enable all interfaces DNA and non DNA
     INTERFACES="$(cat /proc/net/dev | grep ':' | cut -d ':' -f 1|grep -v 'lo' | tr '\n' ' '| sed 's/  / /g')"
@@ -170,6 +182,7 @@ start_interfaces() {
         if [ "$D" != "$MGMT_INTERFACE" ]; then
             /sbin/ethtool -K $D sg off tso off gso off gro off
         fi
+        set_interface_mtu ${D}
     done
 }
 
@@ -397,6 +410,9 @@ old_config_migration() {
 			ln -s ${DRIVERS_CONFIG_DIR}/dna/${DRV_FLAVOR}.conf ${FILES}
 		fi
 	done
+	if [ -f ${HUGEPAGES_CONFIG} ]; then 
+		mv ${HUGEPAGES_CONFIG} ${HUGEPAGES_CONFIG}.conf
+	fi
 }
 ########
 
