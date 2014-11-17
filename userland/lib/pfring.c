@@ -26,7 +26,6 @@
 
 #include "pfring_mod.h"
 #include "pfring_mod_stack.h"
-#include "pfring_mod_usring.h"
 #include "pfring_mod_sysdig.h"
 
 #ifdef HAVE_NT
@@ -90,10 +89,6 @@ static pfring_module_info pfring_module_list[] = {
     .open = pfring_zc_open,
   },
 #endif
-  {
-    .name = "userspace",
-    .open = pfring_mod_usring_open,
-  },
   {0}
 };
 

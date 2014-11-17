@@ -663,11 +663,6 @@ int pfring_mod_poll(pfring *ring, u_int wait_duration) {
     struct pollfd pfd;
     int rc;
 
-    /* Userspace RING: enabling interrupts */
-    if(ring->slots_info != NULL)
-      ring->slots_info->userspace_ring_flags &= ~USERSPACE_RING_NO_INTERRUPT; 
-    //gcc_mb();
-
     /* Sleep when nothing is happening */
     pfd.fd      = ring->fd;
     pfd.events  = POLLIN /* | POLLERR */;

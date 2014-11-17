@@ -67,10 +67,6 @@
 #define SO_SET_POLL_WATERMARK            117
 #define SO_SET_VIRTUAL_FILTERING_DEVICE  118
 #define SO_REHASH_RSS_PACKET             119
-#define SO_SET_VPFRING_HOST_EVENTFD      120 /* host  to guest */
-#define SO_SET_VPFRING_GUEST_EVENTFD     121 /* guest to host (unused) */
-#define SO_SET_VPFRING_CLEAN_EVENTFDS    122
-#define SO_ATTACH_USERSPACE_RING         123
 #define SO_SHUTDOWN_RING                 124
 #define SO_PURGE_IDLE_RULES              125 /* inactivity (sec) */
 #define SO_SET_SOCKET_MODE               126
@@ -650,9 +646,7 @@ typedef struct flowSlotInfo {
   /* second page, managed by userland */
   u_int64_t tot_read;
   u_int64_t remove_off /* managed by userland */;
-  u_int32_t vpfring_guest_flags; /* used by vPFRing */
-  u_int32_t userspace_ring_flags;
-  char u_padding[4096-24];
+  char u_padding[4096-16];
   /* <-- 8192 bytes here, to get a page aligned block writable by userland only */
 } FlowSlotInfo;
 
@@ -983,29 +977,6 @@ struct ring_element {
 
 /* ************************************************* */
 
-typedef enum {
-  userspace_ring_consumer = 0,
-  userspace_ring_producer
-} userspace_ring_client_type;
-
-struct pf_userspace_ring {
-  u_int16_t  id;
-
-  u_int16_t  slot_header_len;
-  u_int32_t  bucket_len;
-
-  u_int32_t  tot_mem;
-  u_char      *ring_memory;
-
-  atomic_t   users[2]; /* producers/consumers */
-
-  wait_queue_head_t *consumer_ring_slots_waitqueue;
-
-  struct list_head list;
-};
-
-/* ************************************************* */
-
 struct dma_memory_info {
   u_int32_t num_chunks, chunk_len;
   u_int32_t num_slots,  slot_len;
@@ -1208,14 +1179,6 @@ struct pf_ring_socket {
   /* Kernel consumer */
   u_int8_t kernel_consumer_plugin_id; /* If != 0 it identifies a plugin responsible for consuming packets */
   char *kernel_consumer_options, *kernel_consumer_private;
-
-#ifdef VPFRING_SUPPORT
-  struct eventfd_ctx *vpfring_host_eventfd_ctx;   /* host  -> guest */
-#endif /* VPFRING_SUPPORT */
-
-  /* UserSpace RING */
-  userspace_ring_client_type userspace_ring_type;
-  struct pf_userspace_ring *userspace_ring;
 
   /* DNA cluster */
   struct dna_cluster *dna_cluster;
@@ -1603,21 +1566,5 @@ struct pcaplike_pkthdr {
 #endif /* __KERNEL__  */
 
 /* *********************************** */
-
-struct vpfring_eventfd_info {
-  u_int32_t id; /* an id (unused now, but maybe useful in future) */
-  int32_t fd;
-};
-
-/* Values for the FlowSlotInfo.vpfring_guest_flags bitmap */
-#define VPFRING_GUEST_NO_INTERRUPT 1
-
-/* Host event IDs */
-#define VPFRING_HOST_EVENT_RX_INT 0
-
-/* *********************************** */
-
-/* bit masks for the FlowSlotInfo.userspace_ring_flags bitmap */
-#define USERSPACE_RING_NO_INTERRUPT 1
 
 #endif /* __RING_H */
