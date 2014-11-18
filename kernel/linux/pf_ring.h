@@ -416,12 +416,6 @@ typedef enum {
   recv_only_mode
 } socket_mode;
 
-typedef enum {
-  standard_linux_path = 0,           /* Business as usual */
-  driver2pf_ring_transparent = 1,    /* Packets are still delivered to the kernel */
-  driver2pf_ring_non_transparent = 2 /* Packets not delivered to the kernel */
-} direct2pf_ring;
-
 typedef struct {
   unsigned long jiffies_last_match;  /* Jiffies of the last rule match (updated by pf_ring) */
   struct net_device *reflector_dev;  /* Reflector device */
@@ -1388,7 +1382,6 @@ struct pfring_hooks {
 		     It should be set to PF_RING
 		     and is MUST be the first one on this struct
 		   */
-  unsigned int *transparent_mode;
   void *rx_private_data, *tx_private_data;
   handle_ring_skb ring_handler;
   handle_ring_buffer buffer_ring_handler;

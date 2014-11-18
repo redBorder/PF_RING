@@ -355,7 +355,7 @@ static unsigned int enable_frag_coherence = 1;
 static unsigned int enable_ip_defrag = 0;
 static unsigned int quick_mode = 0;
 static unsigned int enable_debug = 0;
-static unsigned int transparent_mode = standard_linux_path;
+static unsigned int transparent_mode = 0;
 static atomic_t ring_id_serial = ATOMIC_INIT(0);
 #ifdef REDBORDER_PATCH
 char *bypass_interfaces[MAX_NUM_DEVICES] = { 0 };
@@ -393,8 +393,7 @@ MODULE_PARM(quick_mode, "i");
 MODULE_PARM_DESC(min_num_slots, "Min number of ring slots");
 MODULE_PARM_DESC(perfect_rules_hash_size, "Perfect rules hash size");
 MODULE_PARM_DESC(transparent_mode,
-		 "0=standard Linux, 1=direct2pfring+transparent, 2=direct2pfring+non transparent"
-		 "For 1 and 2 you need to use a PF_RING aware driver");
+		 "(deprecated)");
 MODULE_PARM_DESC(enable_debug, "Set to 1 to enable PF_RING debug tracing into the syslog");
 MODULE_PARM_DESC(enable_tx_capture, "Set to 1 to capture outgoing packets");
 MODULE_PARM_DESC(enable_frag_coherence, "Set to 1 to handle fragments (flow coherence) in clusters");
@@ -1454,9 +1453,6 @@ static int ring_proc_get_info(struct seq_file *m, void *data_not_used)
     seq_printf(m, "Capture TX               : %s\n", enable_tx_capture ? "Yes [RX+TX]" : "No [RX only]");
     seq_printf(m, "IP Defragment            : %s\n", enable_ip_defrag ? "Yes" : "No");
     seq_printf(m, "Socket Mode              : %s\n", quick_mode ? "Quick" : "Standard");
-    seq_printf(m, "Transparent mode         : %s\n",
-		    (transparent_mode == standard_linux_path ? "Yes [mode 0]" :
-		     (transparent_mode == driver2pf_ring_transparent ? "Yes [mode 1]" : "No [mode 2]")));
     seq_printf(m, "Total plugins            : %d\n", plugin_registration_size);
 
     if(enable_frag_coherence) {
@@ -2953,8 +2949,7 @@ static inline int copy_data_to_ring(struct sk_buff *skb,
 	where we can read the id of the output interface
       */
 
-      if(((*clone_id)++ == 0)
-	 && (transparent_mode != driver2pf_ring_transparent /* mode=1 */))
+      if((*clone_id)++ == 0)
 	hdr->extended_hdr.tx.reserved = skb;
       else {
 	cloned = skb_clone(skb, GFP_ATOMIC);
@@ -4414,7 +4409,6 @@ static int skb_ring_handler(struct sk_buff *skb,
   int displ;
   int defragmented_skb = 0;
   struct sk_buff *skk = NULL;
-  struct sk_buff *orig_skb = skb;
   u_int32_t last_list_idx;
   struct sock *sk;
   struct pf_ring_socket *pfr;
@@ -4689,27 +4683,6 @@ static int skb_ring_handler(struct sk_buff *skb,
   if(clone_id > 0)
     *skb_reference_in_use = 1;
 
-  if(rc == 1 /* Ring found */) {
-    if(transparent_mode == driver2pf_ring_non_transparent /* 2 */) {
-      /* transparent mode = 2 */
-      if(recv_packet && real_skb) {
-	//if(unlikely(enable_debug))
-	//  printk("[PF_RING] kfree_skb()\n");
-
-	if(clone_id == 0) /* We have not used the orig_skb */
-	  kfree_skb(orig_skb); /* Free memory */
-      }
-    }
-    // else { /* transparent mode = 0 or 1 */
-    // CHECK: I commented the line below as I have no idea why it has been put there
-    // rc = 0;
-    //}
-#if 0
-    printk("[PF_RING] %s() [clone_id=%d][recv_packet=%d][real_skb=%d]\n",
-	   __FUNCTION__, clone_id, recv_packet, real_skb);
-#endif
-  }
-
 #ifdef PROFILING
   rdt2 = _rdtsc() - rdt2;
   rdt = _rdtsc() - rdt;
@@ -4773,8 +4746,7 @@ static int packet_rcv(struct sk_buff *skb, struct net_device *dev,
   int rc;
   u_int8_t skb_reference_in_use = 0;
 
-  if(skb->pkt_type != PACKET_LOOPBACK
-     && (transparent_mode == standard_linux_path || skb->pkt_type == PACKET_OUTGOING)) {
+  if(skb->pkt_type != PACKET_LOOPBACK) {
     rc = skb_ring_handler(skb,
 			  (skb->pkt_type == PACKET_OUTGOING) ? 0 : 1,
 			  1 /* real_skb */, &skb_reference_in_use,
@@ -4783,13 +4755,8 @@ static int packet_rcv(struct sk_buff *skb, struct net_device *dev,
   } else
     rc = 0;
 
-  if(!skb_reference_in_use) {
-    /*
-      This packet has been received by Linux through its standard
-      mechanisms (no PF_RING transparent/TNAPI)
-    */
+  if(!skb_reference_in_use)
     kfree_skb(skb);
-  }
 
   return(rc);
 }
@@ -4798,9 +4765,6 @@ static int packet_rcv(struct sk_buff *skb, struct net_device *dev,
 
 void register_device_handler(void) 
 {
-  if(transparent_mode != standard_linux_path && !enable_tx_capture)
-    return;
-
   prot_hook.func = packet_rcv;
   prot_hook.type = htons(ETH_P_ALL);
   dev_add_pack(&prot_hook);
@@ -4810,9 +4774,6 @@ void register_device_handler(void)
 
 void unregister_device_handler(void) 
 {
-  if(transparent_mode != standard_linux_path && !enable_tx_capture)
-    return;
-
   dev_remove_pack(&prot_hook); /* Remove protocol hook */
 }
 
@@ -9055,7 +9016,6 @@ static struct proto ring_proto = {
 
 static struct pfring_hooks ring_hooks = {
   .magic = PF_RING,
-  .transparent_mode = &transparent_mode,
   .ring_handler = skb_ring_handler,
   .buffer_ring_handler = buffer_ring_handler,
   .buffer_add_hdr_to_ring = add_hdr_to_ring,
@@ -9544,16 +9504,14 @@ static int __init ring_init(void)
   register_netdevice_notifier(&ring_netdev_notifier);
 
   /* Sanity check */
-  if(transparent_mode > driver2pf_ring_non_transparent)
-    transparent_mode = standard_linux_path;
+  if(transparent_mode != 0)
+    printk("[PF_RING] Warning: transparent_mode is deprecated!\n");
 
   printk("[PF_RING] Min # ring slots %d\n", min_num_slots);
   printk("[PF_RING] Slot version     %d\n",
 	 RING_FLOWSLOT_VERSION);
   printk("[PF_RING] Capture TX       %s\n",
 	 enable_tx_capture ? "Yes [RX+TX]" : "No [RX only]");
-  printk("[PF_RING] Transparent Mode %d\n",
-	 transparent_mode);
   printk("[PF_RING] IP Defragment    %s\n",
 	 enable_ip_defrag ? "Yes" : "No");
   printk("[PF_RING] Initialized correctly\n");
