@@ -379,7 +379,7 @@ int main(int argc, char* argv[]) {
 
   start_time.tv_sec = 0;
 
-  while((c = getopt(argc,argv,"ac:dg:hi:m:n:Q:q:D:N:P:S:")) != '?') {
+  while((c = getopt(argc,argv,"ac:dg:hi:m:n:Q:q:N:P:S:")) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
