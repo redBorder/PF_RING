@@ -133,3 +133,48 @@ char *msec2dhmsm(u_int64_t msec, char *buf, u_int buf_len) {
 
 /* *************************************** */
 
+void daemonize() {
+  pid_t pid, sid;
+
+  pid = fork();
+  if (pid < 0) exit(EXIT_FAILURE);
+  if (pid > 0) exit(EXIT_SUCCESS);
+
+  sid = setsid();
+  if (sid < 0) exit(EXIT_FAILURE);
+
+  if ((chdir("/")) < 0) exit(EXIT_FAILURE);
+
+  close(STDIN_FILENO);
+  close(STDOUT_FILENO);
+  close(STDERR_FILENO);
+}
+
+/* *************************************** */
+
+void create_pid_file(char *pidFile) {
+  FILE *fp;
+
+  if (pidFile == NULL) return;
+
+  fp = fopen(pidFile, "w");
+
+  if (fp == NULL) {
+    fprintf(stderr, "unable to create pid file %s: %s\n", pidFile, strerror(errno));
+    return;
+  }
+
+  fprintf(fp, "%d\n", getpid());
+  fclose(fp);
+}
+
+/* *************************************** */
+
+void remove_pid_file(char *pidFile) {
+  if (pidFile == NULL) return;
+
+  unlink(pidFile);
+}
+
+/* *************************************** */
+
