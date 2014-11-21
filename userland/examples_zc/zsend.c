@@ -94,44 +94,6 @@ static __inline__ ticks getticks(void) {
 
 /* ******************************************* */
 
-int is_a_queue(char *device, int *cluster_id, int *queue_id) {
-  char *tmp;
-  char c_id[32], q_id[32];
-  int i;
-
-  /* Syntax <number>@<number> or zc:<number>@<number> */
-
-  tmp = strstr(device, "zc:");
-  if (tmp != NULL) tmp = &tmp[3];
-  else tmp = device;
-
-  i = 0;
-  if (tmp[0] == '\0' || tmp[0] == '@') return 0;
-  while (tmp[0] != '@' && tmp[0] != '\0') {
-    if (!isdigit(tmp[0])) return 0;
-    c_id[i++] = tmp[0];
-    tmp++;
-  }
-  c_id[i] = '\0';
-
-  i = 0;
-  if (tmp[0] == '@') tmp++;
-  if (tmp[0] == '\0') return 0;
-  while (tmp[0] != '\0') {
-    if (!isdigit(tmp[0])) return 0;
-    q_id[i++] = tmp[0];
-    tmp++;
-  }
-  q_id[i] = '\0';
-
-  *cluster_id = atoi(c_id);
-  *queue_id = atoi(q_id);
-
-  return 1;
-}
-
-/* ******************************************* */
-
 void *time_pulse_thread(void *data) {
   struct timespec tn;
 
