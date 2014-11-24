@@ -176,7 +176,7 @@ static void print_adv_rx_descr(union e1000_adv_rx_desc	*descr) {
 
 /* ********************************** */
 
-dna_device_model dna_model(struct e1000_hw *hw){
+zc_dev_model dna_model(struct e1000_hw *hw){
   switch (hw->mac.type) {
     case e1000_82580:
     case e1000_i350:
@@ -671,8 +671,8 @@ void dna_igb_alloc_rx_buffers(struct igb_ring *rx_ring, struct pfring_hooks *hoo
 
   /* Register with PF_RING */
 
-  hook->ring_dna_device_handler(add_device_mapping,
-				dna_v1,
+  hook->zc_dev_handler(add_device_mapping,
+				dna_driver,
   				&rx_info,
 				&tx_info,
 				rx_ring->dna.rx_tx.rx.packet_memory,

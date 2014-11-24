@@ -209,11 +209,10 @@ struct __pfring {
     u_int32_t rx_reg, tx_reg, last_rx_slot_read;
     u_int32_t num_rx_slots_per_chunk, num_tx_slots_per_chunk;
     
-    dna_device dna_dev;
-    dna_indexes *indexes_ptr;
+    zc_dev_info dna_dev;
     volatile u_int32_t *rx_reg_ptr, *tx_reg_ptr,
       *mpc_reg_ptr, *qprdc_reg_ptr, *rnbc_reg_ptr, *rqdpc_reg_ptr, *gorc_reg_ptr;
-    dna_device_operation last_dna_operation;
+    zc_dev_operation last_dna_operation;
   } dna;
 
   void   *priv_data; /* module private data */

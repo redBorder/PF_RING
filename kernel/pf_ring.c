@@ -216,8 +216,8 @@ static rwlock_t cluster_fragments_lock =
 ;
 
 /* List of all DNA (Direct NIC Access) devices */
-static struct list_head ring_dna_devices_list;
-static u_int dna_devices_list_size = 0;
+static struct list_head zc_devices_list;
+static u_int zc_devices_list_size = 0;
 
 /* List of all plugins */
 static u_int plugin_registration_size = 0;
@@ -330,8 +330,8 @@ static int skb_ring_handler(struct sk_buff *skb, u_char recv_packet,
 			    u_int32_t channel_id, u_int32_t num_rx_channels);
 static int buffer_ring_handler(struct net_device *dev, char *data, int len);
 static int remove_from_cluster(struct sock *sock, struct pf_ring_socket *pfr);
-static int ring_map_dna_device(struct pf_ring_socket *pfr,
-			       dna_device_mapping * mapping);
+static int pfring_map_zc_dev(struct pf_ring_socket *pfr,
+			       zc_dev_mapping *mapping);
 
 static int  get_fragment_app_id(u_int32_t ipv4_src_host, u_int32_t ipv4_dst_host, u_int16_t fragment_id, u_int8_t more_fragments);
 static void add_fragment_app_id(u_int32_t ipv4_src_host, u_int32_t ipv4_dst_host, u_int16_t fragment_id, u_int8_t app_id);
@@ -1016,30 +1016,35 @@ static int ring_proc_dev_get_info(struct seq_file *m, void *data_not_used)
     struct net_device *dev = dev_ptr->dev;
     char dev_buf[16] = { 0 }, *dev_family = "???";
 
-    if(dev_ptr->is_dna_device) {
-      switch(dev_ptr->dna_device_model) {
+    if(dev_ptr->is_zc_device) {
+      switch(dev_ptr->zc_dev_model) {
       case intel_e1000:
-	dev_family = "Intel e1000"; break;
+	dev_family = "Intel e1000"; 
+        break;
       case intel_e1000e:
-	dev_family = "Intel e1000e"; break;
+	dev_family = "Intel e1000e";
+        break;
       case intel_igb:
-	dev_family = "Intel igb"; break;
+	dev_family = "Intel igb";
 	break;
       case intel_igb_82580:
-	dev_family = "Intel igb 82580/i350 HW TS"; break;
+	dev_family = "Intel igb 82580/i350 HW TS";
 	break;
       case intel_ixgbe:
-	dev_family = "Intel ixgbe"; break;
+	dev_family = "Intel ixgbe";
 	break;
       case intel_ixgbe_82598:
-	dev_family = "Intel ixgbe 82598"; break;
+	dev_family = "Intel ixgbe 82598";
 	break;
       case intel_ixgbe_82599:
-	dev_family = "Intel ixgbe 82599"; break;
+	dev_family = "Intel ixgbe 82599";
 	break;
       case intel_ixgbe_82599_ts:
-	dev_family = "Silicom ixgbe 82599 HW TS"; break;
+	dev_family = "Silicom ixgbe 82599 HW TS";
 	break;
+      case intel_i40e:
+        dev_family = "Intel i40e";
+        break;
       }
     } else {
       switch(dev_ptr->device_type) {
@@ -1054,8 +1059,8 @@ static int ring_proc_dev_get_info(struct seq_file *m, void *data_not_used)
 	       dev->perm_addr[0], dev->perm_addr[1], dev->perm_addr[2],
 	       dev->perm_addr[3], dev->perm_addr[4], dev->perm_addr[5]);
     
-    seq_printf(m, "Polling Mode:      %s\n", dev_ptr->is_dna_device == 1 ? "DNA" : 
-      (dev_ptr->is_dna_device == 2 ? "NAPI/ZC" : "NAPI"));
+    seq_printf(m, "Polling Mode:      %s\n", dev_ptr->is_zc_device == 1 ? "DNA" : 
+      (dev_ptr->is_zc_device == 2 ? "NAPI/ZC" : "NAPI"));
 
     switch(dev->type) {
     case 1:   strcpy(dev_buf, "Ethernet"); break;
@@ -1066,7 +1071,7 @@ static int ring_proc_dev_get_info(struct seq_file *m, void *data_not_used)
     seq_printf(m, "Type:              %s\n", dev_buf);
     seq_printf(m, "Family:            %s\n", dev_family);
 
-    if(!dev_ptr->is_dna_device) {
+    if(!dev_ptr->is_zc_device) {
       if(dev->ifindex < MAX_NUM_IFIDX) {
 	seq_printf(m, "# Bound Sockets:   %d\n",
 		   num_rings_per_device[dev->ifindex]);
@@ -1078,7 +1083,7 @@ static int ring_proc_dev_get_info(struct seq_file *m, void *data_not_used)
 #endif
 
     seq_printf(m, "# Used RX Queues:  %d\n",
-	       dev_ptr->is_dna_device ? dev_ptr->num_dna_rx_queues : get_num_rx_queues(dev));
+	       dev_ptr->is_zc_device ? dev_ptr->num_zc_dev_rx_queues : get_num_rx_queues(dev));
   }
 
   return(0);
@@ -1487,7 +1492,7 @@ static int ring_proc_get_info(struct seq_file *m, void *data_not_used)
       seq_printf(m, "\n");
 
       seq_printf(m, "Active             : %d\n", pfr->ring_active || pfr->dna_cluster);
-      seq_printf(m, "Breed              : %s\n", (pfr->dna_device_entry != NULL) ? (pfr->ring_netdev->is_dna_device == 1 ? "DNA" : "ZC") : "Standard");
+      seq_printf(m, "Breed              : %s\n", (pfr->zc_device_entry != NULL) ? (pfr->ring_netdev->is_zc_device == 1 ? "DNA" : "ZC") : "Standard");
       seq_printf(m, "Sampling Rate      : %d\n", pfr->sample_rate);
       seq_printf(m, "Capture Direction  : %s\n", direction2string(pfr->direction));
       seq_printf(m, "Socket Mode        : %s\n", sockmode2string(pfr->mode));
@@ -1499,18 +1504,18 @@ static int ring_proc_get_info(struct seq_file *m, void *data_not_used)
       seq_printf(m, "Poll Pkt Watermark : %d\n", pfr->poll_num_pkts_watermark);
       seq_printf(m, "Num Poll Calls     : %u\n", pfr->num_poll_calls);
 
-      if(pfr->dna_device_entry != NULL) {
+      if(pfr->zc_device_entry != NULL) {
         /* DNA */
-        seq_printf(m, "Channel Id         : %d\n", pfr->dna_device_entry->dev.channel_id);
-        seq_printf(m, "Num RX Slots       : %d\n", pfr->dna_device_entry->dev.mem_info.rx.packet_memory_num_slots);
-	seq_printf(m, "Num TX Slots       : %d\n", pfr->dna_device_entry->dev.mem_info.tx.packet_memory_num_slots);
+        seq_printf(m, "Channel Id         : %d\n", pfr->zc_device_entry->dev.channel_id);
+        seq_printf(m, "Num RX Slots       : %d\n", pfr->zc_device_entry->dev.mem_info.rx.packet_memory_num_slots);
+	seq_printf(m, "Num TX Slots       : %d\n", pfr->zc_device_entry->dev.mem_info.tx.packet_memory_num_slots);
 	seq_printf(m, "Tot Memory         : %u bytes\n",
-			( pfr->dna_device_entry->dev.mem_info.rx.packet_memory_num_chunks *
-			  pfr->dna_device_entry->dev.mem_info.rx.packet_memory_chunk_len   )
-			+(pfr->dna_device_entry->dev.mem_info.tx.packet_memory_num_chunks *
-			  pfr->dna_device_entry->dev.mem_info.tx.packet_memory_chunk_len   )
-			+ pfr->dna_device_entry->dev.mem_info.rx.descr_packet_memory_tot_len
-			+ pfr->dna_device_entry->dev.mem_info.tx.descr_packet_memory_tot_len);
+			( pfr->zc_device_entry->dev.mem_info.rx.packet_memory_num_chunks *
+			  pfr->zc_device_entry->dev.mem_info.rx.packet_memory_chunk_len   )
+			+(pfr->zc_device_entry->dev.mem_info.tx.packet_memory_num_chunks *
+			  pfr->zc_device_entry->dev.mem_info.tx.packet_memory_chunk_len   )
+			+ pfr->zc_device_entry->dev.mem_info.rx.descr_packet_memory_tot_len
+			+ pfr->zc_device_entry->dev.mem_info.tx.descr_packet_memory_tot_len);
 	if(pfr->dna_cluster && pfr->dna_cluster_type == cluster_master && pfr->dna_cluster->stats) {
 	  seq_printf(m, "Cluster: Tot Recvd : %lu\n", (unsigned long)pfr->dna_cluster->stats->tot_rx_packets);
 	  seq_printf(m, "Cluster: Tot Sent  : %lu\n", (unsigned long)pfr->dna_cluster->stats->tot_tx_packets);
@@ -5910,13 +5915,13 @@ static int ring_release(struct socket *sock)
   if(pfr->cluster_referee != NULL)
     remove_cluster_referee(pfr);
 
-  if(pfr->dna_device_entry != NULL) {
-    dna_device_mapping mapping;
+  if(pfr->zc_device_entry != NULL) {
+    zc_dev_mapping mapping;
 
     mapping.operation = remove_device_mapping;
-    snprintf(mapping.device_name, sizeof(mapping.device_name), "%s",  pfr->dna_device_entry->dev.netdev->name);
-    mapping.channel_id = pfr->dna_device_entry->dev.channel_id;
-    ring_map_dna_device(pfr, &mapping);
+    snprintf(mapping.device_name, sizeof(mapping.device_name), "%s",  pfr->zc_device_entry->dev.netdev->name);
+    mapping.channel_id = pfr->zc_device_entry->dev.channel_id;
+    pfring_map_zc_dev(pfr, &mapping);
   }
 
   if(pfr->extra_dma_memory != NULL) {
@@ -6173,31 +6178,31 @@ static int ring_mmap(struct file *file,
   if(mem_id >= 100) {
     mem_id -= 100;
 
-    if(pfr->dna_device) {
-      if(mem_id < pfr->dna_device->mem_info.rx.packet_memory_num_chunks) {
+    if(pfr->zc_dev) {
+      if(mem_id < pfr->zc_dev->mem_info.rx.packet_memory_num_chunks) {
         /* DNA: RX packet memory */
 
-        if((rc = do_memory_mmap(vma, 0, size, (void *)pfr->dna_device->rx_packet_memory[mem_id], 0, VM_LOCKED, 1)) < 0)
+        if((rc = do_memory_mmap(vma, 0, size, (void *)pfr->zc_dev->rx_packet_memory[mem_id], 0, VM_LOCKED, 1)) < 0)
           return(rc);
 
 	return(0);
-      } else if(mem_id < pfr->dna_device->mem_info.rx.packet_memory_num_chunks +
-                         pfr->dna_device->mem_info.tx.packet_memory_num_chunks) {
+      } else if(mem_id < pfr->zc_dev->mem_info.rx.packet_memory_num_chunks +
+                         pfr->zc_dev->mem_info.tx.packet_memory_num_chunks) {
         /* DNA: TX packet memory */
 
-        mem_id -= pfr->dna_device->mem_info.rx.packet_memory_num_chunks;
+        mem_id -= pfr->zc_dev->mem_info.rx.packet_memory_num_chunks;
 
-        if((rc = do_memory_mmap(vma, 0, size, (void *)pfr->dna_device->tx_packet_memory[mem_id], 0, VM_LOCKED, 1)) < 0)
+        if((rc = do_memory_mmap(vma, 0, size, (void *)pfr->zc_dev->tx_packet_memory[mem_id], 0, VM_LOCKED, 1)) < 0)
           return(rc);
 
 	return(0);
-      } else if(pfr->extra_dma_memory && mem_id < pfr->dna_device->mem_info.rx.packet_memory_num_chunks +
-                                                  pfr->dna_device->mem_info.tx.packet_memory_num_chunks +
+      } else if(pfr->extra_dma_memory && mem_id < pfr->zc_dev->mem_info.rx.packet_memory_num_chunks +
+                                                  pfr->zc_dev->mem_info.tx.packet_memory_num_chunks +
                                                   pfr->extra_dma_memory->num_chunks) {
         /* Extra DMA memory */
 
-        mem_id -= pfr->dna_device->mem_info.rx.packet_memory_num_chunks;
-        mem_id -= pfr->dna_device->mem_info.tx.packet_memory_num_chunks;
+        mem_id -= pfr->zc_dev->mem_info.rx.packet_memory_num_chunks;
+        mem_id -= pfr->zc_dev->mem_info.tx.packet_memory_num_chunks;
 
         if(pfr->extra_dma_memory->virtual_addr == NULL)
           return(-EINVAL);
@@ -6212,9 +6217,9 @@ static int ring_mmap(struct file *file,
     if(pfr->dna_cluster) {
       /* DNA cluster extra DMA memory */
 
-      if(pfr->dna_device) {
-        mem_id -= pfr->dna_device->mem_info.rx.packet_memory_num_chunks;
-        mem_id -= pfr->dna_device->mem_info.tx.packet_memory_num_chunks;
+      if(pfr->zc_dev) {
+        mem_id -= pfr->zc_dev->mem_info.rx.packet_memory_num_chunks;
+        mem_id -= pfr->zc_dev->mem_info.tx.packet_memory_num_chunks;
         if(pfr->extra_dma_memory)
           mem_id -= pfr->extra_dma_memory->num_chunks;
       }
@@ -6249,7 +6254,7 @@ static int ring_mmap(struct file *file,
   switch(mem_id) {
     /* RING */
     case 0:
-      if(pfr->dna_device != NULL || pfr->dna_cluster != NULL) {
+      if(pfr->zc_dev != NULL || pfr->dna_cluster != NULL) {
         printk("[PF_RING] %s(): trying to map ring memory on DNA socket\n", __FUNCTION__);
 	return(-EINVAL);
       }
@@ -6278,25 +6283,25 @@ static int ring_mmap(struct file *file,
       break;
     case 1:
       /* DNA: RX packet descriptors */
-      if(pfr->dna_device == NULL) {
+      if(pfr->zc_dev == NULL) {
         if(unlikely(enable_debug))
 	  printk("[PF_RING] %s() failed: operation for DNA only", __FUNCTION__);
         return(-EINVAL);
       }
 
-      if((rc = do_memory_mmap(vma, 0, size, (void *) pfr->dna_device->rx_descr_packet_memory, 0, VM_LOCKED, 1)) < 0)
+      if((rc = do_memory_mmap(vma, 0, size, (void *) pfr->zc_dev->rx_descr_packet_memory, 0, VM_LOCKED, 1)) < 0)
 	return(rc);
 
       break;
     case 2:
       /* DNA: Physical card memory */
-      if(pfr->dna_device == NULL) {
+      if(pfr->zc_dev == NULL) {
         if(unlikely(enable_debug))
 	  printk("[PF_RING] %s() failed: operation for DNA only", __FUNCTION__);
         return(-EINVAL);
       }
 
-      if((rc = do_memory_mmap(vma, 0, size, (void *) pfr->dna_device->phys_card_memory, 0, (
+      if((rc = do_memory_mmap(vma, 0, size, (void *) pfr->zc_dev->phys_card_memory, 0, (
 #if(LINUX_VERSION_CODE < KERNEL_VERSION(3,7,0))
                                                                                            VM_IO | VM_RESERVED
 #else
@@ -6308,13 +6313,13 @@ static int ring_mmap(struct file *file,
       break;
     case 3:
       /* DNA: TX packet descriptors */
-      if(pfr->dna_device == NULL) {
+      if(pfr->zc_dev == NULL) {
         if(unlikely(enable_debug))
 	  printk("[PF_RING] %s() failed: operation for DNA only", __FUNCTION__);
         return(-EINVAL);
       }
 
-      if((rc = do_memory_mmap(vma, 0, size, (void *) pfr->dna_device->tx_descr_packet_memory, 0, VM_LOCKED, 1)) < 0)
+      if((rc = do_memory_mmap(vma, 0, size, (void *) pfr->zc_dev->tx_descr_packet_memory, 0, VM_LOCKED, 1)) < 0)
 	return(rc);
 
       break;
@@ -6589,7 +6594,7 @@ unsigned int ring_poll(struct file *file,
   int rc, mask = 0;
 
   //if(unlikely(enable_debug))
-  //  printk("[PF_RING] -- poll called [DNA: %p][%s]\n", pfr->dna_device,
+  //  printk("[PF_RING] -- poll called [DNA: %p][%s]\n", pfr->zc_dev,
   //	   pfr->ring_netdev->dev->name ? pfr->ring_netdev->dev->name : "???");
 
   pfr->num_poll_calls++;
@@ -6597,7 +6602,7 @@ unsigned int ring_poll(struct file *file,
   if(unlikely(pfr->ring_shutdown))
     return(mask);
 
-  if(pfr->dna_device == NULL) {
+  if(pfr->zc_dev == NULL) {
     /* PF_RING mode (No DNA) */
 
     // if(unlikely(enable_debug))
@@ -6639,16 +6644,16 @@ unsigned int ring_poll(struct file *file,
 
     if(unlikely(enable_debug))
       printk("[PF_RING] poll called on DNA device [%d]\n",
-	     *pfr->dna_device->interrupt_received);
+	     *pfr->zc_dev->interrupt_received);
 
-    if(pfr->dna_device->wait_packet_function_ptr == NULL) {
+    if(pfr->zc_dev->wait_packet_function_ptr == NULL) {
       if(unlikely(enable_debug))
 	printk("[PF_RING] wait_packet_function_ptr is NULL: returning to caller\n");
 
       return(0);
     }
 
-    rc = pfr->dna_device->wait_packet_function_ptr(pfr->dna_device->rx_adapter_ptr, 1);
+    rc = pfr->zc_dev->wait_packet_function_ptr(pfr->zc_dev->rx_adapter_ptr, 1);
 
     if(unlikely(enable_debug))
       printk("[PF_RING] wait_packet_function_ptr(1) returned %d\n", rc);
@@ -6658,12 +6663,12 @@ unsigned int ring_poll(struct file *file,
 	printk("[PF_RING] calling poll_wait()\n");
 
       /* No packet arrived yet */
-      poll_wait(file, pfr->dna_device->packet_waitqueue, wait);
+      poll_wait(file, pfr->zc_dev->packet_waitqueue, wait);
 
       if(unlikely(enable_debug))
 	printk("[PF_RING] poll_wait() just returned\n");
     } else
-      rc = pfr->dna_device->wait_packet_function_ptr(pfr->dna_device->rx_adapter_ptr, 0);
+      rc = pfr->zc_dev->wait_packet_function_ptr(pfr->zc_dev->rx_adapter_ptr, 0);
 
     if(unlikely(enable_debug))
       printk("[PF_RING] wait_packet_function_ptr(0) returned %d\n", rc);
@@ -6671,9 +6676,9 @@ unsigned int ring_poll(struct file *file,
     if(unlikely(enable_debug))
       printk("[PF_RING] poll %s return [%d]\n",
 	     pfr->ring_netdev->dev->name,
-	     *pfr->dna_device->interrupt_received);
+	     *pfr->zc_dev->interrupt_received);
 
-    if(*pfr->dna_device->interrupt_received) {
+    if(*pfr->zc_dev->interrupt_received) {
       return(POLLIN | POLLRDNORM);
     } else {
       return(0);
@@ -6866,8 +6871,8 @@ static int add_sock_to_cluster(struct sock *sock,
 
 /* ************************************* */
 
-static int ring_map_dna_device(struct pf_ring_socket *pfr,
-			       dna_device_mapping *mapping)
+static int pfring_map_zc_dev(struct pf_ring_socket *pfr,
+			       zc_dev_mapping *mapping)
 {
   struct list_head *ptr, *tmp_ptr;
   int i, found;
@@ -6880,8 +6885,8 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
   if(mapping->operation == remove_device_mapping) {
     /* Unlock driver */
 
-    list_for_each_safe(ptr, tmp_ptr, &ring_dna_devices_list) {
-      dna_device_list *entry = list_entry(ptr, dna_device_list, list);
+    list_for_each_safe(ptr, tmp_ptr, &zc_devices_list) {
+      zc_dev_list *entry = list_entry(ptr, zc_dev_list, list);
 
       if(!strcmp(entry->dev.netdev->name, mapping->device_name)
 	 && entry->dev.channel_id == mapping->channel_id) {
@@ -6910,11 +6915,11 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 	  printk("[PF_RING] %s(%s@%u): removed mapping [num_bound_sockets=%u]\n",
 		 __FUNCTION__, mapping->device_name, mapping->channel_id, entry->num_bound_sockets);
 
-        if(pfr->dna_device != NULL) {
-          pfr->dna_device->usage_notification(pfr->dna_device->rx_adapter_ptr,
-					      pfr->dna_device->tx_adapter_ptr,
+        if(pfr->zc_dev != NULL) {
+          pfr->zc_dev->usage_notification(pfr->zc_dev->rx_adapter_ptr,
+					      pfr->zc_dev->tx_adapter_ptr,
 					      0 /* unlock */);
-          // pfr->dna_device = NULL;
+          // pfr->zc_dev = NULL;
         }
 
         break;
@@ -6925,8 +6930,8 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
   } else {
     ring_proc_remove(pfr);
 
-    list_for_each_safe(ptr, tmp_ptr, &ring_dna_devices_list) {
-      dna_device_list *entry = list_entry(ptr, dna_device_list, list);
+    list_for_each_safe(ptr, tmp_ptr, &zc_devices_list) {
+      zc_dev_list *entry = list_entry(ptr, zc_dev_list, list);
       if((!strcmp(entry->dev.netdev->name, mapping->device_name))
 	 && (entry->dev.channel_id == mapping->channel_id)) {
 	int i;
@@ -6956,8 +6961,8 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 	  return(-1); /* Something got wrong: too many mappings */
 	}
 
-	pfr->dna_device_entry = entry;
-	pfr->dna_device = &entry->dev;
+	pfr->zc_device_entry = entry;
+	pfr->zc_dev = &entry->dev;
 
 	/* Now let's set the read ring_netdev device */
 	found = 0;
@@ -6984,8 +6989,8 @@ static int ring_map_dna_device(struct pf_ring_socket *pfr,
 	  printk("[PF_RING] ===> %s(%s@%u): added mapping [num_bound_sockets=%u]\n",
 		 __FUNCTION__, mapping->device_name, mapping->channel_id, entry->num_bound_sockets);
 
-	pfr->dna_device->usage_notification(pfr->dna_device->rx_adapter_ptr,
-					    pfr->dna_device->tx_adapter_ptr,
+	pfr->zc_dev->usage_notification(pfr->zc_dev->rx_adapter_ptr,
+					    pfr->zc_dev->tx_adapter_ptr,
 					    1 /* lock */);
 
 	ring_proc_add(pfr);
@@ -7732,18 +7737,18 @@ static int ring_setsockopt(struct socket *sock,
     if(unlikely(enable_debug))
       printk("[PF_RING] * SO_ACTIVATE_RING *\n");
 
-    if(pfr->dna_device_entry != NULL && !pfr->ring_active /* already active, no check */) {
+    if(pfr->zc_device_entry != NULL && !pfr->ring_active /* already active, no check */) {
       int i;
 
-      write_lock(&pfr->dna_device_entry->lock);
+      write_lock(&pfr->zc_device_entry->lock);
 
       for(i=0; i<MAX_NUM_DNA_BOUND_SOCKETS; i++) {
-	if((pfr->dna_device_entry->bound_sockets[i] != NULL)
-	   && pfr->dna_device_entry->bound_sockets[i]->ring_active) {
-	  if(pfr->dna_device_entry->bound_sockets[i]->mode == pfr->mode
-	     || pfr->dna_device_entry->bound_sockets[i]->mode == send_and_recv_mode
+	if((pfr->zc_device_entry->bound_sockets[i] != NULL)
+	   && pfr->zc_device_entry->bound_sockets[i]->ring_active) {
+	  if(pfr->zc_device_entry->bound_sockets[i]->mode == pfr->mode
+	     || pfr->zc_device_entry->bound_sockets[i]->mode == send_and_recv_mode
 	     || pfr->mode == send_and_recv_mode) {
-            write_unlock(&pfr->dna_device_entry->lock);
+            write_unlock(&pfr->zc_device_entry->lock);
 	    printk("[PF_RING] Unable to activate two or more DNA sockets on the same interface %s/link direction\n",
 		   pfr->ring_netdev->dev->name);
 	    return(-EFAULT); /* No way: we can't have two sockets that are doing the same thing with DNA */
@@ -7753,7 +7758,7 @@ static int ring_setsockopt(struct socket *sock,
 
       pfr->ring_active = 1;
 
-      write_unlock(&pfr->dna_device_entry->lock);
+      write_unlock(&pfr->zc_device_entry->lock);
 
     } else {
       pfr->ring_active = 1;
@@ -7810,15 +7815,15 @@ static int ring_setsockopt(struct socket *sock,
     break;
 
   case SO_MAP_DNA_DEVICE:
-    if(optlen != sizeof(dna_device_mapping))
+    if(optlen != sizeof(zc_dev_mapping))
       return(-EINVAL);
     else {
-      dna_device_mapping mapping;
+      zc_dev_mapping mapping;
 
       if(copy_from_user(&mapping, optval, optlen))
 	return(-EFAULT);
       else
-	ret = ring_map_dna_device(pfr, &mapping), found = 1;
+	ret = pfring_map_zc_dev(pfr, &mapping), found = 1;
     }
     break;
 
@@ -8015,7 +8020,7 @@ static int ring_setsockopt(struct socket *sock,
       if(cdnaci.slave_mem_len == 0 || cdnaci.num_slaves > DNA_CLUSTER_MAX_NUM_SLAVES)
         return(-EINVAL);
 
-      if(pfr->dna_device == NULL || pfr->dna_device->hwdev == NULL)
+      if(pfr->zc_dev == NULL || pfr->zc_dev->hwdev == NULL)
         return(-EINVAL);
 
       if (!(cdnaci.options & DNA_CLUSTER_OPT_HUGEPAGES)) {
@@ -8029,9 +8034,9 @@ static int ring_setsockopt(struct socket *sock,
       pfr->dna_cluster = dna_cluster_create(cdnaci.cluster_id, cdnaci.num_slots, cdnaci.num_slaves,
                                             cdnaci.slave_mem_len, cdnaci.master_persistent_mem_len,
 					    cdnaci.mode, cdnaci.options, cdnaci.hugepages_dir,
-					    pfr->dna_device->hwdev,
-                                            pfr->dna_device->mem_info.rx.packet_memory_slot_len,
-                                            pfr->dna_device->mem_info.rx.packet_memory_chunk_len,
+					    pfr->zc_dev->hwdev,
+                                            pfr->zc_dev->mem_info.rx.packet_memory_slot_len,
+                                            pfr->zc_dev->mem_info.rx.packet_memory_chunk_len,
 					    &cdnaci.recovered);
 
       if(pfr->dna_cluster == NULL) {
@@ -8478,10 +8483,10 @@ static int ring_getsockopt(struct socket *sock,
 
   case SO_GET_MAPPED_DNA_DEVICE:
     {
-      if((pfr->dna_device == NULL) || (len < sizeof(dna_memory_slots)))
+      if((pfr->zc_dev == NULL) || (len < sizeof(zc_memory_info)))
 	return(-EFAULT);
 
-      if(copy_to_user(optval, &pfr->dna_device->mem_info, sizeof(dna_memory_slots)))
+      if(copy_to_user(optval, &pfr->zc_dev->mem_info, sizeof(zc_memory_info)))
 	return(-EFAULT);
 
       break;
@@ -8491,7 +8496,7 @@ static int ring_getsockopt(struct socket *sock,
     {
       u_int64_t num_slots, slot_len, chunk_len;
 
-      if(pfr->dna_device == NULL || pfr->dna_device->hwdev == NULL)
+      if(pfr->zc_dev == NULL || pfr->zc_dev->hwdev == NULL)
         return(-EINVAL);
 
       if(len < (3 * sizeof(u_int64_t)))
@@ -8515,7 +8520,7 @@ static int ring_getsockopt(struct socket *sock,
       if(pfr->extra_dma_memory) /* already called */
         return(-EINVAL);
 
-      if((pfr->extra_dma_memory = allocate_extra_dma_memory(pfr->dna_device->hwdev,
+      if((pfr->extra_dma_memory = allocate_extra_dma_memory(pfr->zc_dev->hwdev,
                                     num_slots, slot_len, chunk_len)) == NULL)
         return(-EFAULT);
 
@@ -8536,8 +8541,8 @@ static int ring_getsockopt(struct socket *sock,
 	/* Device not yet bound */
 	num_rx_channels = UNKNOWN_NUM_RX_CHANNELS;
       } else {
-	if(pfr->ring_netdev->is_dna_device)
-	  num_rx_channels = pfr->ring_netdev->num_dna_rx_queues;
+	if(pfr->ring_netdev->is_zc_device)
+	  num_rx_channels = pfr->ring_netdev->num_zc_dev_rx_queues;
 	else
 	  num_rx_channels = max_val(pfr->num_rx_channels, get_num_rx_queues(pfr->ring_netdev->dev));
       }
@@ -8545,8 +8550,8 @@ static int ring_getsockopt(struct socket *sock,
       if(unlikely(enable_debug))
 	printk("[PF_RING] --> SO_GET_NUM_RX_CHANNELS[%s]=%d [dna=%d/dns_rx_channels=%d][%p]\n",
 	       pfr->ring_netdev->dev->name, num_rx_channels,
-	       pfr->ring_netdev->is_dna_device,
-	       pfr->ring_netdev->num_dna_rx_queues,
+	       pfr->ring_netdev->is_zc_device,
+	       pfr->ring_netdev->num_zc_dev_rx_queues,
 	       pfr->ring_netdev);
 
       if(copy_to_user(optval, &num_rx_channels, sizeof(num_rx_channels)))
@@ -8581,8 +8586,8 @@ static int ring_getsockopt(struct socket *sock,
   case SO_GET_BOUND_DEVICE_ADDRESS:
     if(len < ETH_ALEN) return(-EINVAL);
 
-    if(pfr->dna_device != NULL) {
-      if(copy_to_user(optval, pfr->dna_device->device_address, 6))
+    if(pfr->zc_dev != NULL) {
+      if(copy_to_user(optval, pfr->zc_dev->device_address, 6))
 	return(-EFAULT);
     } else if((pfr->ring_netdev != NULL)
 	      && (pfr->ring_netdev->dev != NULL)) {
@@ -8769,8 +8774,8 @@ static int ring_getsockopt(struct socket *sock,
 
 /* ************************************* */
 
-void dna_device_handler(dna_device_operation operation,
-			dna_version version,
+void zc_dev_handler(zc_dev_operation operation,
+			zc_driver_version version,
 			mem_ring_info *rx_info,
 			mem_ring_info *tx_info,
 			unsigned long  rx_packet_memory[DNA_MAX_NUM_CHUNKS],
@@ -8782,16 +8787,16 @@ void dna_device_handler(dna_device_operation operation,
 			u_int channel_id,
 			struct net_device *netdev,
 			struct device *hwdev,
-			dna_device_model device_model,
+			zc_dev_model device_model,
 			u_char *device_address,
 			wait_queue_head_t *packet_waitqueue,
 			u_int8_t *interrupt_received,
 			void *rx_adapter_ptr, void *tx_adapter_ptr,
-			dna_wait_packet wait_packet_function_ptr,
-			dna_device_notify dev_notify_function_ptr)
+			zc_dev_wait_packet wait_packet_function_ptr,
+			zc_dev_notify dev_notify_function_ptr)
 {
   if(unlikely(enable_debug)) {
-    printk("[PF_RING] dna_device_handler(%s@%u [operation=%s])\n",
+    printk("[PF_RING] %s(%s@%u [operation=%s])\n", __FUNCTION__,
 	   netdev->name, channel_id,
 	   operation == add_device_mapping ? "add_device_mapping" : "remove_device_mapping");
     printk("[PF_RING] RX=%u/TX=%u\n", 
@@ -8800,11 +8805,11 @@ void dna_device_handler(dna_device_operation operation,
   }
 
   if(operation == add_device_mapping) {
-    dna_device_list *next;
+    zc_dev_list *next;
 
-    next = kmalloc(sizeof(dna_device_list), GFP_ATOMIC);
+    next = kmalloc(sizeof(zc_dev_list), GFP_ATOMIC);
     if(next != NULL) {
-      memset(next, 0, sizeof(dna_device_list));
+      memset(next, 0, sizeof(zc_dev_list));
 
       rwlock_init(&next->lock);
       next->num_bound_sockets = 0, next->dev.mem_info.version = version;
@@ -8842,8 +8847,8 @@ void dna_device_handler(dna_device_operation operation,
       next->dev.tx_adapter_ptr = tx_adapter_ptr;
       next->dev.wait_packet_function_ptr = wait_packet_function_ptr;
       next->dev.usage_notification = dev_notify_function_ptr;
-      list_add(&next->list, &ring_dna_devices_list);
-      dna_devices_list_size++;
+      list_add(&next->list, &zc_devices_list);
+      zc_devices_list_size++;
       /* Increment usage count to avoid unloading it while DNA modules are in use */
       try_module_get(THIS_MODULE);
 
@@ -8855,12 +8860,12 @@ void dna_device_handler(dna_device_operation operation,
 	  ring_device_element *dev_ptr = list_entry(ptr, ring_device_element, device_list);
 
 	  if(strcmp(dev_ptr->device_name, netdev->name) == 0) {
-	    dev_ptr->num_dna_rx_queues = max_val(dev_ptr->num_dna_rx_queues, channel_id+1);
-	    dev_ptr->is_dna_device = 1 + version, dev_ptr->dna_device_model = device_model;
+	    dev_ptr->num_zc_dev_rx_queues = max_val(dev_ptr->num_zc_dev_rx_queues, channel_id+1);
+	    dev_ptr->is_zc_device = 1 + version, dev_ptr->zc_dev_model = device_model;
 
 	    if(unlikely(enable_debug))
-	      printk("[PF_RING] ==>> Updating DNA %s [num_dna_rx_queues=%d][%p]\n",
-		     dev_ptr->device_name, dev_ptr->num_dna_rx_queues, dev_ptr);
+	      printk("[PF_RING] ==>> Updating DNA %s [num_zc_dev_rx_queues=%d][%p]\n",
+		     dev_ptr->device_name, dev_ptr->num_zc_dev_rx_queues, dev_ptr);
 	    break;
 	  }
 	}
@@ -8870,16 +8875,16 @@ void dna_device_handler(dna_device_operation operation,
     }
   } else {
     struct list_head *ptr, *tmp_ptr;
-    dna_device_list *entry;
+    zc_dev_list *entry;
 
-    list_for_each_safe(ptr, tmp_ptr, &ring_dna_devices_list) {
-      entry = list_entry(ptr, dna_device_list, list);
+    list_for_each_safe(ptr, tmp_ptr, &zc_devices_list) {
+      entry = list_entry(ptr, zc_dev_list, list);
 
       if((entry->dev.netdev == netdev)
 	 && (entry->dev.channel_id == channel_id)) {
 	list_del(ptr);
 	kfree(entry);
-	dna_devices_list_size--;
+	zc_devices_list_size--;
 	/* Decrement usage count for DNA devices */
 	module_put(THIS_MODULE);
 	break;
@@ -8888,8 +8893,8 @@ void dna_device_handler(dna_device_operation operation,
   }
 
   if(unlikely(enable_debug))
-    printk("[PF_RING] dna_device_handler(%s): [dna_devices_list_size=%d]\n",
-	   netdev->name, dna_devices_list_size);
+    printk("[PF_RING] %s(%s): [zc_devices_list_size=%d]\n",
+	   __FUNCTION__, netdev->name, zc_devices_list_size);
 }
 
 /* ************************************* */
@@ -9021,7 +9026,7 @@ static struct pfring_hooks ring_hooks = {
   .buffer_add_hdr_to_ring = add_hdr_to_ring,
   .pfring_registration = register_plugin,
   .pfring_unregistration = unregister_plugin,
-  .ring_dna_device_handler = dna_device_handler,
+  .zc_dev_handler = zc_dev_handler,
 };
 
 /* ************************************ */
@@ -9428,10 +9433,10 @@ static void __exit ring_exit(void)
   term_lockless_list(&ring_cluster_list, 1 /* free memory */);
   term_lockless_list(&delayed_memory_table, 1 /* free memory */);
 
-  list_for_each_safe(ptr, tmp_ptr, &ring_dna_devices_list) {
-    dna_device_list *elem;
+  list_for_each_safe(ptr, tmp_ptr, &zc_devices_list) {
+    zc_dev_list *elem;
 
-    elem = list_entry(ptr, dna_device_list, list);
+    elem = list_entry(ptr, zc_dev_list, list);
 
     list_del(ptr);
     kfree(elem);
@@ -9475,7 +9480,7 @@ static int __init ring_init(void)
 
   INIT_LIST_HEAD(&virtual_filtering_devices_list);
   INIT_LIST_HEAD(&ring_aware_device_list);
-  INIT_LIST_HEAD(&ring_dna_devices_list);
+  INIT_LIST_HEAD(&zc_devices_list);
   INIT_LIST_HEAD(&dna_cluster_list);
   INIT_LIST_HEAD(&cluster_referee_list);
 

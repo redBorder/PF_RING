@@ -4546,8 +4546,8 @@ static void e1000_configure(struct e1000_adapter *adapter)
 	    tx_info.descr_packet_memory_tot_len = tx_ring->size;
 
 	    // printk("%s(%d)=%lu\n", __FUNCTION__, i, adapter->netdev->mem_start);
-	    hook->ring_dna_device_handler(add_device_mapping,
-					  dna_v2,
+	    hook->zc_dev_handler(add_device_mapping,
+					  zc_driver,
 #ifdef ENABLE_RX_ZC
 					  &rx_info,
 #else
@@ -4982,8 +4982,8 @@ void e1000e_down(struct e1000_adapter *adapter, bool reset)
 	  struct pfring_hooks *hook = (struct pfring_hooks*)adapter->netdev->pfring_ptr;
 
 	  if(hook != NULL) {
-	    hook->ring_dna_device_handler(remove_device_mapping,
-					  dna_v2,
+	    hook->zc_dev_handler(remove_device_mapping,
+					  zc_driver,
 					  NULL, // rx_info,
 					  NULL, // tx_info,
 					  0, // adapter->pfring_zc.packet_memory,

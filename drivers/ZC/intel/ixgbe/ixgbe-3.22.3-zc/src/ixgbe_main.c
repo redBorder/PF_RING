@@ -1386,7 +1386,7 @@ void notify_function_ptr(void *rx_data, void *tx_data, u_int8_t device_in_use)
 
 /* ********************************** */
 
-dna_device_model pfring_zc_dev_model(struct ixgbe_hw *hw)
+zc_dev_model pfring_zc_dev_model(struct ixgbe_hw *hw)
 {
 	switch (hw->mac.type) {
 		case ixgbe_mac_82598EB: return intel_ixgbe_82598;
@@ -5927,8 +5927,8 @@ static void ixgbe_configure(struct ixgbe_adapter *adapter)
 			tx_info.packet_memory_slot_len      = rx_info.packet_memory_slot_len;
 			tx_info.descr_packet_memory_tot_len = tx_ring->size;
 	      
-			hook->ring_dna_device_handler(add_device_mapping,
-			  dna_v2,
+			hook->zc_dev_handler(add_device_mapping,
+			  zc_driver,
 			  &rx_info,
 			  &tx_info,
 			  0, // rx_ring->pfring_zc.rx_tx.rx.packet_memory,
@@ -6521,8 +6521,8 @@ void ixgbe_down(struct ixgbe_adapter *adapter)
 		int i;
 
 		for (i = 0; i < adapter->num_rx_queues; i++) {
-			hook->ring_dna_device_handler(remove_device_mapping,
-			  dna_v2,
+			hook->zc_dev_handler(remove_device_mapping,
+			  zc_driver,
 			  NULL, // rx_info,
 			  NULL, // tx_info,
 			  0, // adapter->rx_ring[i]->pfring_zc.rx_tx.rx.packet_memory,

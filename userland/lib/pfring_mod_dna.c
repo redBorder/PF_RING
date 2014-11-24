@@ -26,9 +26,9 @@
 /* ******************************* */
 
 static int pfring_map_dna_device(pfring *ring,
-				 dna_device_operation operation,
+				 zc_dev_operation operation,
 				 char *device_name) {
-  dna_device_mapping mapping;
+  zc_dev_mapping mapping;
 
   if(ring->dna.last_dna_operation == operation) {
     fprintf(stderr, "%s(): operation (%s) already performed\n",
@@ -185,8 +185,8 @@ int pfring_dna_recv(pfring *ring, u_char** buffer, u_int buffer_len,
 
 /* ******************************* */
 
-static int pfring_get_mapped_dna_device(pfring *ring, dna_device *dev) {
-  socklen_t len = sizeof(dna_device);
+static int pfring_get_mapped_dna_device(pfring *ring, zc_dev_info *dev) {
+  socklen_t len = sizeof(zc_dev_info);
 
   if(dev == NULL)
     return(-1);

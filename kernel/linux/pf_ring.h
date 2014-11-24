@@ -683,12 +683,12 @@ struct ring_sock {
 
 /* *********************************** */
 
-typedef int (*dna_wait_packet)(void *adapter, int mode);
-typedef void (*dna_device_notify)(void *rx_adapter_ptr, void *tx_adapter_ptr, u_int8_t device_in_use);
+typedef int (*zc_dev_wait_packet)(void *adapter, int mode);
+typedef void (*zc_dev_notify)(void *rx_adapter_ptr, void *tx_adapter_ptr, u_int8_t device_in_use);
 
 typedef enum {
   add_device_mapping = 0, remove_device_mapping
-} dna_device_operation;
+} zc_dev_operation;
 
 typedef enum {
   intel_e1000e = 0,
@@ -704,7 +704,7 @@ typedef enum {
   intel_e1000,
   intel_ixgbe_82599_ts,
   intel_i40e
-} dna_device_model;
+} zc_dev_model;
 
 typedef struct {
   u_int32_t packet_memory_num_chunks;
@@ -715,36 +715,20 @@ typedef struct {
 } mem_ring_info;
 
 typedef enum {
-  dna_v1 = 0,
-  dna_v2
-} dna_version;
+  dna_driver = 0,
+  zc_driver
+} zc_driver_version;
 
 typedef struct {
-  dna_version version;
+  zc_driver_version version;
   mem_ring_info rx;
   mem_ring_info tx;
   u_int32_t phys_card_memory_len;
-  dna_device_model device_model;
-} dna_memory_slots;
+  zc_dev_model device_model;
+} zc_memory_info;
 
 typedef struct {
-  u_int64_t rx_descr_head, rx_descr_tail;
-  u_char __cacheline_padding[128-16];
-  u_int64_t rx_descr_next;
-} dna_indexes;
-
-typedef struct {
-  u_int64_t rx_descr_head, rx_descr_tail;
-} tnapi_indexes;
-
-typedef struct {
-  volatile u_int32_t pkt_len;  /* 0 = no packet received */
-  u_int32_t pkt_hash; /* RSS */
-  /* TODO We need to add the timestamp at some point */
-} dna_descriptor;
-
-typedef struct {
-  dna_memory_slots mem_info;
+  zc_memory_info mem_info;
   u_int16_t channel_id;
   unsigned long rx_packet_memory[DNA_MAX_NUM_CHUNKS];  /* Invalid in userland */
   unsigned long tx_packet_memory[DNA_MAX_NUM_CHUNKS];  /* Invalid in userland */
@@ -761,19 +745,19 @@ typedef struct {
 #endif
   u_int8_t *interrupt_received, in_use;
   void *rx_adapter_ptr, *tx_adapter_ptr;
-  dna_wait_packet wait_packet_function_ptr;
-  dna_device_notify usage_notification;
-} dna_device;
+  zc_dev_wait_packet wait_packet_function_ptr;
+  zc_dev_notify usage_notification;
+} zc_dev_info;
 
 #ifndef IFNAMSIZ
 #define IFNAMSIZ 16
 #endif
 
 typedef struct {
-  dna_device_operation operation;
+  zc_dev_operation operation;
   char device_name[IFNAMSIZ];
   int32_t channel_id;
-} dna_device_mapping;
+} zc_dev_mapping;
 
 /* ************************************************* */
 
@@ -908,7 +892,7 @@ typedef struct {
 
 typedef struct {
   u8 num_bound_sockets;
-  dna_device dev;
+  zc_dev_info dev;
   struct list_head list;
   /*
     In the DNA world only one application can open and enable the 
@@ -918,7 +902,7 @@ typedef struct {
   */
   struct pf_ring_socket *bound_sockets[MAX_NUM_DNA_BOUND_SOCKETS];
   rwlock_t lock;
-} dna_device_list;
+} zc_dev_list;
 
 #define MAX_NUM_IFIDX                       1024
 
@@ -933,9 +917,9 @@ typedef struct {
 
 typedef struct {
   /* DNA */
-  u_int num_dna_rx_queues; /* 0 for non DNA devices */
-  u_int8_t is_dna_device;
-  dna_device_model dna_device_model;
+  u_int num_zc_dev_rx_queues; /* 0 for non DNA devices */
+  u_int8_t is_zc_device;
+  zc_dev_model zc_dev_model;
 
   pfring_device_type device_type; /* Device Type */
 
@@ -1112,8 +1096,8 @@ struct pf_ring_socket {
   } tx;
 
   /* Direct NIC Access */
-  dna_device *dna_device;
-  dna_device_list *dna_device_entry;
+  zc_dev_info *zc_dev;
+  zc_dev_list *zc_device_entry;
 
   /* Extra DMA memory */
   struct dma_memory_info *extra_dma_memory;
@@ -1310,8 +1294,8 @@ struct pfring_plugin_registration {
 typedef int   (*register_pfring_plugin)(struct pfring_plugin_registration *reg);
 typedef int   (*unregister_pfring_plugin)(u_int16_t pfring_plugin_id);
 typedef u_int (*read_device_pfring_free_slots)(int ifindex);
-typedef void  (*handle_ring_dna_device)(dna_device_operation operation,
-					dna_version version,
+typedef void  (*handle_pfring_zc_dev)(zc_dev_operation operation,
+					zc_driver_version version,
 					mem_ring_info *rx_info,
 					mem_ring_info *tx_info,
 					unsigned long *rx_packet_memory,
@@ -1323,13 +1307,13 @@ typedef void  (*handle_ring_dna_device)(dna_device_operation operation,
 					u_int channel_id,
 					struct net_device *netdev,
 					struct device *hwdev,
-					dna_device_model device_model,
+					zc_dev_model device_model,
 					u_char *device_address,
 					wait_queue_head_t *packet_waitqueue,
 					u_int8_t *interrupt_received,
 					void *rx_adapter_ptr, void *tx_adapter_ptr,
-					dna_wait_packet wait_packet_function_ptr,
-					dna_device_notify dev_notify_function_ptr);
+					zc_dev_wait_packet wait_packet_function_ptr,
+					zc_dev_notify dev_notify_function_ptr);
 typedef u_int8_t (*pfring_tx_pkt)(void* private_data, char *pkt, u_int pkt_len);
 
 extern register_pfring_plugin get_register_pfring_plugin(void);
@@ -1344,10 +1328,9 @@ extern int do_register_pfring_plugin(struct pfring_plugin_registration *reg);
 extern int do_unregister_pfring_plugin(u_int16_t pfring_plugin_id);
 extern int do_read_device_pfring_free_slots(int deviceidx);
 
-extern handle_ring_dna_device get_ring_dna_device_handler(void);
-extern void set_ring_dna_device_handler(handle_ring_dna_device
-					the_dna_device_handler);
-extern void do_ring_dna_device_handler(dna_device_operation operation,
+extern handle_pfring_zc_dev get_ring_zc_dev_handler(void);
+extern void set_ring_zc_dev_handler(handle_pfring_zc_dev the_zc_device_handler);
+extern void do_ring_zc_dev_handler(zc_dev_operation operation,
 				       mem_ring_info *rx_info,
 				       mem_ring_info *tx_info,
 			 	       unsigned long *rx_packet_memory,
@@ -1359,13 +1342,13 @@ extern void do_ring_dna_device_handler(dna_device_operation operation,
 				       u_int channel_id,
 				       struct net_device *netdev,
 				       struct device *hwdev,
-				       dna_device_model device_model,
+				       zc_dev_model device_model,
 				       u_char *device_address,
 				       wait_queue_head_t * packet_waitqueue,
 				       u_int8_t * interrupt_received,
 				       void *rx_adapter_ptr, void *tx_adapter_ptr,
-				       dna_wait_packet wait_packet_function_ptr,
-				       dna_device_notify dev_notify_function_ptr);
+				       zc_dev_wait_packet wait_packet_function_ptr,
+				       zc_dev_notify dev_notify_function_ptr);
 
 typedef int (*handle_ring_skb)(struct sk_buff *skb, u_char recv_packet,
 			       u_char real_skb, u_int8_t *skb_reference_in_use,
@@ -1389,7 +1372,7 @@ struct pfring_hooks {
   handle_add_hdr_to_ring buffer_add_hdr_to_ring;
   register_pfring_plugin pfring_registration;
   unregister_pfring_plugin pfring_unregistration;
-  handle_ring_dna_device ring_dna_device_handler;
+  handle_pfring_zc_dev zc_dev_handler;
   read_device_pfring_free_slots pfring_free_device_slots;
   pfring_tx_pkt pfring_send_packet;
 };

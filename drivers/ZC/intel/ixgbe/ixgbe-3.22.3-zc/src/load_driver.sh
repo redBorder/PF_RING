@@ -62,7 +62,31 @@ for IF in $INTERFACES ; do
 		#ethtool -s $IF speed 10000
 
 		# Enable n-tuple hw filters
-		#ethtool -K $IF ntuple on
+		ethtool -K $IF ntuple on
+
+		# Virtual Functions (host)
+		#
+		# Add the kernel parameters below to grub and reboot the machine:
+		# $ vim /etc/default/grub
+		# GRUB_CMDLINE_LINUX_DEFAULT="iommu=1 msi=1 pci=assign-busses intel_iommu=on"
+		# $ update-grub && reboot
+		#
+		# Create a XML file with bus/slot/function of the VF (see lscpi):
+		# <interface type='hostdev' managed='yes'>
+		#     <source>
+		#         <address type='pci' domain='0' bus='11' slot='16' function='0'/>
+		#     </source>
+		# </interface>
+		#
+		# Add the VF to the VM configuration:
+		# $ virsh attach-device <vm name> <xml file> --config
+		#
+		# Assign more memory to the VM:
+		# $ virsh setmaxmem ubuntu14 2097152 --config
+		# $ virsh setmem ubuntu14 2097152
+		#
+		# Enable 2 Virtual Functions per interface (uncomment the following line before running the script)
+		#echo '2' > /sys/bus/pci/devices/$(ethtool -i $IF | grep bus-info | cut -d ' ' -f2)/sriov_numvfs
 	fi
 done
 
