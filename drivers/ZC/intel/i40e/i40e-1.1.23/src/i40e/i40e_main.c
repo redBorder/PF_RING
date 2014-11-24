@@ -4772,8 +4772,8 @@ static int i40e_up_complete(struct i40e_vsi *vsi)
 	      tx_info.packet_memory_slot_len      = rx_info.packet_memory_slot_len;
 	      tx_info.descr_packet_memory_tot_len = tx_ring->size;
 	      
-	      hook->ring_dna_device_handler(add_device_mapping,
-					    dna_v2,
+	      hook->zc_dev_handler(add_device_mapping,
+					    zc_driver,
 					    &rx_info,
 					    &tx_info,
 					    0, // rx_ring->pfring_zc.rx_tx.rx.packet_memory,
