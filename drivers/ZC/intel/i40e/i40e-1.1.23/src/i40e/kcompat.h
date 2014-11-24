@@ -1,26 +1,28 @@
 /*******************************************************************************
-
-  Intel 10 Gigabit PCI Express Linux driver
-  Copyright (c) 1999 - 2014 Intel Corporation.
-
-  This program is free software; you can redistribute it and/or modify it
-  under the terms and conditions of the GNU General Public License,
-  version 2, as published by the Free Software Foundation.
-
-  This program is distributed in the hope it will be useful, but WITHOUT
-  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
-  FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
-  more details.
-
-  The full GNU General Public License is included in this distribution in
-  the file called "COPYING".
-
-  Contact Information:
-  Linux NICS <linux.nics@intel.com>
-  e1000-devel Mailing List <e1000-devel@lists.sourceforge.net>
-  Intel Corporation, 5200 N.E. Elam Young Parkway, Hillsboro, OR 97124-6497
-
-*******************************************************************************/
+ *
+ * Intel Ethernet Controller XL710 Family Linux Driver
+ * Copyright(c) 2013 - 2014 Intel Corporation.
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms and conditions of the GNU General Public License,
+ * version 2, as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ * The full GNU General Public License is included in this distribution in
+ * the file called "COPYING".
+ *
+ * Contact Information:
+ * e1000-devel Mailing List <e1000-devel@lists.sourceforge.net>
+ * Intel Corporation, 5200 N.E. Elam Young Parkway, Hillsboro, OR 97124-6497
+ *
+ ******************************************************************************/
 
 #ifndef _KCOMPAT_H_
 #define _KCOMPAT_H_
@@ -45,6 +47,8 @@
 #include <linux/sched.h>
 #include <linux/in.h>
 #include <linux/ip.h>
+#include <linux/ipv6.h>
+#include <linux/tcp.h>
 #include <linux/udp.h>
 #include <linux/mii.h>
 #include <linux/vmalloc.h>
@@ -55,21 +59,22 @@
 /* NAPI enable/disable flags here */
 #define NAPI
 
-#define adapter_struct ixgbe_adapter
-#define adapter_q_vector ixgbe_q_vector
+#define adapter_struct i40e_pf
+#define adapter_q_vector i40e_q_vector
 
 /* and finally set defines so that the code sees the changes */
 #ifdef NAPI
+#ifndef CONFIG_I40E_NAPI
+#define CONFIG_I40E_NAPI
+#endif
 #else
+#undef CONFIG_I40E_NAPI
 #endif /* NAPI */
 
 /* Dynamic LTR and deeper C-State support disable/enable */
 
 /* packet split disable/enable */
 #ifdef DISABLE_PACKET_SPLIT
-#ifndef CONFIG_IXGBE_DISABLE_PACKET_SPLIT
-#define CONFIG_IXGBE_DISABLE_PACKET_SPLIT
-#endif
 #endif /* DISABLE_PACKET_SPLIT */
 
 /* MSI compatibility code for all kernels and drivers */
@@ -205,8 +210,17 @@ struct msix_entry {
 #define NETIF_F_NTUPLE (1 << 27)
 #endif
 
+#ifndef NETIF_F_ALL_FCOE
+#define NETIF_F_ALL_FCOE	(NETIF_F_FCOE_CRC | NETIF_F_FCOE_MTU | \
+				 NETIF_F_FSO)
+#endif
+
 #ifndef IPPROTO_SCTP
 #define IPPROTO_SCTP 132
+#endif
+
+#ifndef IPPROTO_UDPLITE
+#define IPPROTO_UDPLITE 136
 #endif
 
 #ifndef CHECKSUM_PARTIAL
@@ -342,6 +356,10 @@ struct _kc_vlan_hdr {
 
 #ifndef __GFP_COMP
 #define __GFP_COMP 0
+#endif
+
+#ifndef IP_OFFSET
+#define IP_OFFSET 0x1FFF /* "Fragment Offset" part */
 #endif
 
 /*****************************************************************************/
@@ -1047,16 +1065,6 @@ struct vlan_ethhdr {
 #endif
 
 /*****************************************************************************/
-/* 2.4.22 => 2.4.17 */
-
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(2,4,22) )
-#ifndef IXGBE_NO_LRO
-/* Don't enable LRO for these legacy kernels */
-#define IXGBE_NO_LRO
-#endif
-#endif
-
-/*****************************************************************************/
 /*****************************************************************************/
 /* 2.4.23 => 2.4.22 */
 #if ( LINUX_VERSION_CODE < KERNEL_VERSION(2,4,23) )
@@ -1316,7 +1324,9 @@ struct __kc_callback_head {
 #ifndef CONFIG_E1000_DISABLE_PACKET_SPLIT
 #define CONFIG_E1000_DISABLE_PACKET_SPLIT 1
 #endif
+#ifndef CONFIG_IGB_DISABLE_PACKET_SPLIT
 #define CONFIG_IGB_DISABLE_PACKET_SPLIT 1
+#endif
 
 #define dma_set_coherent_mask(dev,mask) 1
 
@@ -1956,8 +1966,10 @@ typedef irqreturn_t (*irq_handler_t)(int, void*, struct pt_regs *);
 #if (RHEL_RELEASE_CODE && RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(6,0))
 #undef CONFIG_INET_LRO
 #undef CONFIG_INET_LRO_MODULE
+#ifdef IXGBE_FCOE
 #undef CONFIG_FCOE
 #undef CONFIG_FCOE_MODULE
+#endif /* IXGBE_FCOE */
 #endif
 typedef irqreturn_t (*new_handler_t)(int, void*);
 static inline irqreturn_t _kc_request_irq(unsigned int irq, new_handler_t handler, unsigned long flags, const char *devname, void *dev_id)
@@ -2397,23 +2409,10 @@ static inline int _kc_strict_strtol(const char *buf, unsigned int base, long *re
 }
 #endif
 
-#if ( LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0) )
-#ifndef IXGBE_PROCFS
-#define IXGBE_PROCFS
-#endif /* IXGBE_PROCFS */
-#endif /* >= 2.6.0 */
 
 
 #else /* < 2.6.25 */
 
-#ifndef IXGBE_SYSFS
-#define IXGBE_SYSFS
-#endif /* IXGBE_SYSFS */
-#if IS_ENABLED(CONFIG_HWMON)
-#ifndef IXGBE_HWMON
-#define IXGBE_HWMON
-#endif /* IXGBE_HWMON */
-#endif /* CONFIG_HWMON */
 
 
 #endif /* < 2.6.25 */
@@ -2614,19 +2613,15 @@ extern void _kc_pci_clear_master(struct pci_dev *dev);
 #ifndef HAVE_NET_DEVICE_OPS
 #define HAVE_NET_DEVICE_OPS
 #endif
-#ifdef CONFIG_DCB
-#define HAVE_PFC_MODE_ENABLE
-#endif /* CONFIG_DCB */
 #endif /* < 2.6.29 */
 
 /*****************************************************************************/
 #if ( LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30) )
+#define NO_PTP_SUPPORT
 #define skb_rx_queue_recorded(a) false
 #define skb_get_rx_queue(a) 0
 #define skb_record_rx_queue(a, b) do {} while (0)
 #define skb_tx_hash(n, s) ___kc_skb_tx_hash((n), (s), (n)->real_num_tx_queues)
-#undef CONFIG_FCOE
-#undef CONFIG_FCOE_MODULE
 #ifndef CONFIG_PCI_IOV
 #undef pci_enable_sriov
 #define pci_enable_sriov(a, b) -ENOTSUPP
@@ -2780,11 +2775,6 @@ static inline int _kc_pm_runtime_get_sync(struct device __always_unused *dev)
 #define HAVE_NETDEV_OPS_FCOE_ENABLE
 #endif
 #endif /* CONFIG_FCOE || CONFIG_FCOE_MODULE */
-#ifdef CONFIG_DCB
-#ifndef HAVE_DCBNL_OPS_GETAPP
-#define HAVE_DCBNL_OPS_GETAPP
-#endif
-#endif /* CONFIG_DCB */
 #include <linux/pm_runtime.h>
 /* IOV bad DMA target work arounds require at least this kernel rev support */
 #define HAVE_PCIE_TYPE
@@ -3181,11 +3171,18 @@ do {								\
 
 #else /* < 2.6.36 */
 
-#define msleep(x)	do { if (x > 20)				\
-				msleep(x);				\
-			     else					\
-				usleep_range(1000 * x, 2000 * x);	\
-			} while (0)
+#ifdef HAVE_PF_RING
+/*
+  u64_stats_fetch_begin_bh is undefined in more recent kernels so
+  we need to defined it too
+*/
+
+#if ( LINUX_VERSION_CODE >= KERNEL_VERSION(3,13,0) )
+#define u64_stats_fetch_begin_bh u64_stats_fetch_begin_irq
+#define u64_stats_fetch_retry_bh u64_stats_fetch_retry_irq
+#endif
+#endif /* PF_RING */
+
 
 #define HAVE_PM_QOS_REQUEST_ACTIVE
 #define HAVE_8021P_SUPPORT
@@ -3282,26 +3279,6 @@ static inline int _kc_skb_checksum_start_offset(const struct sk_buff *skb)
 }
 #define skb_checksum_start_offset(skb) _kc_skb_checksum_start_offset(skb)
 #endif /* 2.6.22 -> 2.6.37 */
-#ifdef CONFIG_DCB
-#ifndef IEEE_8021QAZ_MAX_TCS
-#define IEEE_8021QAZ_MAX_TCS 8
-#endif
-#ifndef DCB_CAP_DCBX_HOST
-#define DCB_CAP_DCBX_HOST		0x01
-#endif
-#ifndef DCB_CAP_DCBX_LLD_MANAGED
-#define DCB_CAP_DCBX_LLD_MANAGED	0x02
-#endif
-#ifndef DCB_CAP_DCBX_VER_CEE
-#define DCB_CAP_DCBX_VER_CEE		0x04
-#endif
-#ifndef DCB_CAP_DCBX_VER_IEEE
-#define DCB_CAP_DCBX_VER_IEEE		0x08
-#endif
-#ifndef DCB_CAP_DCBX_STATIC
-#define DCB_CAP_DCBX_STATIC		0x10
-#endif
-#endif /* CONFIG_DCB */
 #if (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(6,2))
 #define CONFIG_XPS
 #endif /* RHEL_RELEASE_VERSION(6,2) */
@@ -3321,6 +3298,11 @@ static inline int _kc_skb_checksum_start_offset(const struct sk_buff *skb)
 		     skb != (struct sk_buff *)(queue);				\
 		     skb = tmp, tmp = skb->prev)
 #endif
+#if defined(CONFIG_FCOE) || defined(CONFIG_FCOE_MODULE)
+#ifndef FCOE_MTU
+#define FCOE_MTU	2158
+#endif
+#endif
 #if (!(RHEL_RELEASE_CODE && RHEL_RELEASE_CODE > RHEL_RELEASE_VERSION(6,0)))
 extern u16 ___kc_skb_tx_hash(struct net_device *, const struct sk_buff *, u16);
 #define __skb_tx_hash(n, s, q) ___kc_skb_tx_hash((n), (s), (q))
@@ -3337,20 +3319,6 @@ extern u8 _kc_netdev_get_prio_tc_map(struct net_device *dev, u8 up);
 #ifndef HAVE_MQPRIO
 #define HAVE_MQPRIO
 #endif /* HAVE_MQPRIO */
-#ifdef CONFIG_DCB
-#ifndef HAVE_DCBNL_IEEE
-#define HAVE_DCBNL_IEEE
-#ifndef IEEE_8021QAZ_TSA_STRICT
-#define IEEE_8021QAZ_TSA_STRICT		0
-#endif
-#ifndef IEEE_8021QAZ_TSA_ETS
-#define IEEE_8021QAZ_TSA_ETS		2
-#endif
-#ifndef IEEE_8021QAZ_APP_SEL_ETHERTYPE
-#define IEEE_8021QAZ_APP_SEL_ETHERTYPE	1
-#endif
-#endif
-#endif /* CONFIG_DCB */
 #endif /* !(RHEL_RELEASE_CODE > RHEL_RELEASE_VERSION(6,0)) */
 
 #ifndef udp_csum
@@ -3378,11 +3346,6 @@ static inline __wsum __kc_udp_csum(struct sk_buff *skb)
 #ifndef HAVE_SETUP_TC
 #define HAVE_SETUP_TC
 #endif
-#ifdef CONFIG_DCB
-#ifndef HAVE_DCBNL_IEEE
-#define HAVE_DCBNL_IEEE
-#endif
-#endif /* CONFIG_DCB */
 #ifndef HAVE_NDO_SET_FEATURES
 #define HAVE_NDO_SET_FEATURES
 #endif
@@ -4077,8 +4040,11 @@ extern int __kc_dma_set_mask_and_coherent(struct device *dev, u64 mask);
 #endif
 
 /*****************************************************************************/
-//#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0) )
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,13,0) ) || defined(UBUNTU_3_13_PRE) /* HAVE_PF_RING patch (ubutu kernel >=3.13.0-30) */
+#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0) )
+
+#ifndef U32_MAX
+#define U32_MAX ((u32)~0U)
+#endif
 
 #if (!(RHEL_RELEASE_CODE && RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7,0)) && \
      !(SLE_VERSION_CODE && SLE_VERSION_CODE >= SLE_VERSION(12,0,0)))
@@ -4130,14 +4096,7 @@ static inline void __kc_ether_addr_copy(u8 *dst, const u8 *src)
 }
 #endif /* ether_addr_copy */
 
-//#else /* >= 3.14.0 */
-#endif /* HAVE_PF_RING patch */
-#if ( LINUX_VERSION_CODE >= KERNEL_VERSION(3,13,0) )  /* HAVE_PF_RING patch */
-
-#ifndef UBUNTU_3_13_PRE  /* HAVE_PF_RING patch */
-#define u64_stats_fetch_begin_bh u64_stats_fetch_begin_irq /* HAVE_PF_RING patch (ubuntu kernel >=3.13.0-30) */
-#define u64_stats_fetch_retry_bh u64_stats_fetch_retry_irq /* HAVE_PF_RING patch (ubuntu kernel >=3.13.0-30) */
-#endif
+#else /* >= 3.14.0 */
 
 /* for ndo_dfwd_ ops add_station, del_station and _start_xmit */
 #ifndef HAVE_NDO_DFWD_OPS
@@ -4150,10 +4109,16 @@ static inline void __kc_ether_addr_copy(u8 *dst, const u8 *src)
 #if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,15,0) )
 #define u64_stats_fetch_begin_irq u64_stats_fetch_begin_bh
 #define u64_stats_fetch_retry_irq u64_stats_fetch_retry_bh
+#else
+#define HAVE_PTP_1588_CLOCK_PINS
 #endif /* 3.15.0 */
 
 /*****************************************************************************/
 #if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,16,0) )
+#ifndef smp_mb__before_atomic
+#define smp_mb__before_atomic() smp_mb()
+#define smp_mb__after_atomic()  smp_mb()
+#endif
 #ifndef __dev_uc_sync
 #ifdef HAVE_SET_RX_MODE
 #ifdef NETDEV_HW_ADDR_T_UNICAST
@@ -4235,7 +4200,27 @@ static inline void __kc_dev_mc_unsync(struct net_device __maybe_unused *dev,
 #endif /* __dev_uc_sync */
 #else
 #define HAVE_NDO_SET_VF_MIN_MAX_TX_RATE
-#define HAVE_DCBNL_OPS_SETAPP_RETURN_INT
 #endif /* 3.16.0 */
 
+#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0) )
+#define hlist_add_behind(_a, _b) hlist_add_after(_b, _a)
+#else
+#define HAVE_DCBNL_OPS_SETAPP_RETURN_INT
+#endif /* 3.17.0 */
+
+#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0) )
+#ifndef NO_PTP_SUPPORT
+#include <linux/errqueue.h>
+extern struct sk_buff *__kc_skb_clone_sk(struct sk_buff *skb);
+extern void __kc_skb_complete_tx_timestamp(struct sk_buff *skb,
+				struct skb_shared_hwtstamps *hwtstamps);
+#define skb_clone_sk __kc_skb_clone_sk
+#define skb_complete_tx_timestamp __kc_skb_complete_tx_timestamp
+#endif
+extern unsigned int __kc_eth_get_headlen(unsigned char *data, unsigned int max_len);
+#define eth_get_headlen __kc_eth_get_headlen
+#ifndef ETH_P_XDSA
+#define ETH_P_XDSA 0x00F8
+#endif
+#endif /* 3.18.0 */
 #endif /* _KCOMPAT_H_ */
