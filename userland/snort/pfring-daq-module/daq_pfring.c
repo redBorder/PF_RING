@@ -296,6 +296,9 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
 #ifdef HAVE_REDIS
   context->redis_port = -1;
 #endif
+#ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
+  u_int32_t best_effort_min_num_slots = DAQ_PF_RING_BEST_EFFORT_BOOST_MIN_NUM_SLOTS;
+#endif
 
   if(!context->devices[DAQ_PF_RING_PASSIVE_DEV_IDX]) {
     snprintf(errbuf, len, "%s: Couldn't allocate memory for the device string!", __FUNCTION__);
@@ -429,6 +432,16 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
       }
     } else if(!strcmp(entry->key, "besteffort")) {
       context->best_effort = 1;
+    } else if(!strcmp(entry->key, "besteffort_minnumslots")) {
+#ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
+      char* end = NULL;
+      best_effort_min_num_slots = strtol(entry->value, &end, 0);
+      if(end==entry->value || *end != '\0') {
+        snprintf(errbuf, len, "%s: bad best effort min number of slots(%s)\n",
+                 __FUNCTION__, entry->value);
+        return DAQ_ERROR;
+      }
+#endif
     } else if(!strcmp(entry->key, "watermark")) {
       char* end = entry->value;
       context->watermark = (int) strtol(entry->value, &end, 0);
@@ -537,7 +550,7 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
       return DAQ_ERROR_NOMEM;
     }
 
-    context->q->min_num_slots = DAQ_PF_RING_BEST_EFFORT_BOOST_MIN_NUM_SLOTS;
+    context->q->min_num_slots = best_effort_min_num_slots;
     context->q->max_slot_len = sizeof(Pfring_Queue_SlotHdr_t) + context->snaplen;
     context->q->buffer_len = context->q->min_num_slots * context->q->max_slot_len;
 
