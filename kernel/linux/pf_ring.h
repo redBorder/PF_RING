@@ -702,7 +702,8 @@ typedef enum {
   intel_ixgbe_82599,
   intel_igb_82580,
   intel_e1000,
-  intel_ixgbe_82599_ts
+  intel_ixgbe_82599_ts,
+  intel_i40e
 } dna_device_model;
 
 typedef struct {
