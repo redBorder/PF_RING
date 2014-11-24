@@ -94,6 +94,10 @@ typedef struct _pfring_context
   char *devices[DAQ_PF_RING_MAX_NUM_DEVICES];
   int ifindexes[DAQ_PF_RING_MAX_NUM_DEVICES];
   pfring *ring_handles[DAQ_PF_RING_MAX_NUM_DEVICES];
+#ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
+  pfring *best_effort_reflector_ring_handles[DAQ_PF_RING_MAX_NUM_DEVICES];
+  int best_effort_reflector_ifindexes[DAQ_PF_RING_MAX_NUM_DEVICES];
+#endif
   int num_devices;
   int snaplen;
 #ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
@@ -172,7 +176,7 @@ static int pfring_daq_open(Pfring_Context_t *context, int id) {
   if (context->mode == DAQ_MODE_INLINE) {
     /* Default mode: recv_and_send_mode */
     pfring_set_direction(ring_handle, rx_only_direction);
-  } else if (context->mode == DAQ_MODE_PASSIVE) {
+  } else if (!context->best_effort &&  context->mode == DAQ_MODE_PASSIVE) {
     /* Default direction: rx_and_tx_direction */
     if(context->num_reflector_devices > id) { /* lowlevelbridge ON */
       filtering_rule rule;
@@ -266,6 +270,33 @@ static void pfring_daq_reload(Pfring_Context_t *context) {
     }
   }
 }
+
+#ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
+static inline int pfring_daq_fill_best_effort_reflect_rings(Pfring_Context_t *context) {
+  int i;
+  for (i = 0; i < context->num_devices; i++) {
+    int j;
+    for (j = 0; j < context->num_reflector_devices; j++) {
+      const int strcmp_rc = strcmp(context->devices[j],context->reflector_devices[i]);
+      if(0 == strcmp_rc) {
+        /* link this devices and continue with next devices */
+        context->best_effort_reflector_ring_handles[i] = context->ring_handles[j];
+        context->best_effort_reflector_ifindexes[i]    = context->ifindexes[j];
+        break;
+      }
+    }
+
+    if(j==context->num_devices) {
+      /* Error: Could not find reflector device */
+      DPE(context->errbuf, "%s: Could not found reflector device %s for %s!", 
+        __FUNCTION__, context->reflector_devices[i],context->devices[i]);
+      return DAQ_ERROR;
+    }
+  }
+
+  return DAQ_SUCCESS;
+}
+#endif
 
 static int pfring_daq_initialize(const DAQ_Config_t *config,
 				 void **ctxt_ptr, char *errbuf, size_t len) {
@@ -532,6 +563,13 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
         return DAQ_ERROR;
     }
   }
+
+#ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
+  const int best_effort_fill_rc = pfring_daq_fill_best_effort_reflect_rings(context);
+  if(DAQ_ERROR == best_effort_fill_rc) {
+    return DAQ_ERROR;
+  }
+#endif
 
 #ifdef HAVE_REDIS
   if (context->redis_ip != NULL && context->redis_port != -1) {
@@ -865,8 +903,8 @@ static int pfring_daq_acquire_best_effort(void *handle, int cnt, DAQ_Analysis_Fu
       }
 #endif
 
-      pfring_daq_send_packet(context, context->ring_handles[rx_ring_idx ^ 0x1], phdr.caplen,
-        context->ring_handles[rx_ring_idx], context->ifindexes[rx_ring_idx ^ 0x1]);
+      pfring_daq_send_packet(context, context->best_effort_reflector_ring_handles[rx_ring_idx], phdr.caplen,
+        context->ring_handles[rx_ring_idx], context->best_effort_reflector_ifindexes[rx_ring_idx]);
     }
 
     rx_ring_idx_clone = rx_ring_idx;
@@ -879,7 +917,6 @@ static int pfring_daq_acquire_best_effort(void *handle, int cnt, DAQ_Analysis_Fu
 
     if(!ret) {
       /* no packet to read: poll */
-
       for (i = 0; i < context->num_devices; i++) {
         pfring_sync_indexes_with_kernel(context->ring_handles[i]);
         pfd[i].events = POLLIN;
