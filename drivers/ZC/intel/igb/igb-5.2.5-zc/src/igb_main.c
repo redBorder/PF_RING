@@ -6146,7 +6146,7 @@ void igb_update_stats(struct igb_adapter *adapter)
 	}
 
 #ifdef HAVE_PF_RING
-	if(atomic_read(&adapter->pfring_zc.usage_counter) > 0) {
+	if(atomic_read(&adapter->pfring_zc.usage_counter) == 0) {
 #endif
 	net_stats->tx_bytes = bytes;
 	net_stats->tx_packets = packets;
