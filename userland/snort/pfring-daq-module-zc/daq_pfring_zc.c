@@ -54,7 +54,6 @@
 #define DAQ_PF_RING_PASSIVE_DEV_IDX  0
 
 #ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
-#define MAX_CARD_SLOTS 32768
 #define QUEUE_LEN 8192
 #endif
 
@@ -100,27 +99,31 @@ typedef struct _pfring_context
 static void pfring_zc_daq_reset_stats(void *handle);
 static int pfring_zc_daq_set_filter(void *handle, const char *filter);
 
-static int max_packet_len(Pfring_Context_t *context, char *device, int id) {
-  int max_len;
+static int max_packet_len(Pfring_Context_t *context, char *device, int id, int *card_buffers) {
+  int max_len = 1536, num_slots = 32768 /* max */;
   pfring *ring;
 
   ring = pfring_open(device, 1536, PF_RING_PROMISC);
 
   if (ring == NULL)
-    return 1536;
+    goto error;
 
   pfring_get_bound_device_ifindex(ring, &context->ifindexes[id]);
 
   if (ring->dna.dna_mapped_device) {
     max_len = ring->dna.dna_dev.mem_info.rx.packet_memory_slot_len;
+    num_slots = ring->dna.dna_dev.mem_info.rx.packet_memory_num_slots;
   } else {
     max_len = pfring_get_mtu_size(ring);
     if (max_len == 0) max_len = 9000;
     max_len += 14 + 4;
+    num_slots = 0;
   }
 
   pfring_close(ring);
 
+error:
+  *card_buffers = num_slots;
   return max_len;
 }
 
@@ -218,7 +221,7 @@ static int pfring_zc_daq_initialize(const DAQ_Config_t *config,
   Pfring_Context_t *context;
   DAQ_Dict* entry;
   u_int numCPU = get_nprocs();
-  int i, max_buffer_len = 0;
+  int i, max_buffer_len = 0, card_buffers;
   int num_buffers;
 
   context = calloc(1, sizeof(Pfring_Context_t));
@@ -378,13 +381,13 @@ static int pfring_zc_daq_initialize(const DAQ_Config_t *config,
 #endif
 
   for (i = 0; i < context->num_devices; i++) {
-    max_buffer_len = max_packet_len(context, context->devices[i], i);
+    max_buffer_len = max_packet_len(context, context->devices[i], i, &card_buffers);
     if (max_buffer_len > context->max_buffer_len) context->max_buffer_len = max_buffer_len;
-    if (strstr(context->devices[i], "zc:") != NULL) num_buffers += MAX_CARD_SLOTS;
+    if (strstr(context->devices[i], "zc:") != NULL) num_buffers += card_buffers;
     if (context->tx_devices[i] != NULL) {
-      max_buffer_len = max_packet_len(context, context->tx_devices[i], i);
+      max_buffer_len = max_packet_len(context, context->tx_devices[i], i, &card_buffers);
       if (max_buffer_len > context->max_buffer_len) context->max_buffer_len = max_buffer_len;
-      if (strstr(context->tx_devices[i], "zc:") != NULL) num_buffers += MAX_CARD_SLOTS;
+      if (strstr(context->tx_devices[i], "zc:") != NULL) num_buffers += card_buffers;
     }
   }
 
