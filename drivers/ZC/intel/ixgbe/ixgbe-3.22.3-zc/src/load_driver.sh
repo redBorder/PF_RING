@@ -62,7 +62,7 @@ for IF in $INTERFACES ; do
 		#ethtool -s $IF speed 10000
 
 		# Enable n-tuple hw filters
-		ethtool -K $IF ntuple on
+		#ethtool -K $IF ntuple on
 
 		# Virtual Functions (host)
 		#

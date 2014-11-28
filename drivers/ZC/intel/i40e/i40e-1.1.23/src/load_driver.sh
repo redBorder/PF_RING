@@ -42,13 +42,13 @@ for IF in $INTERFACES ; do
 		bash ../scripts/set_irq_affinity $IF
 
 		# Max number of RX slots
-		ethtool -G $IF rx 32768
+		#ethtool -G $IF rx 32768
 
 		# Max number of TX slots
-		ethtool -G $IF tx 32768
+		#ethtool -G $IF tx 32768
 
 		# Disabling VLAN stripping
-		ethtool -K $IF rxvlan off
+		#ethtool -K $IF rxvlan off
 
 		# Flow Control automatically disabled by the driver (no need to use the following commands)
 		#ethtool -A $IF autoneg off
