@@ -2655,6 +2655,10 @@ static int i40e_configure_rx_ring(struct i40e_ring *ring)
 	struct i40e_hmc_obj_rxq rx_ctx;
 	i40e_status err = 0;
 
+	if(unlikely(enable_debug))
+	  printk("[PF_RING-ZC] %s:%s base-queue=%u queue-index=%u\n", 
+            __FUNCTION__, vsi->base_queue, ring->queue_index);
+
 	ring->state = 0;
 
 	/* clear the context structure first */
