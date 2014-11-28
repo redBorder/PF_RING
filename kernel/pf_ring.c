@@ -215,7 +215,7 @@ static rwlock_t cluster_fragments_lock =
 #endif
 ;
 
-/* List of all DNA (Direct NIC Access) devices */
+/* List of all ZC devices */
 static struct list_head zc_devices_list;
 static u_int zc_devices_list_size = 0;
 
@@ -1195,7 +1195,7 @@ static int i82599_generic_handler(struct pf_ring_socket *pfr,
      && rc < 0) {
       intel_82599_perfect_filter_hw_rule *perfect_rule = &rule->rule_family.perfect_rule;
 
-      printk("[DNA][DEBUG] %s() ixgbe_set_rxnfc(%d.%d.%d.%d:%d -> %d.%d.%d.%d:%d) returned %d\n",
+      printk("[DEBUG] %s() ixgbe_set_rxnfc(%d.%d.%d.%d:%d -> %d.%d.%d.%d:%d) returned %d\n",
     	     __FUNCTION__,
              perfect_rule->s_addr >> 24 & 0xFF, perfect_rule->s_addr >> 16 & 0xFF,
              perfect_rule->s_addr >>  8 & 0xFF, perfect_rule->s_addr >>  0 & 0xFF,
@@ -1452,7 +1452,7 @@ static int ring_proc_get_info(struct seq_file *m, void *data_not_used)
     /* /proc/net/pf_ring/info */
     seq_printf(m, "PF_RING Version          : %s ($Revision: %s$)\n", RING_VERSION, SVN_REV);
     seq_printf(m, "Total rings              : %d\n", atomic_read(&ring_table_size));
-    seq_printf(m, "\nStandard (non DNA) Options\n");
+    seq_printf(m, "\nStandard (non DNA/ZC) Options\n");
     seq_printf(m, "Ring slots               : %d\n", min_num_slots);
     seq_printf(m, "Slot version             : %d\n", RING_FLOWSLOT_VERSION);
     seq_printf(m, "Capture TX               : %s\n", enable_tx_capture ? "Yes [RX+TX]" : "No [RX only]");
@@ -1505,7 +1505,7 @@ static int ring_proc_get_info(struct seq_file *m, void *data_not_used)
       seq_printf(m, "Num Poll Calls     : %u\n", pfr->num_poll_calls);
 
       if(pfr->zc_device_entry != NULL) {
-        /* DNA */
+        /* DNA/ZC */
         seq_printf(m, "Channel Id         : %d\n", pfr->zc_device_entry->dev.channel_id);
         seq_printf(m, "Num RX Slots       : %d\n", pfr->zc_device_entry->dev.mem_info.rx.packet_memory_num_slots);
 	seq_printf(m, "Num TX Slots       : %d\n", pfr->zc_device_entry->dev.mem_info.tx.packet_memory_num_slots);
@@ -6255,7 +6255,7 @@ static int ring_mmap(struct file *file,
     /* RING */
     case 0:
       if(pfr->zc_dev != NULL || pfr->dna_cluster != NULL) {
-        printk("[PF_RING] %s(): trying to map ring memory on DNA socket\n", __FUNCTION__);
+        printk("[PF_RING] %s(): trying to map ring memory on DNA/ZC socket\n", __FUNCTION__);
 	return(-EINVAL);
       }
 
@@ -6282,10 +6282,10 @@ static int ring_mmap(struct file *file,
 
       break;
     case 1:
-      /* DNA: RX packet descriptors */
+      /* DNA/ZC: RX packet descriptors */
       if(pfr->zc_dev == NULL) {
         if(unlikely(enable_debug))
-	  printk("[PF_RING] %s() failed: operation for DNA only", __FUNCTION__);
+	  printk("[PF_RING] %s() failed: operation for DNA/ZC only", __FUNCTION__);
         return(-EINVAL);
       }
 
@@ -6294,10 +6294,10 @@ static int ring_mmap(struct file *file,
 
       break;
     case 2:
-      /* DNA: Physical card memory */
+      /* DNA/ZC: Physical card memory */
       if(pfr->zc_dev == NULL) {
         if(unlikely(enable_debug))
-	  printk("[PF_RING] %s() failed: operation for DNA only", __FUNCTION__);
+	  printk("[PF_RING] %s() failed: operation for DNA/ZC only", __FUNCTION__);
         return(-EINVAL);
       }
 
@@ -6312,10 +6312,10 @@ static int ring_mmap(struct file *file,
 
       break;
     case 3:
-      /* DNA: TX packet descriptors */
+      /* DNA/ZC: TX packet descriptors */
       if(pfr->zc_dev == NULL) {
         if(unlikely(enable_debug))
-	  printk("[PF_RING] %s() failed: operation for DNA only", __FUNCTION__);
+	  printk("[PF_RING] %s() failed: operation for DNA/ZC only", __FUNCTION__);
         return(-EINVAL);
       }
 
@@ -6594,7 +6594,7 @@ unsigned int ring_poll(struct file *file,
   int rc, mask = 0;
 
   //if(unlikely(enable_debug))
-  //  printk("[PF_RING] -- poll called [DNA: %p][%s]\n", pfr->zc_dev,
+  //  printk("[PF_RING] -- poll called [ZC: %p][%s]\n", pfr->zc_dev,
   //	   pfr->ring_netdev->dev->name ? pfr->ring_netdev->dev->name : "???");
 
   pfr->num_poll_calls++;
@@ -6603,10 +6603,10 @@ unsigned int ring_poll(struct file *file,
     return(mask);
 
   if(pfr->zc_dev == NULL) {
-    /* PF_RING mode (No DNA) */
+    /* PF_RING mode (No DNA/ZC) */
 
     // if(unlikely(enable_debug))
-    //  printk("[PF_RING] poll called (non DNA device)\n");
+    //  printk("[PF_RING] poll called (non DNA/ZC device)\n");
 
     pfr->ring_active = 1;
     // smp_rmb();
@@ -6639,11 +6639,11 @@ unsigned int ring_poll(struct file *file,
 
     return(mask);
   } else {
-    /* DNA mode */
+    /* DNA/ZC mode */
     /* enable_debug = 1;  */
 
     if(unlikely(enable_debug))
-      printk("[PF_RING] poll called on DNA device [%d]\n",
+      printk("[PF_RING] poll called on DNA/ZC device [%d]\n",
 	     *pfr->zc_dev->interrupt_received);
 
     if(pfr->zc_dev->wait_packet_function_ptr == NULL) {
@@ -6894,7 +6894,7 @@ static int pfring_map_zc_dev(struct pf_ring_socket *pfr,
 
         write_lock(&entry->lock);
 	
-	for(i=0; i<MAX_NUM_DNA_BOUND_SOCKETS; i++) {
+	for(i=0; i<MAX_NUM_ZC_BOUND_SOCKETS; i++) {
 	  if(entry->bound_sockets[i] == pfr) {
 	    entry->bound_sockets[i] = NULL;
 	    entry->num_bound_sockets--;
@@ -6944,7 +6944,7 @@ static int pfring_map_zc_dev(struct pf_ring_socket *pfr,
         write_lock(&entry->lock);
 
         found = 0;
-	for(i=0; i<MAX_NUM_DNA_BOUND_SOCKETS; i++) {
+	for(i=0; i<MAX_NUM_ZC_BOUND_SOCKETS; i++) {
 	  if(entry->bound_sockets[i] == NULL) {
 	    entry->bound_sockets[i] = pfr;
 	    entry->num_bound_sockets++;
@@ -7742,16 +7742,16 @@ static int ring_setsockopt(struct socket *sock,
 
       write_lock(&pfr->zc_device_entry->lock);
 
-      for(i=0; i<MAX_NUM_DNA_BOUND_SOCKETS; i++) {
+      for(i=0; i<MAX_NUM_ZC_BOUND_SOCKETS; i++) {
 	if((pfr->zc_device_entry->bound_sockets[i] != NULL)
 	   && pfr->zc_device_entry->bound_sockets[i]->ring_active) {
 	  if(pfr->zc_device_entry->bound_sockets[i]->mode == pfr->mode
 	     || pfr->zc_device_entry->bound_sockets[i]->mode == send_and_recv_mode
 	     || pfr->mode == send_and_recv_mode) {
             write_unlock(&pfr->zc_device_entry->lock);
-	    printk("[PF_RING] Unable to activate two or more DNA sockets on the same interface %s/link direction\n",
+	    printk("[PF_RING] Unable to activate two or more DNA/ZC sockets on the same interface %s/link direction\n",
 		   pfr->ring_netdev->dev->name);
-	    return(-EFAULT); /* No way: we can't have two sockets that are doing the same thing with DNA */
+	    return(-EFAULT); /* No way: we can't have two sockets that are doing the same thing with DNA/ZC */
 	  }
 	} /* if */
       } /* for */

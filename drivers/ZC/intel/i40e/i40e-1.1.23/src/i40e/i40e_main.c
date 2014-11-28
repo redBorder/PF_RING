@@ -3067,8 +3067,9 @@ void notify_function_ptr(void *rx_data, void *tx_data, u_int8_t device_in_use)
   }
 
   if(unlikely(enable_debug))
-    printk("[PF_RING-ZC] %s %s@%d is %sIN use\n", __FUNCTION__,
-	   xx_ring->netdev->name, xx_ring->queue_index, device_in_use ? "" : "NOT ");
+    printk("[PF_RING-ZC] %s %s@%d is %sIN use (%p counter: %u)\n", __FUNCTION__,
+	   xx_ring->netdev->name, xx_ring->queue_index, device_in_use ? "" : "NOT ", 
+           adapter, atomic_read(&adapter->pfring_zc.usage_counter));
 }
 
 #endif
@@ -4787,32 +4788,34 @@ static int i40e_up_complete(struct i40e_vsi *vsi)
 	      rx_info.packet_memory_num_slots     = rx_ring->count;
 	      rx_info.packet_memory_slot_len      = ALIGN(rx_ring->rx_buf_len, cache_line_size);
 	      rx_info.descr_packet_memory_tot_len = rx_ring->size;
-	      
+	      rx_info.registers_index		  = rx_ring->reg_idx;
+ 
 	      tx_info.packet_memory_num_slots     = tx_ring->count;
 	      tx_info.packet_memory_slot_len      = rx_info.packet_memory_slot_len;
 	      tx_info.descr_packet_memory_tot_len = tx_ring->size;
+	      tx_info.registers_index		  = tx_ring->reg_idx;
 	      
 	      hook->zc_dev_handler(add_device_mapping,
-					    zc_driver,
-					    &rx_info,
-					    &tx_info,
-					    0, // rx_ring->pfring_zc.rx_tx.rx.packet_memory,
-					    rx_ring->desc, /* Packet descriptors */
-					    0, // tx_ring->pfring_zc.rx_tx.tx.packet_memory,
-					    tx_ring->desc, /* Packet descriptors */
-					    (void*)pci_resource_start(pf->pdev, 0),
-					    pci_resource_len(pf->pdev, 0),
-					    rx_ring->queue_index, /* Channel Id */
-					    rx_ring->netdev,
-					    rx_ring->dev, /* for DMA mapping */
-					    intel_i40e,
-					    rx_ring->netdev->dev_addr,
-					    &rx_ring->pfring_zc.rx_tx.rx.packet_waitqueue,
-					    &rx_ring->pfring_zc.rx_tx.rx.interrupt_received,
-					    (void*)rx_ring,
-					    (void*)tx_ring,
-					    wait_packet_function_ptr,
-					    notify_function_ptr);
+					zc_driver,
+					&rx_info,
+					&tx_info,
+					0, /* rx packet memory */
+					rx_ring->desc, /* rx packet descriptors */
+					0, /* tx packet memory */
+					tx_ring->desc, /* tx packet descriptors */
+					(void*)pci_resource_start(pf->pdev, 0),
+					pci_resource_len(pf->pdev, 0),
+					rx_ring->queue_index, /* channel id */
+					rx_ring->netdev,
+					rx_ring->dev, /* for DMA mapping */
+					intel_i40e,
+					rx_ring->netdev->dev_addr,
+					&rx_ring->pfring_zc.rx_tx.rx.packet_waitqueue,
+					&rx_ring->pfring_zc.rx_tx.rx.interrupt_received,
+					(void*)rx_ring,
+					(void*)tx_ring,
+					wait_packet_function_ptr,
+					notify_function_ptr);
 	    }
 	  }
 	}

@@ -707,11 +707,13 @@ typedef enum {
 } zc_dev_model;
 
 typedef struct {
-  u_int32_t packet_memory_num_chunks;
-  u_int32_t packet_memory_chunk_len;
+  u_int32_t packet_memory_num_chunks; /* dna only */
+  u_int32_t packet_memory_chunk_len;  /* dna only */
   u_int32_t packet_memory_num_slots;
   u_int32_t packet_memory_slot_len;
   u_int32_t descr_packet_memory_tot_len;
+  u_int16_t registers_index;
+  u_int16_t reserved; /* future use */
 } mem_ring_info;
 
 typedef enum {
@@ -888,7 +890,7 @@ typedef struct {
   struct list_head list;
 } ring_cluster_element;
 
-#define MAX_NUM_DNA_BOUND_SOCKETS MAX_NUM_RING_SOCKETS
+#define MAX_NUM_ZC_BOUND_SOCKETS MAX_NUM_RING_SOCKETS
 
 typedef struct {
   u8 num_bound_sockets;
@@ -900,7 +902,7 @@ typedef struct {
     pointers to the sockets bound to device@channel in order to
     enable no more than one socket for RX and one for TX.
   */
-  struct pf_ring_socket *bound_sockets[MAX_NUM_DNA_BOUND_SOCKETS];
+  struct pf_ring_socket *bound_sockets[MAX_NUM_ZC_BOUND_SOCKETS];
   rwlock_t lock;
 } zc_dev_list;
 
