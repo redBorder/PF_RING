@@ -4780,8 +4780,8 @@ static int i40e_up_complete(struct i40e_vsi *vsi)
 					    rx_ring->desc, /* Packet descriptors */
 					    0, // tx_ring->pfring_zc.rx_tx.tx.packet_memory,
 					    tx_ring->desc, /* Packet descriptors */
-					    (void*)rx_ring->netdev->mem_start,
-					    rx_ring->netdev->mem_end - rx_ring->netdev->mem_start,
+					    (void*)pci_resource_start(pf->pdev, 0),
+					    pci_resource_len(pf->pdev, 0),
 					    rx_ring->queue_index, /* Channel Id */
 					    rx_ring->netdev,
 					    rx_ring->dev, /* for DMA mapping */
