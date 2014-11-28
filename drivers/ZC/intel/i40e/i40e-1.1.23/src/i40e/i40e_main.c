@@ -43,6 +43,7 @@
 #define I40E_PCI_DEVICE_CACHE_LINE_SIZE      0x0C
 #define PCI_DEVICE_CACHE_LINE_SIZE_BYTES        8
 
+static u8 enable_debug = 1;
 #endif
 
 char i40e_driver_name[] = "i40e";
@@ -2675,6 +2676,11 @@ static int i40e_configure_rx_ring(struct i40e_ring *ring)
 		rx_ctx.dsize = 1;
 	}
 
+#ifdef HAVE_PF_RING
+	if (unlikely(enable_debug))
+		printk("%s:%u dtype %X\n", __FUNCTION__, __LINE__, vsi->dtype);
+#endif
+
 	rx_ctx.dtype = vsi->dtype;
 	if (vsi->dtype) {
 		set_ring_ps_enabled(ring);
@@ -2759,16 +2765,28 @@ static int i40e_vsi_configure_rx(struct i40e_vsi *vsi)
 	switch (vsi->back->flags & (I40E_FLAG_RX_1BUF_ENABLED |
 				    I40E_FLAG_RX_PS_ENABLED)) {
 	case I40E_FLAG_RX_1BUF_ENABLED:
+#ifdef HAVE_PF_RING
+		if (unlikely(enable_debug))
+			printk("%s:%u I40E_FLAG_RX_1BUF_ENABLED\n", __FUNCTION__, __LINE__);
+#endif
 		vsi->rx_hdr_len = 0;
 		vsi->rx_buf_len = vsi->max_frame;
 		vsi->dtype = I40E_RX_DTYPE_NO_SPLIT;
 		break;
 	case I40E_FLAG_RX_PS_ENABLED:
+#ifdef HAVE_PF_RING
+		if (unlikely(enable_debug))
+			printk("%s:%u I40E_FLAG_RX_PS_ENABLED\n", __FUNCTION__, __LINE__);
+#endif
 		vsi->rx_hdr_len = I40E_RX_HDR_SIZE;
 		vsi->rx_buf_len = I40E_RXBUFFER_2048;
 		vsi->dtype = I40E_RX_DTYPE_HEADER_SPLIT;
 		break;
 	default:
+#ifdef HAVE_PF_RING
+		if (unlikely(enable_debug))
+			printk("%s:%u DEFAULT\n", __FUNCTION__, __LINE__);
+#endif
 		vsi->rx_hdr_len = I40E_RX_HDR_SIZE;
 		vsi->rx_buf_len = I40E_RXBUFFER_2048;
 		vsi->dtype = I40E_RX_DTYPE_SPLIT_ALWAYS;
@@ -2849,8 +2867,6 @@ static void i40e_fdir_filter_restore(struct i40e_vsi *vsi)
 }
 
 #ifdef HAVE_PF_RING
-
-static u8 enable_debug = 1;
 
 /* Forward declarations */
 static int i40e_vsi_enable_irq(struct i40e_vsi *vsi);
