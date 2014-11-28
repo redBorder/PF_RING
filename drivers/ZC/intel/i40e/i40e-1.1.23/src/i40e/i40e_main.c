@@ -4737,7 +4737,6 @@ static int i40e_up_complete(struct i40e_vsi *vsi)
 	}
 	i40e_service_event_schedule(pf);
 
-
 #ifdef HAVE_PF_RING
 	if(vsi->netdev) {
 	  struct pfring_hooks *hook = (struct pfring_hooks*)vsi->netdev->pfring_ptr;
@@ -4864,6 +4863,45 @@ void i40e_down(struct i40e_vsi *vsi)
 		i40e_clean_tx_ring(vsi->tx_rings[i]);
 		i40e_clean_rx_ring(vsi->rx_rings[i]);
 	}
+
+#ifdef HAVE_PF_RING
+	if(vsi->netdev) {
+		struct pfring_hooks *hook = (struct pfring_hooks*)vsi->netdev->pfring_ptr;
+		struct i40e_pf *pf = vsi->back;
+
+		if(hook != NULL) {
+			int i;
+
+			for (i = 0; i < vsi->num_queue_pairs; i++) {
+				struct i40e_ring *rx_ring = vsi->rx_rings[i];
+				struct i40e_ring *tx_ring = vsi->tx_rings[i];
+				hook->zc_dev_handler(remove_device_mapping,
+					zc_driver,
+					NULL, // rx_info,
+					NULL, // tx_info,
+					0, // rx_ring->pfring_zc.rx_tx.rx.packet_memory,
+					NULL, /* Packet descriptors */
+					0, // tx_ring->pfring_zc.rx_tx.tx.packet_memory,
+					NULL, /* Packet descriptors */
+					(void*)pci_resource_start(pf->pdev, 0),
+					pci_resource_len(pf->pdev, 0),
+					rx_ring->queue_index, /* Channel Id */
+					rx_ring->netdev,
+					rx_ring->dev, /* for DMA mapping */
+					intel_i40e,
+					rx_ring->netdev->dev_addr,
+					&rx_ring->pfring_zc.rx_tx.rx.packet_waitqueue,
+					&rx_ring->pfring_zc.rx_tx.rx.interrupt_received,
+					(void*)rx_ring,
+					(void*)tx_ring,
+					NULL, // wait_packet_function_ptr
+					NULL // notify_function_ptr
+				);
+			}
+		}
+	}
+#endif
+
 
 }
 
