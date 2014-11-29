@@ -1068,6 +1068,13 @@ int i40e_setup_rx_descriptors(struct i40e_ring *rx_ring)
 	if (!rx_ring->rx_bi)
 		goto err;
 
+#ifdef HAVE_PF_RING
+	//if(unlikely(enable_debug))
+	  printk("[PF_RING-ZC] %s:%d allocating %u %lu bytes descriptors - packet split %s\n", 
+            __FUNCTION__, __LINE__, rx_ring->count, 
+            ring_is_16byte_desc_enabled(rx_ring) ? sizeof(union i40e_16byte_rx_desc) : sizeof(union i40e_32byte_rx_desc), ring_is_ps_enabled(rx_ring) ? "enabled" : "disabled");
+#endif
+
 	/* Round up to nearest 4K */
 	rx_ring->size = ring_is_16byte_desc_enabled(rx_ring)
 		? rx_ring->count * sizeof(union i40e_16byte_rx_desc)

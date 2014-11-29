@@ -2655,10 +2655,12 @@ static int i40e_configure_rx_ring(struct i40e_ring *ring)
 	struct i40e_hmc_obj_rxq rx_ctx;
 	i40e_status err = 0;
 
+#ifdef HAVE_PF_RING
 	if(unlikely(enable_debug))
 	  if (vsi->netdev)
 	    printk("[PF_RING-ZC] %s:%d %s base-queue=%u queue-index=%u\n", 
               __FUNCTION__, __LINE__, vsi->netdev->name, vsi->base_queue, ring->queue_index);
+#endif
 
 	ring->state = 0;
 
@@ -2683,7 +2685,8 @@ static int i40e_configure_rx_ring(struct i40e_ring *ring)
 
 #ifdef HAVE_PF_RING
 	if (unlikely(enable_debug))
-		printk("[PF_RING-ZC] %s:%u dtype %X\n", __FUNCTION__, __LINE__, vsi->dtype);
+	  printk("[PF_RING-ZC] %s:%u dtype %X %u %s\n", __FUNCTION__, __LINE__, 
+	    vsi->dtype, rx_ctx.dsize, rx_ctx.dsize ? "- bytes" : "16 bytes");
 #endif
 
 	rx_ctx.dtype = vsi->dtype;
@@ -3003,6 +3006,46 @@ int wake_up_pfring_zc_socket(struct i40e_ring *rx_ring)
 
 /* ********************************** */
 
+static int i40e_pf_rxq_wait(struct i40e_pf *pf, int pf_q, bool enable);
+
+static int i40e_control_rxq(struct i40e_vsi *vsi, int pf_q, bool enable)
+{
+	struct i40e_pf *pf = vsi->back;
+	struct i40e_hw *hw = &pf->hw;
+	int j, ret = 0;
+	u32 rx_reg;
+
+	for (j = 0; j < 50; j++) {
+		rx_reg = rd32(hw, I40E_QRX_ENA(pf_q));
+		if (((rx_reg >> I40E_QRX_ENA_QENA_REQ_SHIFT) & 1) ==
+		    ((rx_reg >> I40E_QRX_ENA_QENA_STAT_SHIFT) & 1))
+			break;
+		usleep_range(1000, 2000);
+	}
+
+	/* Skip if the queue is already in the requested state */
+	if (enable == !!(rx_reg & I40E_QRX_ENA_QENA_STAT_MASK))
+		return ret;
+
+	/* turn on/off the queue */
+	if (enable)
+		rx_reg |= I40E_QRX_ENA_QENA_REQ_MASK;
+	else
+		rx_reg &= ~I40E_QRX_ENA_QENA_REQ_MASK;
+	wr32(hw, I40E_QRX_ENA(pf_q), rx_reg);
+
+	/* wait for the change to finish */
+	ret = i40e_pf_rxq_wait(pf, pf_q, enable);
+	if (ret) {
+		dev_info(&pf->pdev->dev,
+			 "%s: VSI seid %d Rx ring %d %sable timeout\n",
+			 __func__, vsi->seid, pf_q,
+			 (enable ? "en" : "dis"));
+	}
+
+	return ret;
+}
+
 void notify_function_ptr(void *rx_data, void *tx_data, u_int8_t device_in_use) 
 {
   struct i40e_ring  *rx_ring = (struct i40e_ring *) rx_data;
@@ -3020,18 +3063,31 @@ void notify_function_ptr(void *rx_data, void *tx_data, u_int8_t device_in_use)
 
     if((rx_ring != NULL)
        && atomic_inc_return(&rx_ring->pfring_zc.queue_in_use) == 1 /* first user */) {
+#ifdef TODO
+      i40e_vsi_disable_irq(rx_ring->vsi);
       i40e_clean_rx_ring(rx_ring);
+
+      i40e_control_rxq(rx_ring->vsi, vsi->base_queue + rx_ring->queue_index, false /* stop */);
+
       writel(0, rx_ring->tail);
       // writel(0, rx_ring->head);// FIX
-      i40e_vsi_disable_irq(rx_ring->vsi);
+
+      i40e_control_rxq(rx_ring->vsi, vsi->base_queue + rx_ring->queue_index, true /* start */);
+#endif
     }
+
+    if (tx_ring != NULL && atomic_inc_return(&tx_ring->pfring_zc.queue_in_use) == 1 /* first user */) {
+      /* nothing to do besides increasing the counter */
+    }
+
   } else { /* restore card memory */
-    int i;
 
     if ((rx_ring != NULL)
 	&& atomic_dec_return(&rx_ring->pfring_zc.queue_in_use) == 0 /* last user */) {
+#ifdef TODO
+      int i;
 
-      i40e_vsi_control_rx(rx_ring->vsi, false /* stop */);
+      i40e_control_rxq(rx_ring->vsi, vsi->base_queue + rx_ring->queue_index, false /* stop */);
 
       for(i=0; i<rx_ring->count; i++) {
 	union i40e_rx_desc *rx_desc = I40E_RX_DESC(rx_ring, i);
@@ -3042,12 +3098,14 @@ void notify_function_ptr(void *rx_data, void *tx_data, u_int8_t device_in_use)
       i40e_configure_rx_ring(rx_ring);
       rmb();
     
-      i40e_vsi_control_rx(rx_ring->vsi, true /* start */);
+      i40e_control_rxq(rx_ring->vsi, vsi->base_queue + rx_ring->queue_index, true /* start */);
       i40e_vsi_disable_irq(rx_ring->vsi);
+#endif
     }
 
     if((tx_ring != NULL) 
        && atomic_dec_return(&tx_ring->pfring_zc.queue_in_use) == 0 /* last user */) {
+#ifdef TODO
       /* Restore TX */
       tx_ring->next_to_clean = readl(tx_ring->tail);
        
@@ -3060,6 +3118,7 @@ void notify_function_ptr(void *rx_data, void *tx_data, u_int8_t device_in_use)
 
       i40e_configure_tx_ring(tx_ring);
       rmb();
+#endif
     }
 
     if(atomic_dec_return(&adapter->pfring_zc.usage_counter) == 0 /* last user */)
