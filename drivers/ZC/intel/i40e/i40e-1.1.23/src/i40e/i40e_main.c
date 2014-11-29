@@ -2683,7 +2683,7 @@ static int i40e_configure_rx_ring(struct i40e_ring *ring)
 
 #ifdef HAVE_PF_RING
 	if (unlikely(enable_debug))
-		printk("%s:%u dtype %X\n", __FUNCTION__, __LINE__, vsi->dtype);
+		printk("[PF_RING-ZC] %s:%u dtype %X\n", __FUNCTION__, __LINE__, vsi->dtype);
 #endif
 
 	rx_ctx.dtype = vsi->dtype;
@@ -2772,7 +2772,7 @@ static int i40e_vsi_configure_rx(struct i40e_vsi *vsi)
 	case I40E_FLAG_RX_1BUF_ENABLED:
 #ifdef HAVE_PF_RING
 		if (unlikely(enable_debug))
-			printk("%s:%u I40E_FLAG_RX_1BUF_ENABLED\n", __FUNCTION__, __LINE__);
+			printk("[PF_RING-ZC] %s:%u I40E_FLAG_RX_1BUF_ENABLED\n", __FUNCTION__, __LINE__);
 #endif
 		vsi->rx_hdr_len = 0;
 		vsi->rx_buf_len = vsi->max_frame;
@@ -2781,7 +2781,7 @@ static int i40e_vsi_configure_rx(struct i40e_vsi *vsi)
 	case I40E_FLAG_RX_PS_ENABLED:
 #ifdef HAVE_PF_RING
 		if (unlikely(enable_debug))
-			printk("%s:%u I40E_FLAG_RX_PS_ENABLED\n", __FUNCTION__, __LINE__);
+			printk("[PF_RING-ZC] %s:%u I40E_FLAG_RX_PS_ENABLED\n", __FUNCTION__, __LINE__);
 #endif
 		vsi->rx_hdr_len = I40E_RX_HDR_SIZE;
 		vsi->rx_buf_len = I40E_RXBUFFER_2048;
@@ -2790,7 +2790,7 @@ static int i40e_vsi_configure_rx(struct i40e_vsi *vsi)
 	default:
 #ifdef HAVE_PF_RING
 		if (unlikely(enable_debug))
-			printk("%s:%u DEFAULT\n", __FUNCTION__, __LINE__);
+			printk("[PF_RING-ZC] %s:%u DEFAULT\n", __FUNCTION__, __LINE__);
 #endif
 		vsi->rx_hdr_len = I40E_RX_HDR_SIZE;
 		vsi->rx_buf_len = I40E_RXBUFFER_2048;
@@ -2883,7 +2883,7 @@ int wait_packet_function_ptr(void *data, int mode)
   struct i40e_ring *rx_ring = (struct i40e_ring*)data;
 
   if(unlikely(enable_debug))
-    printk("%s(): enter [mode=%d/%s][queueId=%d][next_to_clean=%u][next_to_use=%d]\n",
+    printk("[PF_RING-ZC] %s(): enter [mode=%d/%s][queueId=%d][next_to_clean=%u][next_to_use=%d]\n",
 	   __FUNCTION__, mode, mode == 1 ? "enable int" : "disable int",
 	   rx_ring->queue_index, rx_ring->next_to_clean, rx_ring->next_to_use);
 
@@ -2917,7 +2917,7 @@ int wait_packet_function_ptr(void *data, int mode)
     }
 
     if(unlikely(enable_debug)) {
-      printk("%s(): Check if a packet ise arrived [idx=%d][rx_status=%d][len=%lu]\n",
+      printk("[PF_RING-ZC] %s(): Check if a packet ise arrived [idx=%d][rx_status=%d][len=%lu]\n",
 	     __FUNCTION__, i, rx_status, 
 	     (unsigned long)((qword & I40E_RXD_QW1_LENGTH_PBUF_MASK) >> I40E_RXD_QW1_LENGTH_PBUF_SHIFT));
     }
@@ -2928,11 +2928,11 @@ int wait_packet_function_ptr(void *data, int mode)
       if(!rx_ring->pfring_zc.rx_tx.rx.interrupt_enabled) {
 	i40e_vsi_enable_irq(rx_ring->vsi);
 
-	if(unlikely(enable_debug)) printk("%s(): Enabled interrupts, queue = %d\n", __FUNCTION__, rx_ring->q_vector->v_idx);
+	if(unlikely(enable_debug)) printk("[PF_RING-ZC] %s(): Enabled interrupts, queue = %d\n", __FUNCTION__, rx_ring->q_vector->v_idx);
 	rx_ring->pfring_zc.rx_tx.rx.interrupt_enabled = 1;
 
 	if(unlikely(enable_debug))
-	  printk("%s(): Packet not arrived yet: enabling "
+	  printk("[PF_RING-ZC] %s(): Packet not arrived yet: enabling "
 		 "interrupts, queue=%d, i=%d\n",
 		 __FUNCTION__,rx_ring->q_vector->v_idx, i);
       }
@@ -2949,7 +2949,7 @@ int wait_packet_function_ptr(void *data, int mode)
     }
 
     if(unlikely(enable_debug))
-      printk("%s(): Packet received: %d\n", __FUNCTION__, 
+      printk("[PF_RING-ZC] %s(): Packet received: %d\n", __FUNCTION__, 
 	     rx_status & (1 << I40E_RX_DESC_STATUS_DD_SHIFT));
 
     return(rx_status & (1 << I40E_RX_DESC_STATUS_DD_SHIFT));
@@ -2961,7 +2961,7 @@ int wait_packet_function_ptr(void *data, int mode)
     rx_ring->pfring_zc.rx_tx.rx.interrupt_enabled = 0;
 
     if(unlikely(enable_debug))
-      printk("%s(): Disabled interrupts, queue = %d\n", __FUNCTION__, rx_ring->q_vector->v_idx);
+      printk("[PF_RING-ZC] %s(): Disabled interrupts, queue = %d\n", __FUNCTION__, rx_ring->q_vector->v_idx);
 
     return(0);
   }
@@ -2973,7 +2973,7 @@ int wake_up_pfring_zc_socket(struct i40e_ring *rx_ring)
 {
   unsigned int last_read = readl(rx_ring->tail);
 
-  if(unlikely(enable_debug))  printk("[PF_RING-ZC] *************** %s() called\n", __FUNCTION__);
+  if(unlikely(enable_debug))  printk("[PF_RING-ZC] %s() called\n", __FUNCTION__);
 	
   if(++last_read == rx_ring->count) last_read = 0;
   if(atomic_read(&rx_ring->pfring_zc.queue_in_use)) {
@@ -4716,6 +4716,10 @@ static int i40e_up_complete(struct i40e_vsi *vsi)
 	struct i40e_pf *pf = vsi->back;
 	int err;
 
+#ifdef HAVE_PF_RING
+	if (unlikely(enable_debug)) printk("[PF_RING-ZC] %s(%s) called\n", __FUNCTION__, vsi->netdev->name);
+#endif
+
 	if (pf->flags & I40E_FLAG_MSIX_ENABLED)
 		i40e_vsi_configure_msix(vsi);
 	else
@@ -4763,8 +4767,6 @@ static int i40e_up_complete(struct i40e_vsi *vsi)
 	if(vsi->netdev) {
 	  struct pfring_hooks *hook = (struct pfring_hooks*)vsi->netdev->pfring_ptr;
 
-	  if(unlikely(enable_debug))  printk("[PF_RING-ZC] *************** %s(%s) called\n", __FUNCTION__, vsi->netdev->name);
-
 	  if(hook != NULL) {
 	    int i;
 	    u16 cache_line_size;
@@ -4775,7 +4777,8 @@ static int i40e_up_complete(struct i40e_vsi *vsi)
 	    cache_line_size *= PCI_DEVICE_CACHE_LINE_SIZE_BYTES;
 	    if(cache_line_size == 0) cache_line_size = 64;
 
-	    printk("[PF_RING-ZC] %s(): [cache_line_size=%u]\n", __FUNCTION__, cache_line_size);
+	    if(unlikely(enable_debug))  
+	      printk("[PF_RING-ZC] %s() attach [cache_line_size=%u]\n", __FUNCTION__, cache_line_size);
 
 	    for (i = 0; i < vsi->num_queue_pairs; i++) {
 	      struct i40e_ring *rx_ring = vsi->rx_rings[i];
@@ -4834,6 +4837,10 @@ static void i40e_vsi_reinit_locked(struct i40e_vsi *vsi)
 {
 	struct i40e_pf *pf = vsi->back;
 
+#ifdef HAVE_PF_RING
+	if (unlikely(enable_debug)) printk("[PF_RING-ZC] %s(%s) called\n", __FUNCTION__, vsi->netdev->name);
+#endif
+
 	WARN_ON(in_interrupt());
 	while (test_and_set_bit(__I40E_CONFIG_BUSY, &pf->state))
 		usleep_range(1000, 2000);
@@ -4857,6 +4864,10 @@ int i40e_up(struct i40e_vsi *vsi)
 {
 	int err;
 
+#ifdef HAVE_PF_RING
+	if (unlikely(enable_debug)) printk("[PF_RING-ZC] %s(%s) called\n", __FUNCTION__, vsi->netdev->name);
+#endif
+
 	err = i40e_vsi_configure(vsi);
 	if (!err)
 		err = i40e_up_complete(vsi);
@@ -4871,6 +4882,10 @@ int i40e_up(struct i40e_vsi *vsi)
 void i40e_down(struct i40e_vsi *vsi)
 {
 	int i;
+
+#ifdef HAVE_PF_RING
+	if (unlikely(enable_debug)) printk("[PF_RING-ZC] %s(%s) called\n", __FUNCTION__, vsi->netdev->name);
+#endif
 
 	/* It is assumed that the caller of this function
 	 * sets the vsi->state __I40E_DOWN bit.
@@ -4895,6 +4910,9 @@ void i40e_down(struct i40e_vsi *vsi)
 
 		if(hook != NULL) {
 			int i;
+			
+			if(unlikely(enable_debug))
+	      			printk("[PF_RING-ZC] %s() detach\n", __FUNCTION__);
 
 			for (i = 0; i < vsi->num_queue_pairs; i++) {
 				struct i40e_ring *rx_ring = vsi->rx_rings[i];
@@ -5089,6 +5107,10 @@ int i40e_vsi_open(struct i40e_vsi *vsi)
 		err = -EINVAL;
 		goto err_setup_rx;
 	}
+
+#ifdef HAVE_PF_RING
+	if (unlikely(enable_debug)) printk("[PF_RING-ZC] %s(%s) called\n", __FUNCTION__, vsi->netdev->name);
+#endif
 
 	err = i40e_up_complete(vsi);
 	if (err)
