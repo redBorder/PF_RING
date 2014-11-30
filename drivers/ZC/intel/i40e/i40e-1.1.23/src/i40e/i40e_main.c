@@ -2657,9 +2657,9 @@ static int i40e_configure_rx_ring(struct i40e_ring *ring)
 
 #ifdef HAVE_PF_RING
 	if(unlikely(enable_debug))
-	  if (vsi->netdev)
-	    printk("[PF_RING-ZC] %s:%d %s base-queue=%u queue-index=%u\n", 
-              __FUNCTION__, __LINE__, vsi->netdev->name, vsi->base_queue, ring->queue_index);
+	  printk("[PF_RING-ZC] %s:%d %s base-queue=%u queue-index=%u\n", 
+            __FUNCTION__, __LINE__, vsi->netdev? vsi->netdev->name : "null", 
+            vsi->base_queue, ring->queue_index);
 #endif
 
 	ring->state = 0;
@@ -2773,28 +2773,16 @@ static int i40e_vsi_configure_rx(struct i40e_vsi *vsi)
 	switch (vsi->back->flags & (I40E_FLAG_RX_1BUF_ENABLED |
 				    I40E_FLAG_RX_PS_ENABLED)) {
 	case I40E_FLAG_RX_1BUF_ENABLED:
-#ifdef HAVE_PF_RING
-		if (unlikely(enable_debug))
-			printk("[PF_RING-ZC] %s:%u I40E_FLAG_RX_1BUF_ENABLED\n", __FUNCTION__, __LINE__);
-#endif
 		vsi->rx_hdr_len = 0;
 		vsi->rx_buf_len = vsi->max_frame;
 		vsi->dtype = I40E_RX_DTYPE_NO_SPLIT;
 		break;
 	case I40E_FLAG_RX_PS_ENABLED:
-#ifdef HAVE_PF_RING
-		if (unlikely(enable_debug))
-			printk("[PF_RING-ZC] %s:%u I40E_FLAG_RX_PS_ENABLED\n", __FUNCTION__, __LINE__);
-#endif
 		vsi->rx_hdr_len = I40E_RX_HDR_SIZE;
 		vsi->rx_buf_len = I40E_RXBUFFER_2048;
 		vsi->dtype = I40E_RX_DTYPE_HEADER_SPLIT;
 		break;
 	default:
-#ifdef HAVE_PF_RING
-		if (unlikely(enable_debug))
-			printk("[PF_RING-ZC] %s:%u DEFAULT\n", __FUNCTION__, __LINE__);
-#endif
 		vsi->rx_hdr_len = I40E_RX_HDR_SIZE;
 		vsi->rx_buf_len = I40E_RXBUFFER_2048;
 		vsi->dtype = I40E_RX_DTYPE_SPLIT_ALWAYS;
@@ -3052,7 +3040,10 @@ void notify_function_ptr(void *rx_data, void *tx_data, u_int8_t device_in_use)
   struct i40e_ring  *tx_ring = (struct i40e_ring *) tx_data;
   struct i40e_ring  *xx_ring = (rx_ring != NULL) ? rx_ring : tx_ring;
   struct i40e_pf    *adapter;
-  
+ 
+  if(unlikely(enable_debug))
+    printk("[PF_RING-ZC] %s %s\n", __FUNCTION__, device_in_use ? "open" : "close");
+ 
   if(xx_ring == NULL) return; /* safety check */
 
   adapter = i40e_netdev_to_pf(xx_ring->netdev);
@@ -3063,6 +3054,10 @@ void notify_function_ptr(void *rx_data, void *tx_data, u_int8_t device_in_use)
 
     if((rx_ring != NULL)
        && atomic_inc_return(&rx_ring->pfring_zc.queue_in_use) == 1 /* first user */) {
+
+      if(unlikely(enable_debug))
+        printk("[PF_RING-ZC] %s:%d Tail=%u\n", __FUNCTION__, __LINE__, readl(rx_ring->tail));
+
 #ifdef TODO
       i40e_vsi_disable_irq(rx_ring->vsi);
       i40e_clean_rx_ring(rx_ring);
@@ -7317,6 +7312,9 @@ static int i40e_sw_init(struct i40e_pf *pf)
 	pf->flags = I40E_FLAG_RX_CSUM_ENABLED |
 		    I40E_FLAG_MSI_ENABLED     |
 		    I40E_FLAG_MSIX_ENABLED    |
+#ifdef HAVE_PF_RING
+		    I40E_FLAG_16BYTE_RX_DESC_ENABLED |
+#endif
 		    I40E_FLAG_RX_1BUF_ENABLED;
 
 	/* Set default ITR */
