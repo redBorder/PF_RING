@@ -1496,7 +1496,8 @@ static int i40e_clean_rx_irq(struct i40e_ring *rx_ring, int budget)
 	u64 qword;
 
 #ifdef HAVE_PF_RING
-	printk("[PF_RING-ZC] *************** %s() called\n", __FUNCTION__);
+	//if(unlikely(enable_debug))
+	  printk("[PF_RING-ZC] %s() called\n", __FUNCTION__);
 
 	if(atomic_read(&i40e_netdev_to_pf(rx_ring->netdev)->pfring_zc.usage_counter) > 0) {
 	  wake_up_pfring_zc_socket(rx_ring);

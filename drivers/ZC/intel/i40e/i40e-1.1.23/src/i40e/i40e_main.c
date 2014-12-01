@@ -2867,7 +2867,6 @@ static void i40e_fdir_filter_restore(struct i40e_vsi *vsi)
 /* Forward declarations */
 static int i40e_vsi_enable_irq(struct i40e_vsi *vsi);
 static void i40e_vsi_disable_irq(struct i40e_vsi *vsi);
-static int i40e_vsi_control_rx(struct i40e_vsi *vsi, bool enable);
 
 int wait_packet_function_ptr(void *data, int mode)
 {
@@ -3034,12 +3033,62 @@ static int i40e_control_rxq(struct i40e_vsi *vsi, int pf_q, bool enable)
 	return ret;
 }
 
+#if 0
+static int i40e_pf_txq_wait(struct i40e_pf *pf, int pf_q, bool enable);
+
+static int i40e_control_txq(struct i40e_vsi *vsi, int pf_q, bool enable)
+{
+	struct i40e_pf *pf = vsi->back;
+	struct i40e_hw *hw = &pf->hw;
+	int i, j, ret = 0;
+	u32 tx_reg;
+
+	/* warn the TX unit of coming changes */
+	i40e_pre_tx_queue_cfg(&pf->hw, pf_q, enable);
+	if (!enable)
+		udelay(10);
+
+	for (j = 0; j < 50; j++) {
+		tx_reg = rd32(hw, I40E_QTX_ENA(pf_q));
+		if (((tx_reg >> I40E_QTX_ENA_QENA_REQ_SHIFT) & 1) ==
+		    ((tx_reg >> I40E_QTX_ENA_QENA_STAT_SHIFT) & 1))
+			break;
+		usleep_range(1000, 2000);
+	}
+	/* Skip if the queue is already in the requested state */
+	if (enable == !!(tx_reg & I40E_QTX_ENA_QENA_STAT_MASK))
+		return ret;
+
+	/* turn on/off the queue */
+	if (enable) {
+		wr32(hw, I40E_QTX_HEAD(pf_q), 0);
+		tx_reg |= I40E_QTX_ENA_QENA_REQ_MASK;
+	} else {
+		tx_reg &= ~I40E_QTX_ENA_QENA_REQ_MASK;
+	}
+
+	wr32(hw, I40E_QTX_ENA(pf_q), tx_reg);
+
+	/* wait for the change to finish */
+	ret = i40e_pf_txq_wait(pf, pf_q, enable);
+	if (ret) {
+		dev_info(&pf->pdev->dev,
+			 "%s: VSI seid %d Tx ring %d %sable timeout\n",
+			 __func__, vsi->seid, pf_q,
+			 (enable ? "en" : "dis"));
+	}
+
+	return ret;
+}
+#endif
+
 void notify_function_ptr(void *rx_data, void *tx_data, u_int8_t device_in_use) 
 {
   struct i40e_ring  *rx_ring = (struct i40e_ring *) rx_data;
   struct i40e_ring  *tx_ring = (struct i40e_ring *) tx_data;
   struct i40e_ring  *xx_ring = (rx_ring != NULL) ? rx_ring : tx_ring;
   struct i40e_pf    *adapter;
+  int i;
  
   if(unlikely(enable_debug))
     printk("[PF_RING-ZC] %s %s\n", __FUNCTION__, device_in_use ? "open" : "close");
@@ -3052,68 +3101,69 @@ void notify_function_ptr(void *rx_data, void *tx_data, u_int8_t device_in_use)
     if(atomic_inc_return(&adapter->pfring_zc.usage_counter) == 1 /* first user */)
       try_module_get(THIS_MODULE); /* ++ */
 
-    if((rx_ring != NULL)
-       && atomic_inc_return(&rx_ring->pfring_zc.queue_in_use) == 1 /* first user */) {
+    if (tx_ring != NULL && atomic_inc_return(&rx_ring->pfring_zc.queue_in_use) == 1 /* first user */) {
 
       if(unlikely(enable_debug))
-        printk("[PF_RING-ZC] %s:%d Tail=%u\n", __FUNCTION__, __LINE__, readl(rx_ring->tail));
+        printk("[PF_RING-ZC] %s:%d RX Tail=%u\n", __FUNCTION__, __LINE__, readl(rx_ring->tail));
 
-#ifdef TODO
-      i40e_vsi_disable_irq(rx_ring->vsi);
+      i40e_vsi_disable_irq(rx_ring->vsi); //TODO per queue?
+
       i40e_clean_rx_ring(rx_ring);
 
+#if 0 /* resetting in userspace */
       i40e_control_rxq(rx_ring->vsi, vsi->base_queue + rx_ring->queue_index, false /* stop */);
-
       writel(0, rx_ring->tail);
-      // writel(0, rx_ring->head);// FIX
-
       i40e_control_rxq(rx_ring->vsi, vsi->base_queue + rx_ring->queue_index, true /* start */);
 #endif
     }
 
     if (tx_ring != NULL && atomic_inc_return(&tx_ring->pfring_zc.queue_in_use) == 1 /* first user */) {
       /* nothing to do besides increasing the counter */
+
+      if(unlikely(enable_debug))
+        printk("[PF_RING-ZC] %s:%d TX Tail=%u\n", __FUNCTION__, __LINE__, readl(tx_ring->tail));
     }
 
   } else { /* restore card memory */
 
-    if ((rx_ring != NULL)
-	&& atomic_dec_return(&rx_ring->pfring_zc.queue_in_use) == 0 /* last user */) {
-#ifdef TODO
-      int i;
+    if (rx_ring != NULL && atomic_dec_return(&rx_ring->pfring_zc.queue_in_use) == 0 /* last user */) {
 
-      i40e_control_rxq(rx_ring->vsi, vsi->base_queue + rx_ring->queue_index, false /* stop */);
+      i40e_control_rxq(rx_ring->vsi, rx_ring->vsi->base_queue + rx_ring->queue_index, false /* stop */);
 
-      for(i=0; i<rx_ring->count; i++) {
+      for (i = 0; i<rx_ring->count; i++) {
 	union i40e_rx_desc *rx_desc = I40E_RX_DESC(rx_ring, i);
 	rx_desc->read.pkt_addr = 0;
 	rx_desc->read.hdr_addr = 0;
       }
 
+#if 0
       i40e_configure_rx_ring(rx_ring);
+#else
+      writel(0, rx_ring->tail);
+      rx_ring->next_to_use = rx_ring->next_to_clean = 0;
+      i40e_alloc_rx_buffers(rx_ring, I40E_DESC_UNUSED(rx_ring));
+#endif
       rmb();
     
-      i40e_control_rxq(rx_ring->vsi, vsi->base_queue + rx_ring->queue_index, true /* start */);
+      i40e_control_rxq(rx_ring->vsi, rx_ring->vsi->base_queue + rx_ring->queue_index, true /* start */);
+
       i40e_vsi_disable_irq(rx_ring->vsi);
-#endif
     }
 
-    if((tx_ring != NULL) 
-       && atomic_dec_return(&tx_ring->pfring_zc.queue_in_use) == 0 /* last user */) {
-#ifdef TODO
+    if(tx_ring != NULL && atomic_dec_return(&tx_ring->pfring_zc.queue_in_use) == 0 /* last user */) {
       /* Restore TX */
-      tx_ring->next_to_clean = readl(tx_ring->tail);
+      rx_ring->next_to_use = tx_ring->next_to_clean = readl(tx_ring->tail);
        
-      for(i=0; i<tx_ring->count; i++) {
+      for (i = 0; i < tx_ring->count; i++) {
 	struct i40e_tx_buffer *tx_buffer = &tx_ring->tx_bi[i];
-
 	tx_buffer->next_to_watch = NULL;
 	tx_buffer->skb = NULL;
       }
 
+#if 0
       i40e_configure_tx_ring(tx_ring);
-      rmb();
 #endif
+      rmb();
     }
 
     if(atomic_dec_return(&adapter->pfring_zc.usage_counter) == 0 /* last user */)
