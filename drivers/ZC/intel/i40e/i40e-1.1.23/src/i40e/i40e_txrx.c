@@ -1132,6 +1132,11 @@ void i40e_alloc_rx_buffers(struct i40e_ring *rx_ring, u16 cleaned_count)
 	if (!rx_ring->netdev || !cleaned_count)
 		return;
 
+#ifdef HAVE_PF_RING
+	//if(unlikely(enable_debug))
+	  printk("[PF_RING-ZC] %s() prefilling rx ring with %u/%u skbuff\n", __FUNCTION__, cleaned_count, rx_ring->count);
+#endif
+
 	while (cleaned_count--) {
 		rx_desc = I40E_RX_DESC(rx_ring, i);
 		bi = &rx_ring->rx_bi[i];
@@ -1678,6 +1683,11 @@ next_desc:
 
 	if (cleaned_count)
 		i40e_alloc_rx_buffers(rx_ring, cleaned_count);
+
+#ifdef HAVE_PF_RING
+	//if(unlikely(enable_debug))
+	  printk("[PF_RING-ZC] %s() cleaned %u/%u skbuff from rx ring\n", __FUNCTION__, cleaned_count, rx_ring->count);
+#endif
 
 	return budget_start - budget;
 }
