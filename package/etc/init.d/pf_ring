@@ -405,9 +405,9 @@ old_config_migration() {
 	for FILES in `ls ${DRIVERS_CONFIG_DIR}/dna-*.conf` ; do
 		DRV_FLAVOR=`echo ${FILES} | cut -d '-' -f 2 | tr -d '.conf'`
 		if [ -f ${FILES} ] && [ ! -L ${FILES} ]; then # if it is not a link - migration already done
-			mv ${FILES} ${DRIVERS_CONFIG_DIR}/dna/${DRV_FLAVOR}.conf
-			touch ${DRIVERS_CONFIG_DIR}/dna/${DRV_FLAVOR}.start
-			ln -s ${DRIVERS_CONFIG_DIR}/dna/${DRV_FLAVOR}.conf ${FILES}
+			mv ${FILES} ${DRIVERS_CONFIG_DIR}/dna/${DRV_FLAVOR}/${DRV_FLAVOR}.conf
+			touch ${DRIVERS_CONFIG_DIR}/dna/${DRV_FLAVOR}/${DRV_FLAVOR}.start
+			ln -s ${DRIVERS_CONFIG_DIR}/dna/${DRV_FLAVOR}/${DRV_FLAVOR}.conf ${FILES}
 		fi
 	done
 	if [ -f ${HUGEPAGES_CONFIG} ]; then 
