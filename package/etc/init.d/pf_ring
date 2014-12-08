@@ -247,7 +247,7 @@ load_dna_zc() {
 	fi
 	
 	if [ ${DRIVER_INSTALLED} -eq 0 ]; then
-		echo "DNA/ZC drivers not loaded: missing driver configuration"
+		echo "DNA/ZC drivers not loaded: missing driver or configuration"
 	fi
 }
 
