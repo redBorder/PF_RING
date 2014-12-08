@@ -247,7 +247,7 @@ load_dna_zc() {
 	fi
 	
 	if [ ${DRIVER_INSTALLED} -eq 0 ]; then
-		   echo "DNA/ZC drivers not found or installed"
+		echo "DNA/ZC drivers not loaded: missing driver configuration"
 	fi
 }
 
@@ -305,6 +305,16 @@ start_pf_ring() {
     PF_RING_MOD_LOCAL="/usr/local/pfring/kernel/pf_ring.ko"
 
     check_pf_ring start
+    
+    if [ ! -f "${DRIVERS_CONFIG_DIR}/pfring.start" ]; then
+    	# remove pf_ring in any case
+    	/sbin/modprobe -r pf_ring
+    	#
+    	echo "PF_RING not enabled"
+        [ ${DISTRO} == "debian" ] && log_end_msg $ERROR
+	    [ ${DISTRO} == "centos" ] && echo_success && echo
+	    return
+    fi
 
     if [ -f $PF_RING_MOD ]; then
         /sbin/insmod $PF_RING_MOD $PARAM
@@ -356,22 +366,22 @@ stop_pf_ring() {
 
     if [ -f /etc/init.d/nprobe ]; then
 		/etc/init.d/nprobe stop
-		sleep 2
+		sleep 1
     fi
 
     if [ -f /etc/init.d/n2disk ]; then
 		/etc/init.d/n2disk stop
-		sleep 2
+		sleep 1
     fi
 
     if [ -f /etc/init.d/ntop ]; then
 		/etc/init.d/ntop stop
-		sleep 2
+		sleep 1
     fi
 
     if [ -f /etc/init.d/ntopng ]; then
 		/etc/init.d/ntopng stop
-		sleep 2
+		sleep 1
     fi
 
 	## Unload NTOP drivers ##
@@ -381,7 +391,7 @@ stop_pf_ring() {
 
     NUM="$(grep pf_ring /proc/modules|wc -l)"
     if [ $NUM -gt 0 ]; then
-	/sbin/rmmod pf_ring
+	/sbin/modprobe -r pf_ring
         NUM="$(grep pf_ring /proc/modules|wc -l)"
 	if [ ${NUM} -gt 0 ]; then
 	   MSG="unable to unload PF_RING module"
