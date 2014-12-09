@@ -64,7 +64,7 @@
 
 #ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
 #define DAQ_PF_RING_BEST_EFFORT_BOOST_MIN_NUM_SLOTS 4096
-#define DAQ_PF_RING_BEST_EFFORT_BOOST_MAX_STATS_FILE_SIZE (4*1024*1024)
+#define DAQ_PF_RING_BEST_EFFORT_BOOST_MAX_STATS_FILE_SIZE (1024*1024)
 
 typedef struct _pfring_queue_slothdr
 {
@@ -101,6 +101,7 @@ typedef struct _pfring_context
   int best_effort_reflector_ifindexes[DAQ_PF_RING_MAX_NUM_DEVICES];
   const char *best_effort_stats_file_path;
   FILE *best_effort_stats_file;
+  ssize_t besteffort_stats_max_file_size;
 #endif
   int num_devices;
   int snaplen;
@@ -306,33 +307,69 @@ static inline int pfring_daq_fill_best_effort_reflect_rings(Pfring_Context_t *co
   return DAQ_SUCCESS;
 }
 
-static void best_effort_stats_print_header0(Pfring_Context_t *context,const char *action) {
+typedef enum{START,STOP,ROTATE} BANNER_TYPE;
+static void best_effort_stats_print_banner0(Pfring_Context_t *context,BANNER_TYPE banner_type) {
   FILE *stats_file = context->best_effort_stats_file;
 
-    if (stats_file == NULL)
-        return;
+  if (stats_file == NULL)
+    return;
+
+  const char *banner_type_str = NULL;
+  switch(banner_type) {
+  case START:
+    banner_type_str = "start";
+    break;
+  case STOP:
+    banner_type_str = "stop";
+    break;
+  case ROTATE:
+    banner_type_str = "rotate";
+    break;
+  };
+
+  if(NULL==banner_type_str) {
+    /* Nothing to do */
+    return;
+  }
 
   const time_t curr_time = time(NULL);
   fprintf(stats_file,
       "################################### "
       "Best effort %s: pid=%u at=%.24s (%lu) "
       "###################################\n",
-      action, getpid(),
+      banner_type_str, getpid(),
       ctime(&curr_time), (unsigned long)curr_time);
 
-  if(0==strcmp(action,"start")) {
-        fprintf(stats_file,"#time,best_effort_drops\n");
+  if(banner_type == START || banner_type == ROTATE) {
+    fprintf(stats_file,"#time,best_effort_drops\n");
   }
 
   fflush(stats_file);
 }
 
-#define best_effort_stats_print_header(context) best_effort_stats_print_header0(context,"start"); 
-#define best_effort_stats_print_footer(context) best_effort_stats_print_header0(context,"stop"); 
+#define best_effort_stats_print_header(context) best_effort_stats_print_banner0(context,START); 
+#define best_effort_stats_print_rotate_header(context) best_effort_stats_print_banner0(context,ROTATE); 
+#define best_effort_stats_print_footer(context) best_effort_stats_print_banner0(context,STOP); 
 
 static void close_best_effort_stats(Pfring_Context_t *context) {
   best_effort_stats_print_footer(context);
   fclose(context->best_effort_stats_file);
+}
+
+static void best_effort_stats_rotate_file(Pfring_Context_t *context) {
+  /* We will rotate the file to the same directory, with the same name plus ".timestamp". */
+  const size_t newfilename_length = snprintf(NULL,0,"%s.%lu",context->best_effort_stats_file_path,(time_t)-1);
+  char *newfilename = calloc(newfilename_length,sizeof(char));
+  snprintf(newfilename,newfilename_length,"%s.%lu",context->best_effort_stats_file_path,time(NULL));
+  
+  fclose(context->best_effort_stats_file);
+  context->best_effort_stats_file = NULL;
+  rename(context->best_effort_stats_file_path,newfilename); /* Don't care if can't rotate*/
+  
+  context->best_effort_stats_file = fopen(context->best_effort_stats_file_path,"w");
+  if(context->best_effort_stats_file) {
+    best_effort_stats_print_rotate_header(context);
+  }
 }
 
 #endif
@@ -368,6 +405,7 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
 #endif
 #ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
   u_int32_t best_effort_min_num_slots = DAQ_PF_RING_BEST_EFFORT_BOOST_MIN_NUM_SLOTS;
+  context->besteffort_stats_max_file_size = DAQ_PF_RING_BEST_EFFORT_BOOST_MAX_STATS_FILE_SIZE;
 #endif
 
   if(!context->devices[DAQ_PF_RING_PASSIVE_DEV_IDX]) {
@@ -514,6 +552,14 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
       }
     } else if(!strcmp(entry->key, "besteffort_logfile")) {
       context->best_effort_stats_file_path = strdup(entry->value);
+    } else if(!strcmp(entry->key, "besteffort_maxfilesize")) {
+      char* end = NULL;
+      context->besteffort_stats_max_file_size = strtol(entry->value, &end, 0);
+      if(end==entry->value || *end != '\0') {
+        snprintf(errbuf, len, "%s: bad best effort max file size(%s)\n",
+                 __FUNCTION__, entry->value);
+        return DAQ_ERROR;
+      }
     }
 #endif
     else if(!strcmp(entry->key, "watermark")) {
@@ -1318,7 +1364,7 @@ static FILE_SIZE update_best_effort_stats_file_status(Pfring_Context_t *context)
     if(0 == stat_rc) {
       if(st.st_size == 0)
         return BEGGINNING;
-      else if(st.st_size >= DAQ_PF_RING_BEST_EFFORT_BOOST_MAX_STATS_FILE_SIZE)
+      else if(st.st_size >= context->besteffort_stats_max_file_size)
         return MAX_SIZE;
       else
         return NORMAL;
@@ -1338,7 +1384,6 @@ static void best_effort_stats_print_line(Pfring_Context_t *context) {
         /* Can't write */
 
     } else {
-        /* TODO Update tot_dropped_base */
         context->base_best_effort_drops = context->q->tot_dropped;
     }
   } else {
@@ -1355,13 +1400,7 @@ static void update_best_effort_stats(Pfring_Context_t *context) {
   }
 
   if(curr_file_size == MAX_SIZE) {
-    // @TODO
-    // best_effort_stats_rotate_file(context);
-    // curr_file_size = BEGGINNING;
-  }
-
-  if(curr_file_size == BEGGINNING) {
-    best_effort_stats_print_header(context);
+    best_effort_stats_rotate_file(context);
   }
 
   best_effort_stats_print_line(context);
