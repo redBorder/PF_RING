@@ -152,7 +152,7 @@ load_hugepages() {
 			done
 		else # set it to max available
 			MEM_AVAIL=`grep MemTotal /proc/meminfo | cut -d ':' -f 2|sed 's/kB//g'|sed 's/ //g'`;
-			MEM_AVAIL=$(( MEM_AVAIL - 512 ))
+			MEM_AVAIL=$(( MEM_AVAIL - 524288 ))
 			HUGEPAGES_NUMBER=$(( MEM_AVAIL / HUGEPAGES_SIZE ))
 			if [ ${HUGEPAGES_NUMBER} -gt 0 ]; then
 				echo ${HUGEPAGES_NUMBER} > /sys/kernel/mm/hugepages/hugepages-${HUGEPAGES_SIZE}kB/nr_hugepages
