@@ -64,6 +64,7 @@
 
 #ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
 #define DAQ_PF_RING_BEST_EFFORT_BOOST_MIN_NUM_SLOTS 4096
+#define DAQ_PF_RING_BEST_EFFORT_BOOST_MAX_STATS_FILE_SIZE (4*1024*1024)
 
 typedef struct _pfring_queue_slothdr
 {
@@ -83,6 +84,7 @@ typedef struct _pfring_queue
   u_int64_t remove_off;
   u_int32_t tot_read;
   u_int32_t tot_insert;
+  u_int32_t tot_dropped;
   u_int32_t max_slot_len;
   u_int32_t min_num_slots;
 } Pfring_Queue_t;
@@ -97,6 +99,8 @@ typedef struct _pfring_context
 #ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
   pfring *best_effort_reflector_ring_handles[DAQ_PF_RING_MAX_NUM_DEVICES];
   int best_effort_reflector_ifindexes[DAQ_PF_RING_MAX_NUM_DEVICES];
+  const char *best_effort_stats_file_path;
+  FILE *best_effort_stats_file;
 #endif
   int num_devices;
   int snaplen;
@@ -125,6 +129,9 @@ typedef struct _pfring_context
   u_int bindcpu;
   uint64_t base_recv[DAQ_PF_RING_MAX_NUM_DEVICES];
   uint64_t base_drop[DAQ_PF_RING_MAX_NUM_DEVICES];
+#ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
+  uint64_t base_best_effort_drops;
+#endif
   DAQ_State state;
 #ifdef HAVE_REDIS
   redisContext *redis_ctx;
@@ -135,6 +142,8 @@ typedef struct _pfring_context
 
 static void pfring_daq_reset_stats(void *handle);
 static int pfring_daq_set_filter(void *handle, const char *filter);
+static void update_best_effort_stats(Pfring_Context_t *context);
+
 
 static int pfring_daq_open(Pfring_Context_t *context, int id) {
   uint32_t default_net = 0xFFFFFF00;
@@ -296,6 +305,36 @@ static inline int pfring_daq_fill_best_effort_reflect_rings(Pfring_Context_t *co
 
   return DAQ_SUCCESS;
 }
+
+static void best_effort_stats_print_header0(Pfring_Context_t *context,const char *action) {
+  FILE *stats_file = context->best_effort_stats_file;
+
+    if (stats_file == NULL)
+        return;
+
+  const time_t curr_time = time(NULL);
+  fprintf(stats_file,
+      "################################### "
+      "Best effort %s: pid=%u at=%.24s (%lu) "
+      "###################################\n",
+      action, getpid(),
+      ctime(&curr_time), (unsigned long)curr_time);
+
+  if(0==strcmp(action,"start")) {
+        fprintf(stats_file,"#time,best_effort_drops\n");
+  }
+
+  fflush(stats_file);
+}
+
+#define best_effort_stats_print_header(context) best_effort_stats_print_header0(context,"start"); 
+#define best_effort_stats_print_footer(context) best_effort_stats_print_header0(context,"stop"); 
+
+static void close_best_effort_stats(Pfring_Context_t *context) {
+  best_effort_stats_print_footer(context);
+  fclose(context->best_effort_stats_file);
+}
+
 #endif
 
 static int pfring_daq_initialize(const DAQ_Config_t *config,
@@ -461,10 +500,11 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
 		 __FUNCTION__, entry->value);
 	return DAQ_ERROR;
       }
-    } else if(!strcmp(entry->key, "besteffort")) {
+    }
+#ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
+    else if(!strcmp(entry->key, "besteffort")) {
       context->best_effort = 1;
     } else if(!strcmp(entry->key, "besteffort_minnumslots")) {
-#ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
       char* end = NULL;
       best_effort_min_num_slots = strtol(entry->value, &end, 0);
       if(end==entry->value || *end != '\0') {
@@ -472,8 +512,11 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
                  __FUNCTION__, entry->value);
         return DAQ_ERROR;
       }
+    } else if(!strcmp(entry->key, "besteffort_logfile")) {
+      context->best_effort_stats_file_path = strdup(entry->value);
+    }
 #endif
-    } else if(!strcmp(entry->key, "watermark")) {
+    else if(!strcmp(entry->key, "watermark")) {
       char* end = entry->value;
       context->watermark = (int) strtol(entry->value, &end, 0);
       if(*end || (context->watermark < 0)) {
@@ -597,6 +640,29 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
       snprintf(errbuf, len, "%s: Couldn't allocate memory for best-effort IDS bridge support (queue)!", __FUNCTION__);
       return DAQ_ERROR_NOMEM;
     }
+  }
+
+  if (NULL != context->best_effort_stats_file_path) {
+    char full_filename_buffer[2048];
+    const int snprintf_rc = snprintf(full_filename_buffer,sizeof(full_filename_buffer),
+                            "%s.%lu",context->best_effort_stats_file_path,time(NULL));
+    if(snprintf_rc < 0) {
+      snprintf(errbuf, len, "%s: Couldn't use %s base filename for best effort stats!", __FUNCTION__,context->best_effort_stats_file_path);
+      return DAQ_ERROR;
+    }
+
+    if(snprintf_rc > (ssize_t)sizeof(full_filename_buffer)) {
+      snprintf(errbuf, len, "%s: Couldn't use %s base filename for best effort stats: It's too long!", __FUNCTION__,context->best_effort_stats_file_path);
+      return DAQ_ERROR;
+    }
+
+    context->best_effort_stats_file = fopen(context->best_effort_stats_file_path,"a");
+    if(NULL == context->best_effort_stats_file) {
+      snprintf(errbuf, len, "%s: Couldn't open %s file for best effort stats!: %s", __FUNCTION__,context->best_effort_stats_file_path,strerror(errno));
+      return DAQ_ERROR;
+    }
+
+    best_effort_stats_print_header(context);
   }
 #endif
 
@@ -787,6 +853,8 @@ static inline void pfring_daq_enqueue(Pfring_Queue_t *q,
 
     q->insert_off = pfring_daq_queue_next_slot_offset(q, q->insert_off);
     q->tot_insert++;
+  } else {
+    q->tot_dropped++;    
   }
 }
 
@@ -1187,6 +1255,11 @@ static int pfring_daq_stop(void *handle) {
 
   update_hw_stats(context);
 
+#ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
+  update_best_effort_stats(context);
+
+#endif
+
   for (i = 0; i < context->num_devices; i++) {
     if(context->ring_handles[i]) {
       /* Store the hardware stats for post-stop stat calls. */
@@ -1217,6 +1290,10 @@ static void pfring_daq_shutdown(void *handle) {
   if(context->filter_string)
     free(context->filter_string);
 
+#ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
+  close_best_effort_stats(context);
+#endif
+
 #ifdef HAVE_REDIS
   if(context->redis_ctx != NULL)
     redisFree(context->redis_ctx);
@@ -1231,12 +1308,77 @@ static DAQ_State pfring_daq_check_status(void *handle) {
   return context->state;
 }
 
+#ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
+typedef enum {NOFILE,NORMAL,BEGGINNING,MAX_SIZE} FILE_SIZE;
+
+static FILE_SIZE update_best_effort_stats_file_status(Pfring_Context_t *context){
+  if(context->best_effort_stats_file_path) {
+    struct stat st;
+    const int stat_rc = stat(context->best_effort_stats_file_path,&st);
+    if(0 == stat_rc) {
+      if(st.st_size == 0)
+        return BEGGINNING;
+      else if(st.st_size >= DAQ_PF_RING_BEST_EFFORT_BOOST_MAX_STATS_FILE_SIZE)
+        return MAX_SIZE;
+      else
+        return NORMAL;
+    }
+  }
+
+  /* Can't do anything from DAQ */
+  return NOFILE;
+}
+
+static void best_effort_stats_print_line(Pfring_Context_t *context) {
+  if(context->best_effort_stats_file) {
+    const uint64_t to_print = context->q->tot_dropped - context->base_best_effort_drops;
+    const int written = fprintf(context->best_effort_stats_file,"%lu,%lu\n",time(NULL),to_print);
+    fflush(context->best_effort_stats_file);
+    if(written < 0){
+        /* Can't write */
+
+    } else {
+        /* TODO Update tot_dropped_base */
+        context->base_best_effort_drops = context->q->tot_dropped;
+    }
+  } else {
+    /* @TODO try to reopen? */
+  }
+}
+
+static void update_best_effort_stats(Pfring_Context_t *context) {
+  FILE_SIZE curr_file_size = update_best_effort_stats_file_status(context);
+
+  if(curr_file_size == NOFILE) {
+    /* Nothing to do */
+    return;
+  }
+
+  if(curr_file_size == MAX_SIZE) {
+    // @TODO
+    // best_effort_stats_rotate_file(context);
+    // curr_file_size = BEGGINNING;
+  }
+
+  if(curr_file_size == BEGGINNING) {
+    best_effort_stats_print_header(context);
+  }
+
+  best_effort_stats_print_line(context);
+}
+
+#endif
+
 static int pfring_daq_get_stats(void *handle, DAQ_Stats_t *stats) {
   Pfring_Context_t *context =(Pfring_Context_t *) handle;
 
   update_hw_stats(context);
 
   memcpy(stats, &context->stats, sizeof(DAQ_Stats_t));
+
+#ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
+  update_best_effort_stats(context);
+#endif
 
   return DAQ_SUCCESS;
 }
