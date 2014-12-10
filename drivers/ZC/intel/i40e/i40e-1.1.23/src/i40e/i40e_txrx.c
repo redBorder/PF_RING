@@ -674,7 +674,9 @@ static bool i40e_clean_tx_irq(struct i40e_ring *tx_ring, int budget)
 	unsigned int total_bytes = 0;
 
 #ifdef HAVE_PF_RING	
-	printk("[PF_RING-ZC] *************** %s() called\n", __FUNCTION__);
+	printk("[PF_RING-ZC] %s() called [usage_counter=%u][head=%u]\n", __FUNCTION__,
+          atomic_read(&i40e_netdev_to_pf(tx_ring->netdev)->pfring_zc.usage_counter),
+          i40e_get_head(tx_ring));
 
 	if(atomic_read(&i40e_netdev_to_pf(tx_ring->netdev)->pfring_zc.usage_counter) > 0)
 	  return(true);
@@ -1502,7 +1504,8 @@ static int i40e_clean_rx_irq(struct i40e_ring *rx_ring, int budget)
 
 #ifdef HAVE_PF_RING
 	//if(unlikely(enable_debug))
-	  printk("[PF_RING-ZC] %s() called\n", __FUNCTION__);
+	  printk("[PF_RING-ZC] %s() called [usage_counter=%u]\n", __FUNCTION__, 
+            atomic_read(&i40e_netdev_to_pf(rx_ring->netdev)->pfring_zc.usage_counter));
 
 	if(atomic_read(&i40e_netdev_to_pf(rx_ring->netdev)->pfring_zc.usage_counter) > 0) {
 	  wake_up_pfring_zc_socket(rx_ring);
@@ -2370,6 +2373,12 @@ static void i40e_tx_map(struct i40e_ring *tx_ring, struct sk_buff *skb,
 		i = 0;
 
 	tx_ring->next_to_use = i;
+
+#ifdef HAVE_PF_RING
+	//if(unlikely(enable_debug))
+	  printk("[PF_RING-ZC] %s:%d tail=%u head=%u\n", 
+            __FUNCTION__, __LINE__, i, i40e_get_head(tx_ring));
+#endif
 
 	/* notify HW of packet */
 	writel(i, tx_ring->tail);

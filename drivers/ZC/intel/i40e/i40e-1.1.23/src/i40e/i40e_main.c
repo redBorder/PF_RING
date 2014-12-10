@@ -3150,9 +3150,13 @@ void notify_function_ptr(void *rx_data, void *tx_data, u_int8_t device_in_use)
       i40e_vsi_disable_irq(rx_ring->vsi);
     }
 
-    if(tx_ring != NULL && atomic_dec_return(&tx_ring->pfring_zc.queue_in_use) == 0 /* last user */) {
+    if (tx_ring != NULL && atomic_dec_return(&tx_ring->pfring_zc.queue_in_use) == 0 /* last user */) {
       /* Restore TX */
+
       rx_ring->next_to_use = tx_ring->next_to_clean = readl(tx_ring->tail);
+
+      if(unlikely(enable_debug))
+        printk("[PF_RING-ZC] %s:%d Restoring TX Tail=%u\n", __FUNCTION__, __LINE__, rx_ring->next_to_use);
        
       for (i = 0; i < tx_ring->count; i++) {
 	struct i40e_tx_buffer *tx_buffer = &tx_ring->tx_bi[i];
@@ -4910,7 +4914,7 @@ static int i40e_up_complete(struct i40e_vsi *vsi)
 					rx_ring->desc, /* rx packet descriptors */
 					0, /* tx packet memory */
 					tx_ring->desc, /* tx packet descriptors */
-					(void*)pci_resource_start(pf->pdev, 0),
+					(void *) pci_resource_start(pf->pdev, 0),
 					pci_resource_len(pf->pdev, 0),
 					rx_ring->queue_index, /* channel id */
 					rx_ring->netdev,
@@ -4919,8 +4923,8 @@ static int i40e_up_complete(struct i40e_vsi *vsi)
 					rx_ring->netdev->dev_addr,
 					&rx_ring->pfring_zc.rx_tx.rx.packet_waitqueue,
 					&rx_ring->pfring_zc.rx_tx.rx.interrupt_received,
-					(void*)rx_ring,
-					(void*)tx_ring,
+					(void *) rx_ring,
+					(void *) tx_ring,
 					wait_packet_function_ptr,
 					notify_function_ptr);
 	    }
