@@ -198,11 +198,11 @@ struct __pfring {
 					       */
   } tx;
 
+  u_int8_t zc_device;
+
   /* FIXX these fields should be moved in ->priv_data */
-  /* DNA (Direct NIC Access) */
+  /* DNA (Direct NIC Access) only */ 
   struct {
-    u_int8_t dna_mapped_device;
-    u_int32_t sampling_counter;
     u_int16_t num_rx_pkts_before_dna_sync, num_tx_pkts_before_dna_sync; 
     u_int16_t dna_rx_sync_watermark, dna_tx_sync_watermark;
     u_int64_t tot_dna_read_pkts, tot_dna_lost_pkts;
@@ -233,6 +233,7 @@ struct __pfring {
   int       (*send_ifindex)                 (pfring *, char *, u_int, u_int8_t, int);
   int       (*send_get_time)                (pfring *, char *, u_int, struct timespec *);
   u_int8_t  (*get_num_rx_channels)          (pfring *);
+  int       (*get_max_packet_size)          (pfring *);
   int       (*set_sampling_rate)            (pfring *, u_int32_t);
   int       (*get_selectable_fd)            (pfring *);
   int       (*set_direction)                (pfring *, packet_direction);
@@ -314,7 +315,7 @@ struct __pfring {
   char *buffer, *slots, *device_name;
   u_int32_t caplen;
   u_int16_t slot_header_len, mtu_len /* 0 = unknown */;
-  u_int32_t sampling_rate;
+  u_int32_t sampling_rate, sampling_counter;
   u_int8_t kernel_packet_consumer, is_shutting_down, socket_default_accept_policy;
   int fd, device_id;
   FlowSlotInfo *slots_info;
@@ -1235,6 +1236,13 @@ int pfring_enable_hw_timestamp(pfring* ring, char *device_name, u_int8_t enable_
  * @return The MTU size on success, a negative value otherwise.
  */
 int pfring_get_mtu_size(pfring* ring);
+
+/**
+ * Return the max packet length.
+ * @param ring The PF_RING handle.
+ * @return The max length on success, a negative value otherwise.
+ */
+int pfring_get_max_packet_size(pfring* ring);
 
 /**
  * Print a packet (the header with parsing info must be provided). 

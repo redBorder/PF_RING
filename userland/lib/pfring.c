@@ -848,6 +848,15 @@ u_int8_t pfring_get_num_rx_channels(pfring *ring) {
 
 /* **************************************************** */
 
+int pfring_get_max_packet_size(pfring* ring) {
+  if(ring && ring->get_max_packet_size)
+    return ring->get_max_packet_size(ring);
+
+  return ring->mtu_len;
+}
+
+/* **************************************************** */
+
 int pfring_set_sampling_rate(pfring *ring, u_int32_t rate /* 1 = no sampling */) {
   if(ring && ring->set_sampling_rate) {
     int rc;

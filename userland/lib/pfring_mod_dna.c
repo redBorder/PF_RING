@@ -159,11 +159,11 @@ int pfring_dna_recv(pfring *ring, u_char** buffer, u_int buffer_len,
 
   if(pkt && (hdr->len > 0)) {
     if(unlikely(ring->sampling_rate > 1)) {
-      if (likely(ring->dna.sampling_counter > 0)) {
-        ring->dna.sampling_counter--;
+      if (likely(ring->sampling_counter > 0)) {
+        ring->sampling_counter--;
 	goto redo_pfring_recv;
       } else {
-        ring->dna.sampling_counter = ring->sampling_rate-1;
+        ring->sampling_counter = ring->sampling_rate-1;
       }
     }
 
@@ -315,7 +315,7 @@ int pfring_dna_open(pfring *ring) {
 	 ring->dna.dna_dev.descr_packet_memory_tot_len);
 #endif
 
-  ring->dna.dna_mapped_device = 1;
+  ring->zc_device = 1;
 
   /* ***************************************** */
 
