@@ -8876,12 +8876,27 @@ void zc_dev_handler(zc_dev_operation operation,
   } else {
     struct list_head *ptr, *tmp_ptr;
     zc_dev_list *entry;
+    int i, found = 0;
 
     list_for_each_safe(ptr, tmp_ptr, &zc_devices_list) {
       entry = list_entry(ptr, zc_dev_list, list);
 
-      if((entry->dev.netdev == netdev)
-	 && (entry->dev.channel_id == channel_id)) {
+      if((entry->dev.netdev == netdev) && (entry->dev.channel_id == channel_id)) {
+
+        /* driver detach - checking if there is an application running */
+        for (i = 0; i < MAX_NUM_ZC_BOUND_SOCKETS; i++) {
+          if (entry->bound_sockets[i] != NULL) {
+            //entry->bound_sockets[i] = NULL;
+            //entry->num_bound_sockets--;
+            found = 1;
+            break;
+          }
+        }
+        if (found) {
+          printk("[PF_RING] Trying to unload a ZC driver while using the device!!\n");
+          //entry->dev.usage_notification(entry->dev.rx_adapter_ptr, entry->dev.tx_adapter_ptr, 0 /* unlock */);
+        }
+
 	list_del(ptr);
 	kfree(entry);
 	zc_devices_list_size--;

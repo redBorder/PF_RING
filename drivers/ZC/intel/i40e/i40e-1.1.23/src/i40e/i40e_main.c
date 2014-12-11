@@ -4331,7 +4331,14 @@ static void i40e_napi_disable_all(struct i40e_vsi *vsi)
 static void i40e_vsi_close(struct i40e_vsi *vsi)
 {
 	if (!test_and_set_bit(__I40E_DOWN, &vsi->state))
+#ifdef HAVE_PF_RING
+	{
+		if (unlikely(enable_debug)) printk("[PF_RING-ZC] %s(%s) called -> i40e_down\n", __FUNCTION__, vsi->netdev->name);
+#endif
 		i40e_down(vsi);
+#ifdef HAVE_PF_RING
+	}
+#endif
 	i40e_vsi_free_irq(vsi);
 	i40e_vsi_free_tx_resources(vsi);
 	i40e_vsi_free_rx_resources(vsi);
@@ -5051,8 +5058,6 @@ void i40e_down(struct i40e_vsi *vsi)
 		}
 	}
 #endif
-
-
 }
 
 #ifdef HAVE_SETUP_TC
@@ -5384,6 +5389,9 @@ void i40e_do_reset(struct i40e_pf *pf, u32 reset_flags)
 			if (vsi != NULL &&
 			    test_bit(__I40E_DOWN_REQUESTED, &vsi->state)) {
 				set_bit(__I40E_DOWN, &vsi->state);
+#ifdef HAVE_PF_RING
+				if (unlikely(enable_debug)) printk("[PF_RING-ZC] %s() called -> i40e_down\n", __FUNCTION__);
+#endif
 				i40e_down(vsi);
 				clear_bit(__I40E_DOWN_REQUESTED, &vsi->state);
 			}

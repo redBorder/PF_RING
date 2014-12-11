@@ -71,13 +71,7 @@ int max_packet_len(char *device) {
   if(ring == NULL)
     return 1536;
 
-  if (ring->dna.dna_mapped_device) {
-    max_len = ring->dna.dna_dev.mem_info.rx.packet_memory_slot_len;
-  } else {
-    max_len = pfring_get_mtu_size(ring);
-    if (max_len == 0) max_len = 9000 /* Jumbo */;
-    max_len += 14 /* Eth */ + 4 /* VLAN */;
-  }
+  max_len = pfring_get_max_packet_size(ring);
 
   pfring_close(ring);
 

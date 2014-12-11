@@ -897,10 +897,10 @@ typedef struct {
   zc_dev_info dev;
   struct list_head list;
   /*
-    In the DNA world only one application can open and enable the 
+    In the ZC world only one application can open and enable the 
     device@channel per direction. The array below is used to keep
-    pointers to the sockets bound to device@channel in order to
-    enable no more than one socket for RX and one for TX.
+    pointers to the sockets bound to device@channel.
+    No more than one socket can be enabled for RX and one for TX.
   */
   struct pf_ring_socket *bound_sockets[MAX_NUM_ZC_BOUND_SOCKETS];
   rwlock_t lock;

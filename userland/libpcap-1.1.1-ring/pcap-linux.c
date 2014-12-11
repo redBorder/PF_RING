@@ -1974,7 +1974,7 @@ pcap_stats_linux(pcap_t *handle, struct pcap_stat *stats)
 	    /* tcpdump reports ps_drop as "packets dropped by kernel",
 	     * that is wrong with DNA, so we should set ps_ifdrop. 
 	     * But snort ignores ps_ifdrop, so it is best to set ps_drop in any case. */
-	    if (handle->ring->dna.dna_mapped_device)
+	    if (handle->ring->zc_device)
 	      handle->md.stat.ps_ifdrop = ring_stats.drop;
 	    else
 #else
@@ -2544,7 +2544,7 @@ pcap_setfilter_linux_common(pcap_t *handle, struct bpf_program *filter,
 #ifdef HAVE_PF_RING
 	if(can_filter_in_kernel && handle->ring != NULL) {
 		int if_index;
-		if (handle->ring->dna.dna_mapped_device /* DNA: we need to filter in userland as kernel is bypassed */
+		if (handle->ring->zc_device /* DNA/ZC: we need to filter in userland as kernel is bypassed */
 		    || pfring_get_bound_device_ifindex(handle->ring, &if_index) != 0 /* not a physical device */)
 			can_filter_in_kernel = 0;
 	}
