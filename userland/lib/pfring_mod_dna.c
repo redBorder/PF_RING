@@ -183,7 +183,7 @@ int pfring_dna_recv(pfring *ring, u_char** buffer, u_int buffer_len,
   return(0);
 }
 
-/* ******************************* */
+/* **************************************************** */
 
 static int pfring_get_mapped_dna_device(pfring *ring, zc_dev_info *dev) {
   socklen_t len = sizeof(zc_dev_info);
@@ -207,6 +207,12 @@ static void pfring_dump_dna_stats(pfring* ring) {
 
 /* **************************************************** */
 
+int pfring_dna_get_max_packet_size(pfring *ring) {
+  return ring->dna.dna_dev.mem_info.rx.packet_memory_slot_len;
+}
+
+/* **************************************************** */
+
 int pfring_dna_open(pfring *ring) {
   int   channel_id = 0;
   int   rc;
@@ -224,6 +230,7 @@ int pfring_dna_open(pfring *ring) {
   ring->poll = pfring_dna_poll;
   ring->set_tx_watermark = pfring_dna_set_tx_watermark;
   ring->set_poll_watermark = pfring_dna_set_poll_watermark;
+  ring->get_max_packet_size = pfring_dna_get_max_packet_size;
 
   ring->set_poll_duration = pfring_mod_set_poll_duration;
   ring->set_channel_id = pfring_mod_set_channel_id;
