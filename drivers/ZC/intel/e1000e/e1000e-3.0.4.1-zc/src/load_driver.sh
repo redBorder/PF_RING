@@ -8,9 +8,11 @@ FAMILY=e1000e
 rmmod e1000e
 rmmod pf_ring
 
-echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
-mkdir /mnt/huge
-mount -t hugetlbfs nodev /mnt/huge
+if [ `cat /proc/mounts | grep hugetlbfs | wc -l` -eq 0 ]; then
+	echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
+	mkdir /mnt/huge
+	mount -t hugetlbfs nodev /mnt/huge
+fi
 
 # We assume that you have compiled PF_RING
 insmod ../../../../../../kernel/pf_ring.ko

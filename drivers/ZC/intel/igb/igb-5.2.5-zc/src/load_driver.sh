@@ -8,9 +8,11 @@ FAMILY=igb
 rmmod igb
 rmmod pf_ring
 
-echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
-mkdir /mnt/huge
-mount -t hugetlbfs nodev /mnt/huge
+if [ `cat /proc/mounts | grep hugetlbfs | wc -l` -eq 0 ]; then
+	echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
+	mkdir /mnt/huge
+	mount -t hugetlbfs nodev /mnt/huge
+fi
 
 # Note: for hw timestamping on supported adapters compile with make CFLAGS_EXTRA="-DIGB_PTP"
 
