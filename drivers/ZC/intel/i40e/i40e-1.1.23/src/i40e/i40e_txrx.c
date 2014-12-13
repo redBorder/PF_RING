@@ -1157,8 +1157,6 @@ void i40e_alloc_rx_buffers(struct i40e_ring *rx_ring, u16 cleaned_count)
 		skb = bi->skb;
 
 		if (!skb) {
-		  // if(unlikely(enable_debug)) printk("[PF_RING-ZC] %s(%s): allocating slot %d\n", __FUNCTION__, rx_ring->netdev->name, i);
-
 			skb = netdev_alloc_skb_ip_align(rx_ring->netdev,
 							rx_ring->rx_buf_len);
 			if (!skb) {

@@ -2872,7 +2872,7 @@ int wait_packet_function_ptr(void *data, int mode)
 {
   struct i40e_ring *rx_ring = (struct i40e_ring*)data;
 
-  //if(unlikely(enable_debug))
+  if(unlikely(enable_debug))
     printk("[PF_RING-ZC] %s(): enter [mode=%d/%s][queueId=%d][next_to_clean=%u][next_to_use=%d] ******\n",
 	   __FUNCTION__, mode, mode == 1 ? "enable int" : "disable int",
 	   rx_ring->queue_index, rx_ring->next_to_clean, rx_ring->next_to_use);
@@ -3082,8 +3082,6 @@ static int i40e_control_txq(struct i40e_vsi *vsi, int pf_q, bool enable)
 }
 #endif
 
-static int i40e_vsi_control_rx(struct i40e_vsi *vsi, bool enable);
-
 void notify_function_ptr(void *rx_data, void *tx_data, u_int8_t device_in_use) 
 {
   struct i40e_ring  *rx_ring = (struct i40e_ring *) rx_data;
@@ -3095,8 +3093,6 @@ void notify_function_ptr(void *rx_data, void *tx_data, u_int8_t device_in_use)
   if(unlikely(enable_debug))
     printk("[PF_RING-ZC] %s %s\n", __FUNCTION__, device_in_use ? "open" : "close");
 
-  // return; // LUCA LUCA LUCA LUCA
-
   if(xx_ring == NULL) return; /* safety check */
 
   adapter = i40e_netdev_to_pf(xx_ring->netdev);
@@ -3107,33 +3103,34 @@ void notify_function_ptr(void *rx_data, void *tx_data, u_int8_t device_in_use)
       try_module_get(THIS_MODULE); /* ++ */
     
     if(rx_ring != NULL && atomic_inc_return(&rx_ring->pfring_zc.queue_in_use) == 1 /* first user */) {
+      struct i40e_vsi *vsi = rx_ring->vsi;
+      u16 pf_q = vsi->base_queue + rx_ring->queue_index;
+
       if(unlikely(enable_debug))
         printk("[PF_RING-ZC] %s:%d RX Tail=%u\n", __FUNCTION__, __LINE__, readl(rx_ring->tail));
 
-      i40e_vsi_control_rx(rx_ring->vsi, false);
+      i40e_control_rxq(vsi, pf_q, false /* stop */);
+
       i40e_clean_rx_ring(rx_ring);
 
-#if 0 /* resetting in userspace */
-      i40e_control_rxq(rx_ring->vsi, vsi->base_queue + rx_ring->queue_index, false /* stop */);
-      writel(0, rx_ring->tail);
-      i40e_control_rxq(rx_ring->vsi, vsi->base_queue + rx_ring->queue_index, true /* start */);
-#endif
+      i40e_control_rxq(vsi, pf_q, true /* start */);
     }
 
-#if 0
     if(tx_ring != NULL && atomic_inc_return(&tx_ring->pfring_zc.queue_in_use) == 1 /* first user */) {
       /* nothing to do besides increasing the counter */
 
       if(unlikely(enable_debug))
         printk("[PF_RING-ZC] %s:%d TX Tail=%u\n", __FUNCTION__, __LINE__, readl(tx_ring->tail));
     }
-#endif
+
   } else { /* restore card memory */
     if(rx_ring != NULL && atomic_dec_return(&rx_ring->pfring_zc.queue_in_use) == 0 /* last user */) {
       struct i40e_vsi *vsi = rx_ring->vsi;
       u16 pf_q = vsi->base_queue + rx_ring->queue_index;
       struct i40e_hw *hw = &vsi->back->hw;
       
+      i40e_control_rxq(vsi, pf_q, false /* stop */);
+
       for(i = 0; i<rx_ring->count; i++) {
 	union i40e_rx_desc *rx_desc = I40E_RX_DESC(rx_ring, i);
 	
@@ -3147,10 +3144,9 @@ void notify_function_ptr(void *rx_data, void *tx_data, u_int8_t device_in_use)
       i40e_alloc_rx_buffers(rx_ring, I40E_DESC_UNUSED(rx_ring));
     
       //i40e_vsi_enable_irq(rx_ring->vsi);
-      i40e_vsi_control_rx(rx_ring->vsi, true);
+      i40e_control_rxq(vsi, pf_q, true /* start */);
     }
 
-#if 0
     if(tx_ring != NULL && atomic_dec_return(&tx_ring->pfring_zc.queue_in_use) == 0 /* last user */) {
       /* Restore TX */
 
@@ -3165,12 +3161,9 @@ void notify_function_ptr(void *rx_data, void *tx_data, u_int8_t device_in_use)
 	tx_buffer->skb = NULL;
       }
 
-#if 0
-      i40e_configure_tx_ring(tx_ring);
-#endif
+      //i40e_configure_tx_ring(tx_ring);
       rmb();
     }
-#endif
 
     if(atomic_dec_return(&adapter->pfring_zc.usage_counter) == 0 /* last user */)
       module_put(THIS_MODULE);  /* -- */
