@@ -30,6 +30,8 @@
 
 #ifdef HAVE_PF_RING
 int wake_up_pfring_zc_socket(struct i40e_ring *rx_ring); /* i40e_main.c */
+
+extern u8 enable_debug;
 #endif
 
 static inline __le64 build_ctob(u32 td_cmd, u32 td_offset, unsigned int size,
@@ -674,9 +676,10 @@ static bool i40e_clean_tx_irq(struct i40e_ring *tx_ring, int budget)
 	unsigned int total_bytes = 0;
 
 #ifdef HAVE_PF_RING	
-	printk("[PF_RING-ZC] %s() called [usage_counter=%u][head=%u]\n", __FUNCTION__,
-          atomic_read(&i40e_netdev_to_pf(tx_ring->netdev)->pfring_zc.usage_counter),
-          i40e_get_head(tx_ring));
+	printk("[PF_RING-ZC] %s(%s) called [usage_counter=%u][head=%u]\n", 
+	       __FUNCTION__, tx_ring->netdev->name,
+	       atomic_read(&i40e_netdev_to_pf(tx_ring->netdev)->pfring_zc.usage_counter),
+	       i40e_get_head(tx_ring));
 
 	if(atomic_read(&i40e_netdev_to_pf(tx_ring->netdev)->pfring_zc.usage_counter) > 0)
 	  return(true);
@@ -1108,6 +1111,13 @@ err:
  **/
 static inline void i40e_release_rx_desc(struct i40e_ring *rx_ring, u32 val)
 {
+#ifdef HAVE_PF_RING
+	if(unlikely(enable_debug))
+	  printk("[PF_RING-ZC] %s(%s) setting tail to %u\n",
+		 __FUNCTION__, rx_ring->netdev->name,
+		 val);
+#endif
+
 	rx_ring->next_to_use = val;
 	/* Force memory writes to complete before letting h/w
 	 * know there are new descriptors to fetch.  (Only
@@ -1135,8 +1145,10 @@ void i40e_alloc_rx_buffers(struct i40e_ring *rx_ring, u16 cleaned_count)
 		return;
 
 #ifdef HAVE_PF_RING
-	//if(unlikely(enable_debug))
-	  printk("[PF_RING-ZC] %s() prefilling rx ring with %u/%u skbuff\n", __FUNCTION__, cleaned_count, rx_ring->count);
+	if(unlikely(enable_debug))
+	  printk("[PF_RING-ZC] %s(%s) prefilling rx ring with %u/%u skbuff\n",
+		 __FUNCTION__, rx_ring->netdev->name,
+		 cleaned_count, rx_ring->count);
 #endif
 
 	while (cleaned_count--) {
@@ -1145,6 +1157,8 @@ void i40e_alloc_rx_buffers(struct i40e_ring *rx_ring, u16 cleaned_count)
 		skb = bi->skb;
 
 		if (!skb) {
+		  // if(unlikely(enable_debug)) printk("[PF_RING-ZC] %s(%s): allocating slot %d\n", __FUNCTION__, rx_ring->netdev->name, i);
+
 			skb = netdev_alloc_skb_ip_align(rx_ring->netdev,
 							rx_ring->rx_buf_len);
 			if (!skb) {
@@ -1504,7 +1518,8 @@ static int i40e_clean_rx_irq(struct i40e_ring *rx_ring, int budget)
 
 #ifdef HAVE_PF_RING
 	//if(unlikely(enable_debug))
-	  printk("[PF_RING-ZC] %s() called [usage_counter=%u]\n", __FUNCTION__, 
+	  printk("[PF_RING-ZC] %s(%s) called [usage_counter=%u]\n", __FUNCTION__, 
+		 rx_ring->netdev->name,
             atomic_read(&i40e_netdev_to_pf(rx_ring->netdev)->pfring_zc.usage_counter));
 
 	if(atomic_read(&i40e_netdev_to_pf(rx_ring->netdev)->pfring_zc.usage_counter) > 0) {
@@ -1689,7 +1704,10 @@ next_desc:
 
 #ifdef HAVE_PF_RING
 	//if(unlikely(enable_debug))
-	  printk("[PF_RING-ZC] %s() cleaned %u/%u skbuff from rx ring\n", __FUNCTION__, cleaned_count, rx_ring->count);
+	  printk("[PF_RING-ZC] %s(%s) cleaned %u/%u skbuff from rx ring\n", 
+		 __FUNCTION__, 
+		 rx_ring->netdev->name,
+		 cleaned_count, rx_ring->count);
 #endif
 
 	return budget_start - budget;
