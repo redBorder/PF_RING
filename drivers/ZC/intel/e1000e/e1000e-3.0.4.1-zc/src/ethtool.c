@@ -2646,7 +2646,11 @@ static const struct ethtool_ops_ext e1000e_ethtool_ops_ext = {
 void e1000e_set_ethtool_ops(struct net_device *netdev)
 {
 	/* have to "undeclare" const on this struct to remove warnings */
+#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,16,0) )
 	SET_ETHTOOL_OPS(netdev, (struct ethtool_ops *)&e1000_ethtool_ops);
+#else
+	netdev->ethtool_ops = &e1000_ethtool_ops;
+#endif
 #ifdef HAVE_RHEL6_ETHTOOL_OPS_EXT_STRUCT
 	set_ethtool_ops_ext(netdev, &e1000e_ethtool_ops_ext);
 #endif /* HAVE_RHEL6_ETHTOOL_OPS_EXT_STRUCT */
