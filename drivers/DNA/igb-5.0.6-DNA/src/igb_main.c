@@ -7631,7 +7631,11 @@ static inline void igb_rx_hash(struct igb_ring *ring,
 			       struct sk_buff *skb)
 {
 	if (netdev_ring(ring)->features & NETIF_F_RXHASH)
+#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,15,0) )
 		skb->rxhash = le32_to_cpu(rx_desc->wb.lower.hi_dword.rss);
+#else
+		skb->hash = le32_to_cpu(rx_desc->wb.lower.hi_dword.rss);
+#endif
 }
 
 #endif

@@ -963,7 +963,11 @@ static inline void e1000_rx_hash(struct net_device *netdev, __le32 rss,
 				 struct sk_buff *skb)
 {
 	if (netdev->features & NETIF_F_RXHASH)
+#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,15,0) )
 		skb->rxhash = le32_to_cpu(rss);
+#else
+		skb->hash = le32_to_cpu(rss);
+#endif
 }
 
 #endif
