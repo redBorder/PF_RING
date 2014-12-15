@@ -713,7 +713,7 @@ typedef struct {
   u_int32_t packet_memory_slot_len;
   u_int32_t descr_packet_memory_tot_len;
   u_int16_t registers_index;
-  u_int16_t reserved; /* future use */
+  u_int16_t stats_index;
 } mem_ring_info;
 
 typedef enum {

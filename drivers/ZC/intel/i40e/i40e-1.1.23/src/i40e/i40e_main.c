@@ -4902,6 +4902,7 @@ static int i40e_up_complete(struct i40e_vsi *vsi)
 	      rx_info.packet_memory_slot_len      = ALIGN(rx_ring->rx_buf_len, cache_line_size);
 	      rx_info.descr_packet_memory_tot_len = rx_ring->size;
 	      rx_info.registers_index		  = rx_ring->reg_idx;
+	      rx_info.stats_index		  = vsi->info.stat_counter_idx;
  
 	      tx_info.packet_memory_num_slots     = tx_ring->count;
 	      tx_info.packet_memory_slot_len      = rx_info.packet_memory_slot_len;
