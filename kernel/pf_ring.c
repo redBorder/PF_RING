@@ -1493,22 +1493,26 @@ static int ring_proc_get_info(struct seq_file *m, void *data_not_used)
 
       seq_printf(m, "Active             : %d\n", pfr->ring_active || pfr->dna_cluster);
       seq_printf(m, "Breed              : %s\n", (pfr->zc_device_entry != NULL) ? (pfr->ring_netdev->is_zc_device == 1 ? "DNA" : "ZC") : "Standard");
-      seq_printf(m, "Sampling Rate      : %d\n", pfr->sample_rate);
-      seq_printf(m, "Capture Direction  : %s\n", direction2string(pfr->direction));
-      seq_printf(m, "Socket Mode        : %s\n", sockmode2string(pfr->mode));
       seq_printf(m, "Appl. Name         : %s\n", pfr->appl_name ? pfr->appl_name : "<unknown>");
-      seq_printf(m, "IP Defragment      : %s\n", enable_ip_defrag ? "Yes" : "No");
-      seq_printf(m, "BPF Filtering      : %s\n", pfr->bpfFilter ? "Enabled" : "Disabled");
-      seq_printf(m, "# Sw Filt. Rules   : %d\n", pfr->num_sw_filtering_rules);
-      seq_printf(m, "# Hw Filt. Rules   : %d\n", pfr->num_hw_filtering_rules);
-      seq_printf(m, "Poll Pkt Watermark : %d\n", pfr->poll_num_pkts_watermark);
-      seq_printf(m, "Num Poll Calls     : %u\n", pfr->num_poll_calls);
+      seq_printf(m, "Socket Mode        : %s\n", sockmode2string(pfr->mode));
+      if (pfr->mode != send_only_mode) {
+        seq_printf(m, "Capture Direction  : %s\n", direction2string(pfr->direction));
+        seq_printf(m, "Sampling Rate      : %d\n", pfr->sample_rate);
+        seq_printf(m, "IP Defragment      : %s\n", enable_ip_defrag ? "Yes" : "No");
+        seq_printf(m, "BPF Filtering      : %s\n", pfr->bpfFilter ? "Enabled" : "Disabled");
+        seq_printf(m, "# Sw Filt. Rules   : %d\n", pfr->num_sw_filtering_rules);
+        seq_printf(m, "# Hw Filt. Rules   : %d\n", pfr->num_hw_filtering_rules);
+        seq_printf(m, "Poll Pkt Watermark : %d\n", pfr->poll_num_pkts_watermark);
+        seq_printf(m, "Num Poll Calls     : %u\n", pfr->num_poll_calls);
+      }
 
       if(pfr->zc_device_entry != NULL) {
         /* DNA/ZC */
         seq_printf(m, "Channel Id         : %d\n", pfr->zc_device_entry->dev.channel_id);
-        seq_printf(m, "Num RX Slots       : %d\n", pfr->zc_device_entry->dev.mem_info.rx.packet_memory_num_slots);
-	seq_printf(m, "Num TX Slots       : %d\n", pfr->zc_device_entry->dev.mem_info.tx.packet_memory_num_slots);
+        if (pfr->mode != send_only_mode)
+          seq_printf(m, "Num RX Slots       : %d\n", pfr->zc_device_entry->dev.mem_info.rx.packet_memory_num_slots);
+        if (pfr->mode != recv_only_mode)
+	  seq_printf(m, "Num TX Slots       : %d\n", pfr->zc_device_entry->dev.mem_info.tx.packet_memory_num_slots);
 	seq_printf(m, "Tot Memory         : %u bytes\n",
 			( pfr->zc_device_entry->dev.mem_info.rx.packet_memory_num_chunks *
 			  pfr->zc_device_entry->dev.mem_info.rx.packet_memory_chunk_len   )
@@ -1529,17 +1533,23 @@ static int ring_proc_get_info(struct seq_file *m, void *data_not_used)
 	seq_printf(m, "Bucket Len         : %d\n", fsi->data_len);
 	seq_printf(m, "Slot Len           : %d [bucket+header]\n", fsi->slot_len);
 	seq_printf(m, "Tot Memory         : %llu\n", fsi->tot_mem);
-	seq_printf(m, "Tot Packets        : %lu\n", (unsigned long)fsi->tot_pkts);
-	seq_printf(m, "Tot Pkt Lost       : %lu\n", (unsigned long)fsi->tot_lost);
-	seq_printf(m, "Tot Insert         : %lu\n", (unsigned long)fsi->tot_insert);
-	seq_printf(m, "Tot Read           : %lu\n", (unsigned long)fsi->tot_read);
-	seq_printf(m, "Insert Offset      : %lu\n", (unsigned long)fsi->insert_off);
-	seq_printf(m, "Remove Offset      : %lu\n", (unsigned long)fsi->remove_off);
-	seq_printf(m, "TX: Send Ok        : %lu\n", (unsigned long)fsi->good_pkt_sent);
-	seq_printf(m, "TX: Send Errors    : %lu\n", (unsigned long)fsi->pkt_send_error);
-	seq_printf(m, "Reflect: Fwd Ok    : %lu\n", (unsigned long)fsi->tot_fwd_ok);
-	seq_printf(m, "Reflect: Fwd Errors: %lu\n", (unsigned long)fsi->tot_fwd_notok);
-	seq_printf(m, "Num Free Slots     : %lu\n",  (unsigned long)get_num_ring_free_slots(pfr));
+        if (pfr->mode != send_only_mode) {
+	  seq_printf(m, "Tot Packets        : %lu\n", (unsigned long)fsi->tot_pkts);
+	  seq_printf(m, "Tot Pkt Lost       : %lu\n", (unsigned long)fsi->tot_lost);
+	  seq_printf(m, "Tot Insert         : %lu\n", (unsigned long)fsi->tot_insert);
+	  seq_printf(m, "Tot Read           : %lu\n", (unsigned long)fsi->tot_read);
+	  seq_printf(m, "Insert Offset      : %lu\n", (unsigned long)fsi->insert_off);
+	  seq_printf(m, "Remove Offset      : %lu\n", (unsigned long)fsi->remove_off);
+	  seq_printf(m, "Num Free Slots     : %lu\n",  (unsigned long)get_num_ring_free_slots(pfr));
+        }
+        if (pfr->mode != recv_only_mode) {
+	  seq_printf(m, "TX: Send Ok        : %lu\n", (unsigned long)fsi->good_pkt_sent);
+	  seq_printf(m, "TX: Send Errors    : %lu\n", (unsigned long)fsi->pkt_send_error);
+        }
+        if (pfr->mode != send_only_mode) {
+	  seq_printf(m, "Reflect: Fwd Ok    : %lu\n", (unsigned long)fsi->tot_fwd_ok);
+	  seq_printf(m, "Reflect: Fwd Errors: %lu\n", (unsigned long)fsi->tot_fwd_notok);
+        }
       }
     } else
       seq_printf(m, "WARNING m->private == NULL\n");
