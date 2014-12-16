@@ -645,6 +645,15 @@ pfring_zc_version();
 
 /* **************************************************************************************** */
 
+/**
+ * Check if ZC is running in demo mode (using adapters in zero-copy mode without a valid license)
+ * @return true if ZC is running with no demo limit.
+ */
+int
+pfring_zc_check_license();
+
+/* **************************************************************************************** */
+
 #ifdef __cplusplus
 }
 #endif
