@@ -18,12 +18,17 @@
 #include <sys/types.h>
 #include <linux/pf_ring.h> /* needed for hw_filtering_rule */
 
-#define PF_RING_ZC_DEVICE_ASYMMETRIC_RSS     1 << 0    /**< pfring_zc_open_device() flag: use asymmetric hw RSS for multiqueue devices. */
-#define PF_RING_ZC_DEVICE_FIXED_RSS_Q_0      1 << 1    /**< pfring_zc_open_device() flag: redirect all traffic to the first hw queue. */
+#define PF_RING_ZC_DEVICE_ASYMMETRIC_RSS     1 << 0   /**< pfring_zc_open_device() flag: use asymmetric hw RSS for multiqueue devices. */
+#define PF_RING_ZC_DEVICE_FIXED_RSS_Q_0      1 << 1   /**< pfring_zc_open_device() flag: redirect all traffic to the first hw queue. */
 //#define PF_RING_ZC_DEVICE_SW_TIMESTAMP       1 << 2
-#define PF_RING_ZC_DEVICE_HW_TIMESTAMP       1 << 3
-#define PF_RING_ZC_DEVICE_STRIP_HW_TIMESTAMP 1 << 4
-#define PF_RING_ZC_DEVICE_IXIA_TIMESTAMP     1 << 5
+#define PF_RING_ZC_DEVICE_HW_TIMESTAMP       1 << 3   /**< pfring_zc_open_device() flag: enable hw timestamp, when available */
+#define PF_RING_ZC_DEVICE_STRIP_HW_TIMESTAMP 1 << 4   /**< pfring_zc_open_device() flag: strip hw timestamp from packet, when available */
+#define PF_RING_ZC_DEVICE_IXIA_TIMESTAMP     1 << 5   /**< pfring_zc_open_device() flag: extract IXIA timestamp from packet */
+
+#define UNDEFINED_QUEUEID  UINT32_MAX       /**< pfring_zc_get_queue_id() return val: queue id is not valid */
+#define QUEUE_IS_DEVICE(i) (i > UINT16_MAX) /**< pfring_zc_get_queue_id() return val: queue id is an encoded device index */
+#define QUEUEID_TO_IFINDEX(i) (i >> 16)     /**< pfring_zc_get_queue_id() return val: convert queue id to device index, if QUEUE_IS_DEVICE(id) */
+#define IFINDEX_TO_QUEUEID(i) (i << 16)     /**< pfring_zc_get_queue_id() return val: convert back device index to queue id, if QUEUE_IS_DEVICE(id) */
 
 #ifdef __cplusplus
 extern "C" {
@@ -137,7 +142,7 @@ pfring_zc_open_device(
  * @param queue_len The queue length.
  * @return          The queue handle on success, NULL otherwise (errno is set appropriately). 
  */
-pfring_zc_queue* 
+pfring_zc_queue * 
 pfring_zc_create_queue(
   pfring_zc_cluster *cluster,
   u_int32_t queue_len
@@ -276,6 +281,16 @@ pfring_zc_remove_hw_rule(
 );
 
 /* **************************************************************************************** */
+
+/**
+ * Read the queue id. If the actual queue is a device, it is possible to convert the ID to the device index using QUEUEID_TO_IFINDEX(id)
+ * @param queue The queue handle.
+ * @return      The queue id.
+ */
+u_int32_t
+pfring_zc_get_queue_id(
+  pfring_zc_queue *queue
+);
 
 /**
  * Read the queue stats.

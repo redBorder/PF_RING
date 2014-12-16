@@ -332,6 +332,8 @@ int main(int argc, char* argv[]) {
 	      strerror(errno), devices[i]);
       return -1;
     }
+
+    //printf("Created device with ID=%u, INDEX=%u\n", pfring_zc_get_queue_id(inzq[i]), QUEUEID_TO_IFINDEX(pfring_zc_get_queue_id(inzq[i])));
   }
 
   for (i = 0; i < num_threads; i++) { 
@@ -341,6 +343,8 @@ int main(int argc, char* argv[]) {
       fprintf(stderr, "pfring_zc_create_queue error [%s]\n", strerror(errno));
       return -1;
     }
+
+    //printf("Created queue with ID=%u\n", pfring_zc_get_queue_id(outzq[i]));
   }
 
   wsp = pfring_zc_create_buffer_pool(zc, PREFETCH_BUFFERS);
