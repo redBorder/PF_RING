@@ -1981,7 +1981,7 @@ static int parse_raw_pkt(u_char *data, u_int data_len,
     }
   }
 
-  hdr->extended_hdr.parsed_pkt.offset.l3_offset = hdr->extended_hdr.parsed_pkt.offset.eth_offset + displ;
+  hdr->extended_hdr.parsed_pkt.offset.l3_offset = displ;
 
   //if(unlikely(enable_debug))
   //  printk("[PF_RING] [eth_type=%04X]\n", hdr->extended_hdr.parsed_pkt.eth_type);
@@ -2330,8 +2330,6 @@ static int parse_pkt(struct sk_buff *skb,
   skb_copy_bits(skb, -skb_displ, buffer, data_len);
 
   rc = parse_raw_pkt(buffer, data_len, hdr, ip_id);
-
-  hdr->extended_hdr.parsed_pkt.offset.eth_offset = -skb_displ;
 
   return(rc);
 }
@@ -2920,27 +2918,32 @@ static inline int copy_data_to_ring(struct sk_buff *skb,
       //         pfr->slot_header_len);
 
       if((__vlan_hwaccel_get_tag(skb, &vlan_tci) == 0) /* The packet is tagged (hw offload)... */
-	 && (hdr->extended_hdr.parsed_pkt.offset.vlan_offset == 0) /* but we have seen no tag -> it has been stripped */) {
+	 && (hdr->extended_hdr.parsed_pkt.offset.vlan_offset == 0 /* but we have seen no tag -> it has been stripped */
+             || (hdr->extended_hdr.flags & PKT_FLAGS_VLAN_HWACCEL /* in case of multiple destination rings */))) {
 	/* VLAN-tagged packet with stripped VLAN tag */
         u_int16_t *b;
         struct vlan_ethhdr *v = vlan_eth_hdr(skb);
 
-        hdr->extended_hdr.parsed_pkt.vlan_id = vlan_tci, hdr->extended_hdr.parsed_pkt.offset.vlan_offset += sizeof(struct ethhdr),
+	if (!(hdr->extended_hdr.flags & PKT_FLAGS_VLAN_HWACCEL)) {
+          hdr->extended_hdr.parsed_pkt.vlan_id = vlan_tci;
+          hdr->extended_hdr.parsed_pkt.offset.vlan_offset = sizeof(struct ethhdr);
           hdr->extended_hdr.parsed_pkt.offset.l3_offset += sizeof(struct eth_vlan_hdr);
-
-        if(hdr->extended_hdr.parsed_pkt.offset.l4_offset) hdr->extended_hdr.parsed_pkt.offset.l4_offset += sizeof(struct eth_vlan_hdr);
-        if(hdr->extended_hdr.parsed_pkt.offset.payload_offset) hdr->extended_hdr.parsed_pkt.offset.payload_offset += sizeof(struct eth_vlan_hdr);
-
-        skb_copy_bits(skb, -displ, &ring_bucket[pfr->slot_header_len + offset], displ);
-        b = (u_int16_t*)&ring_bucket[pfr->slot_header_len + offset+12];
-        b[0] = ntohs(ETH_P_8021Q), b[1] = ntohs(vlan_tci), b[2] = v->h_vlan_proto;
-        if(skb_copy_bits(skb, 0, &ring_bucket[pfr->slot_header_len + offset + 18], (int) hdr->caplen-14) < 0)
-          printk("[PF_RING] FAULT [skb->len=%u][len=%u]\n", skb->len, hdr->caplen-16);
-
+          if(hdr->extended_hdr.parsed_pkt.offset.l4_offset) hdr->extended_hdr.parsed_pkt.offset.l4_offset += sizeof(struct eth_vlan_hdr);
+          if(hdr->extended_hdr.parsed_pkt.offset.payload_offset) hdr->extended_hdr.parsed_pkt.offset.payload_offset += sizeof(struct eth_vlan_hdr);
+          hdr->extended_hdr.flags |= PKT_FLAGS_VLAN_HWACCEL;
+        }
+        /* len/caplen reset outside, we can increment all the time */
 	hdr->len += sizeof(struct eth_vlan_hdr);
 	hdr->caplen = min_val(pfr->bucket_len - offset, hdr->caplen + sizeof(struct eth_vlan_hdr));
-      } else
+
+        skb_copy_bits(skb, -displ, &ring_bucket[pfr->slot_header_len + offset], displ);
+        b = (u_int16_t*)&ring_bucket[pfr->slot_header_len + offset + 12];
+        b[0] = ntohs(ETH_P_8021Q), b[1] = ntohs(vlan_tci), b[2] = v->h_vlan_proto;
+        if(skb_copy_bits(skb, 0, &ring_bucket[pfr->slot_header_len + offset + 18], (int) hdr->caplen - 18) < 0)
+          printk("[PF_RING] FAULT [skb->len=%u][caplen=%u]\n", skb->len, hdr->caplen - 20);
+      } else {
         skb_copy_bits(skb, -displ, &ring_bucket[pfr->slot_header_len + offset], (int) hdr->caplen);
+      }
     } else {
       if(hdr->extended_hdr.parsed_header_len >= pfr->bucket_len) {
 	static u_char print_once = 0;
@@ -4495,6 +4498,7 @@ static int skb_ring_handler(struct sk_buff *skb,
 
   hdr.ts.tv_sec = 0;
   hdr.len = hdr.caplen = skb->len + displ;
+  hdr.extended_hdr.flags = 0;
 
 #if 0 /* safety check (this leads to wrong numbers with GSO) */
   hdr.len = hdr.caplen = min(skb->len + displ,

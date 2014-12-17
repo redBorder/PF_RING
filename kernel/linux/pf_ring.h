@@ -285,6 +285,7 @@ struct pfring_extended_pkthdr {
 #define PKT_FLAGS_CHECKSUM_OK      1 << 1 /* Valid checksum (with IP/TCP checksum offload enabled) */
 #define PKT_FLAGS_IP_MORE_FRAG     1 << 2 /* IP More fragments flag set */
 #define PKT_FLAGS_IP_FRAG_OFFSET   1 << 3 /* IP fragment offset set (not 0) */
+#define PKT_FLAGS_VLAN_HWACCEL     1 << 4 /* VLAN stripped by hw */
   u_int32_t flags;
   /* --- short header ends here --- */
   u_int8_t rx_direction;   /* 1=RX: packet received by the NIC, 0=TX: packet transmitted by the NIC */
