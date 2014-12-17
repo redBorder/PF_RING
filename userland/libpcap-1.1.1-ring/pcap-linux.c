@@ -1390,6 +1390,7 @@ pcap_activate_linux(pcap_t *handle)
 	 */
 #ifdef HAVE_PF_RING
 	if(handle->ring != NULL) {
+        	pfring_enable_ring(handle->ring);
 		handle->selectable_fd = pfring_get_selectable_fd(handle->ring);
 	} else
 #endif
@@ -1498,8 +1499,8 @@ pcap_read_packet(pcap_t *handle, pcap_handler callback, u_char *userdata)
 	  int wait_for_incoming_packet = (pf_ring_active_poll || (handle->md.timeout < 0)) ? 0 : 1;
 	  int ret = 0;
 
-	  if(!handle->ring->enabled)
-	    pfring_enable_ring(handle->ring);
+	  // This does not work with ZC
+	  // if(!handle->ring->enabled) pfring_enable_ring(handle->ring);
 
 	  do {
 	    if (handle->break_loop) {
@@ -1932,7 +1933,8 @@ pcap_inject_linux(pcap_t *handle, const void *buf, size_t size)
 
 #ifdef HAVE_PF_RING
 	if(handle->ring != NULL) {
-	  if(!handle->ring->enabled) pfring_enable_ring(handle->ring);
+	  // This does not work with ZC
+          //if(!handle->ring->enabled) pfring_enable_ring(handle->ring);
 	  return(pfring_send(handle->ring, (char*)buf, size, 1 /* FIX: set it to 1 */));
 	}
 #endif
