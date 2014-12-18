@@ -43,7 +43,7 @@
 #define I40E_PCI_DEVICE_CACHE_LINE_SIZE      0x0C
 #define PCI_DEVICE_CACHE_LINE_SIZE_BYTES        8
 
-u8 enable_debug = 1;
+u8 enable_debug = 0;
 #endif
 
 char i40e_driver_name[] = "i40e";
@@ -2863,132 +2863,133 @@ static void i40e_fdir_filter_restore(struct i40e_vsi *vsi)
 }
 
 #ifdef HAVE_PF_RING
+static void i40e_disable_irq(struct i40e_q_vector *q_vector) {
+	struct i40e_vsi *vsi = q_vector->vsi;
 
-/* Forward declarations */
-static int i40e_vsi_enable_irq(struct i40e_vsi *vsi);
-static void i40e_vsi_disable_irq(struct i40e_vsi *vsi);
+  	if (!test_bit(__I40E_DOWN, &vsi->state)) {
+		i40e_irq_dynamic_disable(vsi, q_vector->v_idx + vsi->base_vector);
+	}
+}
+
+static void i40e_enable_irq(struct i40e_q_vector *q_vector) {
+	struct i40e_vsi *vsi = q_vector->vsi;
+
+	//if (ITR_IS_DYNAMIC(vsi->rx_itr_setting) ||
+	//    ITR_IS_DYNAMIC(vsi->tx_itr_setting))
+	//	i40e_update_dynamic_itr(q_vector);
+
+	if (!test_bit(__I40E_DOWN, &vsi->state)) {
+		i40e_irq_dynamic_enable(vsi, q_vector->v_idx + vsi->base_vector);
+	}
+}
+
+int ring_is_not_empty(struct i40e_ring *rx_ring) {
+	union i40e_rx_desc *rx_desc;
+	u64 qword;
+	u32 rx_status;
+	int i;
+
+#if 1
+	/* Tail is write-only on i40e, checking all descriptors (or we need a shadow tail from userspace) */
+	for (i = 0; i < rx_ring->count; i++) {
+		rx_desc = I40E_RX_DESC(rx_ring, i);    
+		qword = le64_to_cpu(rx_desc->wb.qword1.status_error_len);
+		rx_status = (qword & I40E_RXD_QW1_STATUS_MASK) >> I40E_RXD_QW1_STATUS_SHIFT;
+		if (rx_status & (1 << I40E_RX_DESC_STATUS_DD_SHIFT))
+			return 1;
+	}
+#else
+	unsigned int last_read = readl(rx_ring->tail);
+
+	if(unlikely(enable_debug)) 
+		printk("[PF_RING-ZC] %s() called [last_read=%u]\n", __FUNCTION__, last_read);
+	
+	if(++last_read == rx_ring->count) last_read = 0;
+
+	rx_desc = I40E_RX_DESC(rx_ring, last_read);    
+	qword = le64_to_cpu(rx_desc->wb.qword1.status_error_len);
+	rx_status = (qword & I40E_RXD_QW1_STATUS_MASK) >> I40E_RXD_QW1_STATUS_SHIFT;
+    
+	/* trick for appplications calling poll/select directly (indexes not in sync of one position at most) */
+	if(!(rx_status & (1 << I40E_RX_DESC_STATUS_DD_SHIFT))) {
+		if(++last_read == rx_ring->count) last_read = 0;
+		rx_desc = I40E_RX_DESC(rx_ring, last_read);
+		qword = le64_to_cpu(rx_desc->wb.qword1.status_error_len);
+		rx_status = (qword & I40E_RXD_QW1_STATUS_MASK) >> I40E_RXD_QW1_STATUS_SHIFT;
+	}
+
+	if(rx_status & (1 << I40E_RX_DESC_STATUS_DD_SHIFT))
+		return 1;
+#endif
+
+	return 0;
+}
 
 int wait_packet_function_ptr(void *data, int mode)
 {
-  struct i40e_ring *rx_ring = (struct i40e_ring*)data;
+	struct i40e_ring *rx_ring = (struct i40e_ring*) data;
+	int new_packets;
 
-  if(unlikely(enable_debug))
-    printk("[PF_RING-ZC] %s(): enter [mode=%d/%s][queueId=%d][next_to_clean=%u][next_to_use=%d] ******\n",
-	   __FUNCTION__, mode, mode == 1 ? "enable int" : "disable int",
-	   rx_ring->queue_index, rx_ring->next_to_clean, rx_ring->next_to_use);
+	if (unlikely(enable_debug))
+		printk("[PF_RING-ZC] %s(): enter [mode=%d/%s][queueId=%d][next_to_clean=%u][next_to_use=%d] ******\n",
+		       __FUNCTION__, mode, mode == 1 ? "enable int" : "disable int",
+		       rx_ring->queue_index, rx_ring->next_to_clean, rx_ring->next_to_use);
 
-  if(mode == 1 /* Enable interrupt */) {
-    union i40e_rx_desc *rx_desc, *next_rx_desc = NULL;
-    u32 rx_status;
-    u32 i = readl(rx_ring->tail);
-    u64 qword;
+	if (mode == 1 /* Enable interrupt */) {
 
-    /* Very important: update the value from the register set from userland
-     * Here i is the last I've read (zero-copy implementation) */
-    if(++i == rx_ring->count) i = 0;
-    /* Here i is the next I have to read */
+		new_packets = ring_is_not_empty(rx_ring);
 
-    rx_ring->next_to_clean = i;
+		if (!new_packets) {
+			rx_ring->pfring_zc.rx_tx.rx.interrupt_received = 0;
 
-    rx_desc = I40E_RX_DESC(rx_ring, i);
-    prefetch(rx_desc);
+			if (!rx_ring->pfring_zc.rx_tx.rx.interrupt_enabled) {
+				i40e_enable_irq(rx_ring->q_vector);
 
-    qword = le64_to_cpu(rx_desc->wb.qword1.status_error_len);
-    rx_status = (qword & I40E_RXD_QW1_STATUS_MASK) >> I40E_RXD_QW1_STATUS_SHIFT;
+				if (unlikely(enable_debug)) 
+					printk("[PF_RING-ZC] %s(): Enabled interrupts, queue = %d\n", __FUNCTION__, rx_ring->q_vector->v_idx);
 
-    /* trick for appplications calling poll/select directly (indexes not in sync of one position at most) */
-    if(!(rx_status & (1 << I40E_RX_DESC_STATUS_DD_SHIFT))) {
-      u16 next_i = i;
+				rx_ring->pfring_zc.rx_tx.rx.interrupt_enabled = 1;
 
-      if(++next_i == rx_ring->count) next_i = 0;
-      next_rx_desc = I40E_RX_DESC(rx_ring, next_i);
-      qword = le64_to_cpu(next_rx_desc->wb.qword1.status_error_len);
-      rx_status = (qword & I40E_RXD_QW1_STATUS_MASK) >> I40E_RXD_QW1_STATUS_SHIFT;
-    }
+				if(unlikely(enable_debug))
+					printk("[PF_RING-ZC] %s(): Packet not arrived yet: enabling interrupts, queue=%d\n",
+					       __FUNCTION__,rx_ring->q_vector->v_idx);
+      			}
+    		} else {
+			rx_ring->pfring_zc.rx_tx.rx.interrupt_received = 1;
+		}
 
-    if(unlikely(enable_debug)) {
-      printk("[PF_RING-ZC] %s(): Check if a packet ise arrived [idx=%d][rx_status=%d][len=%lu]\n",
-	     __FUNCTION__, i, rx_status, 
-	     (unsigned long)((qword & I40E_RXD_QW1_LENGTH_PBUF_MASK) >> I40E_RXD_QW1_LENGTH_PBUF_SHIFT));
-    }
+		if (unlikely(enable_debug))
+			printk("[PF_RING-ZC] %s(): Packet received: %d\n", __FUNCTION__, new_packets); 
 
-    if(!(rx_status & (1 << I40E_RX_DESC_STATUS_DD_SHIFT))) {
-      rx_ring->pfring_zc.rx_tx.rx.interrupt_received = 0;
+		return new_packets;
+	} else {
+		/* Disable interrupts */
 
-      if(!rx_ring->pfring_zc.rx_tx.rx.interrupt_enabled) {
-	i40e_vsi_enable_irq(rx_ring->vsi);
+		i40e_disable_irq(rx_ring->q_vector);
 
-	if(unlikely(enable_debug)) printk("[PF_RING-ZC] %s(): Enabled interrupts, queue = %d\n", __FUNCTION__, rx_ring->q_vector->v_idx);
-	rx_ring->pfring_zc.rx_tx.rx.interrupt_enabled = 1;
+		rx_ring->pfring_zc.rx_tx.rx.interrupt_enabled = 0;
 
-	if(unlikely(enable_debug))
-	  printk("[PF_RING-ZC] %s(): Packet not arrived yet: enabling "
-		 "interrupts, queue=%d, i=%d\n",
-		 __FUNCTION__,rx_ring->q_vector->v_idx, i);
-      }
+		if (unlikely(enable_debug))
+			printk("[PF_RING-ZC] %s(): Disabled interrupts, queue = %d\n", __FUNCTION__, rx_ring->q_vector->v_idx);
 
-      /* Refresh the value */
-      qword = le64_to_cpu(rx_desc->wb.qword1.status_error_len);
-      rx_status = (qword & I40E_RXD_QW1_STATUS_MASK) >> I40E_RXD_QW1_STATUS_SHIFT;
-      if(!(rx_status & (1 << I40E_RX_DESC_STATUS_DD_SHIFT))) {
-	qword = le64_to_cpu(next_rx_desc->wb.qword1.status_error_len);
-	rx_status = (qword & I40E_RXD_QW1_STATUS_MASK) >> I40E_RXD_QW1_STATUS_SHIFT;
-      }
-    } else {
-      rx_ring->pfring_zc.rx_tx.rx.interrupt_received = 1;
-    }
-
-    if(unlikely(enable_debug))
-      printk("[PF_RING-ZC] %s(): Packet received: %d\n", __FUNCTION__, 
-	     rx_status & (1 << I40E_RX_DESC_STATUS_DD_SHIFT));
-
-    return(rx_status & (1 << I40E_RX_DESC_STATUS_DD_SHIFT));
-  } else {
-    /* Disable interrupts */
-
-    i40e_vsi_disable_irq(rx_ring->vsi);
-
-    rx_ring->pfring_zc.rx_tx.rx.interrupt_enabled = 0;
-
-    if(unlikely(enable_debug))
-      printk("[PF_RING-ZC] %s(): Disabled interrupts, queue = %d\n", __FUNCTION__, rx_ring->q_vector->v_idx);
-
-    return(0);
-  }
+		return 0;
+	}
 }
 
 /* ********************************** */
 
 int wake_up_pfring_zc_socket(struct i40e_ring *rx_ring)
 {
-  unsigned int last_read = readl(rx_ring->tail);
-
-  if(unlikely(enable_debug))  printk("[PF_RING-ZC] %s() called\n", __FUNCTION__);
-	
-  if(++last_read == rx_ring->count) last_read = 0;
-  if(atomic_read(&rx_ring->pfring_zc.queue_in_use)) {
-    union i40e_rx_desc *rx_desc = I40E_RX_DESC(rx_ring, last_read);    
-    u64 qword = le64_to_cpu(rx_desc->wb.qword1.status_error_len);
-    u32 rx_status = (qword & I40E_RXD_QW1_STATUS_MASK) >> I40E_RXD_QW1_STATUS_SHIFT;
-    
-    /* trick for appplications calling poll/select directly (indexes not in sync of one position at most) */
-    if(!(rx_status & (1 << I40E_RX_DESC_STATUS_DD_SHIFT))) {
-      if(++last_read == rx_ring->count) last_read = 0;
-      rx_desc = I40E_RX_DESC(rx_ring, last_read);
-      qword = le64_to_cpu(rx_desc->wb.qword1.status_error_len);
-      rx_status = (qword & I40E_RXD_QW1_STATUS_MASK) >> I40E_RXD_QW1_STATUS_SHIFT;
-    }
-
-    if(rx_status & (1 << I40E_RX_DESC_STATUS_DD_SHIFT)) {
-      if(waitqueue_active(&rx_ring->pfring_zc.rx_tx.rx.packet_waitqueue)) {
-	wake_up_interruptible(&rx_ring->pfring_zc.rx_tx.rx.packet_waitqueue);
-	rx_ring->pfring_zc.rx_tx.rx.interrupt_received = 1;
-	return 1;
-      }
-    }
-  }
-
-  return 0;
+	if (atomic_read(&rx_ring->pfring_zc.queue_in_use)) {
+		if (waitqueue_active(&rx_ring->pfring_zc.rx_tx.rx.packet_waitqueue)) {
+			if (ring_is_not_empty(rx_ring)) {
+				rx_ring->pfring_zc.rx_tx.rx.interrupt_received = 1;
+				wake_up_interruptible(&rx_ring->pfring_zc.rx_tx.rx.packet_waitqueue);
+				return 1;
+			}
+		}
+	}
+	return 0;
 }
 
 /* ********************************** */
@@ -3114,6 +3115,9 @@ void notify_function_ptr(void *rx_data, void *tx_data, u_int8_t device_in_use)
       i40e_clean_rx_ring(rx_ring);
 
       i40e_control_rxq(vsi, pf_q, true /* start */);
+
+      /* disabling irqs, they will be enabled on-demand*/
+      i40e_disable_irq(rx_ring->q_vector);
     }
 
     if(tx_ring != NULL && atomic_inc_return(&tx_ring->pfring_zc.queue_in_use) == 1 /* first user */) {

@@ -1284,7 +1284,6 @@ int wake_up_pfring_zc_socket(struct ixgbe_ring *rx_ring)
 			if (ring_is_not_empty(rx_ring)) {
 				rx_ring->pfring_zc.rx_tx.rx.interrupt_received = 1;
 				wake_up_interruptible(&rx_ring->pfring_zc.rx_tx.rx.packet_waitqueue);
-				printk("%s: waking up socket\n", __FUNCTION__);
 				return 1;
 			}
 		}
