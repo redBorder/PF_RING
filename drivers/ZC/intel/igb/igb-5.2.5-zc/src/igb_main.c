@@ -1506,70 +1506,74 @@ u16 igb_read_pci_cfg_word(struct e1000_hw *hw, u32 reg)
 	return value;
 }
 
+int ring_is_not_empty(struct igb_ring *rx_ring) {
+	struct igb_adapter *adapter = netdev_priv(rx_ring->netdev);
+	struct e1000_hw *hw = &adapter->hw;
+	union e1000_adv_rx_desc *rx_desc, *next_rx_desc;
+	u32 staterr;
+	u8 reg_idx = rx_ring->reg_idx;
+	u16 i = E1000_READ_REG(hw, E1000_RDT(reg_idx));
+
+	/* Very important: update the value from the register set from userland
+	 * Here i is the last I've read (zero-copy implementation) */
+	if(++i == rx_ring->count) i = 0;
+	/* Here i is the next I have to read */
+
+	rx_ring->next_to_clean = i;
+
+	rx_desc = IGB_RX_DESC(rx_ring, i);
+	prefetch(rx_desc);
+	staterr = le32_to_cpu(rx_desc->wb.upper.status_error);
+
+	/* trick for appplications calling poll/select directly (indexes not in sync of one position at most) */
+	if (!(staterr & E1000_RXD_STAT_DD)) {
+		u16 next_i = i;
+		if(++next_i == rx_ring->count) next_i = 0;
+		next_rx_desc = IGB_RX_DESC(rx_ring, next_i);
+		staterr = le32_to_cpu(next_rx_desc->wb.upper.status_error);
+	}
+
+	if (staterr & E1000_RXD_STAT_DD)
+		return 1;
+
+	return 0;
+}
+
 int wait_packet_function_ptr(void *data, int mode)
 {
 	struct igb_ring	*rx_ring = (struct igb_ring*)data;
 	struct igb_adapter *adapter = netdev_priv(rx_ring->netdev);
-	struct e1000_hw *hw = &adapter->hw;
+	int new_packets;
 
 	if(unlikely(enable_debug))
 		printk("%s(): enter [mode=%d/%s][queueId=%d][next_to_clean=%u][next_to_use=%d]\n",
 		       __FUNCTION__, mode, mode == 1 ? "enable int" : "disable int",
 		       rx_ring->queue_index, rx_ring->next_to_clean, rx_ring->next_to_use);
 
-	if(mode == 1 /* Enable interrupt */) {
-		union e1000_adv_rx_desc *rx_desc, *next_rx_desc;
-		u32 staterr;
-		u8 reg_idx = rx_ring->reg_idx;
-		u16 i = E1000_READ_REG(hw, E1000_RDT(reg_idx));
+	if (mode == 1 /* Enable interrupt */) {
 
-		/* Very important: update the value from the register set from userland
-		 * Here i is the last I've read (zero-copy implementation) */
-		if(++i == rx_ring->count) i = 0;
-		/* Here i is the next I have to read */
+		new_packets = ring_is_not_empty(rx_ring);
 
-		rx_ring->next_to_clean = i;
-
-		rx_desc = IGB_RX_DESC(rx_ring, i);
-		prefetch(rx_desc);
-		staterr = le32_to_cpu(rx_desc->wb.upper.status_error);
-
-		/* trick for appplications calling poll/select directly (indexes not in sync of one position at most) */
-		if (!(staterr & E1000_RXD_STAT_DD)) {
-			u16 next_i = i;
-			if(++next_i == rx_ring->count) next_i = 0;
-			next_rx_desc = IGB_RX_DESC(rx_ring, next_i);
-			staterr = le32_to_cpu(next_rx_desc->wb.upper.status_error);
-		}
-
-		if(unlikely(enable_debug)) {
-			printk("%s(): Check if a packet is arrived [idx=%d][staterr=%d][len=%d]\n",
-			       __FUNCTION__, i, staterr, rx_desc->wb.upper.length);
-		}
-
-		if(!(staterr & E1000_RXD_STAT_DD)) {
+		if (!new_packets) {
 			rx_ring->pfring_zc.rx_tx.rx.interrupt_received = 0;
 
-			if(!rx_ring->pfring_zc.rx_tx.rx.interrupt_enabled) {
+			if (!rx_ring->pfring_zc.rx_tx.rx.interrupt_enabled) {
 				igb_irq_enable(adapter);
 
 				rx_ring->pfring_zc.rx_tx.rx.interrupt_enabled = 1;
 
-				if(unlikely(enable_debug))
+				if (unlikely(enable_debug))
 					printk("%s(): Packet not arrived yet: enabling interrupts\n", __FUNCTION__);
 			}
 
-			/* Refresh the value */
-			staterr = le32_to_cpu(rx_desc->wb.upper.status_error);
-			if (!(staterr & E1000_RXD_STAT_DD)) staterr = le32_to_cpu(next_rx_desc->wb.upper.status_error);
 		} else {
 			rx_ring->pfring_zc.rx_tx.rx.interrupt_received = 1;
 		}
 
 		if(unlikely(enable_debug))
-			printk("%s(): Packet received: %d\n", __FUNCTION__, staterr & E1000_RXD_STAT_DD);
+			printk("%s(): Packet received: %d\n", __FUNCTION__, new_packets);
 
-		return(staterr & E1000_RXD_STAT_DD);
+		return new_packets;
 	} else {
 		/* Disable interrupts */
 
@@ -1579,7 +1583,7 @@ int wait_packet_function_ptr(void *data, int mode)
 		if(unlikely(enable_debug))
 			printk("%s(): Disabled interrupts\n", __FUNCTION__);
 
-		return(0);
+		return 0;
 	}
 }
 
@@ -1587,33 +1591,15 @@ int wait_packet_function_ptr(void *data, int mode)
 
 int wake_up_pfring_zc_socket(struct igb_ring *rx_ring)
 {
-	struct igb_adapter *adapter = netdev_priv(rx_ring->netdev);
-	struct e1000_hw *hw = &adapter->hw;
-	union e1000_adv_rx_desc *rx_desc;
-	unsigned int last_read = E1000_READ_REG(hw, E1000_RDT(rx_ring->reg_idx));
-	
-	if(++last_read == rx_ring->count) last_read = 0;
-	if(atomic_read(&rx_ring->pfring_zc.queue_in_use)) {
-		u32 staterr;
-		rx_desc = IGB_RX_DESC(rx_ring, last_read);
-		staterr =  le32_to_cpu(rx_desc->wb.upper.status_error);
-
-		/* trick for appplications calling poll/select directly (indexes not in sync of one position at most) */
-		if (!(staterr & E1000_RXD_STAT_DD)) {
-			if(++last_read == rx_ring->count) last_read = 0;
-			rx_desc = IGB_RX_DESC(rx_ring, last_read);
-			staterr = le32_to_cpu(rx_desc->wb.upper.status_error);
-		}
-
-		if(staterr & E1000_RXD_STAT_DD) {
-			if(waitqueue_active(&rx_ring->pfring_zc.rx_tx.rx.packet_waitqueue)) {
-				wake_up_interruptible(&rx_ring->pfring_zc.rx_tx.rx.packet_waitqueue);
+	if (atomic_read(&rx_ring->pfring_zc.queue_in_use)) {
+		if (waitqueue_active(&rx_ring->pfring_zc.rx_tx.rx.packet_waitqueue)) {
+			if (ring_is_not_empty(rx_ring)) {
 				rx_ring->pfring_zc.rx_tx.rx.interrupt_received = 1;
+				wake_up_interruptible(&rx_ring->pfring_zc.rx_tx.rx.packet_waitqueue);
 				return 1;
 			}
 		}
 	}
-
 	return 0;
 }
 
