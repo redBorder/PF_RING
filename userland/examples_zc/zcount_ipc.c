@@ -142,6 +142,8 @@ void printHelp(void) {
   printf("zcount_ipc - (C) 2014 ntop.org\n");
   printf("Using PFRING_ZC v.%s\n", pfring_zc_version());
   printf("A simple packet counter application consuming packets from a sw queue.\n\n");
+  printf("Usage: zcount_ipc -i <queue id> -c <cluster id>\n"
+	 "                [-h] [-g <core id>] [-s] [-v] [-u] [-a]\n\n");
   printf("-h              Print this help\n");
   printf("-i <queue id>   Zero queue id\n");
   printf("-c <cluster id> Cluster id\n");

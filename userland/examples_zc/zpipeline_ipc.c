@@ -157,11 +157,14 @@ void printHelp(void) {
   printf("zpipeline_ipc - (C) 2014 ntop.org\n");
   printf("Using PFRING_ZC v.%s\n", pfring_zc_version());
   printf("A master process sending packets from a source interface to a sw queue and from a sw queue to a destination interface (first and last stage of a pipeline)\n\n");
+  printf("Usage: zpipeline_ipc -i <device>;<queue> -o <device>;<queue> -n <num queues>\n"
+         "                    -c <cluster id> [-r <rx thread core>] [-t <tx thread core>]\n"
+	 "                    [-h] [-a] [-f] [-Q <sock list>]\n\n");
   printf("-h                  Print this help\n");
-  printf("-n <num_queues>     Number of queues\n");
   printf("-i <device>;<queue> Ingress device and destination queue\n");
   printf("-o <device>;<queue> Egress device and source queue\n");
   printf("-c <cluster id>     Cluster id\n");
+  printf("-n <num queues>     Number of queues\n");
   printf("-r <rx thread core> Bind the rx thread to a core\n");
   printf("-t <tx thread core> Bind the tx thread to a core\n");
   printf("-a                  Active packet wait\n");

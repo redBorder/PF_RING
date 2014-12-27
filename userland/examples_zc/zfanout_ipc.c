@@ -190,14 +190,16 @@ void printHelp(void) {
   printf("zfanout_ipc - (C) 2014 ntop.org\n");
   printf("Using PFRING_ZC v.%s\n", pfring_zc_version());
   printf("A master process sending all ingress packets to all the consumer processes (e.g. zcount_ipc -c <cluster id> -i <consumer id>).\n");
-  printf("Note: this is an alternative to zbalance -m 2\n");
+  printf("Note: this is an alternative to zbalance -m 2\n\n");
+  printf("Usage: zfanout_ipc -i <device> -c <cluster id> -n <num inst>\n"
+	 "                [-h] [-q <len>] [-S <core id>] [-g <core id>] [-a]\n\n");
   printf("-h              Print this help\n");
   printf("-i <device>     Device name\n");
   printf("-c <cluster id> Cluster id\n");
-  printf("-n <num_slaves> Number of slaves applications\n");
+  printf("-n <num inst>   Number of application instances\n");
   printf("-q <len>        Number of slots in each queue (default: %u)\n", QUEUE_LEN);
   printf("-S <core id>    Enable Time Pulse thread and bind it to a core\n");
-  printf("-g <core_id>    Bind this app to a core\n");
+  printf("-g <core id>    Bind this app to a core\n");
   printf("-a              Active packet wait\n");
   exit(-1);
 }

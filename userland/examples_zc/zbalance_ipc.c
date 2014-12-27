@@ -242,13 +242,11 @@ void sigproc(int sig) {
 void printHelp(void) {
   printf("zbalance_ipc - (C) 2014 ntop.org\n");
   printf("Using PFRING_ZC v.%s\n", pfring_zc_version());
-
   printf("A master process balancing packets to multiple consumer processes.\n\n");
-
-  printf("Usage:  zbalance_ipc [-h] -i <device> -c <cluster id> -n <num inst>\n"
-	 "                     [-m <hash mode>] [-S <core id>] [-g <core_id>]\n"
-	 "                     [-N <num>] [-a] ]-l <sock list>]\n");
-
+  printf("Usage: zbalance_ipc -i <device> -c <cluster id> -n <num inst>\n"
+	 "                [-h] [-m <hash mode>] [-S <core id>] [-g <core_id>]\n"
+	 "                [-N <num>] [-a] [-q <len>] [-Q <sock list>] [-d] \n"
+	 "                [-D <username>] [-P <pid file>] \n\n");
   printf("-h              Print this help\n");
   printf("-i <device>     Device (comma-separated list) Note: use 'Q' as device name to create ingress sw queues\n");
   printf("-c <cluster id> Cluster id\n");

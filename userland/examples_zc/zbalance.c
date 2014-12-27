@@ -163,9 +163,8 @@ void printHelp(void) {
   printf("zbalance - (C) 2014 ntop.org\n");
   printf("Using PFRING_ZC v.%s\n", pfring_zc_version());
   printf("A master thread balancing packets to multiple consumer threads counting packets.\n\n");
-
-  printf("Usage:  zbalance -i <device> -c <cluster id> -g <id:id...>\n"
-	 "                 [-h] [-m <hash mode>] [-r <id>] [-a]\n\n");
+  printf("Usage: zbalance -i <device> -c <cluster id> -g <id:id...>\n"
+	 "                [-h] [-m <hash mode>] [-r <id>] [-a]\n\n");
   printf("-h              Print this help\n");
   printf("-i <device>     Device name (comma-separated list)\n");
   printf("-c <cluster id> Cluster id\n");

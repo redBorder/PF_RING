@@ -141,6 +141,8 @@ void printHelp(void) {
   printf("zbounce - (C) 2014 ntop.org\n");
   printf("Using PFRING_ZC v.%s\n", pfring_zc_version());
   printf("A packet forwarder application between interfaces.\n\n");
+  printf("Usage:  zbounce -i <device> -o <device> -c <cluster id> [-b]\n"
+	 "                [-h] [-g <core id>] [-f] [-v] [-a]\n\n");
   printf("-h              Print this help\n");
   printf("-i <device>     Ingress device name\n");
   printf("-o <device>     Egress device name\n");
