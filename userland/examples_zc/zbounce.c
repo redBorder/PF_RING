@@ -184,8 +184,9 @@ void *packet_consumer_thread(void *_i) {
 
       i->numPkts++;
       i->numBytes += i->tmpbuff->len + 24; /* 8 Preamble + 4 CRC + 12 IFG */
-
-      while (unlikely(pfring_zc_send_pkt(i->outzq, &i->tmpbuff, flush_packet) < 0 && !do_shutdown))
+      
+      errno = 0;
+      while (unlikely(pfring_zc_send_pkt(i->outzq, &i->tmpbuff, flush_packet) < 0 && errno != EMSGSIZE && !do_shutdown))
         if (wait_for_packet) usleep(1);
 
       tx_queue_not_empty = 1;

@@ -752,8 +752,10 @@ int pfring_bind(pfring *ring, char *device_name) {
 int pfring_send(pfring *ring, char *pkt, u_int pkt_len, u_int8_t flush_packet) {
   int rc;
 
-  if(unlikely(pkt_len > ring->mtu_len))
+  if(unlikely(pkt_len > ring->mtu_len)) {
+    errno = EMSGSIZE;
     return(PF_RING_ERROR_INVALID_ARGUMENT); /* Packet too long */
+  }
 
   if(likely(ring
 	    && ring->enabled
