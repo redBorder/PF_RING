@@ -509,7 +509,7 @@ int main(int argc, char* argv[]) {
   char *device = NULL, c;
   pthread_t thread;
   pthread_t time_thread;
-  char *vm_sock;
+  char *vm_sock = NULL;
   int i, rc, ipc_q_attach = 0;
 
   startTime.tv_sec = 0;
