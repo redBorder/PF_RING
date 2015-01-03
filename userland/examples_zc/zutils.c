@@ -27,6 +27,8 @@
 #define N2DISK_CONSUMER_QUEUE_LEN 8192
 #define N2DISK_PREFETCH_BUFFERS     32
 
+#define MAX_NUM_OPTIONS             64
+
 /* *************************************** */
 
 int bind2node(int core_id) {
@@ -211,4 +213,82 @@ void remove_pid_file(char *pidFile) {
 }
 
 /* *************************************** */
+
+int load_args_from_file(char *conffile, int *ret_argc, char **ret_argv[]) {
+  FILE *fd;
+  char *tok, cont = 1;
+  char line[2048];
+  int opt_argc;
+  char **opt_argv;
+  int i;
+
+  opt_argc = 0;
+  opt_argv = (char **) malloc(sizeof(char *) * MAX_NUM_OPTIONS);
+
+  if (opt_argv == NULL)
+    return -1;
+
+  memset(opt_argv, 0, sizeof(char *) * MAX_NUM_OPTIONS);
+
+  fd = fopen(conffile, "r");
+
+  if(fd == NULL) 
+    return -1;
+
+  opt_argv[opt_argc++] = "";
+
+  while(cont && fgets(line, sizeof(line), fd)) {
+    i = 0;
+    while(line[i] != '\0') {
+      if(line[i] == '=')
+        break;
+      else if(line[i] == ' ') {
+        line[i] = '=';
+        break;
+      }
+      i++;
+    }
+
+    tok = strtok(line, "=");
+
+    while(tok != NULL) {
+      int len;
+      char *argument;
+
+      if(opt_argc >= MAX_NUM_OPTIONS) {
+        int i;
+
+        fprintf(stderr, "Too many options (%u)\n", opt_argc);
+
+	for(i=0; i<opt_argc; i++)
+	  fprintf(stderr, "[%d][%s]", i, opt_argv[i]);
+
+	cont = 0;
+	break;
+      }
+
+      len = strlen(tok)-1;
+      if(tok[len] == '\n')
+        tok[len] = '\0';
+
+      if((tok[0] == '\"') && (tok[strlen(tok)-1] == '\"')) {
+	tok[strlen(tok)-1] = '\0';
+	argument = &tok[1];
+      } else
+        argument = tok;
+
+      if(argument[0] != '\0')
+	opt_argv[opt_argc++] = strdup(argument);
+
+      tok = strtok(NULL, "\n");
+    }
+  }
+
+  fclose(fd);
+
+
+  *ret_argc = opt_argc;
+  *ret_argv = opt_argv;
+  return 0;
+}
 

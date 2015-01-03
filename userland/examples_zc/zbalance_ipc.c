@@ -374,10 +374,22 @@ int main(int argc, char* argv[]) {
   int rc;
   int num_real_devices = 0, num_in_queues = 0;
   char *pid_file = NULL;
+  int opt_argc;
+  char **opt_argv;
 
   start_time.tv_sec = 0;
 
-  while((c = getopt(argc,argv,"ac:dg:hi:m:n:Q:q:N:P:S:")) != '?') {
+  if ((argc == 2) && (argv[1][0] != '-')) {
+    if (load_args_from_file(argv[1], &opt_argc, &opt_argv) != 0) {
+      fprintf(stderr, "Unable to read config file %s\n", argv[1]);
+      exit(-1);
+    }
+  } else {
+    opt_argc = argc;
+    opt_argv = argv;
+  }
+
+  while((c = getopt(opt_argc, opt_argv,"ac:dg:hi:m:n:Q:q:N:P:S:")) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
