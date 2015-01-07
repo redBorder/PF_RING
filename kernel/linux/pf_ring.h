@@ -345,8 +345,9 @@ void term_lockless_list(lockless_list *l, u_int8_t free_memory);
 typedef struct {
   u_int8_t smac[ETH_ALEN], dmac[ETH_ALEN]; /* Use '0' (zero-ed MAC address) for any MAC address.
 					      This is applied to both source and destination. */
-  u_int16_t vlan_id;                   /* Use '0' for any vlan */
-  u_int8_t  proto;                     /* Use 0 for 'any' protocol */
+  u_int16_t vlan_id;                   /* Use 0 for any vlan */
+  u_int16_t eth_type;		       /* Use 0 for any ethernet type */
+  u_int8_t  proto;                     /* Use 0 for any l3 protocol */
   ip_addr   shost, dhost;              /* User '0' for any host. This is applied to both source and destination. */
   ip_addr   shost_mask, dhost_mask;    /* IPv4/6 network mask */
   u_int16_t sport_low, sport_high;     /* All ports between port_low...port_high means 'any' port */
