@@ -7,7 +7,7 @@ LIBPFRING  = ${PFRINGDIR}/libpfring.a
 #
 # PF_RING aware libpcap
 #
-PCAPDIR    = ../libpcap-1.1.1-ring
+PCAPDIR    = ../libpcap
 LIBPCAP    = ${PCAPDIR}/libpcap.a
 
 #

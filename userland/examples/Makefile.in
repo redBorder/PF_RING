@@ -24,7 +24,7 @@ DNA_DEFINE = #-DENABLE_DNA_SUPPORT
 #
 O_FLAG     = -O2 -DHAVE_PF_RING
 EXTRA_LIBS =
-PCAPDIR    = ../libpcap-1.1.1-ring
+PCAPDIR    = ../libpcap
 LIBPCAP    = ${PCAPDIR}/libpcap.a  ${EXTRA_LIBS}
 
 #
