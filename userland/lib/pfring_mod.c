@@ -500,10 +500,10 @@ int pfring_mod_recv(pfring *ring, u_char** buffer, u_int buffer_len,
                 ring->slots_info->tot_insert, ring->slots_info->tot_read);
 #endif
 
-      if(ring->slot_header_len != sizeof(struct pfring_pkthdr)) /* using short_pkt_header, parsed_header_len is not available */
-	bktLen = hdr->caplen;
-      else
-	bktLen = hdr->caplen + hdr->extended_hdr.parsed_header_len;
+      bktLen = hdr->caplen;
+
+      if(ring->slot_header_len == sizeof(struct pfring_pkthdr)) /* using long pkt header, parsed_header_len is available */
+        bktLen += hdr->extended_hdr.parsed_header_len;
 
       real_slot_len = ring->slot_header_len + bktLen;
 
