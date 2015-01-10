@@ -83,10 +83,6 @@
 #define pthread_rwlock_destroy pthread_mutex_destroy
 #endif
 
-#ifndef max
-#define max(a, b) (a > b ? a : b)
-#endif
-
 #define timespec_is_before(a, b) \
   ((((a)->tv_sec<(b)->tv_sec)||(((a)->tv_sec==(b)->tv_sec)&&((a)->tv_nsec<(b)->tv_nsec)))?1:0)
 
