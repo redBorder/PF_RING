@@ -628,8 +628,10 @@ typedef struct flowSlotInfo {
   u_int16_t version, sample_rate;
   u_int32_t min_num_slots, slot_len, data_len;
   u_int64_t tot_mem;
-  u_int64_t insert_off, kernel_remove_off;
-  u_int64_t tot_pkts, tot_lost, tot_insert;
+  volatile u_int64_t insert_off;
+  u_int64_t kernel_remove_off;
+  u_int64_t tot_pkts, tot_lost;
+  volatile u_int64_t tot_insert;
   u_int64_t kernel_tot_read;
   u_int64_t tot_fwd_ok, tot_fwd_notok;
   u_int64_t good_pkt_sent, pkt_send_error;
@@ -640,8 +642,8 @@ typedef struct flowSlotInfo {
   /* <-- 4096 bytes here, to get a page aligned block writable by kernel side only */
 
   /* second page, managed by userland */
-  u_int64_t tot_read;
-  u_int64_t remove_off /* managed by userland */;
+  volatile u_int64_t tot_read;
+  volatile u_int64_t remove_off /* managed by userland */;
   char u_padding[4096-16];
   /* <-- 8192 bytes here, to get a page aligned block writable by userland only */
 } FlowSlotInfo;
