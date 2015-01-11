@@ -428,6 +428,8 @@ u_int get_num_rx_queues(struct net_device *dev)
 #else
 #if(LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,38)) && defined(CONFIG_RPS)
   return(min_val(dev->real_num_rx_queues, dev->real_num_tx_queues));
+#elif (defined(RHEL_MAJOR) && /* FIXX check previous versions: */ (RHEL_MAJOR == 6) && (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,32))) && defined(CONFIG_RPS)
+  return(netdev_extended(dev)->real_num_rx_queues);
 #else
   return(dev->real_num_tx_queues);
   // return(1);
@@ -2880,6 +2882,7 @@ static inline int copy_data_to_ring(struct sk_buff *skb,
 
   if(!check_free_ring_slot(pfr)) /* Full */ {
     /* No room left */
+
     pfr->slots_info->tot_lost++;
 
     //if(unlikely(enable_debug))
@@ -3008,6 +3011,15 @@ static inline int copy_data_to_ring(struct sk_buff *skb,
   smp_mb(); //wmb();
 
   pfr->slots_info->tot_insert++;
+
+#if 0
+  printk("Packet=%llu Header_Len=%u Len=%u Caplen=%u Next_Insert_offset=%llu\n",
+    pfr->slots_info->tot_insert,
+    pfr->slot_header_len,
+    hdr->len,
+    hdr->caplen,
+    pfr->slots_info->insert_off);
+#endif
 
  if(do_lock) write_unlock(&pfr->ring_index_lock);
 
