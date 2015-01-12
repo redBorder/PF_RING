@@ -110,9 +110,9 @@ static int max_packet_len(Pfring_Context_t *context, char *device, int id, int *
 
   pfring_get_bound_device_ifindex(ring, &context->ifindexes[id]);
 
-  if (ring->dna.dna_mapped_device) {
-    max_len = ring->dna.dna_dev.mem_info.rx.packet_memory_slot_len;
-    num_slots = ring->dna.dna_dev.mem_info.rx.packet_memory_num_slots;
+  if (ring->zc_device) {
+    max_len = pfring_get_max_packet_size(ring);
+    num_slots = 32768; //TODO get via API
   } else {
     max_len = pfring_get_mtu_size(ring);
     if (max_len == 0) max_len = 9000;
