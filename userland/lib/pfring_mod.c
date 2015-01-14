@@ -291,7 +291,7 @@ char* pfring_mod_get_appl_stats_file_name(pfring *ring, char *path, u_int path_l
 
 int pfring_mod_bind(pfring *ring, char *device_name) {
   struct sockaddr sa;
-  char *at, *elem, name_copy[256];
+  char *at, *elem, *pos, name_copy[256];
   u_int32_t channel_mask = RING_ANY_CHANNEL;
   int rc = 0;
 
@@ -301,7 +301,7 @@ int pfring_mod_bind(pfring *ring, char *device_name) {
   /* FIX: in case of multiple interfaces the channel ID must be the same */
   at = strchr(device_name, '@');
   if(at != NULL) {
-    char *tok, *pos = NULL;
+    char *tok;
 
     at[0] = '\0';
 
@@ -311,6 +311,7 @@ int pfring_mod_bind(pfring *ring, char *device_name) {
        ethX@1-3,5-7   channel 1,2,3,5,6,7
     */
 
+    pos = NULL;
     tok = strtok_r(&at[1], ",", &pos);
     channel_mask = 0;
 
@@ -338,7 +339,9 @@ int pfring_mod_bind(pfring *ring, char *device_name) {
   ring->sock_tx.sll_protocol = htons(ETH_P_ALL);
 
   snprintf(name_copy, sizeof(name_copy), "%s", device_name);
-  elem = strtok(name_copy, ";,");
+
+  pos = NULL;
+  elem = strtok_r(name_copy, ";,", &pos);
 
   while(elem != NULL) {
     memset(&sa, 0, sizeof(sa));
@@ -358,7 +361,7 @@ int pfring_mod_bind(pfring *ring, char *device_name) {
 
     pfring_enable_hw_timestamp(ring, elem, ring->hw_ts.enable_hw_timestamp ? 1 : 0, 0 /* TX timestamp disabled by default */);
 
-    elem = strtok(NULL, ";,");
+    elem = strtok_r(NULL, ";,", &pos);
   }
 
   return(rc);
@@ -684,7 +687,6 @@ int pfring_mod_version(pfring *ring, u_int32_t *version) {
 }
 
 /* **************************************************** */
-
 
 u_int32_t pfring_mod_get_num_queued_pkts(pfring *ring) {
   socklen_t len = sizeof(u_int32_t);
