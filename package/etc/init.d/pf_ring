@@ -122,7 +122,7 @@ rebuild_dkms() {
 
 check_hugepages() {
 	if [ `cat /sys/kernel/mm/hugepages/hugepages-${HUGEPAGES_SIZE}kB/nr_hugepages` -gt 0 ]; then # hugepages already loaded
-		LOAD_HUGEPAGES=1
+		LOAD_HUGEPAGES=0
 		return
 	fi
 }
@@ -135,7 +135,7 @@ unload_hugepages() {
 load_hugepages() {
 	check_hugepages
 	HUGEPAGES_NUMBER=0
-	if [ ${LOAD_HUGEPAGES} -eq 1 ]; then
+	if [ ${LOAD_HUGEPAGES} -eq 0 ]; then
 		return
 		#hugepages already loaded
 	else
@@ -145,7 +145,6 @@ load_hugepages() {
 				HUGEPAGES_NUMBER=`echo ${node} | cut -d ' ' -f 2 | cut -d '=' -f 2` # entry should contain node=yy hugepagenumber=XXX
 				if [ ${HUGEPAGES_NUMBER} -gt 0 ] && [ -f /sys/devices/system/node/node${HUGEPAGES_NODE}/hugepages/hugepages-${HUGEPAGES_SIZE}kB/nr_hugepages ]; then
 					echo ${HUGEPAGES_NUMBER} >  /sys/devices/system/node/node${HUGEPAGES_NODE}/hugepages/hugepages-${HUGEPAGES_SIZE}kB/nr_hugepages
-					LOAD_HUGEPAGES=1
 				fi
                 HUGEPAGES_NODE=""
                 HUGEPAGES_NUMBER=""
@@ -156,7 +155,6 @@ load_hugepages() {
 			HUGEPAGES_NUMBER=$(( MEM_AVAIL / HUGEPAGES_SIZE ))
 			if [ ${HUGEPAGES_NUMBER} -gt 0 ]; then
 				echo ${HUGEPAGES_NUMBER} > /sys/kernel/mm/hugepages/hugepages-${HUGEPAGES_SIZE}kB/nr_hugepages
-				LOAD_HUGEPAGES=1
 			fi
 		fi
 		if [ ! -d ${HUGEPAGES_MOUNTPOINT} ]; then
@@ -191,10 +189,6 @@ start_interfaces() {
 
 load_driver() {
 	DRV_PARAM=""
-	if [ ${2} == "zc" ] && [ ${LOAD_HUGEPAGES} -eq 0 ]; then
-		load_hugepages
-		LOAD_HUGEPAGES=1
-	fi
 
 	if [ `/sbin/modinfo ${1}-${2} | wc -l` -gt 1 ]; then
 		# driver is available
@@ -238,6 +232,9 @@ load_dna_zc() {
 		for D in ${DKMS_DRIVERS[@]} ; do
 			if [ -f ${DRIVERS_CONFIG_DIR}/${F}/${D}/${D}.conf ] && [ -f ${DRIVERS_CONFIG_DIR}/${F}/${D}/${D}.start ]; then
 				load_driver ${D} ${F}
+				if [ ${F} == "zc" ]; then
+					LOAD_HUGEPAGES=1
+				fi
 			fi
 		done
 	done
@@ -248,6 +245,10 @@ load_dna_zc() {
 	
 	if [ ${DRIVER_INSTALLED} -eq 0 ]; then
 		echo "DNA/ZC drivers not loaded: missing driver or configuration"
+	fi
+
+	if [ ${LOAD_HUGEPAGES} -eq 1 ]; then
+		load_hugepages
 	fi
 }
 
@@ -273,7 +274,7 @@ unload_dna_zc() {
 			fi
 		done
 	done
-	if [ ${UNLOAD_HUGEPAGES} -gt 0 ]; then
+	if [ ${UNLOAD_HUGEPAGES} -eq 1 ]; then
 		unload_hugepages
 	fi
 	start_interfaces
@@ -344,12 +345,12 @@ start_pf_ring() {
       fi
     fi
 
-	## Load NTOP drivers ##
-	load_dna_zc
-	## Load NTOP drivers ##
+    ## Load NTOP drivers ##
+    load_dna_zc
+    ## Load NTOP drivers ##
     sleep 1
     
-	start_interfaces
+    start_interfaces
 
     [ ${DISTRO} == "debian" ] && log_end_msg $ERROR
     [ ${DISTRO} == "centos" ] && echo_success && echo
@@ -384,9 +385,9 @@ stop_pf_ring() {
 		sleep 1
     fi
 
-	## Unload NTOP drivers ##
-	unload_dna_zc
-	## Unload NTOP drivers ##
+    ## Unload NTOP drivers ##
+    unload_dna_zc
+    ## Unload NTOP drivers ##
 	
 
     NUM="$(grep pf_ring /proc/modules|wc -l)"
