@@ -265,6 +265,7 @@ void printHelp(void) {
   printf("-N <num>        Producer for n2disk multi-thread (<num> threads)\n");
   printf("-a              Active packet wait\n");
   printf("-Q <sock list>  Enable VM support (comma-separated list of QEMU monitor sockets)\n");
+  printf("-p              Print per-interface absolute stats\n");
   printf("-d              Daemon mode\n");
   printf("-D <username>   Drop privileges\n");
   printf("-P <pid file>   Write pid to the specified file (daemon mode only)\n");
@@ -389,7 +390,7 @@ int main(int argc, char* argv[]) {
     opt_argv = argv;
   }
 
-  while((c = getopt(opt_argc, opt_argv,"ac:dg:hi:m:n:Q:q:N:P:S:")) != '?') {
+  while((c = getopt(opt_argc, opt_argv,"ac:dg:hi:m:n:pQ:q:N:P:S:")) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -416,6 +417,9 @@ int main(int argc, char* argv[]) {
       break;
     case 'g':
       bind_worker_core = atoi(optarg);
+      break;
+    case 'p':
+      print_interface_stats = 1;
       break;
     case 'Q':
       enable_vm_support = 1;
