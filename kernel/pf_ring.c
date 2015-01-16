@@ -1567,7 +1567,7 @@ static int ring_proc_get_plugin_info(struct seq_file *m, void *data_not_used)
   struct pfring_plugin_registration *tmp = NULL;
   int i;
 
-  /* FIXME: I should now the number of plugins registered */
+  /* FIXME: I should know the number of plugins registered */
   if(!plugin_registration_size)
     return(0);
 
