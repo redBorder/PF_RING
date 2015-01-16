@@ -38,11 +38,12 @@ ERROR=0
 DRIVER_INSTALLED=0
 HUGEPAGES_CONFIG="/etc/pf_ring/hugepages.conf"
 HUGEPAGES_SIZE=`grep Hugepagesize /proc/meminfo | cut -d ':' -f 2|sed 's/kB//g'|sed 's/ //g'` # KB
-LOAD_HUGEPAGES=0
 HUGEPAGES_MOUNTPOINT="/mnt/hugepages"
 MTU_CONFIG="/etc/pf_ring/mtu.conf"
 FORCESTART=0
 FORCESTART_FILE="/etc/pf_ring/forcestart"
+DO_NOT_LOAD_HUGEPAGES=0 # set to 1 to disable hugepages preallocation
+LOAD_HUGEPAGES=0
 
 function dkms_installed {
   if [ ${DISTRO} == "debian" ]; then
@@ -232,7 +233,7 @@ load_dna_zc() {
 		for D in ${DKMS_DRIVERS[@]} ; do
 			if [ -f ${DRIVERS_CONFIG_DIR}/${F}/${D}/${D}.conf ] && [ -f ${DRIVERS_CONFIG_DIR}/${F}/${D}/${D}.start ]; then
 				load_driver ${D} ${F}
-				if [ ${F} == "zc" ]; then
+				if [ ${F} == "zc" ] && [ ${DO_NOT_LOAD_HUGEPAGES} -eq 0 ]; then
 					LOAD_HUGEPAGES=1
 				fi
 			fi
@@ -268,7 +269,7 @@ unload_dna_zc() {
 		for D in ${DKMS_DRIVERS[@]} ; do
 			if [ `/sbin/lsmod | grep -w ^${D}_${F} |wc -l ` -eq 1 ]; then
 				unload_driver ${D} ${F}
-				if [ ${F} == "zc" ]; then
+				if [ ${F} == "zc" ] && [ ${DO_NOT_LOAD_HUGEPAGES} -eq 0 ]; then
 					UNLOAD_HUGEPAGES=1
 				fi
 			fi
