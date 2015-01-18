@@ -65,19 +65,19 @@ int bind2core(int core_id) {
 /* *************************************** */
 
 int max_packet_len(char *device) { 
-  int max_len;
   pfring *ring;
+  pfring_card_settings settings;
 
   ring = pfring_open(device, 1536, PF_RING_PROMISC);
 
-  if(ring == NULL)
+  if (ring == NULL)
     return 1536;
 
-  max_len = pfring_get_max_packet_size(ring);
-
+  pfring_get_card_settings(ring, &settings);
+  
   pfring_close(ring);
 
-  return max_len;
+  return settings.max_packet_size;
 }
 
 /* *************************************** */

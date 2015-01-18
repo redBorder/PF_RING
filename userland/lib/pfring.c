@@ -94,7 +94,7 @@ static pfring_module_info pfring_module_list[] = {
 
 /* **************************************************** */
 
-pfring* pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags) {
+pfring *pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags) {
   int i = -1;
   int mod_found = 0;
   int ret;
@@ -228,7 +228,7 @@ pfring* pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags) 
 
 /* **************************************************** */
 
-pfring* pfring_open_consumer(const char *device_name, u_int32_t caplen, u_int32_t flags,
+pfring *pfring_open_consumer(const char *device_name, u_int32_t caplen, u_int32_t flags,
 			     u_int8_t consumer_plugin_id,
 			     char* consumer_data, u_int consumer_data_len) {
   pfring *ring = pfring_open(device_name, caplen, flags);
@@ -254,7 +254,7 @@ pfring* pfring_open_consumer(const char *device_name, u_int32_t caplen, u_int32_
 
 u_int8_t pfring_open_multichannel(const char *device_name, u_int32_t caplen,
 				  u_int32_t flags,
-				  pfring* ring[MAX_NUM_RX_CHANNELS]) {
+				  pfring *ring[MAX_NUM_RX_CHANNELS]) {
   u_int8_t num_channels, i, num = 0;
   char *at;
   char base_device_name[32];
@@ -851,9 +851,13 @@ u_int8_t pfring_get_num_rx_channels(pfring *ring) {
 
 /* **************************************************** */
 
-int pfring_get_max_packet_size(pfring* ring) {
-  if(ring && ring->get_max_packet_size)
-    return ring->get_max_packet_size(ring);
+int pfring_get_card_settings(pfring *ring, pfring_card_settings *settings) {
+  if(ring && ring->get_card_settings)
+    return ring->get_card_settings(ring, settings);
+
+  settings->max_packet_size = ring->mtu_len;
+  settings->rx_ring_slots = 0;
+  settings->tx_ring_slots = 0;
 
   return ring->mtu_len;
 }
@@ -1336,7 +1340,7 @@ int pfring_adjust_device_clock(pfring *ring, struct timespec *offset, int8_t sig
 
 /* **************************************************** */
 
-u_int pfring_get_num_tx_slots(pfring* ring) {
+u_int pfring_get_num_tx_slots(pfring *ring) {
   if(ring && ring->dna_get_num_tx_slots) {
     return ring->dna_get_num_tx_slots(ring);
   }
@@ -1346,7 +1350,7 @@ u_int pfring_get_num_tx_slots(pfring* ring) {
 
 /* **************************************************** */
 
-u_int pfring_get_num_rx_slots(pfring* ring) {
+u_int pfring_get_num_rx_slots(pfring *ring) {
   if(ring && ring->dna_get_num_rx_slots) {
     return ring->dna_get_num_rx_slots(ring);
   }
@@ -1356,7 +1360,7 @@ u_int pfring_get_num_rx_slots(pfring* ring) {
 
 /* **************************************************** */
 
-int pfring_copy_tx_packet_into_slot(pfring* ring,
+int pfring_copy_tx_packet_into_slot(pfring *ring,
 				    u_int16_t tx_slot_id, char* buffer, u_int len) {
   if(ring && ring->dna_copy_tx_packet_into_slot)
     return (ring->dna_copy_tx_packet_into_slot(ring, tx_slot_id, buffer, len) != NULL ? 0 : -1);

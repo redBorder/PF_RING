@@ -139,6 +139,14 @@ typedef struct {
 /* ********************************* */
 
 typedef struct {
+  u_int32_t max_packet_size;
+  u_int32_t rx_ring_slots;
+  u_int32_t tx_ring_slots;
+} pfring_card_settings;
+
+/* ********************************* */
+
+typedef struct {
   u_int64_t recv, drop;
 } pfring_stat;
 
@@ -229,7 +237,7 @@ struct __pfring {
   int       (*send_ifindex)                 (pfring *, char *, u_int, u_int8_t, int);
   int       (*send_get_time)                (pfring *, char *, u_int, struct timespec *);
   u_int8_t  (*get_num_rx_channels)          (pfring *);
-  int       (*get_max_packet_size)          (pfring *);
+  int       (*get_card_settings)            (pfring *, pfring_card_settings *);
   int       (*set_sampling_rate)            (pfring *, u_int32_t);
   int       (*get_selectable_fd)            (pfring *);
   int       (*set_direction)                (pfring *, packet_direction);
@@ -360,7 +368,7 @@ struct __pfring {
  * @param flags       It allows several options to be specified on a compact format using bitmaps (see PF_RING_* macros).
  * @return On success a handle is returned, NULL otherwise.
  */
-pfring* pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags);
+pfring *pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags);
 
 /**
  * Same as pfring_open(), but initializes a kernel plugin for packet processing.
@@ -372,7 +380,7 @@ pfring* pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags);
  * @param consumer_data_len  The size of the plugin data.
  * @return On success a handle is returned, NULL otherwise. 
  */
-pfring* pfring_open_consumer(const char *device_name, u_int32_t caplen, u_int32_t flags,
+pfring *pfring_open_consumer(const char *device_name, u_int32_t caplen, u_int32_t flags,
 			     u_int8_t consumer_plugin_id,
 			     char* consumer_data, u_int consumer_data_len);
 
@@ -387,7 +395,7 @@ pfring* pfring_open_consumer(const char *device_name, u_int32_t caplen, u_int32_
  * @return The last index of the ring array that contain a valid ring pointer.
  */
 u_int8_t pfring_open_multichannel(const char *device_name, u_int32_t caplen, 
-				  u_int32_t flags, pfring* ring[MAX_NUM_RX_CHANNELS]);
+				  u_int32_t flags, pfring *ring[MAX_NUM_RX_CHANNELS]);
 
 /**
  * Shutdown a socket.
@@ -1018,14 +1026,14 @@ int pfring_get_link_status(pfring *ring);
  * @return The number of slots. 
  */
 
-u_int pfring_get_num_tx_slots(pfring* ring);
+u_int pfring_get_num_tx_slots(pfring *ring);
 
 /**
  * Return the number of slots in the ingress ring.
  * @param ring The PF_RING handle.
  * @return The number of slots.
  */
-u_int pfring_get_num_rx_slots(pfring* ring);
+u_int pfring_get_num_rx_slots(pfring *ring);
 
 /**
  * Copies a packet into the specified slot of the egress ring.
@@ -1035,7 +1043,7 @@ u_int pfring_get_num_rx_slots(pfring* ring);
  * @param len        The packet length.
  * @return 0 on success, a negative value otherwise.
  */
-int pfring_copy_tx_packet_into_slot(pfring* ring, u_int16_t tx_slot_id, char* buffer, u_int len);
+int pfring_copy_tx_packet_into_slot(pfring *ring, u_int16_t tx_slot_id, char* buffer, u_int len);
 
 /**
  * Return the pointer to the buffer pointed by the packet buffer handle.
@@ -1224,21 +1232,22 @@ char* pfring_format_numbers(double val, char *buf, u_int buf_len, u_int8_t add_d
  * @param enable_tx   Flag to enable tx timestamping.
  * @return 0 on success, a negative value otherwise.
  */
-int pfring_enable_hw_timestamp(pfring* ring, char *device_name, u_int8_t enable_rx, u_int8_t enable_tx);
+int pfring_enable_hw_timestamp(pfring *ring, char *device_name, u_int8_t enable_rx, u_int8_t enable_tx);
 
 /**
  * Return the size of the MTU.
  * @param ring The PF_RING handle.
  * @return The MTU size on success, a negative value otherwise.
  */
-int pfring_get_mtu_size(pfring* ring);
+int pfring_get_mtu_size(pfring *ring);
 
 /**
- * Return the max packet length.
- * @param ring The PF_RING handle.
- * @return The max length on success, a negative value otherwise.
+ * Return NIC settings: max packet length, num rx/tx slots (DNA/ZC only).
+ * @param ring     The PF_RING handle.
+ * @param settings The card settings (output).
+ * @return 0 on success, a negative value otherwise.
  */
-int pfring_get_max_packet_size(pfring* ring);
+int pfring_get_card_settings(pfring *ring, pfring_card_settings *settings);
 
 /**
  * Print a packet (the header with parsing info must be provided). 

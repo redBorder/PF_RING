@@ -207,8 +207,11 @@ static void pfring_dump_dna_stats(pfring* ring) {
 
 /* **************************************************** */
 
-int pfring_dna_get_max_packet_size(pfring *ring) {
-  return ring->dna.dna_dev.mem_info.rx.packet_memory_slot_len;
+int pfring_dna_get_card_settings(pfring *ring, pfring_card_settings *settings) {
+  settings->max_packet_size = ring->dna.dna_dev.mem_info.rx.packet_memory_slot_len;
+  settings->rx_ring_slots = ring->dna.dna_dev.mem_info.rx.packet_memory_num_slots;
+  settings->tx_ring_slots = ring->dna.dna_dev.mem_info.tx.packet_memory_num_slots;
+  return 0;
 }
 
 /* **************************************************** */
@@ -230,7 +233,7 @@ int pfring_dna_open(pfring *ring) {
   ring->poll = pfring_dna_poll;
   ring->set_tx_watermark = pfring_dna_set_tx_watermark;
   ring->set_poll_watermark = pfring_dna_set_poll_watermark;
-  ring->get_max_packet_size = pfring_dna_get_max_packet_size;
+  ring->get_card_settings = pfring_dna_get_card_settings;
 
   ring->set_poll_duration = pfring_mod_set_poll_duration;
   ring->set_channel_id = pfring_mod_set_channel_id;
