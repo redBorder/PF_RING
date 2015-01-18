@@ -111,8 +111,10 @@ static int max_packet_len(Pfring_Context_t *context, char *device, int id, int *
   pfring_get_bound_device_ifindex(ring, &context->ifindexes[id]);
 
   if (ring->zc_device) {
-    max_len = pfring_get_max_packet_size(ring);
-    num_slots = 32768; //TODO get via API
+    pfring_card_settings settings;
+    pfring_get_card_settings(ring, &settings);
+    max_len = settings.max_packet_size;
+    num_slots = settings.rx_ring_slots;
   } else {
     max_len = pfring_get_mtu_size(ring);
     if (max_len == 0) max_len = 9000;
