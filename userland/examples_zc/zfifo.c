@@ -47,7 +47,7 @@
 #define QUEUE_LEN            8192
 
 #define VERY_VERBOSE
-//#ifdef USE_QUEUE
+//#define USE_QUEUE
 
 struct stats {
   u_int64_t __cache_line_padding_p[8];
@@ -61,10 +61,10 @@ pfring_zc_worker *zw;
 pfring_zc_queue **inzq;
 #ifdef USE_QUEUE
 pfring_zc_queue *outzq;
+pfring_zc_pkt_buff *buffer;
 #endif
 pfring_zc_buffer_pool *wsp;
 
-pfring_zc_pkt_buff *buffer;
 
 u_int32_t num_devices = 0;
 int bind_worker_core = -1;
@@ -136,7 +136,13 @@ void print_stats() {
     diff_bytes /= (1000*1000*1000)/8;
     diff_drop = tot_drop-last_tot_drop;
 
+#ifdef VERY_VERBOSE
+#ifdef USE_QUEUE
+    if (pfring_zc_stats(outzq, &stats) == 0)
+      fprintf(stderr, " (%s drops)", pfring_format_numbers((double)stats.drop, buf1, sizeof(buf1), 1));
+#endif
     fprintf(stderr, " (%s Gbps)\n", pfring_format_numbers(((double)diff_bytes/(double)(delta_msec/1000)),  buf1, sizeof(buf1), 1));
+#endif
 
 #ifdef DEBUG
     fprintf(stderr, "%d Out-Of-Order packets (max roll back %ju nsec)\n",
@@ -177,15 +183,16 @@ void printHelp(void) {
   printf("Using PFRING_ZC v.%s\n", pfring_zc_version());
   printf("A master thread reordering packets from multiple interfaces with\n"
          "hw timestamps support, and delivering them to a consumer thread. (experimental)\n\n");
+  printf("Usage:    zfifo -i <device> -c <cluster id>\n"
+	 "                [-h] [-r <core id>] [-g <core id>] [-a]\n\n");
   printf("-h              Print this help\n");
   printf("-i <devices>    Comma-separated list of devices\n");
   printf("-c <cluster id> Cluster id\n");
-  printf("-r <id>         Sorter thread core affinity\n");
-  //  printf("-t <id>         Timer thread core affinity\n");
-  printf("-g <id>         Consumer thread core affinity\n");
+  printf("-r <core id>    Sorter thread core affinity\n");
+  //printf("-t <core id>    Timer thread core affinity\n");
+  printf("-g <core id>    Consumer thread core affinity\n");
   printf("-a              Active packet wait\n");
-
-  printf("\n\nExample: zfifo -i zc:eth1,zc:eth2 -c 10 -r 1 -g 2\n");
+  printf("\nExample: zfifo -i zc:eth1,zc:eth2 -c 10 -r 1 -g 2\n");
   exit(-1);
 }
 
@@ -291,7 +298,10 @@ int main(int argc, char* argv[]) {
     cluster_id, 
     max_packet_len(devices[0]),
     0,
-    (num_devices * (MAX_CARD_SLOTS + PREFETCH_BUFFERS)) + QUEUE_LEN + 1,
+#ifdef USE_QUEUE
+    QUEUE_LEN + 1 + 
+#endif
+    (num_devices * (MAX_CARD_SLOTS + PREFETCH_BUFFERS)),
     numa_node_of_cpu(bind_worker_core), 
     NULL /* auto hugetlb mountpoint */ 
   );
@@ -304,13 +314,6 @@ int main(int argc, char* argv[]) {
 
   inzq = calloc(num_devices,     sizeof(pfring_zc_queue *));
 
-  buffer = pfring_zc_get_packet_handle(zc);
-
-  if (buffer == NULL) {
-    fprintf(stderr, "pfring_zc_get_packet_handle error\n");
-    return -1;
-  }
-
   for (i = 0; i < num_devices; i++) {
     inzq[i] = pfring_zc_open_device(zc, devices[i], rx_only, PF_RING_ZC_DEVICE_HW_TIMESTAMP);
 
@@ -321,7 +324,21 @@ int main(int argc, char* argv[]) {
     }
   }
 
+  wsp = pfring_zc_create_buffer_pool(zc, num_devices * PREFETCH_BUFFERS);
+
+  if (wsp == NULL) {
+    fprintf(stderr, "pfring_zc_create_buffer_pool error\n");
+    return -1;
+  }
+
 #ifdef USE_QUEUE
+  buffer = pfring_zc_get_packet_handle(zc);
+
+  if (buffer == NULL) {
+    fprintf(stderr, "pfring_zc_get_packet_handle error\n");
+    return -1;
+  }
+
   outzq = pfring_zc_create_queue(zc, QUEUE_LEN);
 
   if(outzq == NULL) {
@@ -329,13 +346,6 @@ int main(int argc, char* argv[]) {
     return -1;
   }
 #endif
-
-  wsp = pfring_zc_create_buffer_pool(zc, num_devices * PREFETCH_BUFFERS);
-
-  if (wsp == NULL) {
-    fprintf(stderr, "pfring_zc_create_buffer_pool error\n");
-    return -1;
-  }
 
   signal(SIGINT,  sigproc);
   signal(SIGTERM, sigproc);

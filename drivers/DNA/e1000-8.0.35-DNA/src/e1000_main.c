@@ -2059,8 +2059,8 @@ static void e1000_clean_rx_ring(struct e1000_adapter *adapter,
 	      tx_info.packet_memory_slot_len      = adapter->dna.packet_slot_len;
 	      tx_info.descr_packet_memory_tot_len = 2 * tx_ring->size;
 
-	      hook->ring_dna_device_handler(remove_device_mapping,
-					    dna_v1,
+	      hook->zc_dev_handler(remove_device_mapping,
+					    dna_driver,
 					    &rx_info,
 					    &tx_info,
 					    0, //adapter->dna.rx_packet_memory,

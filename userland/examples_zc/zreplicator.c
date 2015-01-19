@@ -165,16 +165,13 @@ void sigproc(int sig) {
 void printHelp(void) {
   printf("zreplicator - (C) 2014 ntop.org\n");
   printf("Using PFRING_ZC v.%s\n", pfring_zc_version());
-
   printf("Read packets from multiple ingress devices and replicate it on multipe egress devices.\n\n");
-
-  printf("Usage:  zreplicator [-h] -i <device> -o <device> -c <cluster id> [-g <core>]\n");
-
+  printf("Usage: zreplicator -i <device> -o <device> -c <cluster id> [-h] [-g <core id>] [-a]\n\n");
   printf("-h              Print this help\n");
   printf("-i <device>     Ingress devices (comma-separated list)\n");
   printf("-o <device>     Egress devices (comma-separated list)\n");
   printf("-c <cluster id> Cluster id\n");
-  printf("-g <core_id>    Bind this app to a core\n");
+  printf("-g <core id>    Bind this app to a core\n");
   printf("-a              Active packet wait\n");
   exit(-1);
 }

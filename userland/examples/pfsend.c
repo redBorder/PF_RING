@@ -342,6 +342,7 @@ int main(int argc, char* argv[]) {
   u_int num_pcap_pkts = 0;
   int send_full_pcap_once = 1;
   char *pidFileName = NULL;
+  int send_error_once = 1;
 
   while((c = getopt(argc, argv, "b:dhi:n:g:l:af:r:vm:P:w:zx:")) != -1) {
     switch(c) {
@@ -692,22 +693,25 @@ int main(int argc, char* argv[]) {
     else
       rc = pfring_send(pd, tosend->pkt, tosend->len, gbit_s < 0 ? 1 : 0 /* Don't flush (it does PF_RING automatically) */);
 
-    if(unlikely(verbose))
+    if (unlikely(verbose))
       printf("[%d] pfring_send(%d) returned %d\n", i, tosend->len, rc);
 
-    if(rc == PF_RING_ERROR_INVALID_ARGUMENT) {
-      printf("Attempting to send invalid packet [len: %u][MTU: %u]%s\n",
-	     tosend->len, pd->mtu_len,
-      	     if_index != -1 ? " or using a wrong interface id" : "");
-    } else if(rc < 0) {
+    if (rc == PF_RING_ERROR_INVALID_ARGUMENT) {
+      if (send_error_once) {
+        printf("Attempting to send invalid packet [len: %u][MTU: %u]%s\n",
+	       tosend->len, pd->mtu_len,
+      	       if_index != -1 ? " or using a wrong interface id" : "");
+        send_error_once = 0;
+      }
+    } else if (rc < 0) {
       /* Not enough space in buffer */
       if(!active_poll)
 	usleep(1);
       goto redo;
+    } else {
+      num_pkt_good_sent++;
+      num_bytes_good_sent += tosend->len + 24 /* 8 Preamble + 4 CRC + 12 IFG */;
     }
-
-    num_pkt_good_sent++;
-    num_bytes_good_sent += tosend->len + 24 /* 8 Preamble + 4 CRC + 12 IFG */;
 
     tosend = tosend->next;
 

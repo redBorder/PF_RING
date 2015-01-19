@@ -198,7 +198,7 @@ static void print_adv_rx_descr(union ixgbe_adv_rx_desc	*descr) {
 
 /* ********************************** */
 
-dna_device_model dna_model(struct ixgbe_hw *hw){
+zc_dev_model dna_model(struct ixgbe_hw *hw){
   switch (hw->mac.type) {
     case ixgbe_mac_82598EB:
       return intel_ixgbe_82598;
@@ -619,8 +619,8 @@ void dna_ixgbe_alloc_rx_buffers(struct ixgbe_ring *rx_ring) {
   tx_info.packet_memory_slot_len      = tx_ring->dna.packet_slot_len;
   tx_info.descr_packet_memory_tot_len = 2 * tx_ring->size;
 
-  hook->ring_dna_device_handler(add_device_mapping,
-				dna_v1,
+  hook->zc_dev_handler(add_device_mapping,
+				dna_driver,
   				&rx_info,
 				&tx_info,
 				rx_ring->dna.rx_tx.rx.packet_memory,

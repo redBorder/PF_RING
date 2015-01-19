@@ -683,11 +683,13 @@ static int pfring_promisc(const char *device, int set_promisc) {
 /* ******************************* */
 
 int pfring_set_if_promisc(const char *device, int set_promisc) {
-  char name_copy[256], *elem;
+  char name_copy[256], *elem, *pos;
   int ret = 0;
 
   snprintf(name_copy, sizeof(name_copy), "%s", device);
-  elem = strtok(name_copy, ";,");
+
+  pos = NULL;
+  elem = strtok_r(name_copy, ";,", &pos);
 
   while(elem != NULL) {
     char *at = strchr(elem, '@');
@@ -698,7 +700,7 @@ int pfring_set_if_promisc(const char *device, int set_promisc) {
 
     if(ret < 0) return(ret);
 
-    elem = strtok(NULL, ";,");
+    elem = strtok_r(NULL, ";,", &pos);
   }
 
   return(ret);

@@ -67,10 +67,6 @@
 #define SO_SET_POLL_WATERMARK            117
 #define SO_SET_VIRTUAL_FILTERING_DEVICE  118
 #define SO_REHASH_RSS_PACKET             119
-#define SO_SET_VPFRING_HOST_EVENTFD      120 /* host  to guest */
-#define SO_SET_VPFRING_GUEST_EVENTFD     121 /* guest to host (unused) */
-#define SO_SET_VPFRING_CLEAN_EVENTFDS    122
-#define SO_ATTACH_USERSPACE_RING         123
 #define SO_SHUTDOWN_RING                 124
 #define SO_PURGE_IDLE_RULES              125 /* inactivity (sec) */
 #define SO_SET_SOCKET_MODE               126
@@ -289,6 +285,7 @@ struct pfring_extended_pkthdr {
 #define PKT_FLAGS_CHECKSUM_OK      1 << 1 /* Valid checksum (with IP/TCP checksum offload enabled) */
 #define PKT_FLAGS_IP_MORE_FRAG     1 << 2 /* IP More fragments flag set */
 #define PKT_FLAGS_IP_FRAG_OFFSET   1 << 3 /* IP fragment offset set (not 0) */
+#define PKT_FLAGS_VLAN_HWACCEL     1 << 4 /* VLAN stripped by hw */
   u_int32_t flags;
   /* --- short header ends here --- */
   u_int8_t rx_direction;   /* 1=RX: packet received by the NIC, 0=TX: packet transmitted by the NIC */
@@ -348,8 +345,9 @@ void term_lockless_list(lockless_list *l, u_int8_t free_memory);
 typedef struct {
   u_int8_t smac[ETH_ALEN], dmac[ETH_ALEN]; /* Use '0' (zero-ed MAC address) for any MAC address.
 					      This is applied to both source and destination. */
-  u_int16_t vlan_id;                   /* Use '0' for any vlan */
-  u_int8_t  proto;                     /* Use 0 for 'any' protocol */
+  u_int16_t vlan_id;                   /* Use 0 for any vlan */
+  u_int16_t eth_type;		       /* Use 0 for any ethernet type */
+  u_int8_t  proto;                     /* Use 0 for any l3 protocol */
   ip_addr   shost, dhost;              /* User '0' for any host. This is applied to both source and destination. */
   ip_addr   shost_mask, dhost_mask;    /* IPv4/6 network mask */
   u_int16_t sport_low, sport_high;     /* All ports between port_low...port_high means 'any' port */
@@ -419,12 +417,6 @@ typedef enum {
   send_only_mode,
   recv_only_mode
 } socket_mode;
-
-typedef enum {
-  standard_linux_path = 0,           /* Business as usual */
-  driver2pf_ring_transparent = 1,    /* Packets are still delivered to the kernel */
-  driver2pf_ring_non_transparent = 2 /* Packets not delivered to the kernel */
-} direct2pf_ring;
 
 typedef struct {
   unsigned long jiffies_last_match;  /* Jiffies of the last rule match (updated by pf_ring) */
@@ -636,8 +628,10 @@ typedef struct flowSlotInfo {
   u_int16_t version, sample_rate;
   u_int32_t min_num_slots, slot_len, data_len;
   u_int64_t tot_mem;
-  u_int64_t insert_off, kernel_remove_off;
-  u_int64_t tot_pkts, tot_lost, tot_insert;
+  volatile u_int64_t insert_off;
+  u_int64_t kernel_remove_off;
+  u_int64_t tot_pkts, tot_lost;
+  volatile u_int64_t tot_insert;
   u_int64_t kernel_tot_read;
   u_int64_t tot_fwd_ok, tot_fwd_notok;
   u_int64_t good_pkt_sent, pkt_send_error;
@@ -648,11 +642,9 @@ typedef struct flowSlotInfo {
   /* <-- 4096 bytes here, to get a page aligned block writable by kernel side only */
 
   /* second page, managed by userland */
-  u_int64_t tot_read;
-  u_int64_t remove_off /* managed by userland */;
-  u_int32_t vpfring_guest_flags; /* used by vPFRing */
-  u_int32_t userspace_ring_flags;
-  char u_padding[4096-24];
+  volatile u_int64_t tot_read;
+  volatile u_int64_t remove_off /* managed by userland */;
+  char u_padding[4096-16];
   /* <-- 8192 bytes here, to get a page aligned block writable by userland only */
 } FlowSlotInfo;
 
@@ -695,12 +687,12 @@ struct ring_sock {
 
 /* *********************************** */
 
-typedef int (*dna_wait_packet)(void *adapter, int mode);
-typedef void (*dna_device_notify)(void *rx_adapter_ptr, void *tx_adapter_ptr, u_int8_t device_in_use);
+typedef int (*zc_dev_wait_packet)(void *adapter, int mode);
+typedef void (*zc_dev_notify)(void *rx_adapter_ptr, void *tx_adapter_ptr, u_int8_t device_in_use);
 
 typedef enum {
   add_device_mapping = 0, remove_device_mapping
-} dna_device_operation;
+} zc_dev_operation;
 
 typedef enum {
   intel_e1000e = 0,
@@ -714,48 +706,35 @@ typedef enum {
   intel_ixgbe_82599,
   intel_igb_82580,
   intel_e1000,
-  intel_ixgbe_82599_ts
-} dna_device_model;
+  intel_ixgbe_82599_ts,
+  intel_i40e
+} zc_dev_model;
 
 typedef struct {
-  u_int32_t packet_memory_num_chunks;
-  u_int32_t packet_memory_chunk_len;
+  u_int32_t packet_memory_num_chunks; /* dna only */
+  u_int32_t packet_memory_chunk_len;  /* dna only */
   u_int32_t packet_memory_num_slots;
   u_int32_t packet_memory_slot_len;
   u_int32_t descr_packet_memory_tot_len;
+  u_int16_t registers_index;
+  u_int16_t stats_index;
 } mem_ring_info;
 
 typedef enum {
-  dna_v1 = 0,
-  dna_v2
-} dna_version;
+  dna_driver = 0,
+  zc_driver
+} zc_driver_version;
 
 typedef struct {
-  dna_version version;
+  zc_driver_version version;
   mem_ring_info rx;
   mem_ring_info tx;
   u_int32_t phys_card_memory_len;
-  dna_device_model device_model;
-} dna_memory_slots;
+  zc_dev_model device_model;
+} zc_memory_info;
 
 typedef struct {
-  u_int64_t rx_descr_head, rx_descr_tail;
-  u_char __cacheline_padding[128-16];
-  u_int64_t rx_descr_next;
-} dna_indexes;
-
-typedef struct {
-  u_int64_t rx_descr_head, rx_descr_tail;
-} tnapi_indexes;
-
-typedef struct {
-  volatile u_int32_t pkt_len;  /* 0 = no packet received */
-  u_int32_t pkt_hash; /* RSS */
-  /* TODO We need to add the timestamp at some point */
-} dna_descriptor;
-
-typedef struct {
-  dna_memory_slots mem_info;
+  zc_memory_info mem_info;
   u_int16_t channel_id;
   unsigned long rx_packet_memory[DNA_MAX_NUM_CHUNKS];  /* Invalid in userland */
   unsigned long tx_packet_memory[DNA_MAX_NUM_CHUNKS];  /* Invalid in userland */
@@ -772,19 +751,19 @@ typedef struct {
 #endif
   u_int8_t *interrupt_received, in_use;
   void *rx_adapter_ptr, *tx_adapter_ptr;
-  dna_wait_packet wait_packet_function_ptr;
-  dna_device_notify usage_notification;
-} dna_device;
+  zc_dev_wait_packet wait_packet_function_ptr;
+  zc_dev_notify usage_notification;
+} zc_dev_info;
 
 #ifndef IFNAMSIZ
 #define IFNAMSIZ 16
 #endif
 
 typedef struct {
-  dna_device_operation operation;
+  zc_dev_operation operation;
   char device_name[IFNAMSIZ];
   int32_t channel_id;
-} dna_device_mapping;
+} zc_dev_mapping;
 
 /* ************************************************* */
 
@@ -915,21 +894,21 @@ typedef struct {
   struct list_head list;
 } ring_cluster_element;
 
-#define MAX_NUM_DNA_BOUND_SOCKETS MAX_NUM_RING_SOCKETS
+#define MAX_NUM_ZC_BOUND_SOCKETS MAX_NUM_RING_SOCKETS
 
 typedef struct {
   u8 num_bound_sockets;
-  dna_device dev;
+  zc_dev_info dev;
   struct list_head list;
   /*
-    In the DNA world only one application can open and enable the 
+    In the ZC world only one application can open and enable the 
     device@channel per direction. The array below is used to keep
-    pointers to the sockets bound to device@channel in order to
-    enable no more than one socket for RX and one for TX.
+    pointers to the sockets bound to device@channel.
+    No more than one socket can be enabled for RX and one for TX.
   */
-  struct pf_ring_socket *bound_sockets[MAX_NUM_DNA_BOUND_SOCKETS];
+  struct pf_ring_socket *bound_sockets[MAX_NUM_ZC_BOUND_SOCKETS];
   rwlock_t lock;
-} dna_device_list;
+} zc_dev_list;
 
 #define MAX_NUM_IFIDX                       1024
 
@@ -944,9 +923,9 @@ typedef struct {
 
 typedef struct {
   /* DNA */
-  u_int num_dna_rx_queues; /* 0 for non DNA devices */
-  u_int8_t is_dna_device;
-  dna_device_model dna_device_model;
+  u_int num_zc_dev_rx_queues; /* 0 for non DNA devices */
+  u_int8_t is_zc_device;
+  zc_dev_model zc_dev_model;
 
   pfring_device_type device_type; /* Device Type */
 
@@ -979,29 +958,6 @@ typedef struct {
 struct ring_element {
   struct list_head  list;
   struct sock      *sk;
-};
-
-/* ************************************************* */
-
-typedef enum {
-  userspace_ring_consumer = 0,
-  userspace_ring_producer
-} userspace_ring_client_type;
-
-struct pf_userspace_ring {
-  u_int16_t  id;
-
-  u_int16_t  slot_header_len;
-  u_int32_t  bucket_len;
-
-  u_int32_t  tot_mem;
-  u_char      *ring_memory;
-
-  atomic_t   users[2]; /* producers/consumers */
-
-  wait_queue_head_t *consumer_ring_slots_waitqueue;
-
-  struct list_head list;
 };
 
 /* ************************************************* */
@@ -1146,8 +1102,8 @@ struct pf_ring_socket {
   } tx;
 
   /* Direct NIC Access */
-  dna_device *dna_device;
-  dna_device_list *dna_device_entry;
+  zc_dev_info *zc_dev;
+  zc_dev_list *zc_device_entry;
 
   /* Extra DMA memory */
   struct dma_memory_info *extra_dma_memory;
@@ -1208,14 +1164,6 @@ struct pf_ring_socket {
   /* Kernel consumer */
   u_int8_t kernel_consumer_plugin_id; /* If != 0 it identifies a plugin responsible for consuming packets */
   char *kernel_consumer_options, *kernel_consumer_private;
-
-#ifdef VPFRING_SUPPORT
-  struct eventfd_ctx *vpfring_host_eventfd_ctx;   /* host  -> guest */
-#endif /* VPFRING_SUPPORT */
-
-  /* UserSpace RING */
-  userspace_ring_client_type userspace_ring_type;
-  struct pf_userspace_ring *userspace_ring;
 
   /* DNA cluster */
   struct dna_cluster *dna_cluster;
@@ -1352,8 +1300,8 @@ struct pfring_plugin_registration {
 typedef int   (*register_pfring_plugin)(struct pfring_plugin_registration *reg);
 typedef int   (*unregister_pfring_plugin)(u_int16_t pfring_plugin_id);
 typedef u_int (*read_device_pfring_free_slots)(int ifindex);
-typedef void  (*handle_ring_dna_device)(dna_device_operation operation,
-					dna_version version,
+typedef void  (*handle_pfring_zc_dev)(zc_dev_operation operation,
+					zc_driver_version version,
 					mem_ring_info *rx_info,
 					mem_ring_info *tx_info,
 					unsigned long *rx_packet_memory,
@@ -1365,13 +1313,13 @@ typedef void  (*handle_ring_dna_device)(dna_device_operation operation,
 					u_int channel_id,
 					struct net_device *netdev,
 					struct device *hwdev,
-					dna_device_model device_model,
+					zc_dev_model device_model,
 					u_char *device_address,
 					wait_queue_head_t *packet_waitqueue,
 					u_int8_t *interrupt_received,
 					void *rx_adapter_ptr, void *tx_adapter_ptr,
-					dna_wait_packet wait_packet_function_ptr,
-					dna_device_notify dev_notify_function_ptr);
+					zc_dev_wait_packet wait_packet_function_ptr,
+					zc_dev_notify dev_notify_function_ptr);
 typedef u_int8_t (*pfring_tx_pkt)(void* private_data, char *pkt, u_int pkt_len);
 
 extern register_pfring_plugin get_register_pfring_plugin(void);
@@ -1386,10 +1334,9 @@ extern int do_register_pfring_plugin(struct pfring_plugin_registration *reg);
 extern int do_unregister_pfring_plugin(u_int16_t pfring_plugin_id);
 extern int do_read_device_pfring_free_slots(int deviceidx);
 
-extern handle_ring_dna_device get_ring_dna_device_handler(void);
-extern void set_ring_dna_device_handler(handle_ring_dna_device
-					the_dna_device_handler);
-extern void do_ring_dna_device_handler(dna_device_operation operation,
+extern handle_pfring_zc_dev get_ring_zc_dev_handler(void);
+extern void set_ring_zc_dev_handler(handle_pfring_zc_dev the_zc_device_handler);
+extern void do_ring_zc_dev_handler(zc_dev_operation operation,
 				       mem_ring_info *rx_info,
 				       mem_ring_info *tx_info,
 			 	       unsigned long *rx_packet_memory,
@@ -1401,13 +1348,13 @@ extern void do_ring_dna_device_handler(dna_device_operation operation,
 				       u_int channel_id,
 				       struct net_device *netdev,
 				       struct device *hwdev,
-				       dna_device_model device_model,
+				       zc_dev_model device_model,
 				       u_char *device_address,
 				       wait_queue_head_t * packet_waitqueue,
 				       u_int8_t * interrupt_received,
 				       void *rx_adapter_ptr, void *tx_adapter_ptr,
-				       dna_wait_packet wait_packet_function_ptr,
-				       dna_device_notify dev_notify_function_ptr);
+				       zc_dev_wait_packet wait_packet_function_ptr,
+				       zc_dev_notify dev_notify_function_ptr);
 
 typedef int (*handle_ring_skb)(struct sk_buff *skb, u_char recv_packet,
 			       u_char real_skb, u_int8_t *skb_reference_in_use,
@@ -1425,14 +1372,13 @@ struct pfring_hooks {
 		     It should be set to PF_RING
 		     and is MUST be the first one on this struct
 		   */
-  unsigned int *transparent_mode;
   void *rx_private_data, *tx_private_data;
   handle_ring_skb ring_handler;
   handle_ring_buffer buffer_ring_handler;
   handle_add_hdr_to_ring buffer_add_hdr_to_ring;
   register_pfring_plugin pfring_registration;
   unregister_pfring_plugin pfring_unregistration;
-  handle_ring_dna_device ring_dna_device_handler;
+  handle_pfring_zc_dev zc_dev_handler;
   read_device_pfring_free_slots pfring_free_device_slots;
   pfring_tx_pkt pfring_send_packet;
 };
@@ -1604,21 +1550,5 @@ struct pcaplike_pkthdr {
 #endif /* __KERNEL__  */
 
 /* *********************************** */
-
-struct vpfring_eventfd_info {
-  u_int32_t id; /* an id (unused now, but maybe useful in future) */
-  int32_t fd;
-};
-
-/* Values for the FlowSlotInfo.vpfring_guest_flags bitmap */
-#define VPFRING_GUEST_NO_INTERRUPT 1
-
-/* Host event IDs */
-#define VPFRING_HOST_EVENT_RX_INT 0
-
-/* *********************************** */
-
-/* bit masks for the FlowSlotInfo.userspace_ring_flags bitmap */
-#define USERSPACE_RING_NO_INTERRUPT 1
 
 #endif /* __RING_H */

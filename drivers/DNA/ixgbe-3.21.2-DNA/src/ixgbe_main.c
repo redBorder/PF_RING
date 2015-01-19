@@ -5962,8 +5962,8 @@ void ixgbe_clean_rx_ring(struct ixgbe_ring *rx_ring)
 				tx_info.packet_memory_slot_len	 = tx_ring->dna.packet_slot_len;
 				tx_info.descr_packet_memory_tot_len = 2 * tx_ring->size;
 
-				hook->ring_dna_device_handler(remove_device_mapping,
-					dna_v1,
+				hook->zc_dev_handler(remove_device_mapping,
+					dna_driver,
 					&rx_info,
 					&tx_info,
 					0, //rx_ring->dna.rx_tx.rx.packet_memory,

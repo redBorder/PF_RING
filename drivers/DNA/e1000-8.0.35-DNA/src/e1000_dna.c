@@ -443,8 +443,8 @@ void alloc_dna_memory(struct e1000_adapter *adapter) {
       tx_info.descr_packet_memory_tot_len = 2 * tx_ring->size;
 
       /* Register with PF_RING */
-      hook->ring_dna_device_handler(add_device_mapping,
-				    dna_v1,
+      hook->zc_dev_handler(add_device_mapping,
+				    dna_driver,
   				    &rx_info,
 				    &tx_info,
 				    adapter->dna.rx_packet_memory,

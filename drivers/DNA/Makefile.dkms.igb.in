@@ -7,7 +7,8 @@ add: remove
 	cd @IGB@-@IGB_VERSION@-DNA/src ; cp ../../../../kernel/linux/pf_ring.h /usr/src/@IGB@-dna-@IGB_VERSION@
 	sed -i -e 's|../../../../kernel/linux/pf_ring.h|pf_ring.h|g' /usr/src/@IGB@-dna-@IGB_VERSION@/*.c
 	sed -i -e 's|../../../../kernel/linux/pf_ring.h|pf_ring.h|g' /usr/src/@IGB@-dna-@IGB_VERSION@/*.h
-	sed -i -e 's|DRIVER_NAME=@IGB@|DRIVER_NAME=@IGB@-dna|g' /usr/src/@IGB@-dna-@IGB_VERSION@/Makefile
+	#sed -i -e 's|DRIVER_NAME=@IGB@|DRIVER_NAME=@IGB@-dna|g' /usr/src/@IGB@-dna-@IGB_VERSION@/Makefile
+	sed -i '/EXTRA_CFLAGS += -DDRIVER_\$$/a DRIVER_NAME=@IGB@-dna' /usr/src/@IGB@-dna-@IGB_VERSION@/Makefile
 	cp dkms.conf.@IGB@ /usr/src/@IGB@-dna-@IGB_VERSION@/dkms.conf
 	dkms add -m @IGB@-dna -v @IGB_VERSION@
 

@@ -141,6 +141,8 @@ void printHelp(void) {
   printf("zbounce - (C) 2014 ntop.org\n");
   printf("Using PFRING_ZC v.%s\n", pfring_zc_version());
   printf("A packet forwarder application between interfaces.\n\n");
+  printf("Usage:  zbounce -i <device> -o <device> -c <cluster id> [-b]\n"
+	 "                [-h] [-g <core id>] [-f] [-v] [-a]\n\n");
   printf("-h              Print this help\n");
   printf("-i <device>     Ingress device name\n");
   printf("-o <device>     Egress device name\n");
@@ -182,8 +184,9 @@ void *packet_consumer_thread(void *_i) {
 
       i->numPkts++;
       i->numBytes += i->tmpbuff->len + 24; /* 8 Preamble + 4 CRC + 12 IFG */
-
-      while (unlikely(pfring_zc_send_pkt(i->outzq, &i->tmpbuff, flush_packet) < 0 && !do_shutdown))
+      
+      errno = 0;
+      while (unlikely(pfring_zc_send_pkt(i->outzq, &i->tmpbuff, flush_packet) < 0 && errno != EMSGSIZE && !do_shutdown))
         if (wait_for_packet) usleep(1);
 
       tx_queue_not_empty = 1;

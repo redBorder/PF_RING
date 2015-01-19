@@ -963,7 +963,11 @@ static inline void e1000_rx_hash(struct net_device *netdev, __le32 rss,
 				 struct sk_buff *skb)
 {
 	if (netdev->features & NETIF_F_RXHASH)
+#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,15,0) )
 		skb->rxhash = le32_to_cpu(rss);
+#else
+		skb->hash = le32_to_cpu(rss);
+#endif
 }
 
 #endif
@@ -1874,8 +1878,8 @@ static void e1000_clean_rx_ring(struct e1000_ring *rx_ring)
 				tx_info.packet_memory_slot_len	 = adapter->dna.packet_slot_len;
 				tx_info.descr_packet_memory_tot_len = 2 * tx_ring->size;
 
-				hook->ring_dna_device_handler(remove_device_mapping,
-					dna_v1,
+				hook->zc_dev_handler(remove_device_mapping,
+					dna_driver,
 					&rx_info,
 					&tx_info,
 					0, //adapter->dna.rx_packet_memory,

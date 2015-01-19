@@ -7,7 +7,8 @@ add: veryclean
 	cd @IXGBE@-@IXGBE_VERSION@-DNA/src ; cp ../../../../kernel/linux/pf_ring.h /usr/src/@IXGBE@-dna-@IXGBE_VERSION@
 	sed -i -e 's|../../../../kernel/linux/pf_ring.h|pf_ring.h|g' /usr/src/@IXGBE@-dna-@IXGBE_VERSION@/*.c
 	sed -i -e 's|../../../../kernel/linux/pf_ring.h|pf_ring.h|g' /usr/src/@IXGBE@-dna-@IXGBE_VERSION@/*.h
-	sed -i -e 's|DRIVER_NAME=@IXGBE@|DRIVER_NAME=@IXGBE@-dna|g' /usr/src/@IXGBE@-dna-@IXGBE_VERSION@/Makefile
+	#sed -i -e 's|DRIVER_NAME=@IXGBE@|DRIVER_NAME=@IXGBE@-dna|g' /usr/src/@IXGBE@-dna-@IXGBE_VERSION@/Makefile
+	sed -i '/EXTRA_CFLAGS += -DDRIVER_\$$/a DRIVER_NAME=@IXGBE@-dna' /usr/src/@IXGBE@-dna-@IXGBE_VERSION@/Makefile
 	cp dkms.conf.@IXGBE@ /usr/src/@IXGBE@-dna-@IXGBE_VERSION@/dkms.conf 
 	dkms add -m @IXGBE@-dna -v @IXGBE_VERSION@
 

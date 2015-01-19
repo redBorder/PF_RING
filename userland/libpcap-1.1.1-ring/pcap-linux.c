@@ -1390,6 +1390,7 @@ pcap_activate_linux(pcap_t *handle)
 	 */
 #ifdef HAVE_PF_RING
 	if(handle->ring != NULL) {
+        	pfring_enable_ring(handle->ring);
 		handle->selectable_fd = pfring_get_selectable_fd(handle->ring);
 	} else
 #endif
@@ -1498,8 +1499,8 @@ pcap_read_packet(pcap_t *handle, pcap_handler callback, u_char *userdata)
 	  int wait_for_incoming_packet = (pf_ring_active_poll || (handle->md.timeout < 0)) ? 0 : 1;
 	  int ret = 0;
 
-	  if(!handle->ring->enabled)
-	    pfring_enable_ring(handle->ring);
+	  // This does not work with ZC
+	  // if(!handle->ring->enabled) pfring_enable_ring(handle->ring);
 
 	  do {
 	    if (handle->break_loop) {
@@ -1932,7 +1933,8 @@ pcap_inject_linux(pcap_t *handle, const void *buf, size_t size)
 
 #ifdef HAVE_PF_RING
 	if(handle->ring != NULL) {
-	  if(!handle->ring->enabled) pfring_enable_ring(handle->ring);
+	  // This does not work with ZC
+          //if(!handle->ring->enabled) pfring_enable_ring(handle->ring);
 	  return(pfring_send(handle->ring, (char*)buf, size, 1 /* FIX: set it to 1 */));
 	}
 #endif
@@ -1974,7 +1976,7 @@ pcap_stats_linux(pcap_t *handle, struct pcap_stat *stats)
 	    /* tcpdump reports ps_drop as "packets dropped by kernel",
 	     * that is wrong with DNA, so we should set ps_ifdrop. 
 	     * But snort ignores ps_ifdrop, so it is best to set ps_drop in any case. */
-	    if (handle->ring->dna.dna_mapped_device)
+	    if (handle->ring->zc_device)
 	      handle->md.stat.ps_ifdrop = ring_stats.drop;
 	    else
 #else
@@ -2544,7 +2546,7 @@ pcap_setfilter_linux_common(pcap_t *handle, struct bpf_program *filter,
 #ifdef HAVE_PF_RING
 	if(can_filter_in_kernel && handle->ring != NULL) {
 		int if_index;
-		if (handle->ring->dna.dna_mapped_device /* DNA: we need to filter in userland as kernel is bypassed */
+		if (handle->ring->zc_device /* DNA/ZC: we need to filter in userland as kernel is bypassed */
 		    || pfring_get_bound_device_ifindex(handle->ring, &if_index) != 0 /* not a physical device */)
 			can_filter_in_kernel = 0;
 	}

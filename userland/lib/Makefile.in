@@ -41,7 +41,7 @@ NT_OBJS  = @NT_OBJS@
 #
 # Object files
 #
-OBJS      = pfring.o pfring_mod.o pfring_utils.o pfring_mod_stack.o pfring_mod_usring.o pfring_hw_filtering.o \
+OBJS      = pfring.o pfring_mod.o pfring_utils.o pfring_mod_stack.o pfring_hw_filtering.o \
 	    pfring_hw_timestamp.o pfring_mod_sysdig.o ${ZERO_OBJS} ${DNA_OBJS} ${PF_RING_ZC_OBJS} ${DAG_OBJS} ${NT_OBJS}
 
 #
@@ -87,9 +87,6 @@ extract_zero_lib:
 
 extract_pfring_zc_lib:
 	ar x @PF_RING_ZC_LIB@
-
-extract_userspace_ring_lib:
-	ar x @USERSPACE_RING_LIB@
 
 extract_nt_lib:
 	ar x @MOD_NT_LIB@

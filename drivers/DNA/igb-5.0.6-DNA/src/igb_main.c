@@ -4316,8 +4316,8 @@ void igb_clean_rx_ring(struct igb_ring *rx_ring)
 				tx_info.packet_memory_slot_len	 = tx_ring->dna.packet_slot_len;
 				tx_info.descr_packet_memory_tot_len = 2 * tx_ring->size;
 
-				hook->ring_dna_device_handler(remove_device_mapping,
-					dna_v1,
+				hook->zc_dev_handler(remove_device_mapping,
+					dna_driver,
 					&rx_info,
 					&tx_info,
 					0, //rx_ring->dna.rx_tx.rx.packet_memory,
@@ -7631,7 +7631,11 @@ static inline void igb_rx_hash(struct igb_ring *ring,
 			       struct sk_buff *skb)
 {
 	if (netdev_ring(ring)->features & NETIF_F_RXHASH)
+#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3,15,0) )
 		skb->rxhash = le32_to_cpu(rx_desc->wb.lower.hi_dword.rss);
+#else
+		skb->hash = le32_to_cpu(rx_desc->wb.lower.hi_dword.rss);
+#endif
 }
 
 #endif

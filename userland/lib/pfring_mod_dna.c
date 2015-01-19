@@ -26,9 +26,9 @@
 /* ******************************* */
 
 static int pfring_map_dna_device(pfring *ring,
-				 dna_device_operation operation,
+				 zc_dev_operation operation,
 				 char *device_name) {
-  dna_device_mapping mapping;
+  zc_dev_mapping mapping;
 
   if(ring->dna.last_dna_operation == operation) {
     fprintf(stderr, "%s(): operation (%s) already performed\n",
@@ -159,11 +159,11 @@ int pfring_dna_recv(pfring *ring, u_char** buffer, u_int buffer_len,
 
   if(pkt && (hdr->len > 0)) {
     if(unlikely(ring->sampling_rate > 1)) {
-      if (likely(ring->dna.sampling_counter > 0)) {
-        ring->dna.sampling_counter--;
+      if (likely(ring->sampling_counter > 0)) {
+        ring->sampling_counter--;
 	goto redo_pfring_recv;
       } else {
-        ring->dna.sampling_counter = ring->sampling_rate-1;
+        ring->sampling_counter = ring->sampling_rate-1;
       }
     }
 
@@ -183,10 +183,10 @@ int pfring_dna_recv(pfring *ring, u_char** buffer, u_int buffer_len,
   return(0);
 }
 
-/* ******************************* */
+/* **************************************************** */
 
-static int pfring_get_mapped_dna_device(pfring *ring, dna_device *dev) {
-  socklen_t len = sizeof(dna_device);
+static int pfring_get_mapped_dna_device(pfring *ring, zc_dev_info *dev) {
+  socklen_t len = sizeof(zc_dev_info);
 
   if(dev == NULL)
     return(-1);
@@ -207,6 +207,15 @@ static void pfring_dump_dna_stats(pfring* ring) {
 
 /* **************************************************** */
 
+int pfring_dna_get_card_settings(pfring *ring, pfring_card_settings *settings) {
+  settings->max_packet_size = ring->dna.dna_dev.mem_info.rx.packet_memory_slot_len;
+  settings->rx_ring_slots = ring->dna.dna_dev.mem_info.rx.packet_memory_num_slots;
+  settings->tx_ring_slots = ring->dna.dna_dev.mem_info.tx.packet_memory_num_slots;
+  return 0;
+}
+
+/* **************************************************** */
+
 int pfring_dna_open(pfring *ring) {
   int   channel_id = 0;
   int   rc;
@@ -224,6 +233,7 @@ int pfring_dna_open(pfring *ring) {
   ring->poll = pfring_dna_poll;
   ring->set_tx_watermark = pfring_dna_set_tx_watermark;
   ring->set_poll_watermark = pfring_dna_set_poll_watermark;
+  ring->get_card_settings = pfring_dna_get_card_settings;
 
   ring->set_poll_duration = pfring_mod_set_poll_duration;
   ring->set_channel_id = pfring_mod_set_channel_id;
@@ -315,7 +325,7 @@ int pfring_dna_open(pfring *ring) {
 	 ring->dna.dna_dev.descr_packet_memory_tot_len);
 #endif
 
-  ring->dna.dna_mapped_device = 1;
+  ring->zc_device = 1;
 
   /* ***************************************** */
 

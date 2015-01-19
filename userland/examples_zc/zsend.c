@@ -94,44 +94,6 @@ static __inline__ ticks getticks(void) {
 
 /* ******************************************* */
 
-int is_a_queue(char *device, int *cluster_id, int *queue_id) {
-  char *tmp;
-  char c_id[32], q_id[32];
-  int i;
-
-  /* Syntax <number>@<number> or zc:<number>@<number> */
-
-  tmp = strstr(device, "zc:");
-  if (tmp != NULL) tmp = &tmp[3];
-  else tmp = device;
-
-  i = 0;
-  if (tmp[0] == '\0' || tmp[0] == '@') return 0;
-  while (tmp[0] != '@' && tmp[0] != '\0') {
-    if (!isdigit(tmp[0])) return 0;
-    c_id[i++] = tmp[0];
-    tmp++;
-  }
-  c_id[i] = '\0';
-
-  i = 0;
-  if (tmp[0] == '@') tmp++;
-  if (tmp[0] == '\0') return 0;
-  while (tmp[0] != '\0') {
-    if (!isdigit(tmp[0])) return 0;
-    q_id[i++] = tmp[0];
-    tmp++;
-  }
-  q_id[i] = '\0';
-
-  *cluster_id = atoi(c_id);
-  *queue_id = atoi(q_id);
-
-  return 1;
-}
-
-/* ******************************************* */
-
 void *time_pulse_thread(void *data) {
   struct timespec tn;
 
@@ -383,17 +345,21 @@ void printHelp(void) {
   printf("zsend - (C) 2014 ntop.org\n");
   printf("Using PFRING_ZC v.%s\n", pfring_zc_version());
   printf("A traffic generator able to replay synthetic udp packets or hex from standard input.\n"); 
+  printf("Usage:    zsend -i <device> -c <cluster id>\n"
+	 "                [-h] [-g <core id>] [-p <pps>] [-l <len>] [-n <num>]\n"
+	 "                [-b <num>] [-N <num>] [-S <core id>] [-P <core id>]\n"
+	 "                [-z] [-a] [-Q <sock>]\n\n");
   printf("-h              Print this help\n");
   printf("-i <device>     Device name (optional: do not specify a device to create a cluster with a sw queue)\n");
   printf("-c <cluster id> Cluster id\n");
-  printf("-g <core_id>    Bind this app to a core\n");
+  printf("-g <core id>    Bind this app to a core\n");
   printf("-p <pps>        Rate (packets/s)\n");
   printf("-l <len>        Packet len (bytes)\n");
   printf("-n <num>        Number of packets\n");
   printf("-b <num>        Number of different IPs\n");
   printf("-N <num>        Simulate a producer for n2disk multi-thread (<num> threads)\n");
-  printf("-S <core_id>    Append timestamp to packets, bind time-pulse thread to a core\n");
-  printf("-P <core_id>    Use a time-pulse thread to control transmission rate, bind the thread to a core\n");
+  printf("-S <core id>    Append timestamp to packets, bind time-pulse thread to a core\n");
+  printf("-P <core id>    Use a time-pulse thread to control transmission rate, bind the thread to a core\n");
   printf("-z              Use burst API\n");
   printf("-a              Active packet wait\n");
   printf("-Q <sock>       Enable VM support to attach a consumer from a VM (<sock> is a QEMU monitor sockets)\n");
@@ -543,7 +509,7 @@ int main(int argc, char* argv[]) {
   char *device = NULL, c;
   pthread_t thread;
   pthread_t time_thread;
-  char *vm_sock;
+  char *vm_sock = NULL;
   int i, rc, ipc_q_attach = 0;
 
   startTime.tv_sec = 0;

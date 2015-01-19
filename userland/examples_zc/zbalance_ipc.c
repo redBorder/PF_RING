@@ -74,7 +74,7 @@ int bind_time_pulse_core = -1;
 volatile u_int64_t *pulse_timestamp_ns;
 
 static struct timeval start_time;
-u_int8_t wait_for_packet = 1, enable_vm_support = 0, time_pulse = 0, print_interface_stats = 0;
+u_int8_t wait_for_packet = 1, enable_vm_support = 0, time_pulse = 0, print_interface_stats = 0, daemon_mode = 0;
 volatile u_int8_t do_shutdown = 0;
 
 u_int8_t n2disk_producer = 0;
@@ -145,13 +145,15 @@ void print_stats() {
     if (pfring_zc_stats(outzqs[i], &stats) == 0)
       tot_slave_recv += stats.recv, tot_slave_drop += stats.drop;
 
-  fprintf(stderr, "=========================\n"
-          "Absolute Stats: Recv %s pkts (%s drops) - Forwarded %s pkts (%s drops)\n", 
-	  pfring_format_numbers((double)tot_recv, buf1, sizeof(buf1), 0),
-	  pfring_format_numbers((double)tot_drop, buf2, sizeof(buf2), 0),
-	  pfring_format_numbers((double)tot_slave_recv, buf3, sizeof(buf3), 0),
-	  pfring_format_numbers((double)tot_slave_drop, buf4, sizeof(buf4), 0)
-  );
+  if (!daemon_mode) {
+    fprintf(stderr, "=========================\n"
+            "Absolute Stats: Recv %s pkts (%s drops) - Forwarded %s pkts (%s drops)\n", 
+            pfring_format_numbers((double)tot_recv, buf1, sizeof(buf1), 0),
+	    pfring_format_numbers((double)tot_drop, buf2, sizeof(buf2), 0),
+	    pfring_format_numbers((double)tot_slave_recv, buf3, sizeof(buf3), 0),
+	    pfring_format_numbers((double)tot_slave_drop, buf4, sizeof(buf4), 0)
+    );
+  }
 
   snprintf(stats_buf, sizeof(stats_buf), 
            "ClusterId:         %d\n"
@@ -181,9 +183,11 @@ void print_stats() {
       if (pfring_zc_stats(inzqs[i], &stats) == 0) {
         tot_if_recv += stats.recv;
         tot_if_drop += stats.drop;
-        fprintf(stderr, "                %s RX %lu pkts Dropped %lu pkts (%.1f %%)\n", 
-                devices[i], stats.recv, stats.drop, 
-	        stats.recv == 0 ? 0 : ((double)(stats.drop*100)/(double)(stats.recv + stats.drop)));
+        if (!daemon_mode) {
+          fprintf(stderr, "                %s RX %lu pkts Dropped %lu pkts (%.1f %%)\n", 
+                  devices[i], stats.recv, stats.drop, 
+	          stats.recv == 0 ? 0 : ((double)(stats.drop*100)/(double)(stats.recv + stats.drop)));
+        }
       }
     }
     snprintf(&stats_buf[strlen(stats_buf)], sizeof(stats_buf)-strlen(stats_buf),
@@ -202,15 +206,17 @@ void print_stats() {
     unsigned long long diff_slave_recv = tot_slave_recv - last_tot_slave_recv;
     unsigned long long diff_slave_drop = tot_slave_drop - last_tot_slave_drop;
 
-    fprintf(stderr, "Actual Stats: Recv %s pps (%s drops) - Forwarded %s pps (%s drops)\n",
-	    pfring_format_numbers(((double)diff_recv/(double)(delta_msec/1000)),  buf1, sizeof(buf1), 1),
-	    pfring_format_numbers(((double)diff_drop/(double)(delta_msec/1000)),  buf2, sizeof(buf2), 1),
-	    pfring_format_numbers(((double)diff_slave_recv/(double)(delta_msec/1000)),  buf3, sizeof(buf3), 1),
-	    pfring_format_numbers(((double)diff_slave_drop/(double)(delta_msec/1000)),  buf4, sizeof(buf4), 1)
-    );
+    if (!daemon_mode) {
+      fprintf(stderr, "Actual Stats: Recv %s pps (%s drops) - Forwarded %s pps (%s drops)\n",
+	      pfring_format_numbers(((double)diff_recv/(double)(delta_msec/1000)),  buf1, sizeof(buf1), 1),
+	      pfring_format_numbers(((double)diff_drop/(double)(delta_msec/1000)),  buf2, sizeof(buf2), 1),
+	      pfring_format_numbers(((double)diff_slave_recv/(double)(delta_msec/1000)),  buf3, sizeof(buf3), 1),
+	      pfring_format_numbers(((double)diff_slave_drop/(double)(delta_msec/1000)),  buf4, sizeof(buf4), 1)
+      );
+    }
   }
-   
-  fprintf(stderr, "=========================\n\n");
+  
+  if (!daemon_mode) fprintf(stderr, "=========================\n\n");
  
   last_tot_recv = tot_recv, last_tot_slave_recv = tot_slave_recv;
   last_tot_drop = tot_drop, last_tot_slave_drop = tot_slave_drop;
@@ -236,13 +242,11 @@ void sigproc(int sig) {
 void printHelp(void) {
   printf("zbalance_ipc - (C) 2014 ntop.org\n");
   printf("Using PFRING_ZC v.%s\n", pfring_zc_version());
-
   printf("A master process balancing packets to multiple consumer processes.\n\n");
-
-  printf("Usage:  zbalance_ipc [-h] -i <device> -c <cluster id> -n <num inst>\n"
-	 "                     [-m <hash mode>] [-S <core id>] [-g <core_id>]\n"
-	 "                     [-N <num>] [-a] ]-l <sock list>]\n");
-
+  printf("Usage: zbalance_ipc -i <device> -c <cluster id> -n <num inst>\n"
+	 "                [-h] [-m <hash mode>] [-S <core id>] [-g <core_id>]\n"
+	 "                [-N <num>] [-a] [-q <len>] [-Q <sock list>] [-d] \n"
+	 "                [-D <username>] [-P <pid file>] \n\n");
   printf("-h              Print this help\n");
   printf("-i <device>     Device (comma-separated list) Note: use 'Q' as device name to create ingress sw queues\n");
   printf("-c <cluster id> Cluster id\n");
@@ -261,6 +265,10 @@ void printHelp(void) {
   printf("-N <num>        Producer for n2disk multi-thread (<num> threads)\n");
   printf("-a              Active packet wait\n");
   printf("-Q <sock list>  Enable VM support (comma-separated list of QEMU monitor sockets)\n");
+  printf("-p              Print per-interface absolute stats\n");
+  printf("-d              Daemon mode\n");
+  printf("-D <username>   Drop privileges\n");
+  printf("-P <pid file>   Write pid to the specified file (daemon mode only)\n");
   exit(-1);
 }
 
@@ -366,10 +374,23 @@ int main(int argc, char* argv[]) {
   pthread_t time_thread;
   int rc;
   int num_real_devices = 0, num_in_queues = 0;
+  char *pid_file = NULL;
+  int opt_argc;
+  char **opt_argv;
 
   start_time.tv_sec = 0;
 
-  while((c = getopt(argc,argv,"ac:g:hi:m:n:Q:q:N:S:")) != '?') {
+  if ((argc == 2) && (argv[1][0] != '-')) {
+    if (load_args_from_file(argv[1], &opt_argc, &opt_argv) != 0) {
+      fprintf(stderr, "Unable to read config file %s\n", argv[1]);
+      exit(-1);
+    }
+  } else {
+    opt_argc = argc;
+    opt_argv = argv;
+  }
+
+  while((c = getopt(opt_argc, opt_argv,"ac:dg:hi:m:n:pQ:q:N:P:S:")) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -381,6 +402,9 @@ int main(int argc, char* argv[]) {
       break;
     case 'c':
       cluster_id = atoi(optarg);
+      break;
+    case 'd':
+      daemon_mode = 1;
       break;
     case 'm':
       hash_mode = atoi(optarg);
@@ -394,6 +418,9 @@ int main(int argc, char* argv[]) {
     case 'g':
       bind_worker_core = atoi(optarg);
       break;
+    case 'p':
+      print_interface_stats = 1;
+      break;
     case 'Q':
       enable_vm_support = 1;
       vm_sockets = strdup(optarg);
@@ -404,6 +431,9 @@ int main(int argc, char* argv[]) {
     case 'N':
       n2disk_producer = 1;
       n2disk_threads = atoi(optarg);
+      break;
+    case 'P':
+      pid_file = strdup(optarg);
       break;
     case 'S':
       time_pulse = 1;
@@ -446,6 +476,9 @@ int main(int argc, char* argv[]) {
     if (strcmp(devices[i], "Q") != 0) num_real_devices++;
     else num_in_queues++;
   }
+
+  if (daemon_mode)
+    daemonize();
 
   zc = pfring_zc_create_cluster(
     cluster_id, 
@@ -561,6 +594,9 @@ int main(int argc, char* argv[]) {
     }
   }
 
+  if (pid_file)
+    create_pid_file(pid_file);
+
   signal(SIGINT,  sigproc);
   signal(SIGTERM, sigproc);
   signal(SIGINT,  sigproc);
@@ -664,6 +700,9 @@ int main(int argc, char* argv[]) {
     pthread_join(time_thread, NULL);
 
   pfring_zc_destroy_cluster(zc);
+
+  if(pid_file)
+    remove_pid_file(pid_file);
 
   return 0;
 }

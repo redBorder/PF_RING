@@ -70,6 +70,7 @@ u_int string_id = 1;
 char *out_pcap_file = NULL;
 FILE *match_dumper = NULL;
 u_int8_t do_close_dump = 0, is_sysdig = 0;
+int num_packets = 0;
 
 struct app_stats {
   u_int64_t numPkts[MAX_NUM_THREADS];
@@ -465,6 +466,9 @@ void dummyProcesssPacket(const struct pfring_pkthdr *h,
 
     drop_packet_rule(h);
   }
+
+  if (unlikely(num_packets && num_packets == stats->numPkts[threadId]))
+    sigproc(0);
 }
 
 /* *************************************** */
@@ -493,6 +497,7 @@ void printHelp(void) {
   printf("-p <poll wait>  Poll wait (msec)\n");
   printf("-b <cpu %%>      CPU pergentage priority (0-99)\n");
   printf("-a              Active packet wait\n");
+  printf("-N <num>        Read <num> packets and exit\n");
   printf("-q              If -v is set, force printing packets as sysdig events\n");
   printf("-m              Long packet header (with PF_RING extensions)\n");
   printf("-r              Rehash RSS packets\n");
@@ -699,7 +704,7 @@ int main(int argc, char* argv[]) {
   startTime.tv_sec = 0;
   thiszone = gmt_to_local(0);
 
-  while((c = getopt(argc,argv,"hi:c:Cd:l:v:ae:n:w:o:p:qb:rg:u:mtsSTx:f:z:")) != '?') {
+  while((c = getopt(argc,argv,"hi:c:Cd:l:v:ae:n:w:o:p:qb:rg:u:mtsSTx:f:z:N:")) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -795,7 +800,9 @@ int main(int argc, char* argv[]) {
     case 'x':
       load_strings(optarg);      
       break;
-
+    case 'N':
+      num_packets = atoi(optarg);
+      break;
     case 'o':
       out_pcap_file = optarg;
       use_extended_pkt_header = 1;

@@ -1,8 +1,0 @@
-This directory contains drivers for popular 1 and 10 Gbit adapters.
-These drivers are PF_RING aware meaning that if you insert the pf_ring.ko
-kernel module with transparent_mode equal to 1 or 2, the driver is pushing
-the packets into PF_RING without passing through NAPI. This results in
-much faster operations as you can read from the PF_RING web page.
-
-Some of this drivers (identified by the 'zc' suffix) support PF_RING ZC.
-
