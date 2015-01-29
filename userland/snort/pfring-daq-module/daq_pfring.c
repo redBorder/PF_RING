@@ -1303,7 +1303,6 @@ static int pfring_daq_stop(void *handle) {
 
 #ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
   update_best_effort_stats(context);
-
 #endif
 
   for (i = 0; i < context->num_devices; i++) {
@@ -1337,7 +1336,8 @@ static void pfring_daq_shutdown(void *handle) {
     free(context->filter_string);
 
 #ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
-  close_best_effort_stats(context);
+  if(context->best_effort_stats_file)
+    close_best_effort_stats(context);
 #endif
 
 #ifdef HAVE_REDIS
