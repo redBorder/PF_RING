@@ -4,8 +4,8 @@
 
 obj-m := pf_ring.o
 
-ifneq (, $(shell which svnversion))
-SVNDEF := -DSVN_REV="\"$(shell svnversion -n .)\""
+ifneq (, $(shell which git))
+SVNDEF := -DSVN_REV="\"$(shell git describe --abbrev=6 --tags HEAD --always .)\""
 endif
 
 ifeq (,$(BUILD_KERNEL))
