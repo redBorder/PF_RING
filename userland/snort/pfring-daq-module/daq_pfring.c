@@ -97,8 +97,6 @@ typedef struct _pfring_context
   int ifindexes[DAQ_PF_RING_MAX_NUM_DEVICES];
   pfring *ring_handles[DAQ_PF_RING_MAX_NUM_DEVICES];
 #ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
-  pfring *best_effort_reflector_ring_handles[DAQ_PF_RING_MAX_NUM_DEVICES];
-  int best_effort_reflector_ifindexes[DAQ_PF_RING_MAX_NUM_DEVICES];
   const char *best_effort_stats_file_path;
   FILE *best_effort_stats_file;
   ssize_t besteffort_stats_max_file_size;
@@ -183,10 +181,10 @@ static int pfring_daq_open(Pfring_Context_t *context, int id) {
   /* TODO this is because rules purging is not yet available with hw rules */
   pfring_set_filtering_mode(ring_handle, software_only);
 
-  if (context->mode == DAQ_MODE_INLINE) {
+  if (context->mode == DAQ_MODE_INLINE && !context->best_effort) {
     /* Default mode: recv_and_send_mode */
     pfring_set_direction(ring_handle, rx_only_direction);
-  } else if (!context->best_effort &&  context->mode == DAQ_MODE_PASSIVE) {
+  } else if ( context->mode == DAQ_MODE_PASSIVE) {
     /* Default direction: rx_and_tx_direction */
     if(context->num_reflector_devices > id) { /* lowlevelbridge ON */
       filtering_rule rule;
@@ -282,30 +280,6 @@ static void pfring_daq_reload(Pfring_Context_t *context) {
 }
 
 #ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
-static inline int pfring_daq_fill_best_effort_reflect_rings(Pfring_Context_t *context) {
-  int i;
-  for (i = 0; i < context->num_devices; i++) {
-    int j;
-    for (j = 0; j < context->num_reflector_devices; j++) {
-      const int strcmp_rc = strcmp(context->devices[j],context->reflector_devices[i]);
-      if(0 == strcmp_rc) {
-        /* link this devices and continue with next devices */
-        context->best_effort_reflector_ring_handles[i] = context->ring_handles[j];
-        context->best_effort_reflector_ifindexes[i]    = context->ifindexes[j];
-        break;
-      }
-    }
-
-    if(j==context->num_devices) {
-      /* Error: Could not find reflector device */
-      DPE(context->errbuf, "%s: Could not found reflector device %s for %s!", 
-        __FUNCTION__, context->reflector_devices[i],context->devices[i]);
-      return DAQ_ERROR;
-    }
-  }
-
-  return DAQ_SUCCESS;
-}
 
 typedef enum{START,STOP,ROTATE} BANNER_TYPE;
 static void best_effort_stats_print_banner0(Pfring_Context_t *context,BANNER_TYPE banner_type) {
@@ -653,13 +627,6 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
     }
   }
 
-#ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
-  const int best_effort_fill_rc = pfring_daq_fill_best_effort_reflect_rings(context);
-  if(DAQ_ERROR == best_effort_fill_rc) {
-    return DAQ_ERROR;
-  }
-#endif
-
 #ifdef HAVE_REDIS
   if (context->redis_ip != NULL && context->redis_port != -1) {
     if ((context->redis_ctx = redisConnect(context->redis_ip, context->redis_port)) == NULL || context->redis_ctx->err) {
@@ -670,7 +637,7 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
 #endif
 
 #ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
-  if (context->mode == DAQ_MODE_PASSIVE && context->best_effort == 1) {
+  if (context->mode == DAQ_MODE_INLINE && context->best_effort == 1) {
     context->q = (Pfring_Queue_t *) calloc(1, sizeof(Pfring_Queue_t));
     if(!context->q) {
       snprintf(errbuf, len, "%s: Couldn't allocate memory for the new PF_RING context!", __FUNCTION__);
@@ -1017,8 +984,8 @@ static int pfring_daq_acquire_best_effort(void *handle, int cnt, DAQ_Analysis_Fu
       }
 #endif
 
-      pfring_daq_send_packet(context, context->best_effort_reflector_ring_handles[rx_ring_idx], phdr.caplen,
-        context->ring_handles[rx_ring_idx], context->best_effort_reflector_ifindexes[rx_ring_idx]);
+      pfring_daq_send_packet(context, context->ring_handles[rx_ring_idx ^ 0x1], phdr.caplen, 
+                                 context->ring_handles[rx_ring_idx], context->ifindexes[rx_ring_idx ^ 0x1]);
     }
 
     rx_ring_idx_clone = rx_ring_idx;
@@ -1073,7 +1040,7 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
     pfring_enable_ring(context->ring_handles[i]);
 
 #ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
-  if (context->mode == DAQ_MODE_PASSIVE && context->best_effort == 1)
+  if (context->mode == DAQ_MODE_INLINE && context->best_effort == 1)
     return pfring_daq_acquire_best_effort(handle, cnt, callback, 
 #if (DAQ_API_VERSION >= 0x00010002)
       metaback,
