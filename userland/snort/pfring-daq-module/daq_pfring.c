@@ -637,7 +637,7 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
 #endif
 
 #ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
-  if (context->mode == DAQ_MODE_INLINE && context->best_effort == 1) {
+  if (context->mode == DAQ_MODE_PASSIVE && context->best_effort == 1) {
     context->q = (Pfring_Queue_t *) calloc(1, sizeof(Pfring_Queue_t));
     if(!context->q) {
       snprintf(errbuf, len, "%s: Couldn't allocate memory for the new PF_RING context!", __FUNCTION__);
@@ -1040,7 +1040,7 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
     pfring_enable_ring(context->ring_handles[i]);
 
 #ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
-  if (context->mode == DAQ_MODE_INLINE && context->best_effort == 1)
+  if (context->mode == DAQ_MODE_PASSIVE && context->best_effort == 1)
     return pfring_daq_acquire_best_effort(handle, cnt, callback, 
 #if (DAQ_API_VERSION >= 0x00010002)
       metaback,
