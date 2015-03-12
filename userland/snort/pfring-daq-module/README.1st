@@ -115,6 +115,34 @@ PF_RING DAQ Specific Options
 
    --daq-var watermark=<packets>
 
+7. Best effort mode in IDS mode
+   In high load envirnments, is possible that packet forwarding + packet processing
+   makes machine to drop packets, because both process ocurr at the same time in
+   the same core.
+
+   It is possible to do both process in a sepparate time: First, every packet that 
+   reach DAQ will be copied to an intermediate userland buffer and, then, forwarded
+   by userland (not by kernel). If no space is available on userland buffer, it will
+   be discarded.
+
+   Once there is no more packets to forward, DAQ will pick one packet from their
+   internal buffer and will make snort to analyze it. After that, it will re-check
+   if there is more packets to forward, and over and over.
+
+   It's possible also to enable a log file to count userland buffer dropped packets
+   with besteffort_logfile.
+
+   Note: DAQ have to be compiled with DAQ_PF_RING_BEST_EFFORT_BOOST option.
+
+   Options related:
+
+   --daq-var besteffort=1
+
+   --daq-var besteffort_minnumslots=<slots number>
+
+   --daq-var besteffort_logfile=<file>
+
+   --daq-var besteffort_maxfilesize=<size>
 
 Example of Clustering + Core Binding
 ------------------------------------
@@ -125,6 +153,13 @@ snort -q --pid-path /var/run --create-pidfile -D -c /etc/snort/snort.conf -l /va
 snort -q --pid-path /var/run --create-pidfile -D -c /etc/snort/snort.conf -l /var/log/snort/bpbr0/instance-2 --daq-dir=/usr/local/lib/daq --daq pfring --daq-mode passive -i eth2,eth3 --daq-var lowlevelbridge=eth3,eth2 --daq-var clusterid=10,11 --daq-var bindcpu=2
 snort -q --pid-path /var/run --create-pidfile -D -c /etc/snort/snort.conf -l /var/log/snort/bpbr0/instance-3 --daq-dir=/usr/local/lib/daq --daq pfring --daq-mode passive -i eth2,eth3 --daq-var lowlevelbridge=eth3,eth2 --daq-var clusterid=10,11 --daq-var bindcpu=3
 snort -q --pid-path /var/run --create-pidfile -D -c /etc/snort/snort.conf -l /var/log/snort/bpbr0/instance-4 --daq-dir=/usr/local/lib/daq --daq pfring --daq-mode passive -i eth2,eth3 --daq-var lowlevelbridge=eth3,eth2 --daq-var clusterid=10,11 --daq-var bindcpu=4
+
+Best-effort IDS
+---------------
+snort -q --pid-path /var/run --create-pidfile -D -c /etc/snort/snort.conf -l /var/log/snort/bpbr0/instance-1 --daq-dir /usr/local/lib/daq --daq pfring --daq-mode passive -i eth2:eth3 --daq-var fast-tx=1 --daq-var clusterid=10,11 --daq-var bindcpu=1 --daq-var besteffort=1 --daq-var besteffort_minnumslots=65544 
+snort -q --pid-path /var/run --create-pidfile -D -c /etc/snort/snort.conf -l /var/log/snort/bpbr0/instance-2 --daq-dir /usr/local/lib/daq --daq pfring --daq-mode passive -i eth2:eth3 --daq-var fast-tx=1 --daq-var clusterid=10,11 --daq-var bindcpu=2 --daq-var besteffort=1 --daq-var besteffort_minnumslots=65544 
+snort -q --pid-path /var/run --create-pidfile -D -c /etc/snort/snort.conf -l /var/log/snort/bpbr0/instance-3 --daq-dir /usr/local/lib/daq --daq pfring --daq-mode passive -i eth2:eth3 --daq-var fast-tx=1 --daq-var clusterid=10,11 --daq-var bindcpu=3 --daq-var besteffort=1 --daq-var besteffort_minnumslots=65544 
+snort -q --pid-path /var/run --create-pidfile -D -c /etc/snort/snort.conf -l /var/log/snort/bpbr0/instance-4 --daq-dir /usr/local/lib/daq --daq pfring --daq-mode passive -i eth2:eth3 --daq-var fast-tx=1 --daq-var clusterid=10,11 --daq-var bindcpu=4 --daq-var besteffort=1 --daq-var besteffort_minnumslots=65544 
 
 IPS
 ----
