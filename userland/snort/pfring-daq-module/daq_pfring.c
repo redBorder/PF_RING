@@ -350,6 +350,7 @@ static void best_effort_stats_rotate_file(Pfring_Context_t *context) {
 
 static int pfring_daq_initialize(const DAQ_Config_t *config,
 				 void **ctxt_ptr, char *errbuf, size_t len) {
+  char *clusters = NULL;
   Pfring_Context_t *context;
   DAQ_Dict* entry;
   int i;
@@ -388,91 +389,13 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
     return DAQ_ERROR_NOMEM;
   }
 
-  if(context->mode == DAQ_MODE_READ_FILE) {
-    snprintf(errbuf, len, "%s: function not supported on PF_RING", __FUNCTION__);
-    free(context);
-    return DAQ_ERROR;
-  } else if(context->mode == DAQ_MODE_INLINE) {
-    /* ethX:ethY;ethZ:ethJ */
-    char *twins, *twins_pos = NULL;
-    context->num_devices = 0;
-
-    twins = strtok_r(context->devices[DAQ_PF_RING_PASSIVE_DEV_IDX], ",", &twins_pos);
-    while(twins != NULL) {
-      char *dev, *dev_pos = NULL;
-      int last_twin = 0;
-
-      dev = strtok_r(twins, ":", &dev_pos);
-      while(dev != NULL) {
-        last_twin = context->num_devices;
-
-	context->devices[context->num_devices++] = dev;
-
-        dev = strtok_r(NULL, ":", &dev_pos);
-      }
-
-      if (context->num_devices & 0x1) {
-        snprintf(errbuf, len, "%s: Wrong format: inline mode requires pairs of devices", __FUNCTION__);
-        free(context);
-        return DAQ_ERROR;
-      }
-
-      if (last_twin > 0) /* new dev pair */
-        printf("%s <-> %s\n", context->devices[last_twin - 1], context->devices[last_twin]);
-
-      twins = strtok_r(NULL, ",", &twins_pos);
-    }
-  } else if(context->mode == DAQ_MODE_PASSIVE) {
-    /* ethX,ethY */
-    char *dev, *dev_pos = NULL;
-    context->num_devices = 0;
-
-    dev = strtok_r(context->devices[DAQ_PF_RING_PASSIVE_DEV_IDX], ",", &dev_pos);
-    while(dev != NULL) {
-      if(context->num_devices >= DAQ_PF_RING_MAX_NUM_DEVICES){
-        snprintf(errbuf, len, "%s: too many interfaces!", __FUNCTION__);
-        free(context);
-        return DAQ_ERROR_NOMEM;
-      }
-
-      context->devices[context->num_devices++] = dev;
-      dev = strtok_r(NULL, ",", &dev_pos);
-    }
-  }
-
   for(entry = config->values; entry; entry = entry->next) {
     if(!entry->value || !*entry->value) {
       snprintf(errbuf, len,
 	       "%s: variable needs value(%s)\n", __FUNCTION__, entry->key);
       return DAQ_ERROR;
     } else if(!strcmp(entry->key, "clusterid")) {
-      char *clusters = strdup(entry->value);
-      if (clusters != NULL) {
-        char *clusterid, *clusterid_pos = NULL;
-	char* end;
-
-        clusterid = strtok_r(clusters, ",", &clusterid_pos);
-        for (i = 0; i < context->num_devices; i++) {
-	  if (clusterid == NULL) {
-	    snprintf(errbuf, len, "%s: not enough cluster ids (%d)\n", __FUNCTION__, i);
-	    return DAQ_ERROR;
-	  }
-
-          end = entry->value;
-          context->clusterids[i] =(int)strtol(clusterid, &end, 0);
-          if(*end
-	     || (context->clusterids[i] <= 0)
-	     || (context->clusterids[i] > 65535)) {
-	    snprintf(errbuf, len, "%s: bad clusterid(%s)\n",
-		     __FUNCTION__, clusterid);
-
-	    return DAQ_ERROR;
-          }
-
-          clusterid = strtok_r(NULL, ",", &clusterid_pos);
-        }
-	free(clusters);
-      }
+      clusters = strdup(entry->value);
     } else if(!strcmp(entry->key, "no-kernel-filters")) {
       context->use_kernel_filters = 0;
     } else if(!strcmp(entry->key, "kernel-filters-idle-timeout")) {
@@ -572,12 +495,6 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
             context->reflector_devices[context->num_reflector_devices++] = dev;
             dev = strtok_r(NULL, ",", &dev_pos);
           }
-
-	  if (context->num_reflector_devices != context->num_devices) {
-	    snprintf(errbuf, len, "%s: not enough reflector devices (%d)\n",
-	             __FUNCTION__, context->num_reflector_devices);
-	    return DAQ_ERROR;
-	  }
         }
       } else {
         snprintf(errbuf, len, "%s: lowlevelbridge is for passive mode only\n",
@@ -614,6 +531,92 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
 	       __FUNCTION__, entry->key, entry->value);
       return DAQ_ERROR;
     }
+  }
+
+  if(context->mode == DAQ_MODE_READ_FILE) {
+    snprintf(errbuf, len, "%s: function not supported on PF_RING", __FUNCTION__);
+    free(context);
+    return DAQ_ERROR;
+  } else if(context->mode == DAQ_MODE_INLINE || 
+        (context->mode == DAQ_MODE_PASSIVE && context->best_effort)) {
+    /* ethX:ethY;ethZ:ethJ */
+    char *twins, *twins_pos = NULL;
+    context->num_devices = 0;
+
+    twins = strtok_r(context->devices[DAQ_PF_RING_PASSIVE_DEV_IDX], ",", &twins_pos);
+    while(twins != NULL) {
+      char *dev, *dev_pos = NULL;
+      int last_twin = 0;
+
+      dev = strtok_r(twins, ":", &dev_pos);
+      while(dev != NULL) {
+        last_twin = context->num_devices;
+
+        context->devices[context->num_devices++] = dev;
+
+        dev = strtok_r(NULL, ":", &dev_pos);
+      }
+
+      if (context->num_devices & 0x1) {
+        snprintf(errbuf, len, "%s: Wrong format: inline mode requires pairs of devices", __FUNCTION__);
+        free(context);
+        return DAQ_ERROR;
+      }
+
+      if (last_twin > 0) /* new dev pair */
+        printf("%s <-> %s\n", context->devices[last_twin - 1], context->devices[last_twin]);
+
+      twins = strtok_r(NULL, ",", &twins_pos);
+    }
+  } else if(context->mode == DAQ_MODE_PASSIVE) {
+    /* ethX,ethY */
+    char *dev, *dev_pos = NULL;
+    context->num_devices = 0;
+
+    dev = strtok_r(context->devices[DAQ_PF_RING_PASSIVE_DEV_IDX], ",", &dev_pos);
+    while(dev != NULL) {
+      if(context->num_devices >= DAQ_PF_RING_MAX_NUM_DEVICES){
+        snprintf(errbuf, len, "%s: too many interfaces!", __FUNCTION__);
+        free(context);
+        return DAQ_ERROR_NOMEM;
+      }
+
+      context->devices[context->num_devices++] = dev;
+      dev = strtok_r(NULL, ",", &dev_pos);
+    }
+
+    if (context->num_reflector_devices != context->num_devices) {
+      snprintf(errbuf, len, "%s: not enough reflector devices (%d)\n",
+               __FUNCTION__, context->num_reflector_devices);
+      return DAQ_ERROR;
+    }
+  }
+
+  if (clusters != NULL) {
+    char *clusterid, *clusterid_pos = NULL;
+    char* end;
+
+    clusterid = strtok_r(clusters, ",", &clusterid_pos);
+    for (i = 0; i < context->num_devices; i++) {
+      if (clusterid == NULL) {
+        snprintf(errbuf, len, "%s: not enough cluster ids (%d)\n", __FUNCTION__, i);
+        return DAQ_ERROR;
+      }
+
+      end = clusters;
+      context->clusterids[i] =(int)strtol(clusterid, &end, 0);
+      if(*end
+         || (context->clusterids[i] <= 0)
+         || (context->clusterids[i] > 65535)) {
+        snprintf(errbuf, len, "%s: bad clusterid(%s)\n",
+                 __FUNCTION__, clusterid);
+
+        return DAQ_ERROR;
+      }
+
+      clusterid = strtok_r(NULL, ",", &clusterid_pos);
+    }
+    free(clusters);
   }
 
   /* catching the SIGRELOAD signal, replacing the default snort handler */
@@ -992,7 +995,7 @@ static int pfring_daq_acquire_best_effort(void *handle, int cnt, DAQ_Analysis_Fu
     while(!(ret = pfring_daq_in_packets(context, &rx_ring_idx_clone)) && pfring_daq_queue_check_packet(context->q) && !context->breakloop) {
       /* no incoming pkts, queued pkts available -> processing enqueued pkts */
       Pfring_Queue_SlotHdr_t *qhdr = pfring_daq_dequeue(context->q); 
-      pfring_daq_process(context, qhdr);
+      // pfring_daq_process(context, qhdr);
       c++;
     }
 
