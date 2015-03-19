@@ -243,10 +243,10 @@ static int pfring_daq_open(Pfring_Context_t *context, int id) {
   /* TODO this is because rules purging is not yet available with hw rules */
   pfring_set_filtering_mode(ring_handle, software_only);
 
-  if (context->mode == DAQ_MODE_INLINE && !context->best_effort) {
+  if (context->mode == DAQ_MODE_INLINE) {
     /* Default mode: recv_and_send_mode */
     pfring_set_direction(ring_handle, rx_only_direction);
-  } else if ( context->mode == DAQ_MODE_PASSIVE) {
+  } else if ( context->mode == DAQ_MODE_PASSIVE && !context->best_effort) {
     /* Default direction: rx_and_tx_direction */
     if(context->num_reflector_devices > id) { /* lowlevelbridge ON */
       filtering_rule rule;
