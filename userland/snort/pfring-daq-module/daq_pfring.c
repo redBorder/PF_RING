@@ -134,6 +134,8 @@ typedef struct _pfring_context
 #endif
 #ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
   struct{
+    u_int64_t pkts_bypassed;
+    u_int64_t last_pkts_bypassed;
     u_int8_t enabled;
     u_int16_t sampling_rate;
     u_int16_t upper_threshold;
@@ -179,27 +181,30 @@ static uint64_t pfring_daq_total_queued(Pfring_Context_t *context) {
   return total_queued;
 }
 
-static void software_bypass_log(const char *filename,const char *line){
+static void software_bypass_log(const char *filename,uint64_t d_bypassed,const char *line){
   FILE *f = fopen(filename,"a");
   if(f){
-    fprintf(f,"[%tu] %s\n",time(NULL),line);
+    fprintf(f,"[%tu] %s. %lu packets bypassed.\n",time(NULL),line,d_bypassed);
     fclose(f);
   }
 }
 
 static void update_soft_bypass_status(Pfring_Context_t *context){
   const uint32_t num_queued_packets = pfring_daq_total_queued(context);
-  printf("%tu Number of queued packets: %u\n",time(NULL),num_queued_packets);
+  //printf("%tu Number of queued packets: %u\n",time(NULL),num_queued_packets);
 
   if(!is_bypass_enabled(context)){ /* bypass off. Should we set it on? */
     if(num_queued_packets > context->sw_bypass.upper_threshold){
       enable_bypass(context);
-      software_bypass_log(context->sw_bypass.software_bypass_log,"Enabling soft bypass");
+      software_bypass_log(context->sw_bypass.software_bypass_log,0,"Enabling soft bypass");
     }
   }else{ /* We are in bypass time. Should we set it off? */
     if(num_queued_packets < context->sw_bypass.lower_threshold){
       disable_bypass(context);
-      software_bypass_log(context->sw_bypass.software_bypass_log,"Disable soft bypass");
+      software_bypass_log(context->sw_bypass.software_bypass_log,
+        context->sw_bypass.pkts_bypassed - context->sw_bypass.last_pkts_bypassed,
+        "Disable soft bypass");
+      context->sw_bypass.last_pkts_bypassed = context->sw_bypass.pkts_bypassed;
     }
   }
 }
@@ -996,16 +1001,21 @@ static inline void pfring_daq_process(Pfring_Context_t *context, Pfring_Queue_Sl
 
 #ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
   if(context->sw_bypass.sampling_rate >0 && 
-    context->stats.packets_received%context->sw_bypass.sampling_rate == 0){
+    (context->stats.packets_received+context->sw_bypass.pkts_bypassed)
+        %context->sw_bypass.sampling_rate == 0) {
     update_soft_bypass_status(context);
   }
 
-  if(!is_bypass_enabled(context))
+  if(!is_bypass_enabled(context)) {
+    context->sw_bypass.pkts_bypassed++;
 #endif
     verdict = context->analysis_func(qhdr->user, &hdr,(u_char*)qhdr->pkt_buffer);
 #ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
-  else
+  } else {
     verdict = DAQ_VERDICT_PASS;
+    context->stats.packets_received++;
+    context->stats.verdicts[verdict]++;
+  }
 #endif
 
   if(verdict >= MAX_DAQ_VERDICT)
@@ -1026,9 +1036,6 @@ static inline void pfring_daq_process(Pfring_Context_t *context, Pfring_Queue_Sl
       /* No way we can reach this point */
       break;
   }
-
-  context->stats.packets_received++;
-  context->stats.verdicts[verdict]++;
 }
 
 static inline int pfring_daq_in_packets(Pfring_Context_t *context, u_int32_t *rx_ring_idx) {
@@ -1213,20 +1220,22 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
 
       rx_ring_idx = current_ring_idx;
 
-      context->stats.packets_received++;
-
 #ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
       if(context->sw_bypass.sampling_rate >0 && 
-    context->stats.packets_received%context->sw_bypass.sampling_rate == 0){
-  update_soft_bypass_status(context);
+            (context->stats.packets_received+context->sw_bypass.pkts_bypassed)
+            %context->sw_bypass.sampling_rate == 0) {
+          update_soft_bypass_status(context);
       }
 
-      if(!is_bypass_enabled(context))
+      if(!is_bypass_enabled(context)){
 #endif
+        context->stats.packets_received++;
         verdict = context->analysis_func(user, &hdr,(u_char*)context->pkt_buffer);
 #ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
-      else
+      } else {
+        context->sw_bypass.pkts_bypassed++;
         verdict = DAQ_VERDICT_PASS;
+      }
 #endif
 
 #if 0
