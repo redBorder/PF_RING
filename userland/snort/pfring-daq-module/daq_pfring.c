@@ -722,7 +722,13 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
   for (i = 0; i < context->num_devices; i++) {
     if(context->ring_handles[i] == NULL) {
       if (pfring_daq_open(context, i) == -1)
-        return DAQ_ERROR;
+//rb:ini
+        //return DAQ_ERROR;
+        {
+          snprintf(errbuf, len, "%s", context->errbuf);
+          return DAQ_ERROR;
+        }
+//rb:fin
     }
   }
 
