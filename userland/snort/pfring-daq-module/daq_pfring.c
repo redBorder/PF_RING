@@ -678,7 +678,8 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
       dev = strtok_r(NULL, ",", &dev_pos);
     }
 
-    if (context->num_reflector_devices != context->num_devices) {
+    if (context->num_reflector_devices > 0 && 
+       context->num_reflector_devices != context->num_devices) {
       snprintf(errbuf, len, "%s: not enough reflector devices (%d)\n",
                __FUNCTION__, context->num_reflector_devices);
       return DAQ_ERROR;
