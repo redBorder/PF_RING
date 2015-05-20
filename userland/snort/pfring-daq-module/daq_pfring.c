@@ -1014,14 +1014,14 @@ static inline void pfring_daq_process(Pfring_Context_t *context, Pfring_Queue_Sl
   }
 
   if(!is_bypass_enabled(context)) {
-    context->sw_bypass.pkts_bypassed++;
 #endif
     verdict = context->analysis_func(qhdr->user, &hdr,(u_char*)qhdr->pkt_buffer);
-#ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
-  } else {
-    verdict = DAQ_VERDICT_PASS;
     context->stats.packets_received++;
     context->stats.verdicts[verdict]++;
+#ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
+  } else {
+    context->sw_bypass.pkts_bypassed++;
+    verdict = DAQ_VERDICT_PASS;
   }
 #endif
 
