@@ -869,7 +869,7 @@ struct send_msg_to_plugin_info {
 
 #ifdef __KERNEL__
 
-#define CLUSTER_LEN       64
+#define CLUSTER_LEN      128
 
 /*
  * A ring cluster is used group together rings used by various applications
