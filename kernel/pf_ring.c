@@ -717,22 +717,26 @@ static inline u_int64_t num_queued_pkts(struct pf_ring_socket *pfr)
   // smp_rmb();
 
   if(pfr->ring_slots != NULL) {
-    /* 64-bit counters, no need to ahndle wrap
+    /* 64-bit counters, no need to ahndle wrap */
     u_int64_t tot_insert = pfr->slots_info->tot_insert, tot_read = pfr->slots_info->tot_read;
 
     if(tot_insert >= tot_read) {
       return(tot_insert - tot_read);
     } else {
-      return(((u_int64_t) - 1) + tot_insert - tot_read);
+      // Since it looks like we have readed more packets that we have inserted
+      // (race condition because we are not locking the ring), we assume
+      // that the ring is empty (or almost empty)
+      return 0;
+      
+      //return(((u_int64_t) - 1) + tot_insert - tot_read);
     }
 
     if(unlikely(enable_debug)) {
       printk("[PF_RING] -> [tot_insert=%llu][tot_read=%llu]\n",
 	     tot_insert, tot_read);
     }
-    */
 
-    return pfr->slots_info->tot_insert - pfr->slots_info->tot_read;
+    // return pfr->slots_info->tot_insert - pfr->slots_info->tot_read;
   } else
     return(0);
 }
