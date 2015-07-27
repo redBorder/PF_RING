@@ -114,7 +114,7 @@ typedef struct _pfring_context
   int promisc_flag;
   int timeout;
   int watermark;
-  int best_effort;
+  int best_effort; /// @TODO wrap with DAQ_PF_RING_BEST_EFFORT_BOOST
   u_int16_t filter_count;
   DAQ_Analysis_Func_t analysis_func;
   uint32_t netmask;
@@ -129,9 +129,6 @@ typedef struct _pfring_context
   u_int bindcpu;
   uint64_t base_recv[DAQ_PF_RING_MAX_NUM_DEVICES];
   uint64_t base_drop[DAQ_PF_RING_MAX_NUM_DEVICES];
-#ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
-  uint64_t base_best_effort_drops;
-#endif
 #ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
   struct{
     u_int64_t pkts_bypassed;
@@ -1482,14 +1479,11 @@ static FILE_SIZE update_best_effort_stats_file_status(Pfring_Context_t *context)
 
 static void best_effort_stats_print_line(Pfring_Context_t *context) {
   if(context->best_effort_stats_file) {
-    const uint64_t to_print = context->q->tot_dropped - context->base_best_effort_drops;
-    const int written = fprintf(context->best_effort_stats_file,"%lu,%lu\n",time(NULL),to_print);
+    const int written = fprintf(context->best_effort_stats_file,"%lu,%lu\n",time(NULL),
+      context->q->tot_dropped);
     fflush(context->best_effort_stats_file);
     if(written < 0){
-        /* Can't write */
-
-    } else {
-        context->base_best_effort_drops = context->q->tot_dropped;
+        /* @TODO Can't write */
     }
   } else {
     /* @TODO try to reopen? */
