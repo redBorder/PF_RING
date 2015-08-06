@@ -129,6 +129,9 @@ typedef struct _pfring_context
   u_int bindcpu;
   uint64_t base_recv[DAQ_PF_RING_MAX_NUM_DEVICES];
   uint64_t base_drop[DAQ_PF_RING_MAX_NUM_DEVICES];
+#ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
+  uint64_t base_best_effort_drops;
+#endif
 #ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
   struct{
     u_int64_t pkts_bypassed;
@@ -1395,13 +1398,17 @@ static DAQ_State pfring_daq_check_status(void *handle) {
 
 #ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
 static void best_effort_stats_print_line(Pfring_Context_t *context) {
-  if(context->best_effort_stats_file) {
+  if(context->best_effort_stats_file 
+        && context->q->tot_dropped > context->base_best_effort_drops) {
     fseek(context->best_effort_stats_file, 0, SEEK_SET);
     const int written = fprintf(context->best_effort_stats_file,"%u\n",
       context->q->tot_dropped);
     fflush(context->best_effort_stats_file);
     if(written < 0){
-        /* @TODO Can't write */
+        /* Can't write */
+
+    } else {
+        context->base_best_effort_drops = context->q->tot_dropped;
     }
   } else {
     /* @TODO try to reopen? */
