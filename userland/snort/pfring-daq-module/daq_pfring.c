@@ -134,13 +134,14 @@ typedef struct _pfring_context
 #endif
 #ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
   struct{
+    char *software_bypass_log;
+    FILE *software_bypass_log_f;
     u_int64_t pkts_bypassed;
     u_int64_t last_pkts_bypassed;
-    u_int8_t enabled;
     u_int16_t sampling_rate;
     u_int16_t upper_threshold;
     u_int16_t lower_threshold;
-    char *software_bypass_log;
+    u_int8_t enabled;
   }sw_bypass;
 #endif
   DAQ_State state;
@@ -181,12 +182,9 @@ static uint64_t pfring_daq_total_queued(Pfring_Context_t *context) {
   return total_queued;
 }
 
-static void software_bypass_log(const char *filename,uint64_t d_bypassed,const char *line){
-  FILE *f = fopen(filename,"a");
-  if(f){
-    fprintf(f,"[%tu] %s. %lu packets bypassed.\n",time(NULL),line,d_bypassed);
-    fclose(f);
-  }
+static void software_bypass_log(FILE *f,uint64_t d_bypassed,const char *line){
+  fprintf(f,"[%tu] %s. %lu packets bypassed.\n",time(NULL),line,d_bypassed);
+  fclose(f);
 }
 
 static void update_soft_bypass_status(Pfring_Context_t *context){
@@ -196,12 +194,12 @@ static void update_soft_bypass_status(Pfring_Context_t *context){
   if(!is_bypass_enabled(context)){ /* bypass off. Should we set it on? */
     if(num_queued_packets > context->sw_bypass.upper_threshold){
       enable_bypass(context);
-      software_bypass_log(context->sw_bypass.software_bypass_log,0,"Enabling soft bypass");
+      software_bypass_log(context->sw_bypass.software_bypass_log_f,0,"Enabling soft bypass");
     }
   }else{ /* We are in bypass time. Should we set it off? */
     if(num_queued_packets < context->sw_bypass.lower_threshold){
       disable_bypass(context);
-      software_bypass_log(context->sw_bypass.software_bypass_log,
+      software_bypass_log(context->sw_bypass.software_bypass_log_f,
         context->sw_bypass.pkts_bypassed - context->sw_bypass.last_pkts_bypassed,
         "Disable soft bypass");
       context->sw_bypass.last_pkts_bypassed = context->sw_bypass.pkts_bypassed;
@@ -350,6 +348,14 @@ static void pfring_daq_reload(Pfring_Context_t *context) {
 
 static void close_best_effort_stats(Pfring_Context_t *context) {
   fclose(context->best_effort_stats_file);
+}
+
+#endif
+
+#ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
+
+static void close_soft_bypass_stats(Pfring_Context_t *context) {
+  fclose(context->sw_bypass.software_bypass_log_f);
 }
 
 #endif
@@ -717,6 +723,17 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
     context->best_effort_stats_file = fopen(context->best_effort_stats_file_path,"w");
     if(NULL == context->best_effort_stats_file) {
       snprintf(errbuf, len, "%s: Couldn't open %s file for best effort stats!: %s", __FUNCTION__,context->best_effort_stats_file_path,strerror(errno));
+      return DAQ_ERROR;
+    }
+  }
+#endif
+
+#ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
+  /// @TODO merge with best effort log file
+  if(context->sw_bypass.software_bypass_log) {
+    context->best_effort_stats_file = fopen(context->sw_bypass.software_bypass_log,"w");
+    if(NULL == context->best_effort_stats_file) {
+      snprintf(errbuf, len, "%s: Couldn't open %s file for best effort stats!: %s", __FUNCTION__,context->sw_bypass.software_bypass_log,strerror(errno));
       return DAQ_ERROR;
     }
   }
@@ -1377,6 +1394,11 @@ static void pfring_daq_shutdown(void *handle) {
 #ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
   if(context->best_effort_stats_file)
     close_best_effort_stats(context);
+#endif
+
+#ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
+  if(context->sw_bypass.software_bypass_log_f)
+    close_soft_bypass_stats(context);
 #endif
 
 #ifdef HAVE_REDIS
