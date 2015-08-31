@@ -137,7 +137,7 @@ typedef struct _pfring_context
     char *software_bypass_log;
     FILE *software_bypass_log_f;
     u_int64_t pkts_bypassed;
-    u_int64_t last_pkts_bypassed;
+    u_int64_t base_pkts_bypassed;
     u_int16_t sampling_rate;
     u_int16_t upper_threshold;
     u_int16_t lower_threshold;
@@ -182,9 +182,23 @@ static uint64_t pfring_daq_total_queued(Pfring_Context_t *context) {
   return total_queued;
 }
 
-static void software_bypass_log(FILE *f,uint64_t d_bypassed,const char *line){
-  fprintf(f,"[%tu] %s. %lu packets bypassed.\n",time(NULL),line,d_bypassed);
-  fclose(f);
+/// @TODO merge with software_bypass_log
+static void software_bypass_stats_print_line(Pfring_Context_t *context) {
+  if(context->sw_bypass.software_bypass_log_f
+      && context->sw_bypass.pkts_bypassed > context->sw_bypass.base_pkts_bypassed){
+    fseek(context->sw_bypass.software_bypass_log_f, 0, SEEK_SET);
+    const int written = fprintf(context->sw_bypass.software_bypass_log_f,"%lu\n",
+      context->sw_bypass.pkts_bypassed);
+    fflush(context->best_effort_stats_file);
+    if(written < 0){
+        /* Can't write */
+
+    } else {
+        context->sw_bypass.base_pkts_bypassed = context->sw_bypass.pkts_bypassed;
+    }
+  } else {
+    /* @TODO try to reopen? */
+  }
 }
 
 static void update_soft_bypass_status(Pfring_Context_t *context){
@@ -194,15 +208,11 @@ static void update_soft_bypass_status(Pfring_Context_t *context){
   if(!is_bypass_enabled(context)){ /* bypass off. Should we set it on? */
     if(num_queued_packets > context->sw_bypass.upper_threshold){
       enable_bypass(context);
-      software_bypass_log(context->sw_bypass.software_bypass_log_f,0,"Enabling soft bypass");
     }
   }else{ /* We are in bypass time. Should we set it off? */
     if(num_queued_packets < context->sw_bypass.lower_threshold){
       disable_bypass(context);
-      software_bypass_log(context->sw_bypass.software_bypass_log_f,
-        context->sw_bypass.pkts_bypassed - context->sw_bypass.last_pkts_bypassed,
-        "Disable soft bypass");
-      context->sw_bypass.last_pkts_bypassed = context->sw_bypass.pkts_bypassed;
+      software_bypass_stats_print_line(context);
     }
   }
 }
@@ -731,10 +741,12 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
 #ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
   /// @TODO merge with best effort log file
   if(context->sw_bypass.software_bypass_log) {
-    context->best_effort_stats_file = fopen(context->sw_bypass.software_bypass_log,"w");
-    if(NULL == context->best_effort_stats_file) {
+    context->sw_bypass.software_bypass_log_f = fopen(context->sw_bypass.software_bypass_log,"w");
+    if(NULL == context->sw_bypass.software_bypass_log_f) {
       snprintf(errbuf, len, "%s: Couldn't open %s file for best effort stats!: %s", __FUNCTION__,context->sw_bypass.software_bypass_log,strerror(errno));
       return DAQ_ERROR;
+    } else {
+      fprintf(context->sw_bypass.software_bypass_log_f,"0\n");
     }
   }
 #endif
