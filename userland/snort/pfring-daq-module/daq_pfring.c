@@ -100,7 +100,6 @@ typedef struct _pfring_context
 #ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
   const char *best_effort_stats_file_path;
   FILE *best_effort_stats_file;
-  ssize_t besteffort_stats_max_file_size;
 #endif
   int num_devices;
   int snaplen;
@@ -402,7 +401,6 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
 #endif
 #ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
   u_int32_t best_effort_min_num_slots = DAQ_PF_RING_BEST_EFFORT_BOOST_MIN_NUM_SLOTS;
-  context->besteffort_stats_max_file_size = DAQ_PF_RING_BEST_EFFORT_BOOST_MAX_STATS_FILE_SIZE;
 #endif
 
   if(!context->devices[DAQ_PF_RING_PASSIVE_DEV_IDX]) {
@@ -471,14 +469,6 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
       }
     } else if(!strcmp(entry->key, "besteffort_logfile")) {
       context->best_effort_stats_file_path = strdup(entry->value);
-    } else if(!strcmp(entry->key, "besteffort_maxfilesize")) {
-      char* end = NULL;
-      context->besteffort_stats_max_file_size = strtol(entry->value, &end, 0);
-      if(end==entry->value || *end != '\0') {
-        snprintf(errbuf, len, "%s: bad best effort max file size(%s)\n",
-                 __FUNCTION__, entry->value);
-        return DAQ_ERROR;
-      }
     }
 #endif
     else if(!strcmp(entry->key, "watermark")) {
