@@ -62,6 +62,7 @@
 
 #define DAQ_PF_RING_BEST_EFFORT_BOOST
 #define DAQ_PF_RING_SOFT_BYPASS_BOOST
+#define DAQ_PFRING_SEND_RETRY_BOOST
 
 #ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
 #define DAQ_PF_RING_BEST_EFFORT_BOOST_MIN_NUM_SLOTS 4096
@@ -142,6 +143,12 @@ typedef struct _pfring_context
     u_int16_t lower_threshold;
     u_int8_t enabled;
   }sw_bypass;
+#endif
+#ifdef DAQ_PFRING_SEND_RETRY_BOOST
+  struct {
+    u_int32_t enobuf_wait_usecs;
+    u_int32_t enobuf_attemps;
+  } send_enobuf;
 #endif
   DAQ_State state;
 #ifdef HAVE_REDIS
@@ -563,6 +570,24 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
       }
     } else if(!strcmp(entry->key,"sbypasslogfile")){
       context->sw_bypass.software_bypass_log = strdup(entry->value);
+#ifdef DAQ_PFRING_SEND_RETRY_BOOST
+    } else if(!strcmp(entry->key,"send_enobuf_usecs")) {
+      char* end = entry->value;
+      context->send_enobuf.enobuf_wait_usecs = strtol(entry->value, &end, 0);
+      if(end==NULL){
+        snprintf(errbuf, len, "%s: bad software bypass wait usecs(%s)\n",
+                 __FUNCTION__, entry->value);
+        return DAQ_ERROR;
+      }
+    } else if(!strcmp(entry->key,"send_enobuf_attemps")) {
+      char* end = entry->value;
+      context->send_enobuf.enobuf_attemps = strtol(entry->value, &end, 0);
+      if(end==NULL){
+        snprintf(errbuf, len, "%s: bad software bypass enobuf attempts(%s)\n",
+                 __FUNCTION__, entry->value);
+        return DAQ_ERROR;
+      }
+#endif
     } else {
       snprintf(errbuf, len,
 	       "%s: unsupported variable(%s=%s)\n",
@@ -814,15 +839,27 @@ static int pfring_daq_send_packet(Pfring_Context_t *context, pfring *send_ring,
 				  u_int pkt_len, pfring *recv_ring, int send_ifindex)
 {
   int rc;
+  u_int32_t attempts = 0;
 
   if(( !context->use_fast_tx && send_ring == NULL)
      ||(context->use_fast_tx && recv_ring == NULL))
     return(DAQ_SUCCESS);
 
-  if(context->use_fast_tx)
+  if(context->use_fast_tx) {
     rc = pfring_send_last_rx_packet(recv_ring, send_ifindex);
-  else
-    rc = pfring_send(send_ring, (char *) context->pkt_buffer, pkt_len, 1 /* flush packet */);
+  } else {
+#ifdef DAQ_PFRING_SEND_RETRY_BOOST
+    rc = -1;
+    do{
+#endif
+      rc = pfring_send(send_ring, (char *) context->pkt_buffer, pkt_len, 1 /* flush packet */);
+#ifdef DAQ_PFRING_SEND_RETRY_BOOST
+      if(rc < 0 && context->send_enobuf.enobuf_wait_usecs) {
+        usleep(context->send_enobuf.enobuf_wait_usecs);
+      }
+    } while(rc < 0 && (++attempts < context->send_enobuf.enobuf_attemps));
+#endif
+  }
 
   if (rc < 0) {
     DPE(context->errbuf, "%s", "pfring_send() error");
