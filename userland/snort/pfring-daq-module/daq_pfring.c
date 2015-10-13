@@ -146,8 +146,12 @@ typedef struct _pfring_context
 #endif
 #ifdef DAQ_PFRING_SEND_RETRY_BOOST
   struct {
+    // Packets not sent even with the retry
+    u_int64_t pkts_not_sent;
     u_int32_t enobuf_wait_usecs;
     u_int32_t enobuf_attemps;
+    char *log_filename;
+    FILE *log_file;
   } send_enobuf;
 #endif
   DAQ_State state;
@@ -188,14 +192,19 @@ static uint64_t pfring_daq_total_queued(Pfring_Context_t *context) {
   return total_queued;
 }
 
+static int rb_log_print_line(FILE *f,u_int64_t stat) {
+  fseek(f, 0, SEEK_SET);
+  const int written = fprintf(f,"%lu\n",stat);
+  fflush(f);
+  return written;
+}
+
 /// @TODO merge with software_bypass_log
 static void software_bypass_stats_print_line(Pfring_Context_t *context) {
   if(context->sw_bypass.software_bypass_log_f
       && context->sw_bypass.pkts_bypassed > context->sw_bypass.base_pkts_bypassed){
-    fseek(context->sw_bypass.software_bypass_log_f, 0, SEEK_SET);
-    const int written = fprintf(context->sw_bypass.software_bypass_log_f,"%lu\n",
+    const int written = rb_log_print_line(context->sw_bypass.software_bypass_log_f,
       context->sw_bypass.pkts_bypassed);
-    fflush(context->best_effort_stats_file);
     if(written < 0){
         /* Can't write */
 
@@ -587,6 +596,16 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
                  __FUNCTION__, entry->value);
         return DAQ_ERROR;
       }
+    } else if(!strcmp(entry->key,"send_enobuf_log_file")) {
+      if(NULL != entry->value) {
+        context->send_enobuf.log_filename = strdup(entry->value);
+        if(NULL == context->send_enobuf.log_filename) {
+          snprintf(errbuf, len, "%s: Couldn strdup send enobuf filename "
+                                "(out of memory?)\n",
+                   __FUNCTION__);
+          return DAQ_ERROR;
+        }
+      }
 #endif
     } else {
       snprintf(errbuf, len,
@@ -753,6 +772,16 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
   }
 #endif
 
+#ifdef DAQ_PFRING_SEND_RETRY_BOOST
+    if(context->send_enobuf.log_filename) {
+      context->send_enobuf.log_file = fopen(context->send_enobuf.log_filename,"w");
+      if(NULL == context->send_enobuf.log_file) {
+        snprintf(errbuf, len, "%s: Couldn't open %s file for best effort stats!: %s", __FUNCTION__,context->best_effort_stats_file_path,strerror(errno));
+        return DAQ_ERROR;
+      }
+    }
+#endif
+
 #ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
   /// @TODO merge with best effort log file
   if(context->sw_bypass.software_bypass_log) {
@@ -858,6 +887,11 @@ static int pfring_daq_send_packet(Pfring_Context_t *context, pfring *send_ring,
         usleep(context->send_enobuf.enobuf_wait_usecs);
       }
     } while(rc < 0 && (++attempts < context->send_enobuf.enobuf_attemps));
+
+    if(context->send_enobuf.log_file && rc < 0) {
+      rb_log_print_line(context->send_enobuf.log_file,
+        ++context->send_enobuf.pkts_not_sent);
+    }
 #endif
   }
 
