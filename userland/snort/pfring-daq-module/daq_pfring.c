@@ -138,9 +138,9 @@ typedef struct _pfring_context
     FILE *software_bypass_log_f;
     u_int64_t pkts_bypassed;
     u_int64_t base_pkts_bypassed;
-    u_int16_t sampling_rate;
-    u_int16_t upper_threshold;
-    u_int16_t lower_threshold;
+    u_int64_t upper_threshold;
+    u_int64_t lower_threshold;
+    u_int64_t sampling_rate;
     u_int8_t enabled;
   }sw_bypass;
 #endif
@@ -555,7 +555,7 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
 #endif
     else if(!strcmp(entry->key,"sbypassupperthreshold")) {
       char* end = entry->value;
-      context->sw_bypass.upper_threshold = strtol(entry->value, &end, 0);
+      context->sw_bypass.upper_threshold = strtoull(entry->value, &end, 0);
       if(end==NULL){
 	snprintf(errbuf, len, "%s: bad software bypass upper threshold(%s)\n",
 		 __FUNCTION__, entry->value);
@@ -563,7 +563,7 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
       }
     } else if(!strcmp(entry->key,"sbypasslowerthreshold")) {
       char* end = entry->value;
-      context->sw_bypass.lower_threshold = strtol(entry->value, &end, 0);
+      context->sw_bypass.lower_threshold = strtoull(entry->value, &end, 0);
       if(end==NULL){
 	snprintf(errbuf, len, "%s: bad software bypass lower threshold(%s)\n",
 		 __FUNCTION__, entry->value);
@@ -571,7 +571,7 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
       }
     } else if(!strcmp(entry->key,"sbypasssamplingrate")) {
       char* end = entry->value;
-      context->sw_bypass.sampling_rate = strtol(entry->value, &end, 0);
+      context->sw_bypass.sampling_rate = strtoull(entry->value, &end, 0);
       if(end==NULL){
 	snprintf(errbuf, len, "%s: bad software bypass sampling rate(%s)\n",
 		 __FUNCTION__, entry->value);
@@ -582,7 +582,7 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
 #ifdef DAQ_PFRING_SEND_RETRY_BOOST
     } else if(!strcmp(entry->key,"send_enobuf_usecs")) {
       char* end = entry->value;
-      context->send_enobuf.enobuf_wait_usecs = strtol(entry->value, &end, 0);
+      context->send_enobuf.enobuf_wait_usecs = strtoull(entry->value, &end, 0);
       if(end==NULL){
         snprintf(errbuf, len, "%s: bad software bypass wait usecs(%s)\n",
                  __FUNCTION__, entry->value);
