@@ -141,7 +141,7 @@ typedef struct _pfring_context
     u_int64_t upper_threshold;
     u_int64_t lower_threshold;
     u_int64_t sampling_rate;
-    u_int8_t enabled;
+    u_int64_t pkts_to_bypass;
   }sw_bypass;
 #endif
 #ifdef DAQ_PFRING_SEND_RETRY_BOOST
@@ -168,17 +168,6 @@ static int pfring_daq_set_filter(void *handle, const char *filter);
 static void update_best_effort_stats(Pfring_Context_t *context);
 
 #ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
-static int is_bypass_enabled(const Pfring_Context_t *context){
-  return context->sw_bypass.enabled;
-}
-
-static void disable_bypass(Pfring_Context_t *context){
-  context->sw_bypass.enabled = 0;
-}
-
-static void enable_bypass(Pfring_Context_t *context){
-  context->sw_bypass.enabled = 1;
-}
 
 static uint64_t pfring_daq_total_queued(Pfring_Context_t *context) {
   int i;
@@ -217,19 +206,34 @@ static void software_bypass_stats_print_line(Pfring_Context_t *context) {
 }
 
 static void update_soft_bypass_status(Pfring_Context_t *context){
-  const uint32_t num_queued_packets = pfring_daq_total_queued(context);
-  //printf("%tu Number of queued packets: %u\n",time(NULL),num_queued_packets);
 
-  if(!is_bypass_enabled(context)){ /* bypass off. Should we set it on? */
-    if(num_queued_packets > context->sw_bypass.upper_threshold){
-      enable_bypass(context);
+  if(context->sw_bypass.pkts_to_bypass == 0 &&
+    ((context->stats.packets_received+context->sw_bypass.pkts_bypassed)
+    %context->sw_bypass.sampling_rate == 0)) {
+
+    /* bypass off & sampling time. should we set it on? */
+    const uint32_t num_queued_packets = pfring_daq_total_queued(context);
+    if(num_queued_packets > context->sw_bypass.upper_threshold) {
+      context->sw_bypass.pkts_to_bypass = 
+        (num_queued_packets - context->sw_bypass.lower_threshold)
+        // Using sampling rate as extra margin 
+        + context->sw_bypass.sampling_rate; 
     }
-  }else{ /* We are in bypass time. Should we set it off? */
-    if(num_queued_packets < context->sw_bypass.lower_threshold){
-      disable_bypass(context);
+  } else if(context->sw_bypass.pkts_to_bypass == 1) {
+    /* We are ending bypass time. Should we set it off? */
+
+    const uint32_t num_queued_packets = pfring_daq_total_queued(context);
+    if(context->sw_bypass.pkts_to_bypass > context->sw_bypass.lower_threshold) {
+      /* Still need to keep bypassing */
+      context->sw_bypass.pkts_to_bypass =
+        (num_queued_packets - context->sw_bypass.lower_threshold)
+        // Using sampling rate as extra margin
+        + context->sw_bypass.sampling_rate;
+    } else {
       software_bypass_stats_print_line(context);
     }
   }
+
 }
 
 #endif
@@ -1034,19 +1038,16 @@ static inline void pfring_daq_process(Pfring_Context_t *context, Pfring_Queue_Sl
   hdr.flags = 0;
 
 #ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
-  if(context->sw_bypass.sampling_rate >0 && 
-    (context->stats.packets_received+context->sw_bypass.pkts_bypassed)
-        %context->sw_bypass.sampling_rate == 0) {
-    update_soft_bypass_status(context);
-  }
+  update_soft_bypass_status(context);
 
-  if(!is_bypass_enabled(context)) {
+  if(0 == context->sw_bypass.pkts_to_bypass) {
 #endif
     verdict = context->analysis_func(qhdr->user, &hdr,(u_char*)qhdr->pkt_buffer);
     context->stats.packets_received++;
     context->stats.verdicts[verdict]++;
 #ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
   } else {
+    context->sw_bypass.pkts_to_bypass--;
     context->sw_bypass.pkts_bypassed++;
     verdict = DAQ_VERDICT_PASS;
   }
@@ -1255,18 +1256,15 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
       rx_ring_idx = current_ring_idx;
 
 #ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
-      if(context->sw_bypass.sampling_rate >0 && 
-            (context->stats.packets_received+context->sw_bypass.pkts_bypassed)
-            %context->sw_bypass.sampling_rate == 0) {
-          update_soft_bypass_status(context);
-      }
+      update_soft_bypass_status(context);
 
-      if(!is_bypass_enabled(context)){
+      if(0 == context->sw_bypass.pkts_to_bypass) {
 #endif
         context->stats.packets_received++;
         verdict = context->analysis_func(user, &hdr,(u_char*)context->pkt_buffer);
 #ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
       } else {
+        context->sw_bypass.pkts_to_bypass--;
         context->sw_bypass.pkts_bypassed++;
         verdict = DAQ_VERDICT_PASS;
       }
