@@ -795,6 +795,7 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
       return DAQ_ERROR;
     } else {
       fprintf(context->sw_bypass.software_bypass_log_f,"0\n");
+      fflush(context->sw_bypass.software_bypass_log_f);
     }
   }
 #endif
