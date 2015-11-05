@@ -1039,7 +1039,9 @@ static inline void pfring_daq_process(Pfring_Context_t *context, Pfring_Queue_Sl
   hdr.flags = 0;
 
 #ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
-  update_soft_bypass_status(context);
+  if(context->sw_bypass.sampling_rate > 0) {
+    update_soft_bypass_status(context);
+  }
 
   if(0 == context->sw_bypass.pkts_to_bypass) {
 #endif
@@ -1257,7 +1259,9 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
       rx_ring_idx = current_ring_idx;
 
 #ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
-      update_soft_bypass_status(context);
+      if(context->sw_bypass.sampling_rate > 0) {
+        update_soft_bypass_status(context);
+      }
 
       if(0 == context->sw_bypass.pkts_to_bypass) {
 #endif
