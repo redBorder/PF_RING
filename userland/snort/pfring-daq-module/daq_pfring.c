@@ -149,7 +149,7 @@ typedef struct _pfring_context
     // Packets not sent even with the retry
     u_int64_t pkts_not_sent;
     u_int32_t enobuf_wait_usecs;
-    u_int32_t enobuf_attemps;
+    u_int32_t enobuf_attempts;
     char *log_filename;
     FILE *log_file;
   } send_enobuf;
@@ -592,9 +592,9 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
                  __FUNCTION__, entry->value);
         return DAQ_ERROR;
       }
-    } else if(!strcmp(entry->key,"send_enobuf_attemps")) {
+    } else if(!strcmp(entry->key,"send_enobuf_attempts")) {
       char* end = entry->value;
-      context->send_enobuf.enobuf_attemps = strtol(entry->value, &end, 0);
+      context->send_enobuf.enobuf_attempts = strtol(entry->value, &end, 0);
       if(end==NULL){
         snprintf(errbuf, len, "%s: bad software bypass enobuf attempts(%s)\n",
                  __FUNCTION__, entry->value);
@@ -891,7 +891,7 @@ static int pfring_daq_send_packet(Pfring_Context_t *context, pfring *send_ring,
       if(rc < 0 && context->send_enobuf.enobuf_wait_usecs) {
         usleep(context->send_enobuf.enobuf_wait_usecs);
       }
-    } while(rc < 0 && (++attempts < context->send_enobuf.enobuf_attemps));
+    } while(rc < 0 && (++attempts < context->send_enobuf.enobuf_attempts));
 
     if(context->send_enobuf.log_file && rc < 0) {
       rb_log_print_line(context->send_enobuf.log_file,
