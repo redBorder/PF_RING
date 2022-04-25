@@ -1393,6 +1393,37 @@ void pf_ring_zc_dev_handler(zc_dev_operation operation,
 			    zc_dev_wait_packet wait_packet_function_ptr,
 			    zc_dev_notify dev_notify_function_ptr);
 
+/* *************************************************************** */
+
+#define REDBORDER_PATCH
+#ifdef REDBORDER_PATCH
+typedef enum {
+  IF_SCAN,
+  GET_DEV_NUM,
+  IS_BYPASS,
+  GET_BYPASS_SLAVE,
+  GET_BYPASS_CAPS,
+  GET_WD_SET_CAPS,
+  SET_BYPASS,
+  GET_BYPASS
+  /* ... */
+} BPCTL_COMPACT_CMND_TYPE_SD;
+
+struct bpctl_cmd {
+  int status;
+  int data[8];
+  int in_param[8];
+  int out_param[8];
+};
+
+#define BPCTL_MAGIC_NUM 'J'
+#define BPCTL_IOCTL_TX_MSG(cmd) _IOWR(BPCTL_MAGIC_NUM, cmd, struct bpctl_cmd)
+
+extern int bpctl_kernel_ioctl(unsigned int ioctl_num, void *ioctl_param);
+#endif
+
+/* *************************************************************** */
+
 #endif /* __KERNEL__  */
 
 /* *********************************** */

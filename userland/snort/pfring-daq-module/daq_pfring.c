@@ -57,8 +57,40 @@
 #define DAQ_PF_RING_DEFAULT_WATERMARK 128
 #define DAQ_PF_RING_DEFAULT_IDLE_RULES_TIMEOUT 300 /* 5 minutes */
 
-#define DAQ_PF_RING_MAX_NUM_DEVICES 16
+#define DAQ_PF_RING_MAX_NUM_DEVICES 64
 #define DAQ_PF_RING_PASSIVE_DEV_IDX  0
+
+#define DAQ_PF_RING_BEST_EFFORT_BOOST
+#define DAQ_PF_RING_SOFT_BYPASS_BOOST
+#define DAQ_PFRING_SEND_RETRY_BOOST
+
+#ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
+#define DAQ_PF_RING_BEST_EFFORT_BOOST_MIN_NUM_SLOTS 4096
+#define DAQ_PF_RING_BEST_EFFORT_BOOST_MAX_STATS_FILE_SIZE (1024*1024)
+
+typedef struct _pfring_queue_slothdr
+{
+  u_int32_t caplen;
+  u_int32_t pktlen;
+  int device_index;
+  struct timeval ts;
+  void *user;
+  u_char pkt_buffer[];
+} Pfring_Queue_SlotHdr_t;
+
+typedef struct _pfring_queue 
+{
+  u_char *buffer;
+  u_int64_t buffer_len;
+  u_int64_t insert_off;
+  u_int64_t remove_off;
+  u_int32_t tot_read;
+  u_int32_t tot_insert;
+  u_int32_t tot_dropped;
+  u_int32_t max_slot_len;
+  u_int32_t min_num_slots;
+} Pfring_Queue_t;
+#endif
 
 typedef struct _pfring_context
 {
@@ -66,8 +98,15 @@ typedef struct _pfring_context
   char *devices[DAQ_PF_RING_MAX_NUM_DEVICES];
   int ifindexes[DAQ_PF_RING_MAX_NUM_DEVICES];
   pfring *ring_handles[DAQ_PF_RING_MAX_NUM_DEVICES];
+#ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
+  const char *best_effort_stats_file_path;
+  FILE *best_effort_stats_file;
+#endif
   int num_devices;
   int snaplen;
+#ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
+  Pfring_Queue_t *q;
+#endif
   char *filter_string;
   char errbuf[1024];
   u_char *pkt_buffer;
@@ -76,6 +115,7 @@ typedef struct _pfring_context
   int promisc_flag;
   int timeout;
   int watermark;
+  int best_effort; /// @TODO wrap with DAQ_PF_RING_BEST_EFFORT_BOOST
   u_int16_t filter_count;
   DAQ_Analysis_Func_t analysis_func;
   uint32_t netmask;
@@ -90,6 +130,31 @@ typedef struct _pfring_context
   u_int bindcpu;
   uint64_t base_recv[DAQ_PF_RING_MAX_NUM_DEVICES];
   uint64_t base_drop[DAQ_PF_RING_MAX_NUM_DEVICES];
+#ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
+  uint64_t base_best_effort_drops;
+#endif
+#ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
+  struct{
+    char *software_bypass_log;
+    FILE *software_bypass_log_f;
+    u_int64_t pkts_bypassed;
+    u_int64_t base_pkts_bypassed;
+    u_int64_t upper_threshold;
+    u_int64_t lower_threshold;
+    u_int64_t sampling_rate;
+    u_int64_t pkts_to_bypass;
+  }sw_bypass;
+#endif
+#ifdef DAQ_PFRING_SEND_RETRY_BOOST
+  struct {
+    // Packets not sent even with the retry
+    u_int64_t pkts_not_sent;
+    u_int32_t enobuf_wait_usecs;
+    u_int32_t enobuf_attemps;
+    char *log_filename;
+    FILE *log_file;
+  } send_enobuf;
+#endif
   DAQ_State state;
 #ifdef HAVE_REDIS
   redisContext *redis_ctx;
@@ -100,6 +165,78 @@ typedef struct _pfring_context
 
 static void pfring_daq_reset_stats(void *handle);
 static int pfring_daq_set_filter(void *handle, const char *filter);
+static void update_best_effort_stats(Pfring_Context_t *context);
+
+#ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
+
+static uint64_t pfring_daq_total_queued(Pfring_Context_t *context) {
+  int i;
+  uint64_t total_queued = 0;
+
+  for (i = 0; i < context->num_devices; i++){
+    if(context->ring_handles[i])
+       total_queued += pfring_get_num_queued_pkts(context->ring_handles[i]);
+  }
+
+  return total_queued;
+}
+
+static int rb_log_print_line(FILE *f,u_int64_t stat) {
+  fseek(f, 0, SEEK_SET);
+  const int written = fprintf(f,"%lu\n",stat);
+  fflush(f);
+  return written;
+}
+
+/// @TODO merge with software_bypass_log
+static void software_bypass_stats_print_line(Pfring_Context_t *context) {
+  if(context->sw_bypass.software_bypass_log_f
+      && context->sw_bypass.pkts_bypassed > context->sw_bypass.base_pkts_bypassed){
+    const int written = rb_log_print_line(context->sw_bypass.software_bypass_log_f,
+      context->sw_bypass.pkts_bypassed);
+    if(written < 0){
+        /* Can't write */
+
+    } else {
+        context->sw_bypass.base_pkts_bypassed = context->sw_bypass.pkts_bypassed;
+    }
+  } else {
+    /* @TODO try to reopen? */
+  }
+}
+
+static void update_soft_bypass_status(Pfring_Context_t *context){
+
+  if(context->sw_bypass.pkts_to_bypass == 0 &&
+    ((context->stats.packets_received+context->sw_bypass.pkts_bypassed)
+    %context->sw_bypass.sampling_rate == 0)) {
+
+    /* bypass off & sampling time. should we set it on? */
+    const uint32_t num_queued_packets = pfring_daq_total_queued(context);
+    if(num_queued_packets > context->sw_bypass.upper_threshold) {
+      context->sw_bypass.pkts_to_bypass = 
+        (num_queued_packets - context->sw_bypass.lower_threshold)
+        // Using sampling rate as extra margin 
+        + context->sw_bypass.sampling_rate; 
+    }
+  } else if(context->sw_bypass.pkts_to_bypass == 1) {
+    /* We are ending bypass time. Should we set it off? */
+
+    const uint32_t num_queued_packets = pfring_daq_total_queued(context);
+    if(context->sw_bypass.pkts_to_bypass > context->sw_bypass.lower_threshold) {
+      /* Still need to keep bypassing */
+      context->sw_bypass.pkts_to_bypass =
+        (num_queued_packets - context->sw_bypass.lower_threshold)
+        // Using sampling rate as extra margin
+        + context->sw_bypass.sampling_rate;
+    } else {
+      software_bypass_stats_print_line(context);
+    }
+  }
+
+}
+
+#endif
 
 static int pfring_daq_open(Pfring_Context_t *context, int id) {
   uint32_t default_net = 0xFFFFFF00;
@@ -114,10 +251,12 @@ static int pfring_daq_open(Pfring_Context_t *context, int id) {
   }
 
   if(device) {
-    if(strncmp(device, "zc:", 3) == 0) {
-      DPE(context->errbuf, "ZC is not supported by daq_pfring. Please use daq_pfring_zc");
+    if(strncmp(device, "dna", 3) == 0) {
+      DPE(context->errbuf, "DNA is not supported by daq_pfring. Please get daq_pfring_dna from http://shop.ntop.org");
       return(-1);
     }
+
+    context->pkt_buffer = NULL;
 
     ring_handle = pfring_open(device, context->snaplen,
 			      PF_RING_LONG_HEADER 
@@ -139,7 +278,7 @@ static int pfring_daq_open(Pfring_Context_t *context, int id) {
   if (context->mode == DAQ_MODE_INLINE) {
     /* Default mode: recv_and_send_mode */
     pfring_set_direction(ring_handle, rx_only_direction);
-  } else if (context->mode == DAQ_MODE_PASSIVE) {
+  } else if (context->mode == DAQ_MODE_PASSIVE && !context->best_effort) {
     /* Default direction: rx_and_tx_direction */
     if(context->num_reflector_devices > id) { /* lowlevelbridge ON */
       filtering_rule rule;
@@ -199,7 +338,7 @@ static int update_hw_stats(Pfring_Context_t *context) {
     memset(&ps, 0, sizeof(pfring_stat));
 
     if(pfring_stats(context->ring_handles[i], &ps) < 0) {
-      DPE(context->errbuf, "%s: pfring_stats error [ring_idx = %d]", __func__, i);
+      DPE(context->errbuf, "%s: pfring_stats error [ring_idx = %d]", __FUNCTION__, i);
       return DAQ_ERROR;
     }
 
@@ -234,17 +373,34 @@ static void pfring_daq_reload(Pfring_Context_t *context) {
   }
 }
 
+#ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
+
+static void close_best_effort_stats(Pfring_Context_t *context) {
+  fclose(context->best_effort_stats_file);
+}
+
+#endif
+
+#ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
+
+static void close_soft_bypass_stats(Pfring_Context_t *context) {
+  fclose(context->sw_bypass.software_bypass_log_f);
+}
+
+#endif
+
 static int pfring_daq_initialize(const DAQ_Config_t *config,
 				 void **ctxt_ptr, char *errbuf, size_t len) {
+  char *clusters = NULL;
   Pfring_Context_t *context;
   DAQ_Dict* entry;
   int i;
-  pfring_card_settings ring_settings;
+  /* pfring_card_settings ring_settings; taken from pfcount example */
   u_int numCPU = get_nprocs();
 
   context = calloc(1, sizeof(Pfring_Context_t));
   if(!context) {
-    snprintf(errbuf, len, "%s: Couldn't allocate memory for the new PF_RING context!", __func__);
+    snprintf(errbuf, len, "%s: Couldn't allocate memory for the new PF_RING context!", __FUNCTION__);
     return DAQ_ERROR_NOMEM;
   }
 
@@ -265,99 +421,23 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
 #ifdef HAVE_REDIS
   context->redis_port = -1;
 #endif
+#ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
+  u_int32_t best_effort_min_num_slots = DAQ_PF_RING_BEST_EFFORT_BOOST_MIN_NUM_SLOTS;
+#endif
 
   if(!context->devices[DAQ_PF_RING_PASSIVE_DEV_IDX]) {
-    snprintf(errbuf, len, "%s: Couldn't allocate memory for the device string!", __func__);
+    snprintf(errbuf, len, "%s: Couldn't allocate memory for the device string!", __FUNCTION__);
     free(context);
     return DAQ_ERROR_NOMEM;
-  }
-
-  if(context->mode == DAQ_MODE_READ_FILE) {
-    snprintf(errbuf, len, "%s: function not supported on PF_RING", __func__);
-    free(context);
-    return DAQ_ERROR;
-  } else if(context->mode == DAQ_MODE_INLINE) {
-    /* ethX:ethY;ethZ:ethJ */
-    char *twins, *twins_pos = NULL;
-    context->num_devices = 0;
-
-    twins = strtok_r(context->devices[DAQ_PF_RING_PASSIVE_DEV_IDX], ",", &twins_pos);
-    while(twins != NULL) {
-      char *dev, *dev_pos = NULL;
-      int last_twin = 0;
-
-      dev = strtok_r(twins, ":", &dev_pos);
-      while(dev != NULL) {
-        last_twin = context->num_devices;
-
-	context->devices[context->num_devices++] = dev;
-
-        dev = strtok_r(NULL, ":", &dev_pos);
-      }
-
-      if (context->num_devices & 0x1) {
-        snprintf(errbuf, len, "%s: Wrong format: inline mode requires pairs of devices", __func__);
-        free(context);
-        return DAQ_ERROR;
-      }
-
-      if (last_twin > 0) /* new dev pair */
-        printf("%s <-> %s\n", context->devices[last_twin - 1], context->devices[last_twin]);
-
-      twins = strtok_r(NULL, ",", &twins_pos);
-    }
-  } else if(context->mode == DAQ_MODE_PASSIVE) {
-    /* ethX,ethY */
-    char *dev, *dev_pos = NULL;
-    context->num_devices = 0;
-
-    dev = strtok_r(context->devices[DAQ_PF_RING_PASSIVE_DEV_IDX], ",", &dev_pos);
-    while(dev != NULL) {
-
-      if(context->num_devices >= DAQ_PF_RING_MAX_NUM_DEVICES){
-        snprintf(errbuf, len, "%s: too many interfaces!", __func__);
-        free(context);
-        return DAQ_ERROR_NOMEM;
-      }
-
-      context->devices[context->num_devices++] = dev;
-      dev = strtok_r(NULL, ",", &dev_pos);
-    }
   }
 
   for(entry = config->values; entry; entry = entry->next) {
     if(!entry->value || !*entry->value) {
       snprintf(errbuf, len,
-	       "%s: variable needs value(%s)\n", __func__, entry->key);
+	       "%s: variable needs value(%s)\n", __FUNCTION__, entry->key);
       return DAQ_ERROR;
     } else if(!strcmp(entry->key, "clusterid")) {
       char *clusters = strdup(entry->value);
-      if (clusters != NULL) {
-        char *clusterid, *clusterid_pos = NULL;
-	char* end;
-
-        clusterid = strtok_r(clusters, ",", &clusterid_pos);
-        for (i = 0; i < context->num_devices; i++) {
-	  if (clusterid == NULL) {
-	    snprintf(errbuf, len, "%s: not enough cluster ids (%d)\n", __func__, i);
-	    return DAQ_ERROR;
-	  }
-
-          end = entry->value;
-          context->clusterids[i] =(int)strtol(clusterid, &end, 0);
-          if(*end
-	     || (context->clusterids[i] <= 0)
-	     || (context->clusterids[i] > 65535)) {
-	    snprintf(errbuf, len, "%s: bad clusterid(%s)\n",
-		     __func__, clusterid);
-
-	    return DAQ_ERROR;
-          }
-
-          clusterid = strtok_r(NULL, ",", &clusterid_pos);
-        }
-	free(clusters);
-      }
     } else if(!strcmp(entry->key, "no-kernel-filters")) {
       context->use_kernel_filters = 0;
     } else if(!strcmp(entry->key, "kernel-filters-idle-timeout")) {
@@ -376,7 +456,7 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
       if(*end
 	 || (context->bindcpu >= numCPU)) {
 	snprintf(errbuf, len, "%s: bad bindcpu(%s)\n",
-		 __func__, entry->value);
+		 __FUNCTION__, entry->value);
 	return DAQ_ERROR;
       } else {
 	cpu_set_t mask;
@@ -385,7 +465,7 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
 	CPU_SET((int)context->bindcpu, &mask);
 	if(sched_setaffinity(0, sizeof(mask), &mask) < 0) {
 	  snprintf(errbuf, len, "%s:failed to set bindcpu(%u) on pid %i\n",
-		   __func__, context->bindcpu, getpid());
+		   __FUNCTION__, context->bindcpu, getpid());
 	  return DAQ_ERROR;
 	}
       }
@@ -394,15 +474,31 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
       context->timeout = (int) strtol(entry->value, &end, 0);
       if(*end || (context->timeout < 0)) {
 	snprintf(errbuf, len, "%s: bad timeout(%s)\n",
-		 __func__, entry->value);
+		 __FUNCTION__, entry->value);
 	return DAQ_ERROR;
       }
-    } else if(!strcmp(entry->key, "watermark")) {
+    } 
+#ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
+    else if(!strcmp(entry->key, "besteffort")) {
+      context->best_effort = 1;
+    } else if(!strcmp(entry->key, "besteffort_minnumslots")) {
+      char* end = NULL;
+      best_effort_min_num_slots = strtol(entry->value, &end, 0);
+      if(end==entry->value || *end != '\0') {
+        snprintf(errbuf, len, "%s: bad best effort min number of slots(%s)\n",
+                 __FUNCTION__, entry->value);
+        return DAQ_ERROR;
+      }
+    } else if(!strcmp(entry->key, "besteffort_logfile")) {
+      context->best_effort_stats_file_path = strdup(entry->value);
+    }
+#endif
+    else if(!strcmp(entry->key, "watermark")) {
       char* end = entry->value;
       context->watermark = (int) strtol(entry->value, &end, 0);
       if(*end || (context->watermark < 0)) {
 	snprintf(errbuf, len, "%s: bad watermark(%s)\n",
-		 __func__, entry->value);
+		 __FUNCTION__, entry->value);
 	return DAQ_ERROR;
       }
     } else if(!strcmp(entry->key, "clustermode")) {
@@ -410,7 +506,7 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
       int cmode = (int) strtol(entry->value, &end, 0);
       if(*end || (cmode != 2 && cmode != 4 && cmode != 5 && cmode != 6)) {
 	snprintf(errbuf, len, "%s: bad cluster mode(%s)\n",
-		 __func__, entry->value);
+		 __FUNCTION__, entry->value);
 	return DAQ_ERROR;
       } else {
         switch (cmode) {
@@ -433,16 +529,10 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
             context->reflector_devices[context->num_reflector_devices++] = dev;
             dev = strtok_r(NULL, ",", &dev_pos);
           }
-
-	  if (context->num_reflector_devices != context->num_devices) {
-	    snprintf(errbuf, len, "%s: not enough reflector devices (%d)\n",
-	             __func__, context->num_reflector_devices);
-	    return DAQ_ERROR;
-	  }
         }
       } else {
         snprintf(errbuf, len, "%s: lowlevelbridge is for passive mode only\n",
-		 __func__);
+		 __FUNCTION__);
         return DAQ_ERROR;
       }
     }
@@ -462,25 +552,164 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
 	  i++;
 	}
 	if (temp != NULL) {
-	  snprintf(errbuf, len, "%s: Incorrect format for <redis ip>:<redis port>\n", __func__);
+	  snprintf(errbuf, len, "%s: Incorrect format for <redis ip>:<redis port>\n", __FUNCTION__);
 	  free(temp);
 	  return DAQ_ERROR;
 	}
       }
     }
 #endif
-    else {
+    else if(!strcmp(entry->key,"sbypassupperthreshold")) {
+      char* end = entry->value;
+      context->sw_bypass.upper_threshold = strtoull(entry->value, &end, 0);
+      if(end==NULL){
+	snprintf(errbuf, len, "%s: bad software bypass upper threshold(%s)\n",
+		 __FUNCTION__, entry->value);
+	return DAQ_ERROR;
+      }
+    } else if(!strcmp(entry->key,"sbypasslowerthreshold")) {
+      char* end = entry->value;
+      context->sw_bypass.lower_threshold = strtoull(entry->value, &end, 0);
+      if(end==NULL){
+	snprintf(errbuf, len, "%s: bad software bypass lower threshold(%s)\n",
+		 __FUNCTION__, entry->value);
+	return DAQ_ERROR;
+      }
+    } else if(!strcmp(entry->key,"sbypasssamplingrate")) {
+      char* end = entry->value;
+      context->sw_bypass.sampling_rate = strtoull(entry->value, &end, 0);
+      if(end==NULL){
+	snprintf(errbuf, len, "%s: bad software bypass sampling rate(%s)\n",
+		 __FUNCTION__, entry->value);
+	return DAQ_ERROR;
+      }
+    } else if(!strcmp(entry->key,"sbypasslogfile")){
+      context->sw_bypass.software_bypass_log = strdup(entry->value);
+#ifdef DAQ_PFRING_SEND_RETRY_BOOST
+    } else if(!strcmp(entry->key,"send_enobuf_usecs")) {
+      char* end = entry->value;
+      context->send_enobuf.enobuf_wait_usecs = strtoull(entry->value, &end, 0);
+      if(end==NULL){
+        snprintf(errbuf, len, "%s: bad software bypass wait usecs(%s)\n",
+                 __FUNCTION__, entry->value);
+        return DAQ_ERROR;
+      }
+    } else if(!strcmp(entry->key,"send_enobuf_attemps")) {
+      char* end = entry->value;
+      context->send_enobuf.enobuf_attemps = strtol(entry->value, &end, 0);
+      if(end==NULL){
+        snprintf(errbuf, len, "%s: bad software bypass enobuf attempts(%s)\n",
+                 __FUNCTION__, entry->value);
+        return DAQ_ERROR;
+      }
+    } else if(!strcmp(entry->key,"send_enobuf_log_file")) {
+      if(NULL != entry->value) {
+        context->send_enobuf.log_filename = strdup(entry->value);
+        if(NULL == context->send_enobuf.log_filename) {
+          snprintf(errbuf, len, "%s: Couldn strdup send enobuf filename "
+                                "(out of memory?)\n",
+                   __FUNCTION__);
+          return DAQ_ERROR;
+        }
+      }
+#endif
+      } else {
       snprintf(errbuf, len,
 	       "%s: unsupported variable(%s=%s)\n",
-	       __func__, entry->key, entry->value);
+	       __FUNCTION__, entry->key, entry->value);
       return DAQ_ERROR;
     }
   }
 
-  if (context->num_devices == 0) {
-    snprintf(errbuf, len, "%s: no device specified (self-test mode?)\n", __func__);
-    return DAQ_ERROR;  
+  if(context->mode == DAQ_MODE_READ_FILE) {
+    snprintf(errbuf, len, "%s: function not supported on PF_RING", __FUNCTION__);
+    free(context);
+    return DAQ_ERROR;
+  } else if(context->mode == DAQ_MODE_INLINE || 
+        (context->mode == DAQ_MODE_PASSIVE && context->best_effort)) {
+    /* ethX:ethY;ethZ:ethJ */
+    char *twins, *twins_pos = NULL;
+    context->num_devices = 0;
+
+    twins = strtok_r(context->devices[DAQ_PF_RING_PASSIVE_DEV_IDX], ",", &twins_pos);
+    while(twins != NULL) {
+      char *dev, *dev_pos = NULL;
+      int last_twin = 0;
+
+      dev = strtok_r(twins, ":", &dev_pos);
+      while(dev != NULL) {
+        last_twin = context->num_devices;
+
+        context->devices[context->num_devices++] = dev;
+
+        dev = strtok_r(NULL, ":", &dev_pos);
+      }
+
+      if (context->num_devices & 0x1) {
+        snprintf(errbuf, len, "%s: Wrong format: inline mode requires pairs of devices", __FUNCTION__);
+        free(context);
+        return DAQ_ERROR;
+      }
+
+      if (last_twin > 0) /* new dev pair */
+        printf("%s <-> %s\n", context->devices[last_twin - 1], context->devices[last_twin]);
+
+      twins = strtok_r(NULL, ",", &twins_pos);
+    }
+  } else if(context->mode == DAQ_MODE_PASSIVE) {
+    /* ethX,ethY */
+    char *dev, *dev_pos = NULL;
+    context->num_devices = 0;
+
+    dev = strtok_r(context->devices[DAQ_PF_RING_PASSIVE_DEV_IDX], ",", &dev_pos);
+    while(dev != NULL) {
+      if(context->num_devices >= DAQ_PF_RING_MAX_NUM_DEVICES){
+        snprintf(errbuf, len, "%s: too many interfaces!", __FUNCTION__);
+        free(context);
+        return DAQ_ERROR_NOMEM;
+      }
+
+      context->devices[context->num_devices++] = dev;
+      dev = strtok_r(NULL, ",", &dev_pos);
+    }
+
+    if (context->num_reflector_devices > 0 && 
+       context->num_reflector_devices != context->num_devices) {
+      snprintf(errbuf, len, "%s: not enough reflector devices (%d)\n",
+               __FUNCTION__, context->num_reflector_devices);
+      return DAQ_ERROR;
+    }
   }
+
+  if (clusters != NULL) {
+    char *clusterid, *clusterid_pos = NULL;
+    char* end;
+
+    clusterid = strtok_r(clusters, ",", &clusterid_pos);
+    for (i = 0; i < context->num_devices; i++) {
+      if (clusterid == NULL) {
+        snprintf(errbuf, len, "%s: not enough cluster ids (%d)\n", __FUNCTION__, i);
+        return DAQ_ERROR;
+      }
+
+      end = clusters;
+      context->clusterids[i] =(int)strtol(clusterid, &end, 0);
+      if(*end
+         || (context->clusterids[i] <= 0)
+         || (context->clusterids[i] > 65535)) {
+        snprintf(errbuf, len, "%s: bad clusterid(%s)\n",
+                 __FUNCTION__, clusterid);
+
+        return DAQ_ERROR;
+      }
+
+      clusterid = strtok_r(NULL, ",", &clusterid_pos);
+    }
+    free(clusters);
+  }
+
+  if(context->sw_bypass.upper_threshold == 0 || context->sw_bypass.lower_threshold == 0)
+    context->sw_bypass.sampling_rate = 0; // Disable
 
   /* catching the SIGRELOAD signal, replacing the default snort handler */
   if ((default_sig_reload_handler = signal(SIGHUP, pfring_daq_sig_reload)) == SIG_ERR)
@@ -489,15 +718,14 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
   for (i = 0; i < context->num_devices; i++) {
     if(context->ring_handles[i] == NULL) {
       if (pfring_daq_open(context, i) == -1)
-        return DAQ_ERROR;
+//rb:ini
+        //return DAQ_ERROR;
+        {
+          snprintf(errbuf, len, "%s", context->errbuf);
+          return DAQ_ERROR;
+        }
+//rb:fin
     }
-  }
-
-  pfring_get_card_settings(context->ring_handles[0], &ring_settings);
-  context->inj_buffer = malloc(ring_settings.max_packet_size);
-  if (context->inj_buffer == NULL) {
-    snprintf(errbuf, len, "%s: memory allocation failure\n", __func__);
-    return DAQ_ERROR;
   }
 
 #ifdef HAVE_REDIS
@@ -508,6 +736,72 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
     }
   }
 #endif
+
+#ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
+  if (context->mode == DAQ_MODE_PASSIVE && context->best_effort == 1) {
+    context->q = (Pfring_Queue_t *) calloc(1, sizeof(Pfring_Queue_t));
+    if(!context->q) {
+      snprintf(errbuf, len, "%s: Couldn't allocate memory for the new PF_RING context!", __FUNCTION__);
+      return DAQ_ERROR_NOMEM;
+    }
+
+    context->q->min_num_slots = best_effort_min_num_slots;
+    context->q->max_slot_len = sizeof(Pfring_Queue_SlotHdr_t) + context->snaplen;
+    context->q->buffer_len = context->q->min_num_slots * context->q->max_slot_len;
+
+    context->q->buffer = (u_char *) malloc(context->q->buffer_len);
+    if(!context->q->buffer) {
+      snprintf(errbuf, len, "%s: Couldn't allocate memory for best-effort IDS bridge support (queue)!", __FUNCTION__);
+      return DAQ_ERROR_NOMEM;
+    }
+  }
+
+  if (NULL != context->best_effort_stats_file_path) {
+    char full_filename_buffer[2048];
+    const int snprintf_rc = snprintf(full_filename_buffer,sizeof(full_filename_buffer),
+                            "%s.%lu",context->best_effort_stats_file_path,time(NULL));
+    if(snprintf_rc < 0) {
+      snprintf(errbuf, len, "%s: Couldn't use %s base filename for best effort stats!", __FUNCTION__,context->best_effort_stats_file_path);
+      return DAQ_ERROR;
+    }
+
+    if(snprintf_rc > (ssize_t)sizeof(full_filename_buffer)) {
+      snprintf(errbuf, len, "%s: Couldn't use %s base filename for best effort stats: It's too long!", __FUNCTION__,context->best_effort_stats_file_path);
+      return DAQ_ERROR;
+    }
+
+    context->best_effort_stats_file = fopen(context->best_effort_stats_file_path,"w");
+    if(NULL == context->best_effort_stats_file) {
+      snprintf(errbuf, len, "%s: Couldn't open %s file for best effort stats!: %s", __FUNCTION__,context->best_effort_stats_file_path,strerror(errno));
+      return DAQ_ERROR;
+    }
+  }
+#endif
+
+#ifdef DAQ_PFRING_SEND_RETRY_BOOST
+    if(context->send_enobuf.log_filename) {
+      context->send_enobuf.log_file = fopen(context->send_enobuf.log_filename,"w");
+      if(NULL == context->send_enobuf.log_file) {
+        snprintf(errbuf, len, "%s: Couldn't open %s file for best effort stats!: %s", __FUNCTION__,context->best_effort_stats_file_path,strerror(errno));
+        return DAQ_ERROR;
+      }
+    }
+#endif
+
+#ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
+  /// @TODO merge with best effort log file
+  if(context->sw_bypass.software_bypass_log) {
+    context->sw_bypass.software_bypass_log_f = fopen(context->sw_bypass.software_bypass_log,"w");
+    if(NULL == context->sw_bypass.software_bypass_log_f) {
+      snprintf(errbuf, len, "%s: Couldn't open %s file for best effort stats!: %s", __FUNCTION__,context->sw_bypass.software_bypass_log,strerror(errno));
+      return DAQ_ERROR;
+    } else {
+      fprintf(context->sw_bypass.software_bypass_log_f,"0\n");
+      fflush(context->sw_bypass.software_bypass_log_f);
+    }
+  }
+#endif
+
 
   context->state = DAQ_STATE_INITIALIZED;
 
@@ -523,7 +817,7 @@ static int pfring_daq_set_filter(void *handle, const char *filter) {
   if(context->ring_handles[DAQ_PF_RING_PASSIVE_DEV_IDX]) {
     if(sfbpf_compile(context->snaplen, DLT_EN10MB, &fcode,
 		     filter, 0 /* 1: optimize */, htonl(context->netmask)) < 0) {
-      DPE(context->errbuf, "%s: BPF state machine compilation failed!", __func__);
+      DPE(context->errbuf, "%s: BPF state machine compilation failed!", __FUNCTION__);
       return DAQ_ERROR;
     }
 
@@ -540,7 +834,7 @@ static int pfring_daq_set_filter(void *handle, const char *filter) {
     /* Just check if the filter is valid */
     if(sfbpf_compile(context->snaplen, DLT_EN10MB, &fcode,
     		     filter, 0 /* 1: optimize */, 0 /* netmask */) < 0) {
-      DPE(context->errbuf, "%s: BPF state machine compilation failed!", __func__);
+      DPE(context->errbuf, "%s: BPF state machine compilation failed!", __FUNCTION__);
       return DAQ_ERROR;
     }
 
@@ -553,7 +847,7 @@ static int pfring_daq_set_filter(void *handle, const char *filter) {
 
     if(!context->filter_string) {
       DPE(context->errbuf, "%s: Couldn't allocate memory for the filter string!",
-	  __func__);
+	  __FUNCTION__);
       ret = DAQ_ERROR;
     }
 
@@ -581,15 +875,32 @@ static int pfring_daq_send_packet(Pfring_Context_t *context, pfring *send_ring,
 				  u_int pkt_len, pfring *recv_ring, int send_ifindex)
 {
   int rc;
+  u_int32_t attempts = 0;
 
   if(( !context->use_fast_tx && send_ring == NULL)
      ||(context->use_fast_tx && recv_ring == NULL))
     return(DAQ_SUCCESS);
 
-  if(context->use_fast_tx)
+  if(context->use_fast_tx) {
     rc = pfring_send_last_rx_packet(recv_ring, send_ifindex);
-  else
-    rc = pfring_send(send_ring, (char *) context->pkt_buffer, pkt_len, 1 /* flush packet */);
+  } else {
+#ifdef DAQ_PFRING_SEND_RETRY_BOOST
+    rc = -1;
+    do{
+#endif
+      rc = pfring_send(send_ring, (char *) context->pkt_buffer, pkt_len, 1 /* flush packet */);
+#ifdef DAQ_PFRING_SEND_RETRY_BOOST
+      if(rc < 0 && context->send_enobuf.enobuf_wait_usecs) {
+        usleep(context->send_enobuf.enobuf_wait_usecs);
+      }
+    } while(rc < 0 && (++attempts < context->send_enobuf.enobuf_attemps));
+
+    if(context->send_enobuf.log_file && rc < 0) {
+      rb_log_print_line(context->send_enobuf.log_file,
+        ++context->send_enobuf.pkts_not_sent);
+    }
+#endif
+  }
 
   if (rc < 0) {
     DPE(context->errbuf, "%s", "pfring_send() error");
@@ -647,6 +958,223 @@ int pfring_daq_redis_insert_to_set(redisContext *redis_ctx, const char *set_name
 }
 #endif
 
+#ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
+static inline int pfring_daq_queue_check_room(Pfring_Queue_t *q) {
+  if (q->insert_off == q->remove_off) {
+    if ((q->tot_insert - q->tot_read) >= q->min_num_slots)
+      return 0;
+  } else {
+    if (q->insert_off < q->remove_off) {
+      if ((q->remove_off - q->insert_off) < q->max_slot_len)
+        return 0;
+    } else {
+      if ((q->buffer_len - q->insert_off) < q->max_slot_len && q->remove_off == 0)
+        return 0;
+    }
+  }
+
+  return 1;
+}
+
+static inline int pfring_daq_queue_next_slot_offset(Pfring_Queue_t *q, 
+  u_int32_t off) {
+  Pfring_Queue_SlotHdr_t *qhdr = (Pfring_Queue_SlotHdr_t *) &q->buffer[off];
+  u_int32_t real_slot_size;
+
+  real_slot_size = sizeof(Pfring_Queue_SlotHdr_t) + qhdr->caplen;
+
+  if((off + real_slot_size + q->max_slot_len) > q->buffer_len)
+    return 0;
+
+  return (off + real_slot_size);
+}
+
+#define min(_a, _b) ((_a) < (_b) ? (_a) : (_b))
+
+static inline void pfring_daq_enqueue(Pfring_Queue_t *q,
+  struct pfring_pkthdr *phdr, u_char* pkt_buffer, u_int32_t ifindex, void *user) {
+
+  if (pfring_daq_queue_check_room(q)) {
+    Pfring_Queue_SlotHdr_t *qhdr = (Pfring_Queue_SlotHdr_t *) &q->buffer[q->insert_off];
+
+    qhdr->caplen = min(phdr->caplen, q->max_slot_len - sizeof(Pfring_Queue_SlotHdr_t));
+    qhdr->pktlen = phdr->len;
+    qhdr->ts = phdr->ts;
+    qhdr->device_index = ifindex;
+
+    memcpy(qhdr->pkt_buffer, pkt_buffer, qhdr->caplen);
+
+    q->insert_off = pfring_daq_queue_next_slot_offset(q, q->insert_off);
+    q->tot_insert++;
+  } else {
+    q->tot_dropped++;    
+  }
+}
+
+static inline int pfring_daq_queue_check_packet(Pfring_Queue_t *q) {
+  return q->tot_insert != q->tot_read;
+}
+
+static inline Pfring_Queue_SlotHdr_t *pfring_daq_dequeue(Pfring_Queue_t *q) { 
+  Pfring_Queue_SlotHdr_t *qhdr = (Pfring_Queue_SlotHdr_t *) &q->buffer[q->remove_off];
+  q->remove_off = pfring_daq_queue_next_slot_offset(q, q->remove_off);
+  q->tot_read++;
+  return qhdr;
+}
+
+/// @TODO merge with main pfring_daq_process
+static inline void pfring_daq_process(Pfring_Context_t *context, Pfring_Queue_SlotHdr_t *qhdr) {
+  DAQ_PktHdr_t hdr;
+  DAQ_Verdict verdict;
+
+  hdr.caplen = qhdr->caplen;
+  hdr.pktlen = qhdr->pktlen;
+  hdr.ts = qhdr->ts;
+#if (DAQ_API_VERSION >= 0x00010002)
+  hdr.ingress_index = qhdr->device_index;
+  hdr.egress_index = -1;
+  hdr.ingress_group = -1;
+  hdr.egress_group = -1;
+#else
+  hdr.device_index = qhdr->device_index;
+#endif
+  hdr.flags = 0;
+
+#ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
+  if(context->sw_bypass.sampling_rate > 0) {
+    update_soft_bypass_status(context);
+  }
+
+  if(0 == context->sw_bypass.pkts_to_bypass) {
+#endif
+    verdict = context->analysis_func(qhdr->user, &hdr,(u_char*)qhdr->pkt_buffer);
+    context->stats.packets_received++;
+    context->stats.verdicts[verdict]++;
+#ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
+  } else {
+    context->sw_bypass.pkts_to_bypass--;
+    context->sw_bypass.pkts_bypassed++;
+    verdict = DAQ_VERDICT_PASS;
+  }
+#endif
+
+  if(verdict >= MAX_DAQ_VERDICT)
+    verdict = DAQ_VERDICT_PASS;
+
+  switch(verdict) {
+    case DAQ_VERDICT_BLACKLIST: /* Block the packet and block all future packets in the same flow systemwide. */
+      /* TODO handle hw filters */
+      break;
+    case DAQ_VERDICT_WHITELIST: /* Pass the packet and fastpath all future packets in the same flow systemwide. */
+    case DAQ_VERDICT_IGNORE:    /* Pass the packet and fastpath all future packets in the same flow for this application. */
+    case DAQ_VERDICT_PASS:      /* Pass the packet */
+    case DAQ_VERDICT_REPLACE:   /* Pass a packet that has been modified in-place.(No resizing allowed!) */
+    case DAQ_VERDICT_BLOCK:     /* Block the packet. */
+      /* Nothing to do really */
+      break;
+    case MAX_DAQ_VERDICT:
+      /* No way we can reach this point */
+      break;
+  }
+}
+
+static inline int pfring_daq_in_packets(Pfring_Context_t *context, u_int32_t *rx_ring_idx) {
+  int i;
+  
+  for (i = 0; i < context->num_devices; i++) {
+    *rx_ring_idx = ((*rx_ring_idx) + 1) % context->num_devices;
+    if (context->ring_handles[*rx_ring_idx]->is_pkt_available(context->ring_handles[*rx_ring_idx]) > 0) 
+      return 1;
+  }
+
+  return 0;
+}
+
+static int pfring_daq_acquire_best_effort(void *handle, int cnt, DAQ_Analysis_Func_t callback,
+#if (DAQ_API_VERSION >= 0x00010002)
+                              DAQ_Meta_Func_t metaback,
+#endif
+                              void *user) {
+  Pfring_Context_t *context = (Pfring_Context_t *) handle;
+  int ret = 0, i, rc, poll_duration = 0, c = 0;
+  u_int32_t rx_ring_idx = context->num_devices - 1, rx_ring_idx_clone;
+  struct pollfd pfd[DAQ_PF_RING_MAX_NUM_DEVICES];
+  struct pfring_pkthdr phdr;
+
+  context->analysis_func = callback;
+  context->breakloop = 0;
+
+  for (i = 0; i < context->num_devices; i++) {
+    //pfring_enable_ring(context->ring_handles[i]);
+    pfd[i].fd = pfring_get_selectable_fd(context->ring_handles[i]);
+  }
+
+  while((!context->breakloop) && ((cnt <= 0) || (c < cnt))) {
+
+    memset(&phdr, 0, sizeof(phdr));
+
+    if(pfring_daq_reload_requested)
+      pfring_daq_reload(context);
+
+    while(pfring_daq_in_packets(context, &rx_ring_idx) && !context->breakloop) {
+
+      pfring_recv(context->ring_handles[rx_ring_idx], &context->pkt_buffer, 0, &phdr, 0);
+#if 0
+      if(!pfring_daq_in_packets(context, &rx_ring_idx)) { /* optimization (?): no enqueue */
+        pfring_daq_process(..);
+        c++;
+      } else
+#endif
+
+#ifdef ENABLE_BPF
+      if (!context->bpf_filter || bpf_filter(context->filter.bf_insns, context->pkt_buffer, phdr.caplen, phdr.len) != 0) { /* accept */
+#endif
+      /* enqueueing pkt (and don't care of no room available) */
+      pfring_daq_enqueue(context->q, &phdr, context->pkt_buffer, context->ifindexes[rx_ring_idx], user);
+#ifdef ENABLE_BPF
+      } else {
+        context->stats.packets_received++;
+        context->stats.verdicts[DAQ_VERDICT_PASS]++;
+      }
+#endif
+
+      pfring_daq_send_packet(context, context->ring_handles[rx_ring_idx ^ 0x1], phdr.caplen, 
+                                 context->ring_handles[rx_ring_idx], context->ifindexes[rx_ring_idx ^ 0x1]);
+    }
+
+    rx_ring_idx_clone = rx_ring_idx;
+    while(!(ret = pfring_daq_in_packets(context, &rx_ring_idx_clone)) && pfring_daq_queue_check_packet(context->q) && !context->breakloop) {
+      /* no incoming pkts, queued pkts available -> processing enqueued pkts */
+      Pfring_Queue_SlotHdr_t *qhdr = pfring_daq_dequeue(context->q); 
+      pfring_daq_process(context, qhdr);
+      c++;
+    }
+
+    if(!ret) {
+      /* no packet to read: poll */
+      for (i = 0; i < context->num_devices; i++) {
+        pfring_sync_indexes_with_kernel(context->ring_handles[i]);
+        pfd[i].events = POLLIN;
+        pfd[i].revents = 0;
+      }
+
+      errno = 0;
+      rc = poll(pfd, context->num_devices, poll_duration < context->timeout ? poll_duration += 10 : poll_duration);
+
+      if(rc < 0) {
+        if(errno == EINTR)
+          break;
+
+        DPE(context->errbuf, "%s: Poll failed: %s(%d)", __FUNCTION__, strerror(errno), errno);
+        return DAQ_ERROR;
+      } else if (rc > 0) poll_duration = 0;
+    }
+  }
+
+  return 0;
+}
+#endif
+
 static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callback, 
 #if (DAQ_API_VERSION >= 0x00010002)
                               DAQ_Meta_Func_t metaback,
@@ -664,6 +1192,15 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
 
   for (i = 0; i < context->num_devices; i++)
     pfring_enable_ring(context->ring_handles[i]);
+
+#ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
+  if (context->mode == DAQ_MODE_PASSIVE && context->best_effort == 1)
+    return pfring_daq_acquire_best_effort(handle, cnt, callback, 
+#if (DAQ_API_VERSION >= 0x00010002)
+      metaback,
+#endif 
+      user);
+#endif
 
   while((cnt <= 0) || (c < cnt)) {
     struct pfring_pkthdr phdr;
@@ -704,7 +1241,7 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
 	if(errno == EINTR)
 	  break;
 
-	DPE(context->errbuf, "%s: Poll failed: %s(%d)", __func__, strerror(errno), errno);
+	DPE(context->errbuf, "%s: Poll failed: %s(%d)", __FUNCTION__, strerror(errno), errno);
 	return DAQ_ERROR;
       }
     } else {
@@ -722,10 +1259,22 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
       hdr.flags = 0;
 
       rx_ring_idx = current_ring_idx;
+#ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
+      if(context->sw_bypass.sampling_rate > 0) {
+        update_soft_bypass_status(context);
+      }
 
-      context->stats.packets_received++;
-
-      verdict = context->analysis_func(user, &hdr,(u_char*)context->pkt_buffer);
+      if(0 == context->sw_bypass.pkts_to_bypass) {
+#endif
+        context->stats.packets_received++;
+        verdict = context->analysis_func(user, &hdr,(u_char*)context->pkt_buffer);
+#ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
+      } else {
+        context->sw_bypass.pkts_to_bypass--;
+        context->sw_bypass.pkts_bypassed++;
+        verdict = DAQ_VERDICT_PASS;
+      }
+#endif
 
 #if 0
       printf("[DEBUG] %d.%d.%d.%d:%d -> %d.%d.%d.%d:%d Verdict=%d\n",
@@ -759,6 +1308,7 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
 	  memcpy(&hash_rule.host_peer_b, &phdr.extended_hdr.parsed_pkt.ipv4_dst, sizeof(ip_addr));
 	  hash_rule.port_peer_a = phdr.extended_hdr.parsed_pkt.l4_src_port;
 	  hash_rule.port_peer_b = phdr.extended_hdr.parsed_pkt.l4_dst_port;
+	  /*hash_rule.plugin_action.plugin_id = NO_PLUGIN_ID;*/
 
 	  if (context->mode == DAQ_MODE_PASSIVE && context->num_reflector_devices > rx_ring_idx) { /* lowlevelbridge ON */
 	    hash_rule.rule_action = reflect_packet_and_stop_rule_evaluation;
@@ -795,7 +1345,7 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
 	  /* Attacker */
 	  if (inet_ntop(AF_INET, (const void *) &phdr.extended_hdr.parsed_pkt.ipv4_src, ipAttacker, INET_ADDRSTRLEN) != NULL) {
 	    if (pfring_daq_redis_insert_to_set(context->redis_ctx, "Attackers", ipAttacker) != DAQ_SUCCESS) {
-	      DPE(context->errbuf, "%s: Insert into Attackers Set failed: %s", __func__, ipAttacker);
+	      DPE(context->errbuf, "%s: Insert into Attackers Set failed: %s", __FUNCTION__, ipAttacker);
 	      return DAQ_ERROR;
 	    }
 	  }
@@ -803,7 +1353,7 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
 	  /* target */
 	  if (inet_ntop(AF_INET,(const void *) &phdr.extended_hdr.parsed_pkt.ipv4_dst, ipTarget, INET_ADDRSTRLEN) != NULL) {
 	    if (pfring_daq_redis_insert_to_set(context->redis_ctx, "Targets", ipTarget) != DAQ_SUCCESS) {
-	      DPE(context->errbuf, "%s: Insert into Targets Set failed: %s", __func__, ipTarget);
+	      DPE(context->errbuf, "%s: Insert into Targets Set failed: %s", __FUNCTION__, ipTarget);
 	      return DAQ_ERROR;
 	    }
 	  }
@@ -825,10 +1375,6 @@ static int pfring_daq_acquire(void *handle, int cnt, DAQ_Analysis_Func_t callbac
 	break;
 
       case DAQ_VERDICT_BLOCK:   /* Block the packet. */
-#ifdef DAQ_CAPA_RETRY
-      case DAQ_VERDICT_RETRY:   /* Hold the packet briefly and resend it to Snort while Snort waits for external response. 
-                                   Drop any new packets received on that flow while holding before sending them to Snort. */
-#endif
 	/* Nothing to do really */
 	break;
 
@@ -857,10 +1403,7 @@ static int pfring_daq_inject(void *handle, const DAQ_PktHdr_t *hdr,
 #else
       if (context->ifindexes[i] == hdr->device_index) {
 #endif
-        if(reverse == 1)
-                tx_ring_idx = i;
-        else
-                tx_ring_idx = i ^ 0x1;
+        tx_ring_idx = i ^ 0x1;
         break;
       }
   }
@@ -869,7 +1412,8 @@ static int pfring_daq_inject(void *handle, const DAQ_PktHdr_t *hdr,
   memcpy(&context->inj_buffer[14], packet_data, len); /* copy data packet to inj_buffer */
   len += 14; /* update packet len */
 
-  if(pfring_send(context->ring_handles[tx_ring_idx], (char *) context->inj_buffer, len, 1 /* flush packet */) < 0) {
+  if(pfring_send(context->ring_handles[tx_ring_idx],
+		 (char *) packet_data, len, 1 /* flush packet */) < 0) {
     DPE(context->errbuf, "%s", "pfring_send() error");
     return DAQ_ERROR;
   }
@@ -894,6 +1438,10 @@ static int pfring_daq_stop(void *handle) {
   int i;
 
   update_hw_stats(context);
+
+#ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
+  update_best_effort_stats(context);
+#endif
 
   for (i = 0; i < context->num_devices; i++) {
     if(context->ring_handles[i]) {
@@ -925,10 +1473,23 @@ static void pfring_daq_shutdown(void *handle) {
   if(context->filter_string)
     free(context->filter_string);
 
+#ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
+  if(context->best_effort_stats_file)
+    close_best_effort_stats(context);
+#endif
+
+#ifdef DAQ_PF_RING_SOFT_BYPASS_BOOST
+  if(context->sw_bypass.software_bypass_log_f)
+    close_soft_bypass_stats(context);
+#endif
+
 #ifdef HAVE_REDIS
   if(context->redis_ctx != NULL)
     redisFree(context->redis_ctx);
 #endif
+
+  if(context->sw_bypass.software_bypass_log)
+    free(context->sw_bypass.software_bypass_log);
 
   free(context);
 }
@@ -939,12 +1500,41 @@ static DAQ_State pfring_daq_check_status(void *handle) {
   return context->state;
 }
 
+#ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
+static void best_effort_stats_print_line(Pfring_Context_t *context) {
+  if(context->best_effort_stats_file 
+        && context->q->tot_dropped > context->base_best_effort_drops) {
+    fseek(context->best_effort_stats_file, 0, SEEK_SET);
+    const int written = fprintf(context->best_effort_stats_file,"%u\n",
+      context->q->tot_dropped);
+    fflush(context->best_effort_stats_file);
+    if(written < 0){
+        /* Can't write */
+
+    } else {
+        context->base_best_effort_drops = context->q->tot_dropped;
+    }
+  } else {
+    /* @TODO try to reopen? */
+  }
+}
+
+static void update_best_effort_stats(Pfring_Context_t *context) {
+  best_effort_stats_print_line(context);
+}
+
+#endif
+
 static int pfring_daq_get_stats(void *handle, DAQ_Stats_t *stats) {
   Pfring_Context_t *context =(Pfring_Context_t *) handle;
 
   update_hw_stats(context);
 
   memcpy(stats, &context->stats, sizeof(DAQ_Stats_t));
+
+#ifdef DAQ_PF_RING_BEST_EFFORT_BOOST
+  update_best_effort_stats(context);
+#endif
 
   return DAQ_SUCCESS;
 }
@@ -1034,15 +1624,4 @@ DAQ_SO_PUBLIC const DAQ_Module_t DAQ_MODULE_DATA =
     .get_errbuf = pfring_daq_get_errbuf,
     .set_errbuf = pfring_daq_set_errbuf,
     .get_device_index = pfring_daq_get_device_index
-#if (DAQ_API_VERSION >= 0x00010002)
-    ,
-    .modify_flow = NULL,
-    .hup_prep = NULL,
-    .hup_apply = NULL,
-    .hup_post = NULL
-#ifdef DAQ_CAPA_RETRY /* trick to check dp_add_dc presence */
-    ,
-    .dp_add_dc = NULL
-#endif
-#endif
   };

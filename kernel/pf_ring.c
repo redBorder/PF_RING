@@ -401,6 +401,9 @@ static unsigned int force_ring_lock = 0;
 static unsigned int enable_debug = 0;
 static unsigned int transparent_mode = 0;
 static atomic_t ring_id_serial = ATOMIC_INIT(0);
+#ifdef REDBORDER_PATCH
+char *bypass_interfaces[MAX_NUM_DEVICES] = { 0 };
+#endif
 
 #if defined(RHEL_RELEASE_CODE)
 #if(RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(4,8))
@@ -417,7 +420,9 @@ module_param(quick_mode, uint, 0644);
 module_param(force_ring_lock, uint, 0644);
 module_param(enable_debug, uint, 0644);
 module_param(transparent_mode, uint, 0644);
-
+#ifdef REDBORDER_PATCH
+module_param_array(bypass_interfaces, charp, NULL, 0444);
+#endif
 MODULE_PARM_DESC(min_num_slots, "Min number of ring slots");
 MODULE_PARM_DESC(perfect_rules_hash_size, "Perfect rules hash size");
 MODULE_PARM_DESC(enable_tx_capture, "Set to 1 to capture outgoing packets");
@@ -432,7 +437,11 @@ MODULE_PARM_DESC(force_ring_lock, "Set to 1 to force ring locking (automatically
 MODULE_PARM_DESC(enable_debug, "Set to 1 to enable PF_RING debug tracing into the syslog, 2 for more verbosity");
 MODULE_PARM_DESC(transparent_mode,
 		 "(deprecated)");
-
+#ifdef REDBORDER_PATCH
+MODULE_PARM_DESC(bypass_interfaces,
+                 "Comma separated list of interfaces where bypass"
+		 "will be enabled on link down");
+#endif
 /* ********************************** */
 
 #define MIN_QUEUED_PKTS      64
@@ -8150,6 +8159,45 @@ EXPORT_SYMBOL(pf_ring_zc_dev_handler);
 
 /* ************************************* */
 
+#ifdef REDBORDER_PATCH
+static void bpctl_notifier(char *if_name) 
+{
+  struct bpctl_cmd bpctl_cmd;
+  int i = 0, rc;
+
+  while (i < MAX_NUM_DEVICES && bypass_interfaces[i] != NULL && bypass_interfaces[i | 0x1] != NULL) {
+    if(strcmp(if_name, bypass_interfaces[i]) == 0) {
+      struct list_head *ptr, *tmp_ptr;
+      list_for_each_safe(ptr, tmp_ptr, &ring_aware_device_list) {
+        pf_ring_device *dev_ptr = list_entry(ptr, pf_ring_device, device_list);
+        if(strcmp(dev_ptr->device_name, bypass_interfaces[i | 0x1]) == 0) { /* master found */
+
+          memset(&bpctl_cmd, 0, sizeof(bpctl_cmd));
+          bpctl_cmd.in_param[1] = dev_ptr->dev->ifindex;
+          bpctl_cmd.in_param[2] = 1; /* on */
+
+          if((rc = bpctl_kernel_ioctl(BPCTL_IOCTL_TX_MSG(SET_BYPASS), &bpctl_cmd)) < 0) {
+            printk("[PF_RING][%s] %s interface is not a bypass device.\n",
+	           __FUNCTION__, dev_ptr->device_name);
+            return;
+          }
+
+          if((rc == 0) && (bpctl_cmd.status == 0))
+            printk("[PF_RING][%s] bypass enabled on %s.\n", __FUNCTION__, if_name);
+          else
+            printk("[PF_RING][%s] %s is a slave interface or doesn't support bypass.\n",
+                   __FUNCTION__, dev_ptr->device_name);
+        }
+      }
+      break;
+    }
+    i++;
+  }
+}
+#endif
+
+/* ************************************* */
+
 static int ring_ioctl(struct socket *sock, unsigned int cmd, unsigned long arg)
 {
   switch (cmd) {
@@ -8586,7 +8634,10 @@ static int ring_notifier(struct notifier_block *this, unsigned long msg, void *d
       break;
 
     case NETDEV_CHANGE:     /* Interface state change */
-      /* Example testing link loss: if(test_bit(__LINK_STATE_NOCARRIER, &dev->state)) */
+#ifdef REDBORDER_PATCH
+      if(test_bit(__LINK_STATE_NOCARRIER, &dev->state))
+        bpctl_notifier(dev->name);
+#endif
     case NETDEV_CHANGEADDR: /* Interface address changed (e.g. during device probing) */
       break;
 

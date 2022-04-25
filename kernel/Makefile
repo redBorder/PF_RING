@@ -64,6 +64,7 @@ all: Makefile pf_ring.c linux/pf_ring.h
 #		echo "*"; \
 #		echo "*********************************************"; \
 #	fi
+	echo -e "0xfca76689\tbpctl_kernel_ioctl\tupdates/drivers/net/ethernet/intel/bpctl_mod\tEXPORT_SYMBOL" >> Module.symvers
 	$(MAKE) -C $(KERNEL_SRC) M=${HERE} EXTRA_CFLAGS='${EXTRA_CFLAGS}' modules
 
 dkms-deb:
