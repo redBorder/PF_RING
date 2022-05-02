@@ -127,7 +127,8 @@
 #define PF_RING_ERROR_MMAP_FAILURE        -17
 #define PF_RING_ERROR_INIT_FAILURE        -18
 
-#define REFLECTOR_NAME_LEN                 8
+/* support longer interface names */
+#define REFLECTOR_NAME_LEN                 10
 
 #ifndef IN6ADDR_ANY_INIT
 #define IN6ADDR_ANY_INIT { { { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 } } }
