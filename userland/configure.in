@@ -43,8 +43,13 @@ AC_ARG_ENABLE([redis], AS_HELP_STRING([--enable-redis], [Enable Redis support in
 if test "x$enable_redis" = xyes; then
   AC_CHECK_LIB([hiredis], [redisCommand])
   if test "x$ac_cv_lib_hiredis_redisCommand" = xyes; then
-    AS_IF([test "x$enable_redis" = "xyes"], [REDIS_LIB="-lhiredis"; HAVE_REDIS="-D HAVE_REDIS"])
+    AS_IF([test "x$enable_redis" = "xyes"], [REDIS_LIB="-lhiredis"; HAVE_REDIS="-D HAVE_REDIS"; HAVE_DL_REDIS="-DHAVE_DL_REDIS"])
   fi
+fi
+
+dnl> Redis - enable at least dlopen support if header files are available
+if test "x$REDIS_LIB" = "x"; then
+  AC_CHECK_HEADERS(hiredis/hiredis.h, [HAVE_DL_REDIS="-DHAVE_DL_REDIS"])
 fi
 
 dnl> ZMQ - disabled by default
@@ -72,11 +77,9 @@ if test x$have_nl_3 = xyes ; then
   ])
 fi
 
-AR_X=
+AR_X="ar x"
 
 if test $MACHINE = "x86_64"; then
-  AR_X="ar x"
-
   dnl> Check for a modern pthread library
   AC_CHECK_LIB(pthread, pthread_setaffinity_np, AC_DEFINE_UNQUOTED(HAVE_PTHREAD_SETAFFINITY_NP, 1, [libc has pthread_setaffinity_np]))
 
@@ -175,40 +178,6 @@ if test $MACHINE = "x86_64"; then
   dnl> end of pthread_setaffinity_np check
   fi
 
-  dnl> Accolade
-  MOD_ACCOLADE_LIB="libs/libpfring_accolade_$MACHINE$LIBARCH.a"
-  if test -f "lib/$MOD_ACCOLADE_LIB"; then
-    HAVE_ACCOLADE="-D HAVE_ACCOLADE"
-    ACCOLADE_OBJS=`ar t lib/$MOD_ACCOLADE_LIB | grep .o\$ | tr '\n' ' '`
-    ACCOLADE_DEP="extract_accolade_lib"
-    if test ! -z "$DEBUG" ; then
-      AC_MSG_CHECKING([Accolade debug library])
-      MOD_ACCOLADE_LIB_DBG="libs/libpfring_accolade_${MACHINE}_dbg.a" 
-      if test -f "lib/${MOD_ACCOLADE_LIB_DBG}"; then
-        MOD_ACCOLADE_LIB=${MOD_ACCOLADE_LIB_DBG}
-        ACCOLADE_OBJS=`ar t lib/${MOD_ACCOLADE_LIB_DBG} | grep -F .o | tr '\n' ' '`
-        AC_MSG_RESULT(yes)
-      else
-        AC_MSG_RESULT(no)
-      fi
-    fi
-  fi
-
-  dnl> DAG
-  MOD_DAG_LIB="libs/libpfring_dag_$MACHINE$LIBARCH.a"
-  if test -f "lib/$MOD_DAG_LIB"; then
-    DAG_LIB="-lm -ldl" 
-    HAVE_DAG="-D HAVE_DAG"
-    DAG_OBJS=`ar t lib/$MOD_DAG_LIB | grep .o\$ | tr '\n' ' '`
-    DAG_DEP="extract_dag_lib"
-  fi
-
-  dnl> Exablaze
-  dnl> HAVE_EXABLAZE="-D HAVE_EXABLAZE"
-  dnl> EXABLAZE_OBJS=`ar t lib/$MOD_EXABLAZE_LIB | grep .o\$ | tr '\n' ' '`
-  dnl> EXABLAZE_DEP="extract_exablaze_lib"
-  dnl> EXABLAZE_LIB="-lexanic"
-
   dnl> Fiberblaze
   MOD_FIBERBLAZE_LIB="libs/libpfring_fiberblaze_$MACHINE$LIBARCH.a"
   if test -f "lib/$MOD_FIBERBLAZE_LIB"; then
@@ -216,14 +185,6 @@ if test $MACHINE = "x86_64"; then
     HAVE_FIBERBLAZE="-D HAVE_FIBERBLAZE"
     FIBERBLAZE_OBJS=`ar t lib/$MOD_FIBERBLAZE_LIB | grep .o\$ | tr '\n' ' '`
     FIBERBLAZE_DEP="extract_fiberblaze_lib"
-  fi
-
-  dnl> Myricom
-  MOD_MYRICOM_LIB="libs/libpfring_myricom_$MACHINE$LIBARCH.a"
-  if test -f "lib/$MOD_MYRICOM_LIB"; then
-    HAVE_MYRICOM="-D HAVE_MYRICOM"
-    MYRICOM_OBJS=`ar t lib/$MOD_MYRICOM_LIB | grep .o\$ | tr '\n' ' '`
-    MYRICOM_DEP="extract_myricom_lib"
   fi
 
   dnl> Napatech
@@ -245,10 +206,14 @@ if test $MACHINE = "x86_64"; then
     fi
   fi
 
-  dnl> Mellanox
-  AC_MSG_CHECKING([Mellanox support])
-  MOD_MLX_LIB="libs/libpfring_mlx_${MACHINE}${LIBARCH}.a"
-  if test -f "lib/${MOD_MLX_LIB}"; then
+dnl> end of x86_64 check
+fi
+
+dnl> Mellanox
+AC_MSG_CHECKING([Mellanox support (x64 and aarch64)])
+MOD_MLX_LIB="libs/libpfring_mlx_${MACHINE}${LIBARCH}.a"
+
+if test -f "lib/${MOD_MLX_LIB}"; then
     HAVE_MLX="-D HAVE_MLX"
     MLX_OBJS=`ar t lib/${MOD_MLX_LIB} | grep -F .o | tr '\n' ' '`
     MLX_DEP="extract_mlx_lib"
@@ -270,20 +235,10 @@ if test $MACHINE = "x86_64"; then
       fi
     fi
 
-  else
-    AC_MSG_RESULT(no)
-  fi
-
-  dnl> Netcope
-  MOD_NETCOPE_LIB="libs/libpfring_netcope_$MACHINE.a" #MOD_NETCOPE_LIB="libs/libpfring_netcope_$MACHINE$LIBARCH.a"
-  if test -f "lib/$MOD_NETCOPE_LIB"; then 
-    HAVE_NETCOPE="-D HAVE_NETCOPE"
-    NETCOPE_OBJS=`ar t lib/$MOD_NETCOPE_LIB | grep .o\$ | tr '\n' ' '`
-    NETCOPE_DEP="extract_netcope_lib"
-  fi
-
-dnl> end of x86_64 check
+else
+   AC_MSG_RESULT(no)
 fi
+
 
 dnl> AF_XDP - Default enabled
 AC_ARG_ENABLE([xdp], AS_HELP_STRING([--disable-xdp], [Disable XDP/AF_XDP support in PF_RING]))
@@ -380,32 +335,11 @@ AC_SUBST(HAVE_AF_XDP)
 AC_SUBST(AF_XDP_OBJS)
 AC_SUBST(AF_XDP_DEP)
 
-AC_SUBST(HAVE_ACCOLADE)
-AC_SUBST(ACCOLADE_OBJS)
-AC_SUBST(ACCOLADE_DEP)
-AC_SUBST(MOD_ACCOLADE_LIB)
-
-AC_SUBST(HAVE_DAG)
-AC_SUBST(DAG_OBJS)
-AC_SUBST(DAG_LIB)
-AC_SUBST(DAG_DEP)
-AC_SUBST(MOD_DAG_LIB)
-
-AC_SUBST(EXABLAZE_LIB)
-AC_SUBST(EXABLAZE_OBJS)
-AC_SUBST(EXABLAZE_DEP)
-AC_SUBST(HAVE_EXABLAZE)
-
 AC_SUBST(HAVE_FIBERBLAZE)
 AC_SUBST(FIBERBLAZE_OBJS)
 AC_SUBST(FIBERBLAZE_LIB)
 AC_SUBST(FIBERBLAZE_DEP)
 AC_SUBST(MOD_FIBERBLAZE_LIB)
-
-AC_SUBST(MYRICOM_OBJS)
-AC_SUBST(HAVE_MYRICOM)
-AC_SUBST(MOD_MYRICOM_LIB)
-AC_SUBST(MYRICOM_DEP)
 
 AC_SUBST(HAVE_NT)
 AC_SUBST(NT_OBJS)
@@ -418,11 +352,6 @@ AC_SUBST(MLX_DEP)
 AC_SUBST(MOD_MLX_LIB)
 AC_SUBST(MLX_LIB)
 
-AC_SUBST(HAVE_NETCOPE)
-AC_SUBST(NETCOPE_OBJS)
-AC_SUBST(NETCOPE_DEP)
-AC_SUBST(MOD_NETCOPE_LIB)
-
 AC_SUBST(HAVE_BPF)
 AC_SUBST(BPF_INCLUDE)
 
@@ -432,6 +361,8 @@ AC_SUBST(HAVE_NDPI)
 
 AC_SUBST(HAVE_REDIS)
 AC_SUBST(REDIS_LIB)
+
+AC_SUBST(HAVE_DL_REDIS)
 
 AC_SUBST(HAVE_ZMQ)
 AC_SUBST(ZMQ_LIB)

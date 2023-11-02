@@ -4623,8 +4623,9 @@ static void e1000_configure(struct e1000_adapter *adapter)
 		u16	cache_line_size;
 		struct e1000_ring *rx_ring = adapter->rx_ring;
 		struct e1000_ring *tx_ring = adapter->tx_ring;
-		mem_ring_info rx_info = { 0 };
-		mem_ring_info tx_info = { 0 };
+		zc_dev_ring_info rx_info = { 0 };
+		zc_dev_ring_info tx_info = { 0 };
+		zc_dev_callbacks callbacks = { NULL };
 
 		cache_line_size = cpu_to_le16(e1000e_read_pci_cfg_word(adapter, E1000_PCI_DEVICE_CACHE_LINE_SIZE));
 		cache_line_size &= 0x00FF;
@@ -4643,8 +4644,13 @@ static void e1000_configure(struct e1000_adapter *adapter)
 		tx_info.packet_memory_slot_len      = ALIGN(adapter->rx_buffer_len, cache_line_size);
 		tx_info.descr_packet_memory_tot_len = tx_ring->size;
 
-		// printk("%s(%d)=%lu\n", __FUNCTION__, i, adapter->netdev->mem_start);
+#ifdef ENABLE_RX_ZC
+		callbacks.wait_packet = wait_packet_function_ptr;
+#endif
+		callbacks.usage_notification = notify_function_ptr;
+
 		pf_ring_zc_dev_handler(add_device_mapping,
+				     &callbacks,
 #ifdef ENABLE_RX_ZC
 				     &rx_info,
 #else
@@ -4663,15 +4669,8 @@ static void e1000_configure(struct e1000_adapter *adapter)
 				     &adapter->pfring_zc.packet_waitqueue,
 				     &adapter->pfring_zc.interrupt_received,
 				     (void*)rx_ring,
-				     (void*)tx_ring,
-#ifdef ENABLE_RX_ZC
-				     wait_packet_function_ptr,
-#else
-				     NULL,
-#endif
-				     notify_function_ptr);
-
-		//printk(KERN_INFO "[PF_RING] %s(%s, rx_ring=%p, tx_ring=%p)\n", __FUNCTION__, adapter->netdev->name, rx_ring, tx_ring);
+				     (void*)tx_ring
+		);
 	}
 #endif
 }
@@ -4839,6 +4838,7 @@ static void e1000e_systim_reset(struct e1000_adapter *adapter)
 	if (!(adapter->flags & FLAG_HAS_HW_TIMESTAMP))
 		return;
 
+#ifndef HAVE_PTP_CLOCK_INFO_ADJFINE
 	if (info->adjfreq) {
 		/* restore the previous ptp frequency delta */
 		ret_val = info->adjfreq(info, adapter->ptp_delta);
@@ -4855,6 +4855,7 @@ static void e1000e_systim_reset(struct e1000_adapter *adapter)
 			 ret_val);
 		return;
 	}
+#endif
 
 	/* reset the systim ns time counter */
 	spin_lock_irqsave(&adapter->systim_lock, flags);
@@ -5274,8 +5275,9 @@ void e1000e_down(struct e1000_adapter *adapter, bool reset)
 #ifdef HAVE_PF_RING
 	{
 		pf_ring_zc_dev_handler(remove_device_mapping,
-				     NULL, // rx_info,
-				     NULL, // tx_info,
+				     NULL, /* callbacks */
+				     NULL, /* rx_info */
+				     NULL, /* tx_info */
 				     NULL, /* Packet descriptors */
 				     NULL, /* Packet descriptors */
 				     (void*)adapter->netdev->mem_start,
@@ -5287,10 +5289,9 @@ void e1000e_down(struct e1000_adapter *adapter, bool reset)
 				     adapter->netdev->dev_addr,
 				     &adapter->pfring_zc.packet_waitqueue,
 				     &adapter->pfring_zc.interrupt_received,
-				     (void*)adapter->rx_ring, (void*)adapter->tx_ring,
-				     NULL, // wait_packet_function_ptr
-				     NULL // notify_function_ptr
-				     );
+				     (void*)adapter->rx_ring,
+				     (void*)adapter->tx_ring
+		);
 	}
 #endif
 }

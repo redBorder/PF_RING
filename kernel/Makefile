@@ -1,5 +1,5 @@
 #
-# (C) 2009-15 - ntop.org
+# (C) 2009-23 - ntop.org
 #
 
 obj-m := pf_ring.o
@@ -60,11 +60,12 @@ all: Makefile pf_ring.c linux/pf_ring.h
 #		echo "********** WARNING WARNING WARNING **********"; \
 #		echo "*"; \
 #		echo "* Compiling PF_RING as root might lead you to compile errors"; \
-#		echo "* Please compile PF_RING as unpriviliged user"; \
+#		echo "* Please compile PF_RING as unprivileged user"; \
 #		echo "*"; \
 #		echo "*********************************************"; \
 #	fi
 	echo -e "0xfca76689\tbpctl_kernel_ioctl\tupdates/drivers/net/ethernet/intel/bpctl_mod\tEXPORT_SYMBOL" >> Module.symvers
+	exit
 	$(MAKE) -C $(KERNEL_SRC) M=${HERE} EXTRA_CFLAGS='${EXTRA_CFLAGS}' modules
 
 dkms-deb:

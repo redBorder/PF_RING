@@ -16,7 +16,7 @@ fi
 PF_RING="pf_ring"
 PF_RING_CONFIG_DIR="/etc/pf_ring"
 DRIVERS_FLAVOR=("zc")
-DKMS_DRIVERS=('e1000e' 'igb' 'ixgbe' 'ixgbevf' 'i40e' 'fm10k' 'ice')
+DKMS_DRIVERS=('e1000e' 'igb' 'ixgbe' 'ixgbevf' 'i40e' 'iavf' 'ice')
 ERROR=0
 DRIVER_INSTALLED=0
 OLD_HUGEPAGES_CONFIG="${PF_RING_CONFIG_DIR}/hugepages"
@@ -259,12 +259,39 @@ start_interfaces() {
 	done
 }
 
+# Configure RSS using ethtool
+configure_rss() {
+	# Default RSS queues
+	DEF_RSS=1
+
+	# Driver name (e.g. mlx5_core)
+	D=$1
+	# Family (e.g. zc)
+	F=$2
+	# Configuration name (e.g. mlx)
+	C=$3
+
+	# Setting configured number of RSS queues (or default)
+	INTERFACES=$(cat /proc/net/dev|grep ':'|grep -v 'lo'|grep -v 'sit'|awk -F":" '{print $1}'|tr -d ' ')
+	for IF in $INTERFACES ; do
+		D_MATCH=$(ethtool -i $IF|grep "$D\$"|wc -l)
+
+		if [ "$D_MATCH" -eq 1 ]; then
+			RSS=$(cat ${PF_RING_CONFIG_DIR}/${F}/${C}/${C}.conf 2>/dev/null | grep RSS | cut -d'=' -f2 | cut -d',' -f1)
+			if [ -z "${RSS}" ]; then
+				RSS=$DEF_RSS
+			fi
+			ethtool -L ${IF} combined ${RSS}
+		fi
+	done
+}
+
 load_driver() {
 	DRV_PARAM=""
 
 	if [ `/sbin/modinfo ${1}-${2} | wc -l` -gt 1 ]; then
 		# driver is available
-		DRV_PARAM=`cat ${PF_RING_CONFIG_DIR}/${2}/${1}/${1}.conf`
+		DRV_PARAM=`cat ${PF_RING_CONFIG_DIR}/${2}/${1}/${1}.conf | tr '\n' ' '`
 		if [ ! -f ${DRIVER_FORCESTART_FILE} ] && is_management_interface_driver ${1} ; then
 			echo "Skipping driver ${1}: driver matches the management interface"
 			return
@@ -277,6 +304,9 @@ load_driver() {
 			if [ ${1} == "i40e" ]; then
 				/sbin/modprobe -r i40iw 2>/dev/null
 			fi
+			if [ ${1} == "ice" ]; then
+				/sbin/modprobe -r irdma 2>/dev/null
+			fi
 
 			/sbin/modprobe -r ${1}
 			if [ `echo $?` -gt 0 ]; then
@@ -284,14 +314,20 @@ load_driver() {
 				return
 			fi
 		fi
-			
+
 		# check if already loaded
 		if [ `lsmod |grep -w ^${1}_${2} | wc -l` -eq 1 ]; then
 			echo "Driver ${1}-${2} already installed"
 			DRIVER_INSTALLED=1
 			return
 		fi
-			
+
+		# Check if there is a pre script (e.g. used for VFs configuration)
+		DRV_PRE_SCRIPT="${PF_RING_CONFIG_DIR}/${2}/${1}/${1}.pre"
+		if [ -x ${DRV_PRE_SCRIPT} ]; then
+			${DRV_PRE_SCRIPT}
+		fi
+
 		/sbin/modprobe ${1}_${2} ${DRV_PARAM}
 		if [ `echo $?` -gt 0 ]; then
 			echo "Error loading driver ${1}-${2}"
@@ -305,6 +341,18 @@ load_driver() {
 		else 
 			DRIVER_INSTALLED=1
 		fi
+
+		if [ ${1} == "iavf" ] || [ ${1} == "ixgbevf" ]; then
+			# Setting configured number of RSS queues (or default)
+			configure_rss ${1} ${2} ${1}
+		fi
+
+		# Check if there is a post script
+		DRV_POST_SCRIPT="${PF_RING_CONFIG_DIR}/${2}/${1}/${1}.post"
+		if [ -x ${DRV_POST_SCRIPT} ]; then
+			${DRV_POST_SCRIPT}
+		fi
+
 	else
 		echo "Driver ${1}-${2} not available"
 	fi
@@ -319,7 +367,7 @@ load_zc() {
 	/sbin/modprobe configfs > /dev/null 2>&1
 
 	# load dkms drivers
-	# search for file under /etc/pf_ring/zc/{e1000e,igb,ixgbe,ixgbevf,i40e,fm10k,ice}/{e1000e,igb,ixgbe,ixgbevf,i40e,fm10k,ice}.conf
+	# search for file under /etc/pf_ring/zc/{e1000e,igb,ixgbe,ixgbevf,i40e,iavf,ice}/{e1000e,igb,ixgbe,ixgbevf,i40e,iavf,ice}.conf
 	for F in ${DRIVERS_FLAVOR[@]} ; do
 		for D in ${DKMS_DRIVERS[@]} ; do
 			if [ -f ${PF_RING_CONFIG_DIR}/${F}/${D}/${D}.conf ] && [ -f ${PF_RING_CONFIG_DIR}/${F}/${D}/${D}.start ]; then
@@ -366,20 +414,7 @@ load_mlx() {
 		modprobe -a ib_uverbs mlx5_core mlx5_ib > /dev/null 2>&1
 
 		# Setting configured number of RSS queues (or default)
-		INTERFACES=$(cat /proc/net/dev|grep ':'|grep -v 'lo'|grep -v 'sit'|awk -F":" '{print $1}'|tr -d ' ')
-		for IF in $INTERFACES ; do
-			D_MATCH=$(ethtool -i $IF|grep "$D\$"|wc -l)
-
-			if [ "$D_MATCH" -eq 1 ]; then
-				RSS=$(cat ${PF_RING_CONFIG_DIR}/${F}/${C}/${C}.conf 2>/dev/null | grep RSS | cut -d'=' -f2 | cut -d',' -f1)
-				if [ -z "${RSS}" ]; then
-					# Default: 1 queue
-					RSS=$DEF_RSS
-				fi
-
-				ethtool -L ${IF} combined ${RSS}
-			fi
-		done
+		configure_rss ${D} ${F} ${C}
 	fi
 }
 
@@ -512,8 +547,8 @@ start_pf_ring() {
 	## Load dummy interfaces associated to timelines or nic cards ##
 	local N2IF_SCRIPT="/usr/bin/n2if"
 	if [ -f "${N2IF_SCRIPT}" ]; then
-	${N2IF_SCRIPT} up-all
-	sleep 1
+		${N2IF_SCRIPT} up-all
+		sleep 1
 	fi
 	
 	start_interfaces 1

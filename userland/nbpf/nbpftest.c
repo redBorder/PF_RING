@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2016-22 ntop.org
+ *  Copyright (C) 2016-23 ntop
  *
  *      http://www.ntop.org/
  *
@@ -76,6 +76,7 @@ static char *proto_to_string(int protoq) {
   switch(protoq) {
     case NBPF_Q_LINK: return "Eth";
     case NBPF_Q_IP:   return "IP";
+    case NBPF_Q_ICMP: return "ICMP";
     case NBPF_Q_SCTP: return "SCTP";
     case NBPF_Q_TCP:  return "TCP";
     case NBPF_Q_UDP:  return "UDP";
@@ -297,6 +298,10 @@ void dump_rules(nbpf_rule_list_item_t *pun) {
     dump_rule(c);
 
     if(pun->bidirectional) printf("[BIDIRECTIONAL] ");
+
+    if(pun->fields.not_rule) printf("[DROP] ");
+    else printf("[PASS] ");
+
     printf("\n");
 
     pun = pun->next;
@@ -439,8 +444,8 @@ int main(int argc, char *argv[]) {
 
   printf("\nDumping Rules\n-------------\n");
 
+  printf("Default: %s\n", tree->default_pass ? "PASS" : "DROP");
   dump_rules(pun);
-
   if(dump_napatech)   napatech_dump_rules(pun);
   if(dump_fiberblaze) fiberblaze_dump_rules(pun);
 

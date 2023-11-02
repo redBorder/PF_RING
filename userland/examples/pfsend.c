@@ -1,5 +1,5 @@
 /*
- * (C) 2003-20 - ntop 
+ * (C) 2003-23 - ntop 
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -98,10 +98,12 @@ u_int8_t wait_for_packet = 1, do_shutdown = 0;
 u_int32_t pkt_loop = 0, pkt_loop_sent = 0, uniq_pkts_per_sec = 0;
 u_int64_t num_pkt_good_sent = 0, last_num_pkt_good_sent = 0;
 u_int64_t num_bytes_good_sent = 0, last_num_bytes_good_sent = 0;
+u_int32_t mtu = 1500;
 struct timeval lastTime, startTime;
 int reforge_ip = 0, on_the_fly_reforging = 0;
 int send_len = 60;
 int daemon_mode = 0;
+
 
 #define DEFAULT_DEVICE     "eth0"
 
@@ -174,7 +176,7 @@ void sigproc(int sig) {
 /* *************************************** */
 
 void printHelp(void) {
-  printf("pfsend - (C) 2011-22 ntop.org\n");
+  printf("pfsend - (C) 2011-23 ntop\n");
   printf("Replay synthetic traffic, or a pcap, or a packet in hex format from standard input.\n\n"); 
   printf("pfsend -i out_dev [-a] [-f <.pcap file>] [-g <core_id>] [-h]\n"
          "       [-l <length>] [-n <num>] "
@@ -201,6 +203,7 @@ void printHelp(void) {
   printf("-M <src MAC>    Reforge source MAC (format AA:BB:CC:DD:EE:FF)\n");
   printf("-m <dst MAC>    Reforge destination MAC (format AA:BB:CC:DD:EE:FF)\n");
   printf("-b <num>        Reforge source IP with <num> different IPs (balanced traffic)\n");
+  printf("-c <num>        Reforge destination IP with <num> different IPs (ignore -b)\n");
   printf("-t <num>        Reforge source port with <num> different ports per IP (-b)\n");
   printf("-S <ip>         Use <ip> as base source IP for -b (default: 10.0.0.1)\n");
   printf("-D <ip>         Use <ip> as destination IP (default: 192.168.0.1)\n");
@@ -208,7 +211,7 @@ void printHelp(void) {
   printf("-8 <num>        Send the same packets <num> times before moving to the next\n");
   printf("-A <num>        Add <num> different packets (e.g. -b) every second\n");
   printf("-O              On the fly reforging instead of preprocessing (-b)\n");
-  printf("-z              Randomize generated IPs sequence\n");
+  printf("-z              Randomize generated IPs sequence (requires -b)\n");
   printf("-o <num>        Offset for generated IPs (-b) or packets in pcap (-f)\n");
   printf("-W <ID>[,<ID>]  Forge VLAN packets with the specified VLAN ID (and QinQ ID if specified after comma)\n");
   printf("-L <num>        Forge VLAN packets with <num> different ids\n");
@@ -242,8 +245,17 @@ static int reforge_packet(u_char *buffer, u_int buffer_len, u_int idx, u_int use
     }
 
     ip_header = (struct ip_header *) &buffer[hdr.extended_hdr.parsed_pkt.offset.l3_offset];
-    ip_header->daddr = dstaddr.s_addr;
-    ip_header->saddr = htonl((ntohl(srcaddr.s_addr) + ip_offset + (idx % num_ips)) & 0xFFFFFFFF);
+
+    if (balance_source_ips)
+      ip_header->daddr = dstaddr.s_addr;
+    else
+      ip_header->daddr = htonl((ntohl(dstaddr.s_addr) + ip_offset + (idx % num_ips)) & 0xFFFFFFFF);
+
+    if (balance_source_ips)
+      ip_header->saddr = htonl((ntohl(srcaddr.s_addr) + ip_offset + (idx % num_ips)) & 0xFFFFFFFF);
+    else
+      ip_header->saddr = srcaddr.s_addr;
+
     ip_header->check = 0;
     ip_header->check = wrapsum(in_cksum((unsigned char *) ip_header, sizeof(struct ip_header), 0));
 
@@ -274,11 +286,11 @@ static int reforge_packet(u_char *buffer, u_int buffer_len, u_int idx, u_int use
 /* *************************************** */
 
 static void randomize_packets() {
-  struct packet *tobemoved, *add_before, *prev, *tmp;
+  struct packet *tobemoved, *add_before, *prev, *tmp, *last;
   int j, n, moved_pkts = 0;
  
   // keep the first item in pkt_head and detach the second
-  tobemoved = pkt_head->next;
+  last = tobemoved = pkt_head->next;
   pkt_head->next = NULL;
   moved_pkts++;
 
@@ -301,8 +313,11 @@ static void randomize_packets() {
     tobemoved->next = add_before;
     moved_pkts++;
 
+    last = tobemoved;
     tobemoved = tmp;
   }
+
+  last->next = pkt_head;
 }
 
 /* *************************************** */
@@ -343,11 +358,14 @@ int main(int argc, char* argv[]) {
   srcaddr.s_addr = 0x0100000A /* 10.0.0.1 */;
   dstaddr.s_addr = 0x0100A8C0 /* 192.168.0.1 */;
 
-  while((c = getopt(argc, argv, "A:b:B:dD:hi:n:g:l:L:o:Oaf:Fr:vm:M:p:P:S:t:V:w:W:z8:")) != -1) {
+  while((c = getopt(argc, argv, "A:b:B:c:dD:hi:n:g:l:L:o:Oaf:Fr:vm:M:p:P:S:t:V:w:W:z8:")) != -1) {
     switch(c) {
     case 'A':
       uniq_pkts_per_sec = atoi(optarg);
       break;
+    case 'c':
+      balance_source_ips = 0;
+      /* fall through */
     case 'b':
       num_ips = atoi(optarg);
       if(num_ips == 0) num_ips = 1;
@@ -390,6 +408,7 @@ int main(int argc, char* argv[]) {
     case 'l':
       send_len = atoi(optarg);
       if (send_len > MAX_PACKET_SIZE) send_len = MAX_PACKET_SIZE;
+      if (send_len > mtu) mtu = send_len;
       break;
     case 'L':
       forge_vlan = 1;
@@ -498,7 +517,7 @@ int main(int argc, char* argv[]) {
   if(bpfFilter != NULL)
     flags |= PF_RING_TX_BPF;
 
-  pd = pfring_open(device, 1500, flags);
+  pd = pfring_open(device, mtu, flags);
   if(pd == NULL) {
     printf("pfring_open error [%s] (pf_ring not loaded or interface %s is down ?)\n", 
            strerror(errno), device);
@@ -784,9 +803,16 @@ int main(int argc, char* argv[]) {
   if (pps < 0) /* flush for sending at the exact original pcap speed only, otherwise let pf_ring flush when needed) */
     flush = 1;
 
-  if (randomize && !on_the_fly_reforging)
-    randomize_packets();
-
+  if (randomize) {
+    if(reforge_ip == 0) {
+      randomize = 0;
+      fprintf(stderr, "WARNING: -z requires you to use -b: ignored\n");
+    } else {
+      if(!on_the_fly_reforging)
+	randomize_packets();
+    }
+  }
+  
   if(!verbose) {
     signal(SIGALRM, my_sigalarm);
     alarm(1);
@@ -858,11 +884,17 @@ int main(int argc, char* argv[]) {
         if (unlikely(do_shutdown)) break;
       }
     } else if (pps < 0) {
+      int tx_syncronized = 0;
       /* real pcap rate */
       if (tosend->ticks_from_beginning == 0)
         tick_start = getticks(); /* first packet, resetting time */
-      while((getticks() - tick_start) < tosend->ticks_from_beginning)
+      while((getticks() - tick_start) < tosend->ticks_from_beginning) {
+        if (!tx_syncronized) {
+          pfring_flush_tx_packets(pd);
+          tx_syncronized = 1;
+        }
         if (unlikely(do_shutdown)) break;
+      }
     }
 
     /* add N uniq packets per second */
@@ -882,6 +914,8 @@ int main(int argc, char* argv[]) {
 
     if(num_to_send > 0) i++;
   } /* for */
+
+  pfring_flush_tx_packets(pd);
 
   print_stats();
   printf("Sent %llu packets\n", (long long unsigned int) num_pkt_good_sent);

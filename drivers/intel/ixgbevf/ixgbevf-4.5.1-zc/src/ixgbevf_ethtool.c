@@ -400,8 +400,15 @@ static void ixgbevf_get_drvinfo(struct net_device *netdev,
 #endif /* HAVE_ETHTOOL_GET_SSET_COUNT && HAVE_SWIOTLB_SKIP_CPU_SYNC */
 }
 
+#ifdef HAVE_ETHTOOL_EXTENDED_RINGPARAMS
+static void ixgbevf_get_ringparam(struct net_device *netdev,
+		  struct ethtool_ringparam *ring,
+		  struct kernel_ethtool_ringparam __always_unused *kernel_rp,
+		  struct netlink_ext_ack __always_unused *extack)
+#else /* HAVE_ETHTOOL_EXTENDED_RINGPARAMS */
 static void ixgbevf_get_ringparam(struct net_device *netdev,
 				  struct ethtool_ringparam *ring)
+#endif /* HAVE_ETHTOOL_EXTENDED_RINGPARAMS */
 {
 	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
 
@@ -411,8 +418,15 @@ static void ixgbevf_get_ringparam(struct net_device *netdev,
 	ring->tx_pending = adapter->tx_ring_count;
 }
 
+#ifdef HAVE_ETHTOOL_EXTENDED_RINGPARAMS
+static int ixgbevf_set_ringparam(struct net_device *netdev,
+		  struct ethtool_ringparam *ring,
+		  struct kernel_ethtool_ringparam __always_unused *kernel_rp,
+		  struct netlink_ext_ack __always_unused *extack)
+#else /* HAVE_ETHTOOL_EXTENDED_RINGPARAMS */
 static int ixgbevf_set_ringparam(struct net_device *netdev,
 				 struct ethtool_ringparam *ring)
+#endif /* HAVE_ETHTOOL_EXTENDED_RINGPARAMS */
 {
 	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
 	struct ixgbevf_ring *tx_ring = NULL, *rx_ring = NULL;
@@ -1057,8 +1071,14 @@ static int ixgbevf_nway_reset(struct net_device *netdev)
 	return 0;
 }
 
+#ifdef HAVE_ETHTOOL_COALESCE_EXTACK
+static int ixgbevf_get_coalesce(struct net_device *netdev, struct ethtool_coalesce *ec,
+			      struct kernel_ethtool_coalesce __maybe_unused *kec,
+			      struct netlink_ext_ack __maybe_unused *extack)
+#else
 static int ixgbevf_get_coalesce(struct net_device *netdev,
-				struct ethtool_coalesce *ec)
+			      struct ethtool_coalesce *ec)
+#endif /* HAVE_ETHTOOL_COALESCE_EXTACK */
 {
 	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
 
@@ -1081,8 +1101,14 @@ static int ixgbevf_get_coalesce(struct net_device *netdev,
 	return 0;
 }
 
+#ifdef HAVE_ETHTOOL_COALESCE_EXTACK
+static int ixgbevf_set_coalesce(struct net_device *netdev, struct ethtool_coalesce *ec,
+			      struct kernel_ethtool_coalesce __maybe_unused *kec,
+			      struct netlink_ext_ack __maybe_unused *extack)
+#else
 static int ixgbevf_set_coalesce(struct net_device *netdev,
-				struct ethtool_coalesce *ec)
+			      struct ethtool_coalesce *ec)
+#endif /* HAVE_ETHTOOL_COALESCE_EXTACK */
 {
 	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
 	struct ixgbevf_q_vector *q_vector;

@@ -114,6 +114,12 @@ used to select the TX interface. Example:
 
    pfsend -i mlx:mlx5_0
 
+Or to send from all queues and scale the transmission performance:
+
+.. code-block:: console
+
+   pfsend_multichannel -i mlx:mlx5_0
+
 Hw Filtering
 ------------
 
@@ -123,9 +129,11 @@ In order to set an hw filter the *pfring_add_hw_rule* API should be used.
 Sample code for filtering traffic with Mellanox (as well as with other adapters) 
 is available in the *pfcount.c* sample application (look for *sample_filtering_rules*).
 
-Filtering rules can be defined as *drop* or *pass*. The default behaviour for packets,
-is defined by the promiscuous mode set using the *pfring_open* flag *PF_RING_PROMISC*.
-With the promisc set, all traffic is received by default, no traffic otherwise.
+Filtering rules can be defined as *drop* or *pass*. The default behaviour can be set
+with the *pfring_set_default_hw_action* API. When the default is not explicitly set,
+this depends on the promiscuous mode: with the promisc set, all traffic is received by 
+default (pass), no traffic otherwise (drop). Promisc is set using the *pfring_open* 
+flag *PF_RING_PROMISC*.
 
 In order to set a filtering rule, a rule ID (0..65534) should be assigned to the rule.
 This is a unique identifier that can be used to remove the rule later on. The ID can
@@ -140,6 +148,8 @@ Example setting a filtering rule to drop UDP traffic matching a src IP and desti
 
 .. code-block:: c
 
+   pfring_set_default_hw_action(socket, default_pass);
+   
    hw_filtering_rule r = { 0 };
    
    r.rule_id = FILTERING_RULE_AUTO_RULE_ID;
@@ -148,6 +158,7 @@ Example setting a filtering rule to drop UDP traffic matching a src IP and desti
    
    r.rule_family.flow_tuple_rule.action = flow_drop_rule;
    
+   r.rule_family.flow_tuple_rule.vlan_id = 10;
    r.rule_family.flow_tuple_rule.ip_version = 4;
    r.rule_family.flow_tuple_rule.src_ip.v4 = src_ip_rule;
    r.rule_family.flow_tuple_rule.protocol = IPPROTO_UDP;
@@ -167,4 +178,25 @@ Example of removing a filtering rule by ID:
 .. code-block:: c
 
    pfring_remove_hw_rule(socket, RULE_ID);
+
+BPF filters are also offloaded to the adapter as long as they can be automatically converted by the nBPF engine into hardware rules. Example:
+
+.. code-block:: console
+
+   pfcount -i mlx:mlx5_0 -f "vlan 10 and host 192.168.1.1"
+
+RoCEv2/RDMA Capture
+-------------------
+
+Mellanox adapters support RoCEv2/RDMA traffic natively. This traffic is not captured
+in the standard mode as it is handled by the adapter, even if this looks like standard UDP
+traffic. In order to enable RoCEv2/RDMA traffic capture, a special sniffing mode should be
+enabled through the PF_RING_MLX_SNIFFER_MODE environment variable as below:
+
+.. code-block:: console
+
+   PF_RING_MLX_SNIFFER_MODE=1 ./pfcount -i mlx:mlx5_0 -v 1
+
+Please note that hardware filtering (including BPF offload) does not work when this mode
+is enabled.
 

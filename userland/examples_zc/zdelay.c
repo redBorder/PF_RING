@@ -1,5 +1,5 @@
 /*
- * (C) 2021-22 - ntop 
+ * (C) 2021-23 - ntop 
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -216,7 +216,7 @@ void sigproc(int sig) {
 /* *************************************** */
 
 void printHelp(void) {
-  printf("zdelay - (C) 2021 ntop.org\n");
+  printf("zdelay - (C) 2021 ntop\n");
   printf("Using PFRING_ZC v.%s\n", pfring_zc_version());
   printf("A packet forwarder application between interfaces, adding a configurable delay to forwarded traffic.\n\n");
   printf("Usage:  zdelay -i <device> -o <device> -c <cluster id> -d <delay usec> -s <link speed Mbps>\n\n");
@@ -230,6 +230,7 @@ void printHelp(void) {
   printf("-T <time core>    Bind time thread to core\n");
   printf("-a                Active packet wait to improve latency (higher cpu load)\n");
   printf("-f                Flush packets immediately to improve latency (lower throughput)\n");
+  printf("-J                Debug mode\n");
   printf("-v                Verbose\n");
   printf("-h                Print this help\n\n");
   printf("Example: zdelay -i zc:eno1 -o zc:eno2 -c 1 -d 100 -s 1000\n");
@@ -411,12 +412,21 @@ u_int64_t compute_buffer_size(u_int32_t delay_usec, u_int64_t link_speed) {
   u_int64_t max_pps = link_speed / ((60+24) * 8);
   double max_ppus = (double) max_pps / 1000000;
   double max_buff_packets = max_ppus * delay_usec;
+  u_int64_t queue_len, margin = 512;
+  
 
   printf("Link speed: %.3f Gbps\n", (double) link_speed/1000000000);
   printf("Max packets/sec: %.3f Mpps\n", (double) max_pps/1000000);
   printf("Max buffered packets: %lu\n", (u_int64_t) max_buff_packets);
 
-  return (u_int64_t) max_buff_packets + 512 /* add some margin to handle queue watermark and bursts */;
+  /* round queue len to pow2 */
+  queue_len = upper_power_of_2((u_int64_t) max_buff_packets);
+
+  /* add some margin to handle queue watermark and bursts */;
+  if (queue_len - max_buff_packets < margin)
+    queue_len = upper_power_of_2((u_int64_t) max_buff_packets + margin);
+
+  return queue_len;
 }
 
 /* *************************************** */
@@ -434,7 +444,7 @@ int main(int argc, char* argv[]) {
 
   startTime.tv_sec = 0;
 
-  while((c = getopt(argc,argv,"ac:d:I:O:T:hi:o:fs:v")) != '?') {
+  while((c = getopt(argc,argv,"ac:d:I:JO:T:hi:o:fs:v")) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -464,6 +474,9 @@ int main(int argc, char* argv[]) {
       break;
     case 'I':
       pair[0].rx_core = atoi(optarg) % numCPU;
+      break;
+    case 'J':
+      pfring_zc_debug();
       break;
     case 'O':
       pair[0].tx_core = atoi(optarg) % numCPU;

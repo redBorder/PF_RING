@@ -2,7 +2,7 @@
  *
  * Definitions for packet ring
  *
- * 2004-22 - ntop.org
+ * 2004-23 - ntop
  *
  */
 
@@ -23,14 +23,16 @@
 #endif /* __KERNEL__ */
 
 /* Versioning */
-#define RING_VERSION                "8.1.0"
-#define RING_VERSION_NUM           0x080100
+#define RING_VERSION                "8.6.0"
+#define RING_VERSION_NUM           0x080600
 
 /* Increment whenever we change slot or packet header layout (e.g. we add/move a field) */
 #define RING_FLOWSLOT_VERSION          20
 
 #define RING_MAGIC
 #define RING_MAGIC_VALUE             0x88
+
+#define RING_USE_SOCKADDR_LL /* use sockaddr_ll instead of sockaddr */
 
 #define MIN_NUM_SLOTS                 512
 #define DEFAULT_NUM_SLOTS            4096
@@ -69,10 +71,13 @@
 #define SO_REHASH_RSS_PACKET             119
 #define SO_SET_FILTERING_SAMPLING_RATE   120
 #define SO_SET_POLL_WATERMARK_TIMEOUT    121
+#define SO_SET_DEV_TIME			 122
+#define SO_ADJ_DEV_TIME			 123
 #define SO_SHUTDOWN_RING                 124
 #define SO_PURGE_IDLE_RULES              125 /* inactivity (sec) */
 #define SO_SET_SOCKET_MODE               126
 #define SO_USE_SHORT_PKT_HEADER          127
+#define SO_CONTROL_DEV_QUEUE		 128
 #define SO_ENABLE_RX_PACKET_BOUNCE       131
 #define SO_SET_APPL_STATS                133
 #define SO_SET_STACK_INJECTION_MODE      134 /* stack injection/interception from userspace */
@@ -103,8 +108,8 @@
 #define SO_GET_DEVICE_IFINDEX            185
 #define SO_GET_APPL_STATS_FILE_NAME      186
 #define SO_GET_LINK_STATUS               187
-
-/* Other *sockopt */
+#define SO_GET_DEV_TX_TIME		 188
+#define SO_GET_DEV_STATS		 189
 #define SO_SELECT_ZC_DEVICE              190
 
 /* Error codes */
@@ -167,9 +172,9 @@ struct timeval ns_to_timeval(const s64 nsec);
   please do not change them to unsigned
 */
 struct pkt_offset {
-  /* This 'eth_offset' offset *must* be added to all offsets below 
+  /* This 'eth_offset' offset *must* be added to all offsets below
    * ONLY if you are inside the kernel. Ignore it in user-space. */
-  int16_t eth_offset; 
+  int16_t eth_offset;
 
   int16_t vlan_offset;
   int16_t l3_offset;
@@ -269,7 +274,7 @@ struct gtp_v1_hdr {
 } __attribute__((__packed__));
 
 /* Optional: GTP_FLAGS_EXTENSION | GTP_FLAGS_SEQ_NUM | GTP_FLAGS_NPDU_NUM */
-struct gtp_v1_opt_hdr { 
+struct gtp_v1_opt_hdr {
   u_int16_t seq_num;
   u_int8_t  npdu_num;
   u_int8_t  next_ext_hdr;
@@ -294,7 +299,7 @@ typedef struct {
   u_int16_t tunneled_eth_type;         /* Ethernet type */
   u_int8_t tunneled_ip_version; /* Layer 4 protocol */
   u_int8_t tunneled_proto; /* Layer 4 protocol */
-  ip_addr tunneled_ip_src, tunneled_ip_dst;  
+  ip_addr tunneled_ip_src, tunneled_ip_dst;
   u_int16_t tunneled_l4_src_port, tunneled_l4_dst_port;
 } __attribute__((packed))
 tunnel_info;
@@ -380,7 +385,7 @@ struct pfring_extended_pkthdr {
   struct {
     u_int32_t pid /* process id */;
   } process;
-  
+
   /* NOTE: leave it as last field of the memset on parse_pkt() will fail */
   struct pkt_parsing_info parsed_pkt; /* packet parsing info */
 } __attribute__((packed));
@@ -482,7 +487,8 @@ typedef enum {
 typedef enum {
   send_and_recv_mode = 0,
   send_only_mode,
-  recv_only_mode
+  recv_only_mode,
+  management_only_mode
 } socket_mode;
 
 typedef struct {
@@ -493,7 +499,7 @@ filtering_internals;
 
 typedef struct {
   /* FILTERING_RULE_AUTO_RULE_ID to auto generate a rule ID */
-  u_int16_t rule_id;                 /* Rules are processed in order from lowest to higest id */
+  u_int16_t rule_id;                 /* Rules are processed in order from lowest to highest id */
 
   rule_action_behaviour rule_action; /* What to do in case of match */
   u_int8_t balance_id, balance_pool; /* If balance_pool > 0, then pass the packet above only if the
@@ -574,32 +580,9 @@ typedef struct {
 silicom_redirector_hw_rule;
 
 typedef enum {
-  accolade_drop,
-  accolade_pass
-} accolade_rule_action_type;
-
-/* Accolade supports mode 1 filtering on almost all cards (up to 32 rules),
- * and mode 2 filtering on selected adapters (up to 1K rules).
- * PF_RING automatically select mode 2 when available, and mode 1 as fallback.
- * Mode 1 and 2 support different fields, please refer to the fields description. */
-typedef struct {
-  accolade_rule_action_type action; /* in mode 2 this should be always the opposite of the default action */
-  u_int32_t port_mask; /* ports on which the rule is defined (default 0xf) - mode 1 only */
-  u_int8_t ip_version;
-  u_int8_t protocol; /* l4 */
-  u_int16_t vlan_id; /* mode 2 only (if vlan_id is set, mpls_label is ignored due to hw limitations) */
-  u_int32_t mpls_label; /* mode 2 only */
-  ip_addr src_addr, dst_addr;
-  u_int32_t src_addr_bits, dst_addr_bits;
-  u_int16_t src_port_low;
-  u_int16_t src_port_high; /* mode 1 only */
-  u_int16_t dst_port_low;
-  u_int16_t dst_port_high; /* mode 1 only */
-  u_int8_t l4_port_not; /* rule match if src_port_low/dst_port_low are defined and they do not match - mode 2 only */
-  u_int8_t steer_to_ring; /* steer matching traffic to the specified ring_id (instead of LB) */
-  u_int8_t ring_id; /* destination ring for action = pass */
-} __attribute__((packed))
-accolade_hw_rule;
+  default_pass,
+  default_drop
+} generic_default_action_type;
 
 typedef enum {
   flow_drop_rule,
@@ -608,19 +591,22 @@ typedef enum {
   flow_steer_rule
 } generic_flow_rule_action_type;
 
-typedef struct { 
+typedef struct {
   generic_flow_rule_action_type action;
   u_int32_t flow_id; /* flow id from flow metadata */
   u_int32_t thread; /* id of the thread setting the rule */
 } __attribute__((packed))
 generic_flow_id_hw_rule;
 
-typedef struct { 
+typedef struct {
   generic_flow_rule_action_type action;
   ip_addr src_ip;
   ip_addr dst_ip;
+  ip_addr src_ip_mask;
+  ip_addr dst_ip_mask;
   u_int16_t src_port;
   u_int16_t dst_port;
+  u_int16_t vlan_id;
   u_int8_t ip_version;
   u_int8_t protocol;
   u_int8_t interface; /* from extended_hdr.if_index */
@@ -634,15 +620,13 @@ typedef enum {
   silicom_redirector_rule,
   generic_flow_id_rule,
   generic_flow_tuple_rule,
-  accolade_rule,
-  accolade_default
 } hw_filtering_rule_type;
 
 typedef struct {
   hw_filtering_rule_type rule_family_type;
 
-  /* FILTERING_RULE_AUTO_RULE_ID to auto generate a rule ID 
-   * Supported by Accolade and Mellanox */
+  /* FILTERING_RULE_AUTO_RULE_ID to auto generate a rule ID
+   * Supported by Mellanox */
   u_int16_t rule_id;
 
   /* Rule priority (when supported by the adapter)
@@ -655,7 +639,6 @@ typedef struct {
     silicom_redirector_hw_rule redirector_rule; /* Silicom Redirector (Intel) */
     generic_flow_id_hw_rule flow_id_rule;
     generic_flow_tuple_hw_rule flow_tuple_rule; /* Mellanox */
-    accolade_hw_rule accolade_rule; /* Accolade */
   } rule_family;
 } __attribute__((packed))
 hw_filtering_rule;
@@ -706,7 +689,7 @@ struct pfring_timespec {
   u_int32_t tv_nsec;
 } __attribute__((packed));
 
-typedef struct { 
+typedef struct {
   u_int32_t flow_id;
 
   u_int8_t ip_version;
@@ -729,7 +712,7 @@ typedef struct {
   u_int32_t rev_packets;
   u_int64_t fwd_bytes;
   u_int64_t rev_bytes;
-  
+
   struct pfring_timespec fwd_ts_first;
   struct pfring_timespec fwd_ts_last;
   struct pfring_timespec rev_ts_first;
@@ -878,11 +861,30 @@ struct ring_sock {
 
 /* *********************************** */
 
-typedef int (*zc_dev_wait_packet)(void *adapter, int mode);
-typedef int (*zc_dev_notify)(void *rx_adapter_ptr, void *tx_adapter_ptr, u_int8_t device_in_use);
+/* ZC driver API - data structures */
+
+typedef int (*zc_dev_wait_packet)(void *rx_adapter, int mode);
+typedef int (*zc_dev_notify)(void *rx_adapter, void *tx_adapter, u_int8_t device_in_use);
+typedef int (*zc_dev_set_time)(void *rx_adapter, u_int64_t time_ns);
+typedef int (*zc_dev_adjust_time)(void *rx_adapter, int64_t offset_ns);
+typedef int (*zc_dev_get_tx_time)(void *tx_adapter, u_int64_t *time_ns);
+typedef int (*zc_dev_control_queue)(void *rx_adapter, u_int8_t enable);
+typedef int (*zc_dev_get_stats)(void *rx_adapter, u_int64_t *rx_missed);
+
+typedef struct {
+  zc_dev_wait_packet wait_packet;
+  zc_dev_notify usage_notification;
+  zc_dev_set_time set_time;
+  zc_dev_adjust_time adjust_time;
+  zc_dev_get_tx_time get_tx_time;
+  zc_dev_control_queue control_queue;
+  zc_dev_get_stats get_stats;
+} __attribute__((packed))
+zc_dev_callbacks;
 
 typedef enum {
-  add_device_mapping = 0, remove_device_mapping
+  add_device_mapping = 0,
+  remove_device_mapping
 } zc_dev_operation;
 
 /* IMPORTANT NOTE
@@ -898,10 +900,10 @@ typedef enum {
   intel_e1000,
   intel_ixgbe_82599_ts,
   intel_i40e,
-  intel_fm10k,
   intel_ixgbe_vf,
   intel_ixgbe_x550,
-  intel_ice
+  intel_ice,
+  intel_i40e_vf
 } zc_dev_model;
 
 typedef struct {
@@ -913,11 +915,13 @@ typedef struct {
   u_int32_t vector;
   u_int32_t num_queues;
 } __attribute__((packed))
-mem_ring_info;
+zc_dev_ring_info;
+
+/* ************************************************* */
 
 typedef struct {
-  mem_ring_info rx;
-  mem_ring_info tx;
+  zc_dev_ring_info rx;
+  zc_dev_ring_info tx;
   u_int32_t phys_card_memory_len;
   zc_dev_model device_model;
 } __attribute__((packed))
@@ -937,10 +941,11 @@ typedef struct {
 #else
   void *packet_waitqueue;
 #endif
-  u_int8_t *interrupt_received, in_use;
-  void *rx_adapter_ptr, *tx_adapter_ptr;
-  zc_dev_wait_packet wait_packet_function_ptr;
-  zc_dev_notify usage_notification;
+  u_int8_t *interrupt_received;
+  u_int8_t in_use;
+  void *rx_adapter;
+  void *tx_adapter;
+  zc_dev_callbacks callbacks;
 } __attribute__((packed))
 zc_dev_info;
 
@@ -1077,7 +1082,7 @@ typedef struct {
   zc_dev_info zc_dev;
   struct list_head list;
   /*
-    In the ZC world only one application can open and enable the 
+    In the ZC world only one application can open and enable the
     device@channel per direction. The array below is used to keep
     pointers to the sockets bound to device@channel.
     No more than one socket can be enabled for RX and one for TX.
@@ -1150,7 +1155,7 @@ struct dma_memory_info {
   u_int32_t num_chunks, chunk_len;
   u_int32_t num_slots,  slot_len;
   unsigned long *virtual_addr;  /* chunks pointers */
-  u_int64_t     *dma_addr;      /* per-slot DMA adresses */
+  u_int64_t     *dma_addr;      /* per-slot DMA addresses */
   struct device *hwdev;         /* dev for DMA mapping */
 };
 
@@ -1210,7 +1215,7 @@ struct pf_ring_socket {
 
   /* last device set with bind, needed to heck channels when multiple
    * devices are used with quick-mode */
-  pf_ring_device *last_bind_dev; 
+  pf_ring_device *last_bind_dev;
 
   DECLARE_BITMAP(pf_dev_mask, MAX_NUM_DEV_IDX /* bits */);
   int ring_pid;
@@ -1277,7 +1282,9 @@ struct pf_ring_socket {
   u_char *ring_slots;       /* Points to ring_memory+sizeof(FlowSlotInfo) */
 
   /* Packet Sampling */
-  u_int32_t pktToSample, sample_rate;
+  u_int32_t sample_rate;
+  u_int32_t pkts_to_sample;
+  u_int32_t sample_rnd_shift;
 
   /* Virtual Filtering Device */
   virtual_filtering_device_element *v_filtering_dev;
@@ -1334,7 +1341,7 @@ typedef struct {
   /* /proc entry for ring module */
   struct proc_dir_entry *proc;
   struct proc_dir_entry *proc_dir;
-  struct proc_dir_entry *proc_dev_dir; 
+  struct proc_dir_entry *proc_dev_dir;
   struct proc_dir_entry *proc_stats_dir;
 
   /* Map ifindex to pf device idx (used for quick_mode_rings, num_rings_per_device) */
@@ -1376,23 +1383,25 @@ int pf_ring_skb_ring_handler(struct sk_buff *skb,
 			     int32_t channel_id,
 			     u_int32_t num_rx_channels);
 
+/* ZC driver API */
+
 void pf_ring_zc_dev_handler(zc_dev_operation operation,
-			    mem_ring_info *rx_info,
-			    mem_ring_info *tx_info,
-			    void          *rx_descr_packet_memory,
-			    void          *tx_descr_packet_memory,
-			    void          *phys_card_memory,
-			    u_int          phys_card_memory_len,
-			    u_int channel_id,
+			    zc_dev_callbacks *callbacks,
+			    zc_dev_ring_info *rx_info,
+			    zc_dev_ring_info *tx_info,
+			    void *rx_descr_packet_memory,
+			    void *tx_descr_packet_memory,
+			    void *phys_card_memory,
+			    u_int32_t phys_card_memory_len,
+			    u_int32_t channel_id,
 			    struct net_device *dev,
 			    struct device *hwdev,
 			    zc_dev_model device_model,
 			    u_char *device_address,
 			    wait_queue_head_t *packet_waitqueue,
 			    u_int8_t *interrupt_received,
-			    void *rx_adapter_ptr, void *tx_adapter_ptr,
-			    zc_dev_wait_packet wait_packet_function_ptr,
-			    zc_dev_notify dev_notify_function_ptr);
+			    void *rx_adapter_ptr,
+			    void *tx_adapter_ptr);
 
 /* *************************************************************** */
 

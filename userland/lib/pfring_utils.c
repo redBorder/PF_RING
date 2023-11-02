@@ -1,6 +1,6 @@
 /*
  *
- * (C) 2005-22 - ntop.org
+ * (C) 2005-23 - ntop
  *
  *
  * This program is free software; you can redistribute it and/or modify
@@ -20,6 +20,9 @@
 #ifdef ENABLE_HW_TIMESTAMP
 #include <linux/net_tstamp.h>
 #endif
+
+#include <sys/ioctl.h>
+#include <linux/ethtool.h>
 
 /* ******************************* */
 
@@ -951,3 +954,80 @@ void pfring_thirdparty_lib_init(const char* thirdparty_lib_name, struct thirdpar
   /* Don't dlclose(thirdparty_handle) as otherwise symbols will disappead */
 }
 
+/* *************************************** */
+
+#ifndef SPEED_UNKNOWN
+#define SPEED_UNKNOWN		-1
+#endif
+
+u_int32_t pfring_get_ethtool_link_speed(const char *ifname) {
+  int sock, rc;
+  struct ifreq ifr;
+  struct ethtool_cmd edata;
+  u_int32_t speed = 0;
+  const char *col;
+#ifdef USE_ETHTOOL_GLINKSETTINGS
+  struct {
+    struct ethtool_link_settings edata;
+    uint32_t link_mode_data[3 *	ETHTOOL_LINK_MODE_MASK_MAX_KERNEL_NU32];
+  } ecmd;
+#endif
+
+  col = strchr(ifname, ':');
+
+  if (col != NULL)
+    ifname = &col[1];
+
+  sock = socket(PF_INET, SOCK_DGRAM, 0 /* IPPROTO_IP */);
+
+  if (sock < 0) {
+    fprintf(stderr, "Socket error [%s]\n", ifname);
+    return speed;
+  }
+
+  memset(&ifr, 0, sizeof(struct ifreq));
+  strncpy(ifr.ifr_name, ifname, IFNAMSIZ-1);
+
+#ifdef USE_ETHTOOL_GLINKSETTINGS
+  /* Try with ETHTOOL_GLINKSETTINGS first */
+
+  memset(&ecmd, 0, sizeof(ecmd));
+  ecmd.edata.cmd = ETHTOOL_GLINKSETTINGS;
+  ifr.ifr_data = (void *) &ecmd;
+	
+  rc = ioctl(sock, SIOCETHTOOL, &ifr);
+
+  if (rc == 0) {
+
+    speed = ecmd.edata.speed;
+
+  } else 
+#endif
+  {
+
+    /* Try with ETHTOOL_GSET */
+
+    memset(&edata, 0, sizeof(struct ethtool_cmd));
+    edata.cmd = ETHTOOL_GSET;
+    ifr.ifr_data = (char *) &edata;
+
+    rc = ioctl(sock, SIOCETHTOOL, &ifr);
+
+    if (rc == 0) {
+
+      speed = ethtool_cmd_speed(&edata);
+
+    } else {
+      fprintf(stderr, "error reading link speed on %s\n", ifname);
+    }  
+  }  
+
+  close(sock);
+
+  if (speed == SPEED_UNKNOWN)
+    speed = 0;
+
+  return speed;
+}
+
+/* *************************************** */

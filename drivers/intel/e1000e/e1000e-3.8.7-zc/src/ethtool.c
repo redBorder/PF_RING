@@ -1008,8 +1008,15 @@ static void e1000_get_drvinfo(struct net_device *netdev,
 		sizeof(drvinfo->bus_info));
 }
 
+#ifdef HAVE_ETHTOOL_EXTENDED_RINGPARAMS
+static void e1000_get_ringparam(struct net_device *netdev,
+		  struct ethtool_ringparam *ring,
+		  struct kernel_ethtool_ringparam __always_unused *kernel_rp,
+		  struct netlink_ext_ack __always_unused *extack)
+#else /* HAVE_ETHTOOL_EXTENDED_RINGPARAMS */
 static void e1000_get_ringparam(struct net_device *netdev,
 				struct ethtool_ringparam *ring)
+#endif /* HAVE_ETHTOOL_EXTENDED_RINGPARAMS */
 {
 	struct e1000_adapter *adapter = netdev_priv(netdev);
 
@@ -1019,8 +1026,15 @@ static void e1000_get_ringparam(struct net_device *netdev,
 	ring->tx_pending = adapter->tx_ring_count;
 }
 
+#ifdef HAVE_ETHTOOL_EXTENDED_RINGPARAMS
+static int e1000_set_ringparam(struct net_device *netdev,
+		  struct ethtool_ringparam *ring,
+		  struct kernel_ethtool_ringparam __always_unused *kernel_rp,
+		  struct netlink_ext_ack __always_unused *extack)
+#else /* HAVE_ETHTOOL_EXTENDED_RINGPARAMS */
 static int e1000_set_ringparam(struct net_device *netdev,
 			       struct ethtool_ringparam *ring)
+#endif /* HAVE_ETHTOOL_EXTENDED_RINGPARAMS */
 {
 	struct e1000_adapter *adapter = netdev_priv(netdev);
 	struct e1000_ring *temp_tx = NULL, *temp_rx = NULL;
@@ -2427,8 +2441,14 @@ static int e1000_phys_id(struct net_device *netdev, u32 data)
 }
 #endif /* HAVE_ETHTOOL_SET_PHYS_ID */
 
+#ifdef HAVE_ETHTOOL_COALESCE_EXTACK
+static int e1000_get_coalesce(struct net_device *netdev, struct ethtool_coalesce *ec,
+			    struct kernel_ethtool_coalesce __maybe_unused *kec,
+			    struct netlink_ext_ack __maybe_unused *extack)
+#else
 static int e1000_get_coalesce(struct net_device *netdev,
-			      struct ethtool_coalesce *ec)
+			    struct ethtool_coalesce *ec)
+#endif /* HAVE_ETHTOOL_COALESCE_EXTACK */
 {
 	struct e1000_adapter *adapter = netdev_priv(netdev);
 
@@ -2440,8 +2460,14 @@ static int e1000_get_coalesce(struct net_device *netdev,
 	return 0;
 }
 
+#ifdef HAVE_ETHTOOL_COALESCE_EXTACK
+static int e1000_set_coalesce(struct net_device *netdev, struct ethtool_coalesce *ec,
+			    struct kernel_ethtool_coalesce __maybe_unused *kec,
+			    struct netlink_ext_ack __maybe_unused *extack)
+#else
 static int e1000_set_coalesce(struct net_device *netdev,
-			      struct ethtool_coalesce *ec)
+			    struct ethtool_coalesce *ec)
+#endif /* HAVE_ETHTOOL_COALESCE_EXTACK */
 {
 	struct e1000_adapter *adapter = netdev_priv(netdev);
 

@@ -9,13 +9,13 @@ Packager: Luca Deri <deri@ntop.org>
 # Temporary location where the RPM will be built
 BuildRoot:  %{_tmppath}/%{name}-%{version}-root
 # Requires: pfring-dkms = @VERS@, net-tools
-Requires: @NDPI_DEP@, pciutils, net-tools, ethtool @EXTRA_REQUIRES@
+Requires: @NDPI_DEP@, pciutils, net-tools, hiredis, ethtool @EXTRA_REQUIRES@
 
 # Disable shared libs dependency check (needed by FPGA libs)
 AutoReq: no
-# 
-# As dependecies are disabled (AutoReqProv: no) we must report them manually
-%if 0%{?centos_ver} != 8
+#
+# As dependencies are disabled (AutoReqProv: no) we must report them manually
+%if 0%{?centos_ver} < 8
 Provides: daq_pfring_zc.so, daq_pfring.so, libpfring.so
 %else
 Provides: libpfring.so
@@ -64,6 +64,8 @@ cp $HOME/PF_RING/userland/wireshark/extcap/ntopdump $RPM_BUILD_ROOT/usr/lib64/wi
 cp $HOME/PF_RING/userland/tcpdump/tcpdump      $RPM_BUILD_ROOT/usr/local/bin
 cp $HOME/PF_RING/userland/examples/pfcount     $RPM_BUILD_ROOT/usr/bin
 cp $HOME/PF_RING/userland/examples/pfsend      $RPM_BUILD_ROOT/usr/bin
+cp $HOME/PF_RING/userland/examples/pfcount_multichannel     $RPM_BUILD_ROOT/usr/bin
+cp $HOME/PF_RING/userland/examples/pfsend_multichannel      $RPM_BUILD_ROOT/usr/bin
 cp $HOME/PF_RING/tools/n2if                    $RPM_BUILD_ROOT/usr/bin
 cp $HOME/PF_RING/package/etc/ld.so.conf.d/pf_ring.conf $RPM_BUILD_ROOT/etc/ld.so.conf.d
 cp $HOME/PF_RING/package/etc/pf_ring/pf_ring.conf.example $RPM_BUILD_ROOT/etc/pf_ring
@@ -81,15 +83,13 @@ cp $HOME/PF_RING/package/etc/cluster/cluster.conf.example $RPM_BUILD_ROOT/etc/cl
 cp $HOME/PF_RING/package/usr/bin/pf_ringctl $RPM_BUILD_ROOT/usr/bin
 cp $HOME/PF_RING/package/usr/bin/pf_ringcfg $RPM_BUILD_ROOT/usr/bin
 cp $HOME/PF_RING/package/usr/bin/clusterctl $RPM_BUILD_ROOT/usr/bin
-%if 0%{?centos_ver} != 8
 # DAQ
-mkdir -p $RPM_BUILD_ROOT/usr/local/lib/daq
-cp $HOME/PF_RING/userland/snort/pfring-daq-module/daq_pfring.la $RPM_BUILD_ROOT/usr/local/lib/daq
-cp $HOME/PF_RING/userland/snort/pfring-daq-module/.libs/daq_pfring.so $RPM_BUILD_ROOT/usr/local/lib/daq
-cp $HOME/PF_RING/userland/snort/pfring-daq-module-zc/daq_pfring_zc.la $RPM_BUILD_ROOT/usr/local/lib/daq
-cp $HOME/PF_RING/userland/snort/pfring-daq-module-zc/.libs/daq_pfring_zc.so $RPM_BUILD_ROOT/usr/local/lib/daq
-cp -a $HOME/daq-2.?.?/sfbpf/.libs/libsfbpf.so.0 $HOME/daq-2.?.?/sfbpf/.libs/libsfbpf.so.0.0.1 $RPM_BUILD_ROOT/usr/local/lib
-%endif
+#mkdir -p $RPM_BUILD_ROOT/usr/local/lib/daq
+#cp $HOME/PF_RING/userland/snort/pfring-daq-module/daq_pfring.la $RPM_BUILD_ROOT/usr/local/lib/daq
+#cp $HOME/PF_RING/userland/snort/pfring-daq-module/.libs/daq_pfring.so $RPM_BUILD_ROOT/usr/local/lib/daq
+#cp $HOME/PF_RING/userland/snort/pfring-daq-module-zc/daq_pfring_zc.la $RPM_BUILD_ROOT/usr/local/lib/daq
+#cp $HOME/PF_RING/userland/snort/pfring-daq-module-zc/.libs/daq_pfring_zc.so $RPM_BUILD_ROOT/usr/local/lib/daq
+#cp -a $HOME/daq-2.?.?/sfbpf/.libs/libsfbpf.so.0 $HOME/daq-2.?.?/sfbpf/.libs/libsfbpf.so.0.0.1 $RPM_BUILD_ROOT/usr/local/lib
 %if %nozc == 0
 cp $HOME/PF_RING/userland/examples_zc/zbalance_ipc $RPM_BUILD_ROOT/usr/bin
 cp $HOME/PF_RING/userland/examples_zc/zsend $RPM_BUILD_ROOT/usr/bin
@@ -115,14 +115,13 @@ rm -fr $RPM_BUILD_ROOT
 /usr/include/pfring_zc.h
 /usr/include/pfring_ft.h
 /usr/include/nbpf.h
-%if 0%{?centos_ver} != 8
-/usr/local/lib/daq/daq_pfring.la
-/usr/local/lib/daq/daq_pfring.so
-/usr/local/lib/daq/daq_pfring_zc.la
-/usr/local/lib/daq/daq_pfring_zc.so
-/usr/local/lib/libsfbpf.so.0
-/usr/local/lib/libsfbpf.so.0.0.1
-%endif
+# DAQ
+#/usr/local/lib/daq/daq_pfring.la
+#/usr/local/lib/daq/daq_pfring.so
+#/usr/local/lib/daq/daq_pfring_zc.la
+#/usr/local/lib/daq/daq_pfring_zc.so
+#/usr/local/lib/libsfbpf.so.0
+#/usr/local/lib/libsfbpf.so.0.0.1
 /usr/lib64/wireshark/extcap
 %if %nozc == 0
 /usr/bin/zbalance_ipc
@@ -134,6 +133,8 @@ rm -fr $RPM_BUILD_ROOT
 /usr/local/bin/tcpdump
 /usr/bin/pfcount
 /usr/bin/pfsend
+/usr/bin/pfcount_multichannel
+/usr/bin/pfsend_multichannel
 /usr/bin/n2if
 /etc/ld.so.conf.d/pf_ring.conf
 /etc/pf_ring/pf_ring.conf.example
@@ -171,7 +172,8 @@ case "$1" in
 esac
 
 %post
-if [ ! -f /.dockerenv ]; then
+CMDLINE=$(tr -d '\0' < /proc/1/cmdline) 
+if [ -z "${CMDLINE##*system*}" ] || [ -z "${CMDLINE##*init*}" ]; then # init/systemd (not a container)
 case "$1" in
   1)
     # install
@@ -195,7 +197,8 @@ fi
 /sbin/ldconfig > /dev/null 2>&1
 
 %postun
-if [ ! -f /.dockerenv ]; then
+CMDLINE=$(tr -d '\0' < /proc/1/cmdline) 
+if [ -z "${CMDLINE##*system*}" ] || [ -z "${CMDLINE##*init*}" ]; then # init/systemd (not a container)
 %if 0%{?centos_ver} != 6
   %systemd_postun_with_restart pf_ring.service cluster.service "cluster@*.service"
 %else
@@ -205,7 +208,8 @@ if [ ! -f /.dockerenv ]; then
 fi
 
 %preun
-if [ ! -f /.dockerenv ]; then
+CMDLINE=$(tr -d '\0' < /proc/1/cmdline) 
+if [ -z "${CMDLINE##*system*}" ] || [ -z "${CMDLINE##*init*}" ]; then # init/systemd (not a container)
 case "$1" in
   0)
     # un-install
@@ -226,5 +230,4 @@ fi
 
 %changelog
 * Wed Dec  5 2012  <deri@centos.ntop.org> - @VERS@-%{buildrev}
-- 
-
+-

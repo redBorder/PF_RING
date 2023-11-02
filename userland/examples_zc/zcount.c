@@ -1,5 +1,5 @@
 /*
- * (C) 2003-20 - ntop 
+ * (C) 2003-23 - ntop 
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -162,7 +162,7 @@ void sigproc(int sig) {
 /* *************************************** */
 
 void printHelp(void) {
-  printf("zcount - (C) 2014-22 ntop.org\n");
+  printf("zcount - (C) 2014-23 ntop\n");
   printf("Using PFRING_ZC v.%s\n", pfring_zc_version());
   printf("A simple packet counter application.\n\n");
   printf("Usage:   zcount -i <device> -c <cluster id>\n"
@@ -175,33 +175,39 @@ void printHelp(void) {
   printf("-f <bpf>        Set a BPF filter\n");
   printf("-R              Test hw filters adding a rule (Intel 82599)\n");
   printf("-H              High stats refresh rate (workaround for drop counter on 1G Intel cards)\n");
+  printf("-X              Enable hardware timestamp (when supported)\n");
+  printf("-s <time>       Set hardware timestamp (when supported). Format example: '2022-09-23 14:30:55.123456789'\n");
+  printf("-d <nsec>       Adjust hardware timestamp using a signed nsec delta (when supported)'\n");
   printf("-S <core id>    Pulse-time thread for inter-packet time check\n");
   printf("-T              Capture also TX (standard kernel drivers only)\n");
   printf("-t              Touch payload (to force packet load on cache)\n");
   printf("-D              Debug mode\n");
   printf("-C              Check license\n");
   printf("-M              Print maintenance\n");
-  printf("-v              Verbose\n");
+  printf("-v <level>      Verbose (1 to print packet headers, 2 to print hex)\n");
 }
 
 /* *************************************** */
 
 void print_packet(pfring_zc_pkt_buff *buffer) {
   u_char *pkt_data = pfring_zc_pkt_buff_data(buffer, zq);
-  char bigbuf[4096];
 
-  if (buffer->ts.tv_nsec)
-    printf("[%u.%u] [hash=%08X] ", buffer->ts.tv_sec, buffer->ts.tv_nsec, buffer->hash);
+  if (buffer->ts.tv_sec)
+    printf("[%u.%u] ", buffer->ts.tv_sec, buffer->ts.tv_nsec);
 
-#if 1
-  pfring_print_pkt(bigbuf, sizeof(bigbuf), pkt_data, buffer->len, buffer->len);
-  fputs(bigbuf, stdout);
-#else
-  int i;
-  for(i = 0; i < buffer->len; i++)
-    printf("%02X ", pkt_data[i]);
-  printf("\n");
-#endif
+  if (buffer->hash)
+    printf("[hash=%08X] ", buffer->hash);
+
+  if (verbose == 1) {
+    char bigbuf[4096];
+    pfring_print_pkt(bigbuf, sizeof(bigbuf), pkt_data, buffer->len, buffer->len);
+    fputs(bigbuf, stdout);
+  } else {
+    int i;
+    for(i = 0; i < buffer->len; i++)
+      printf("%02X ", pkt_data[i]);
+    printf("\n");
+  }
 }
 
 /* *************************************** */
@@ -216,8 +222,19 @@ void *packet_consumer_thread(void *user) {
     bind2core(bind_core);
 
   while(!do_shutdown) {
+#ifdef USE_BURST_API
+    if((n = pfring_zc_recv_pkt_burst(zq, buffers, BURST_LEN, wait_for_packet)) > 0) {
 
-#ifndef USE_BURST_API
+      if (unlikely(verbose))
+        for (i = 0; i < n; i++) 
+          print_packet(buffers[i]);
+
+      for (i = 0; i < n; i++) {
+        numPkts++;
+        numBytes += buffers[i]->len + 24; /* 8 Preamble + 4 CRC + 12 IFG */
+      }
+    }
+#else
     if(pfring_zc_recv_pkt(zq, &buffers[0], wait_for_packet) > 0) {
 
       if (unlikely(time_pulse)) {
@@ -241,20 +258,7 @@ void *packet_consumer_thread(void *user) {
       numPkts++;
       numBytes += buffers[0]->len + 24; /* 8 Preamble + 4 CRC + 12 IFG */
     }
-#else
-    if((n = pfring_zc_recv_pkt_burst(zq, buffers, BURST_LEN, wait_for_packet)) > 0) {
-
-      if (unlikely(verbose))
-        for (i = 0; i < n; i++) 
-          print_packet(buffers[i]);
-
-      for (i = 0; i < n; i++) {
-        numPkts++;
-        numBytes += buffers[i]->len + 24; /* 8 Preamble + 4 CRC + 12 IFG */
-      }
-    }
 #endif
-
   }
 
    pfring_zc_sync_queue(zq, rx_only);
@@ -270,13 +274,17 @@ int main(int argc, char* argv[]) {
   pthread_t my_thread;
   struct timeval timeNow, lastTime;
   pthread_t time_thread;
-  u_int32_t flags = 0;
+  u_int32_t flags;
   char *filter = NULL;
+  char *init_time = NULL;
+  long long shift_time = 0;
 
   lastTime.tv_sec = 0;
   startTime.tv_sec = 0;
 
-  while((c = getopt(argc,argv,"ac:f:g:hi:vCDMRHS:Tt")) != '?') {
+  flags = PF_RING_ZC_DEVICE_CAPTURE_INJECTED;
+
+  while((c = getopt(argc,argv,"ac:d:f:g:hi:v:CDMRHs:S:TtX")) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -289,6 +297,10 @@ int main(int argc, char* argv[]) {
       break;
     case 'c':
       cluster_id = atoi(optarg);
+      break;
+    case 'd':
+      flags |= PF_RING_ZC_DEVICE_HW_TIMESTAMP;
+      shift_time = atoll(optarg);
       break;
     case 'f':
       filter = strdup(optarg);
@@ -305,6 +317,10 @@ int main(int argc, char* argv[]) {
     case 'H':
       high_stats_refresh = 1;
       break;
+    case 's':
+      flags |= PF_RING_ZC_DEVICE_HW_TIMESTAMP;
+      init_time = strdup(optarg);
+      break;
     case 'S':
       time_pulse = 1;
       bind_time_pulse_core = atoi(optarg);
@@ -316,7 +332,7 @@ int main(int argc, char* argv[]) {
       touch_payload = 1;
       break;
     case 'v':
-      verbose = 1;
+      verbose = atoi(optarg);
       break;
     case 'C':
       check_license = 1;
@@ -326,6 +342,9 @@ int main(int argc, char* argv[]) {
       break;
     case 'M':
       print_maintenance = 1;
+      break;
+    case 'X':
+      flags |= PF_RING_ZC_DEVICE_HW_TIMESTAMP;
       break;
     }
   }
@@ -429,6 +448,38 @@ int main(int argc, char* argv[]) {
     pulse_timestamp_ns = calloc(CACHE_LINE_LEN/sizeof(u_int64_t), sizeof(u_int64_t));
     pthread_create(&time_thread, NULL, time_pulse_thread, NULL);
     while (!*pulse_timestamp_ns && !do_shutdown); /* wait for ts */
+  }
+
+  if (init_time) {
+    int rc;
+    struct timespec ts;
+
+    rc = str2nsec(init_time, &ts);
+
+    if (rc == 0)
+      rc = pfring_zc_set_device_clock(zq, &ts);
+
+    if (rc == 0) printf("Device clock correctly initialized\n");
+    else printf("Unable to set device clock (%u)\n", rc);
+  }
+
+  if (shift_time) {
+    int rc;
+    struct timespec ts;
+    int sign = 0;
+
+    if (shift_time < 0) {
+      sign = -1;
+      shift_time = -shift_time;
+    }
+
+    ts.tv_sec  = shift_time / 1000000000;
+    ts.tv_nsec = shift_time % 1000000000;
+
+    rc = pfring_zc_adjust_device_clock(zq, &ts, sign);
+
+    if (rc == 0) printf("Device clock adjusted (%s %ld.%ld)\n", sign ? "-" : "+", ts.tv_sec, ts.tv_nsec);
+    else printf("Unable to adjust device clock (%u)\n", rc);
   }
 
   pthread_create(&my_thread, NULL, packet_consumer_thread, (void*) NULL);

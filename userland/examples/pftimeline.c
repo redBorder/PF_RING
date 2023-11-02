@@ -1,5 +1,5 @@
 /*
- * (C) 2003-20 - ntop 
+ * (C) 2003-23 - ntop 
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -98,7 +98,7 @@ void print_help(void) {
   tm_info = localtime(&timer);
   strftime(time_buffer_start, sizeof(time_buffer_start), "%Y-%m-%d %H:%M:%S", tm_info);
 
-  printf("pftimeline - (C) 2018 ntop.org\n");
+  printf("pftimeline - (C) 2018 ntop\n");
   printf("Extract traffic from a n2disk timeline using the PF_RING API\n\n");
   printf("-h              Print this help\n");
   printf("-t <path>       Timeline path\n");

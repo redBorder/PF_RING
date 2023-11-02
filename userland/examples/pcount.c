@@ -1,5 +1,5 @@
 /*
- * (C) 2003-20 - ntop 
+ * (C) 2003-23 - ntop 
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -52,8 +52,6 @@ unsigned long long numPkts = 0, numBytes = 0;
 #define DEFAULT_DEVICE "eth1" /* "e1000" */
 
 int32_t gmt_to_local(time_t t);
-int pcap_set_cluster(pcap_t *ring, u_int clusterId);
-int pcap_set_application_name(pcap_t *handle, char *name);
 char* pfring_format_numbers(double val, char *buf, u_int buf_len, u_int8_t add_decimals);
 int use_pcap_loop = 1;
 
@@ -104,9 +102,9 @@ void print_stats() {
 
   if(pcap_stats(pd, &pcapStat) >= 0) {
     fprintf(stderr, "=========================\n"
-	    "Absolute Stats: [%u pkts rcvd][%u pkts dropped]\n"
+	    "Absolute Stats: [%u pkts rcvd][%u pkts dropped (%u if drops)]\n"
 	    "Total Pkts=%u/Dropped=%.1f %%\n",
-	    pcapStat.ps_recv, pcapStat.ps_drop, pcapStat.ps_recv-pcapStat.ps_drop,
+	    pcapStat.ps_recv, pcapStat.ps_drop, pcapStat.ps_ifdrop, pcapStat.ps_recv-pcapStat.ps_drop,
 	    pcapStat.ps_recv == 0 ? 0 : (double)(pcapStat.ps_drop*100)/(double)pcapStat.ps_recv);
     fprintf(stderr, "%llu pkts [%.1f pkt/sec] - %llu bytes [%.2f Mbit/sec]\n",
 	    numPkts, (double)numPkts/deltaSec,
@@ -334,7 +332,7 @@ void printHelp(void) {
   char errbuf[PCAP_ERRBUF_SIZE];
   pcap_if_t *devpointer;
 
-  printf("pcount\n(C) 2003-20 ntop.org\n");
+  printf("pcount\n(C) 2003-23 ntop\n");
   printf("-h              Print help\n");
   printf("-i <device>     Device name\n");
   printf("-f <filter>     pcap filter\n");
@@ -351,6 +349,8 @@ void printHelp(void) {
       printf(" %d. %s [%s]\n", i++, devpointer->name, devpointer->description);
       devpointer = devpointer->next;
     }
+
+    pcap_freealldevs(devpointer);
   }
 }
 
@@ -464,6 +464,7 @@ int main(int argc, char* argv[]) {
       if(pcap_setfilter(pd, &fcode) < 0) {
 	printf("pcap_setfilter error: '%s'\n", pcap_geterr(pd));
       }
+      pcap_freecode(&fcode);
     }
   }
 

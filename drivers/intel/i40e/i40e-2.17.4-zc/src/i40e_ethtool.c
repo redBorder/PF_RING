@@ -2239,8 +2239,15 @@ static void i40e_get_drvinfo(struct net_device *netdev,
 #endif
 }
 
+#ifdef HAVE_ETHTOOL_EXTENDED_RINGPARAMS
+static void i40e_get_ringparam(struct net_device *netdev,
+		  struct ethtool_ringparam *ring,
+		  struct kernel_ethtool_ringparam __always_unused *kernel_rp,
+		  struct netlink_ext_ack __always_unused *extack)
+#else /* HAVE_ETHTOOL_EXTENDED_RINGPARAMS */
 static void i40e_get_ringparam(struct net_device *netdev,
 			       struct ethtool_ringparam *ring)
+#endif /* HAVE_ETHTOOL_EXTENDED_RINGPARAMS */
 {
 	struct i40e_netdev_priv *np = netdev_priv(netdev);
 	struct i40e_pf *pf = np->vsi->back;
@@ -2267,8 +2274,15 @@ static bool i40e_active_tx_ring_index(struct i40e_vsi *vsi, u16 index)
 	return index < vsi->num_queue_pairs;
 }
 
+#ifdef HAVE_ETHTOOL_EXTENDED_RINGPARAMS
+static int i40e_set_ringparam(struct net_device *netdev,
+		  struct ethtool_ringparam *ring,
+		  struct kernel_ethtool_ringparam __always_unused *kernel_rp,
+		  struct netlink_ext_ack __always_unused *extack)
+#else /* HAVE_ETHTOOL_EXTENDED_RINGPARAMS */
 static int i40e_set_ringparam(struct net_device *netdev,
 			      struct ethtool_ringparam *ring)
+#endif /* HAVE_ETHTOOL_EXTENDED_RINGPARAMS */
 {
 	struct i40e_ring *tx_rings = NULL, *rx_rings = NULL;
 	struct i40e_netdev_priv *np = netdev_priv(netdev);
@@ -3325,8 +3339,14 @@ static int __i40e_get_coalesce(struct net_device *netdev,
  * modified per-queue settings, this only guarantees to represent queue 0. See
  * __i40e_get_coalesce for more details.
  **/
+#ifdef HAVE_ETHTOOL_COALESCE_EXTACK
+static int i40e_get_coalesce(struct net_device *netdev, struct ethtool_coalesce *ec,
+			      struct kernel_ethtool_coalesce __maybe_unused *kec,
+			      struct netlink_ext_ack __maybe_unused *extack)
+#else
 static int i40e_get_coalesce(struct net_device *netdev,
-			     struct ethtool_coalesce *ec)
+			      struct ethtool_coalesce *ec)
+#endif /* HAVE_ETHTOOL_COALESCE_EXTACK */
 {
 	return __i40e_get_coalesce(netdev, ec, -1);
 }
@@ -3548,8 +3568,14 @@ static int __i40e_set_coalesce(struct net_device *netdev,
  *
  * This will set each queue to the same coalesce settings.
  **/
+#ifdef HAVE_ETHTOOL_COALESCE_EXTACK
+static int i40e_set_coalesce(struct net_device *netdev, struct ethtool_coalesce *ec,
+			      struct kernel_ethtool_coalesce __maybe_unused *kec,
+			      struct netlink_ext_ack __maybe_unused *extack)
+#else
 static int i40e_set_coalesce(struct net_device *netdev,
-			     struct ethtool_coalesce *ec)
+			      struct ethtool_coalesce *ec)
+#endif /* HAVE_ETHTOOL_COALESCE_EXTACK */
 {
 	return __i40e_set_coalesce(netdev, ec, -1);
 }

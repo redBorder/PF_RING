@@ -1,7 +1,7 @@
 /*
  * PF_RING ZC API
  *
- * (C) 2013-22 - ntop.org
+ * (C) 2013-23 - ntop
  *
  */
 
@@ -35,6 +35,7 @@
 #define PF_RING_ZC_DO_NOT_STRIP_FCS           (1 << 10) /**< pfring_zc_open_device() flag: do NOT strip the FCS (CRC), when not stripped out by the adapter */
 #define PF_RING_ZC_DEVICE_ARISTA_TIMESTAMP    (1 << 11) /**< pfring_zc_open_device() flag: extract Arista 7150 series timestamp from packet */
 #define PF_RING_ZC_DEVICE_METAWATCH_TIMESTAMP (1 << 11) /**< pfring_zc_open_device() flag: extract Arista Metawatch timestamp from packet */
+#define PF_RING_ZC_DEVICE_CAPTURE_INJECTED    (1 << 12) /**< pfring_zc_open_device() flag: capture also injected packets (see PF_RING_DISCARD_INJECTED_PKTS) */
 
 #define UNDEFINED_QUEUEID 0xFFFFFFFF    /**< pfring_zc_get_queue_id() return val: queue id is not valid */
 #define QUEUE_IS_DEVICE(i) (i > 0xFFFF) /**< pfring_zc_get_queue_id() return val: queue id is an encoded device index */
@@ -62,6 +63,7 @@
 
 /* Misc defines */
 #define PF_RING_ZC_SEND_PKT_MULTI_MAX_QUEUES 64 /**< pfring_zc_send_pkt_multi: max number of queues in queues_mask */
+#define PF_RING_ZC_SEND_PKT_MULTI_V3_MAX_QUEUES 128 /**< pfring_zc_send_pkt_multi_v3: max number of queues in queues_mask */
 #define PF_RING_ZC_BUFFER_HEAD_ROOM          64
 
 #ifdef __cplusplus
@@ -79,7 +81,8 @@ typedef void pfring_zc_multi_queue;
  */
 typedef enum {
   rx_only,        /**< RX only mode. */
-  tx_only         /**< TX only mode. */
+  tx_only,        /**< TX only mode. */
+  management_only /**< No capture/transmission. */
 } pfring_zc_queue_mode;
 
 /**
@@ -438,6 +441,22 @@ pfring_zc_send_pkt(
 );
 
 /**
+ * Insert a packet into the queue and return the (hardware when available) send time.
+ * @param queue        The queue handle.
+ * @param pkt_handle   The pointer to the buffer handle to send. Once a packet has been sent, the buffer handle can be reused or if not longer necessary it must be freed by calling pfring_zc_release_packet_handle().
+ * @param flush_packet This flag is currently ignored, packets is immediately sent out flushing also older packets if any.
+ * @param ts           The send time.
+ * @return             The packet length on success, 0 if filtered out (bpf), a negative value otherwise. 
+ */
+int
+pfring_zc_send_pkt_get_time(
+  pfring_zc_queue *queue,
+  pfring_zc_pkt_buff **pkt_handle,
+  u_int8_t flush_packet,
+  struct timespec *ts
+);
+
+/**
  * Send a burst of packets to the queue.
  * @param queue         The queue handle.
  * @param pkt_handles   The array with the buffer handles for the buffers to send.
@@ -474,6 +493,43 @@ void
 pfring_zc_sync_queue(
   pfring_zc_queue *queue,
   pfring_zc_queue_mode direction 
+);
+
+/* **************************************************************************************** */
+
+/**
+ * Read the time from the device hardware clock (if supported by the underlying device)
+ * @param queue The queue handle.
+ * @param ts    The time.
+ */
+int
+pfring_zc_get_device_clock(
+  pfring_zc_queue *queue,
+  struct timespec *ts
+);
+
+/**
+ * Set the time in the device hardware clock (if supported by the underlying device)
+ * @param queue The queue handle.
+ * @param ts    The time.
+ */
+int
+pfring_zc_set_device_clock(
+  pfring_zc_queue *queue,
+  struct timespec *ts
+);
+
+/**
+ * Adjust the time in the device hardware clock with an offset (if supported by the underlying device)
+ * @param queue  The queue handle.
+ * @param offset The time offset.
+ * @param sign   The sign.
+ */
+int
+pfring_zc_adjust_device_clock(
+  pfring_zc_queue *queue,
+  struct timespec *offset,
+  int8_t sign
 );
 
 /* **************************************************************************************** */
@@ -631,7 +687,7 @@ pfring_zc_create_multi_queue(
 );
 
 /**
- * Send a packet to multiple queues bound to a multi-queue object.
+ * Send a packet to multiple queues bound to a multi-queue object (up to 64 queues).
  * @param multi_queue  The multi-queue handle.
  * @param pkt_handle   The pointer to the buffer handle to send. Once a packet has been sent, the buffer handle can be reused or if not longer necessary it must be freed by calling pfring_zc_release_packet_handle().
  * @param queues_mask  The mask with the egress queues where the buffer should be inserted. The LSB indicates the first queue in the multi-queue array. The max number of queues is defined in PF_RING_ZC_SEND_PKT_MULTI_MAX_QUEUES.
@@ -643,6 +699,22 @@ pfring_zc_send_pkt_multi(
   pfring_zc_multi_queue *multi_queue, 
   pfring_zc_pkt_buff **pkt_handle, 
   u_int64_t queues_mask,
+  u_int8_t flush_packet
+);
+
+/**
+ * Send a packet to multiple queues bound to a multi-queue object (v3 - up to 128 queues).
+ * @param multi_queue  The multi-queue handle.
+ * @param pkt_handle   The pointer to the buffer handle to send. Once a packet has been sent, the buffer handle can be reused or if not longer necessary it must be freed by calling pfring_zc_release_packet_handle().
+ * @param queues_mask  The mask with the egress queues where the buffer should be inserted. The LSB indicates the first queue in the multi-queue array. The max number of queues is defined in PF_RING_ZC_SEND_PKT_MULTI_V3_MAX_QUEUES.
+ * @param flush_packet The flag indicating whether this call should flush the enqueued packet, and older packets if any.
+ * @return             The number of packet copies enqueued. 
+ */
+int 
+pfring_zc_send_pkt_multi_v3(
+  pfring_zc_multi_queue *multi_queue, 
+  pfring_zc_pkt_buff **pkt_handle, 
+  __int128_t queues_mask,
   u_int8_t flush_packet
 );
 
@@ -685,15 +757,28 @@ typedef int64_t
 );
 
 /**
+ * The distribution function prototype (v3 - up to 128 queues with pfring_zc_run_fanout_v3).
+ * @param pkt_handle The received buffer handle.
+ * @param in_queue   The ingress queues handle from which the packet arrived.
+ * @param user       The pointer to the user data.
+ * @return           The egress queue index (or a negative value to drop the packet) in case of balancing, the egress queues bit-mask in case of fan-out.
+ */
+typedef __int128_t
+(*pfring_zc_distribution_func_v3) (
+  pfring_zc_pkt_buff *pkt_handle,
+  pfring_zc_queue *in_queue,
+  void *user
+);
+
+/**
  * The idle callback prototype.
  */
 typedef void
 (*pfring_zc_idle_callback) (
 );
 
-
 /**
- * Run a balancer worker.
+ * Run a balancer worker (v2).
  * @param in_queues        The ingress queues handles array. 
  * @param out_queues       The egress queues handles array.
  * @param num_in_queues    The number of ingress queues.
@@ -745,7 +830,39 @@ pfring_zc_run_balancer(
 );
 
 /**
- * Run a fan-out worker. 
+ * Run a fan-out worker (v3 - up to 128 queues). 
+ * @param in_queues        The ingress queues handles array. 
+ * @param out_multi_queue  The egress multi-queue handle.
+ * @param num_in_queues    The number of ingress queues.
+ * @param working_set_pool The pool handle for working set buffers allocation. The worker uses 8 buffers in burst mode, 1 otherwise.
+ * @param recv_policy      The receive policy.
+ * @param idle_func        The function called when there is no incoming packet.
+ * @param filter_func      The filtering function, or NULL for no filtering.
+ * @param filter_user_data The user data passed to the filtering function.
+ * @param distr_func       The distribution function, or NULL to send all the packets to all the egress queues.
+ * @param distr_user_data  The user data passed to distribution function.
+ * @param active_wait      The flag indicating whether the worker should use active or passive wait for incoming packets.
+ * @param core_id_affinity The core affinity for the worker thread.
+ * @return                 The worker handle on success, NULL otherwise (errno is set appropriately). 
+ */
+pfring_zc_worker * 
+pfring_zc_run_fanout_v3(
+  pfring_zc_queue *in_queues[],
+  pfring_zc_multi_queue *out_multi_queue, 
+  u_int32_t num_in_queues,
+  pfring_zc_buffer_pool *working_set_pool,
+  pfring_zc_recv_policy recv_policy,
+  pfring_zc_idle_callback idle_func,
+  pfring_zc_filtering_func filter_func,
+  void *filter_user_data,
+  pfring_zc_distribution_func_v3 distr_func,
+  void *distr_user_data,
+  u_int32_t active_wait,
+  int32_t core_id_affinity
+);
+
+/**
+ * Run a fan-out worker (v2 - up to 64 queues). 
  * @param in_queues        The ingress queues handles array. 
  * @param out_multi_queue  The egress multi-queue handle.
  * @param num_in_queues    The number of ingress queues.

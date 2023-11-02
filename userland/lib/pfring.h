@@ -1,6 +1,6 @@
 /*
  *
- * (C) 2005-22 - ntop.org
+ * (C) 2005-23 - ntop
  *
  *
  * This program is free software; you can redistribute it and/or modify
@@ -173,6 +173,7 @@ typedef struct pfring_if {
   char *name;
   char *system_name;
   char *module;
+  char *module_version;
   char *sn;
   char mac[6];
   struct { /* Bus ID: "%04X:%02X:%02X.%X", slot, bus, device, function */
@@ -181,7 +182,7 @@ typedef struct pfring_if {
     int device;
     int function;
   } bus_id;
-  int status; /* 1: up, 0: down*/
+  int status; /* 1: up, 0: down, -1: unknown */
   int license; /* 1: valid, 0: invalid or not installed */
   time_t license_expiration; /* expiration epoch */
   struct pfring_if *next;
@@ -287,6 +288,7 @@ struct __pfring {
   int       (*get_device_ifindex)           (pfring *, char *, int *);
   u_int16_t (*get_slot_header_len)          (pfring *);
   int       (*set_virtual_device)           (pfring *, virtual_filtering_device_info *);
+  int       (*set_default_hw_action)        (pfring *, generic_default_action_type);
   int       (*add_hw_rule)                  (pfring *, hw_filtering_rule *);
   int       (*remove_hw_rule)               (pfring *, u_int16_t);
   int       (*loopback_test)                (pfring *, char *, u_int, u_int);
@@ -323,15 +325,17 @@ struct __pfring {
   char *slots;
   char *device_name;
 
+  u_int32_t flags;
   u_int32_t caplen;
+
   u_int16_t slot_header_len;
   u_int16_t mtu /* 0 = unknown */;
-
   u_int32_t sampling_rate;
+
   u_int32_t sampling_counter;
+  u_int32_t sampling_rnd_shift;
 
   packet_slicing_level slicing_level;
-
   u_int32_t slicing_additional_bytes;
 
   int fd;
@@ -341,18 +345,16 @@ struct __pfring {
 
   u_int32_t poll_sleep;
   u_int16_t poll_duration;
-
   u_int8_t promisc;
   u_int8_t ft_enabled; /* PF_RING FT support enabled */
+
   u_int8_t reentrant;
   u_int8_t break_recv_loop;
-
-  u_long num_poll_calls;
+  u_int16_t __padding;
+  u_int32_t num_poll_calls;
 
   pfring_rwlock_t rx_lock;
   pfring_rwlock_t tx_lock;
-
-  u_int32_t flags;
 
   void *ft; /* PF_RING FT handle */
 
@@ -363,6 +365,8 @@ struct __pfring {
 
   /* Semi-ZC devices (1-copy) */
   pfring *one_copy_rx_pfring;
+
+  pthread_t runtime_manager_thread;
 };
 
 /* ********************************* */
@@ -581,6 +585,14 @@ int pfring_set_poll_duration(pfring *ring, u_int duration);
  * @return 0 on success, a negative value otherwise.
  */
 int pfring_set_tx_watermark(pfring *ring, u_int16_t watermark);
+
+/**
+ * Set a default action for filtering into the NIC.
+ * @param ring The PF_RING handle on which the default rule will be set. 
+ * @param action. The action (default_pass or default_drop).
+ * @return 0 on success, a negative value otherwise.
+ */
+int pfring_set_default_hw_action(pfring *ring, generic_default_action_type action);
 
 /**
  * Set a specified filtering rule into the NIC. Note that no PF_RING filter is added, but only a NIC filter.
@@ -1336,6 +1348,13 @@ void pfring_handle_vss_apcon_hw_timestamp(u_char* buffer, struct pfring_pkthdr *
  * @return 0 if interface speed is unknown, the interface speed (Mbit/s) otherwise.
  */
 u_int32_t pfring_get_interface_speed(pfring *ring);
+
+/**
+ * Get interface speed by linux interface name.
+ * @param ifname The interface name.
+ * @return 0 if interface speed is unknown, the interface speed (Mbit/s) otherwise.
+ */
+u_int32_t pfring_get_ethtool_link_speed(const char *ifname);
 
 /**
  * List all interfaces.

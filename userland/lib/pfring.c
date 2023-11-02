@@ -1,6 +1,6 @@
 /*
  *
- * (C) 2005-22 - ntop.org
+ * (C) 2005-23 - ntop
  *
  *
  * This program is free software; you can redistribute it and/or modify
@@ -21,6 +21,7 @@
 
 #include "pfring.h"
 #include "pfring_priv.h"
+#include "pfring_runtime_manager.h"
 #include <net/ethernet.h>
 
 // #define RING_DEBUG
@@ -50,44 +51,14 @@
 #include "pfring_mod_nt.h"
 #endif
 
-#ifdef HAVE_DAG
-/* Endace DAG */
-#include "pfring_mod_dag.h"
-#endif
-
 #ifdef HAVE_FIBERBLAZE
 /* Fiberblaze */
 #include "pfring_mod_fiberblaze.h"
 #endif
 
-#ifdef HAVE_ACCOLADE
-/* Accolade */
-#include "pfring_mod_accolade.h"
-#endif
-
-#ifdef HAVE_MYRICOM
-/* Myricom */
-#include "pfring_mod_myricom.h"
-#endif
-
 #ifdef HAVE_MLX
 /* Mellanox */
 #include "pfring_mod_mlx.h"
-#endif
-
-#ifdef HAVE_INVEATECH
-/* InveaTech */
-#include "pfring_mod_invea.h"
-#endif
-
-#ifdef HAVE_NETCOPE
-/* Netcope */
-#include "pfring_mod_netcope.h"
-#endif
-
-#ifdef HAVE_EXABLAZE
-/* Exablaze */
-#include "pfring_mod_exablaze.h"
 #endif
 
 #ifdef HAVE_NPCAP
@@ -136,14 +107,6 @@ static pfring_module_info pfring_module_list[] = {
 #endif
 #endif
 
-#ifdef HAVE_DAG
-  {
-    .name = "dag",
-    .open = pfring_dag_open,
-    .findalldevs = pfring_dag_findalldevs
-  },
-#endif
-
 #ifdef HAVE_FIBERBLAZE
   {
     .name = "fbcard",
@@ -160,51 +123,11 @@ static pfring_module_info pfring_module_list[] = {
   },
 #endif
 
-#ifdef HAVE_ACCOLADE
-  {
-    .name = "anic",
-    .open = pfring_anic_open,
-    .findalldevs = NULL
-  },
-#endif
-
-#ifdef HAVE_MYRICOM
-  {
-    .name = "myri",
-    .open = pfring_myri_open,
-    .findalldevs = pfring_myri_findalldevs
-  },
-#endif
-
 #ifdef HAVE_MLX
   {
     .name = "mlx",
     .open = pfring_mlx_open,
     .findalldevs = pfring_mlx_findalldevs
-  },
-#endif
-
-#ifdef HAVE_INVEATECH
-  {
-    .name = "invea",
-    .open = pfring_invea_open,
-    .findalldevs = NULL
-  },
-#endif
-
-#ifdef HAVE_NETCOPE
-  {
-    .name = "nsf",
-    .open = pfring_netcope_open,
-    .findalldevs = NULL
-  },
-#endif
-
-#ifdef HAVE_EXABLAZE
-  {
-    .name = "exanic",
-    .open = pfring_exablaze_open,
-    .findalldevs = NULL
   },
 #endif
 
@@ -237,8 +160,10 @@ pfring *pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags) 
   char *ft_conf_file;
   pfring *ring;
 
-  if (device_name == NULL)
+  if (device_name == NULL) {
+    errno = EINVAL;
     return NULL;
+  }
 
 #ifdef RING_DEBUG
   printf("[PF_RING] Attempting to pfring_open(%s)\n", device_name);
@@ -306,6 +231,7 @@ pfring *pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags) 
       ret = pfring_ft_load_ndpi_protocols(ring->ft, ft_proto_file);
 
       if (ret != 0) {
+        errno = EINVAL;
         return NULL;
       }
     }
@@ -314,6 +240,7 @@ pfring *pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags) 
       ret = pfring_ft_load_configuration(ring->ft, ft_conf_file);
 
       if (ret != 0) {
+        errno = EINVAL;
         return NULL;
       }
     }
@@ -352,7 +279,6 @@ pfring *pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags) 
 
   /* default */
   if(!mod_found) {
-    errno = ENODEV;
     ring->device_name = strdup(device_name ? device_name : "any");
     if (ring->device_name == NULL) {
       errno = ENOMEM;
@@ -363,6 +289,8 @@ pfring *pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags) 
   }
 
   if(ret < 0) {
+    if (!errno)
+      errno = ENODEV;
     if (ring->device_name != NULL) free(ring->device_name);
     free(ring);
     return NULL;
@@ -371,6 +299,7 @@ pfring *pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags) 
   if(unlikely(ring->reentrant)) {
     if (pfring_rwlock_init(&ring->rx_lock, PTHREAD_PROCESS_PRIVATE) != 0 || 
         pfring_rwlock_init(&ring->tx_lock, PTHREAD_PROCESS_PRIVATE) != 0) {
+      errno = ENOTSUP;
       free(ring);
       return NULL;
     }
@@ -381,9 +310,16 @@ pfring *pfring_open(const char *device_name, u_int32_t caplen, u_int32_t flags) 
   ring->rdi.device_id = ring->rdi.port_id = -1; /* Default */
 
   ring->mtu = pfring_get_mtu_size(ring);
-  if(ring->mtu == 0) ring->mtu = 9000 /* Jumbo MTU */;
+  if(ring->mtu == 0) {
+    if (strcmp(device_name, "lo") == 0)
+       ring->mtu = 65535 /* Loopback MTU (64K) */;
+    else
+       ring->mtu = 9000 /* Jumbo MTU (9K) */;
+  }
 
   pfring_get_bound_device_ifindex(ring, &ring->device_id);
+  errno = 0; /* Ignore errno from pfring_get_bound_device_ifindex */
+
   ring->initialized = 1;
 
 #ifdef RING_DEBUG
@@ -400,15 +336,23 @@ u_int8_t pfring_open_multichannel(const char *device_name, u_int32_t caplen,
 				  pfring *ring[MAX_NUM_RX_CHANNELS]) {
   u_int8_t num_channels, i, num = 0;
   char *at;
-  char base_device_name[32];
+  const char *dev;
+  char base_dev[32];
 
-  snprintf(base_device_name, sizeof(base_device_name), "%s", device_name);
-  at = strchr(base_device_name, '@');
+  dev = device_name;
+
+  /* Use linux device in case of zc to avoid opening in ZC mode for read only */
+  if (strncmp(dev, "zc:", 3) == 0)
+    dev = &dev[3];
+
+  snprintf(base_dev, sizeof(base_dev), "%s", dev);
+
+  at = strchr(base_dev, '@');
   if(at != NULL)
     at[0] = '\0';
 
   /* Count how many RX channel the specified device supports */
-  ring[0] = pfring_open(base_device_name, caplen, flags);
+  ring[0] = pfring_open(base_dev, caplen, flags);
 
   if(ring[0] == NULL)
     return(0);
@@ -421,11 +365,18 @@ u_int8_t pfring_open_multichannel(const char *device_name, u_int32_t caplen,
     num_channels = MAX_NUM_RX_CHANNELS;
 
   /* Now do the real job */
-  for(i=0; i<num_channels; i++) {
-    char dev[64];
 
-    snprintf(dev, sizeof(dev), "%s@%d", base_device_name, i);
-    ring[i] = pfring_open(dev, caplen, flags);
+  snprintf(base_dev, sizeof(base_dev), "%s", device_name);
+
+  at = strchr(base_dev, '@');
+  if(at != NULL)
+    at[0] = '\0';
+
+  for(i=0; i<num_channels; i++) {
+    char dev_queue[64];
+
+    snprintf(dev_queue, sizeof(dev_queue), "%s@%d", base_dev, i);
+    ring[i] = pfring_open(dev_queue, caplen, flags);
 
     if(ring[i] == NULL)
       return(num);
@@ -448,6 +399,11 @@ void pfring_close(pfring *ring) {
   pfring_shutdown(ring);
 
   pfring_sync_indexes_with_kernel(ring);
+
+  if (getenv("PF_RING_RUNTIME_MANAGER") != NULL)
+#ifdef HAVE_DL_REDIS
+    pfring_stop_runtime_manager(ring);
+#endif
 
   if(ring->close)
     ring->close(ring);
@@ -627,9 +583,7 @@ int pfring_recv(pfring *ring, u_char** buffer, u_int buffer_len,
 
     ring->break_recv_loop = 0;
 
-#if defined(ENABLE_BPF) || defined(HAVE_PF_RING_FT)
 recv_next:
-#endif
 
     rc = ring->recv(ring, buffer, buffer_len, hdr, wait_for_incoming_packet);
 
@@ -642,7 +596,7 @@ recv_next:
         pfring_handle_ixia_hw_timestamp(*buffer, hdr);
       else if(ring->vss_apcon_timestamp_enabled)
         pfring_handle_vss_apcon_hw_timestamp(*buffer, hdr);
-      else if(ring->flags & PF_RING_ARISTA_TIMESTAMP)
+      else if(ring->flags & PF_RING_METAWATCH_TIMESTAMP)
         pfring_handle_metawatch_hw_timestamp(*buffer, hdr);
       else if(ring->flags & PF_RING_ARISTA_TIMESTAMP) {
         if (pfring_handle_arista_hw_timestamp(*buffer, hdr) == 1)
@@ -744,6 +698,15 @@ int pfring_set_poll_duration(pfring *ring, u_int duration) {
 int pfring_set_tx_watermark(pfring *ring, u_int16_t watermark) {
   if(ring && ring->set_tx_watermark)
     return ring->set_tx_watermark(ring, watermark);
+
+  return(PF_RING_ERROR_NOT_SUPPORTED);
+}
+
+/* **************************************************** */
+
+int pfring_set_default_hw_action(pfring *ring, generic_default_action_type action) {
+   if(ring && ring->set_default_hw_action)
+    return ring->set_default_hw_action(ring, action);
 
   return(PF_RING_ERROR_NOT_SUPPORTED);
 }
@@ -921,18 +884,21 @@ int pfring_get_card_settings(pfring *ring, pfring_card_settings *settings) {
 /* **************************************************** */
 
 int pfring_set_sampling_rate(pfring *ring, u_int32_t rate /* 1 = no sampling */) {
-  if(ring && ring->set_sampling_rate) {
-    int rc;
+  int rc = PF_RING_ERROR_NOT_SUPPORTED;
 
-    rc = ring->set_sampling_rate(ring, rate);
+  srand(time(NULL));
 
-    if (rc == 0)
-      ring->sampling_rate = rate;
+  if (ring) {
+    ring->sampling_rate = rate;
 
-    return(rc);
+    if(ring->set_sampling_rate) {
+      rc = ring->set_sampling_rate(ring, rate);
+    } else {
+      rc = 0;
+    }
   }
 
-  return(PF_RING_ERROR_NOT_SUPPORTED);
+  return rc;
 }
 
 /* **************************************************** */
@@ -1272,10 +1238,22 @@ int pfring_enable_ring(pfring *ring) {
   if(ring && ring->enable_ring) {
     int rc;
 
-    if(ring->enabled) return(0);
+    if (ring->enabled)
+      return(0);
 
     rc = ring->enable_ring(ring);
-    if(rc == 0) ring->enabled = 1;
+    if (rc == 0) {
+      ring->enabled = 1;
+
+      if (getenv("PF_RING_RUNTIME_MANAGER") != NULL) {
+#ifdef HAVE_DL_REDIS
+        pfring_run_runtime_manager(ring);
+#else
+        fprintf(stderr, "*** Unable to start runtime manager (compiled without redis support) ***\n");
+#endif
+      }
+
+    }
 
     return rc;
   }

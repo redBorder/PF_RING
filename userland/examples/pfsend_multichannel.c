@@ -1,5 +1,5 @@
 /*
- * (C) 2003-20 - ntop 
+ * (C) 2003-23 - ntop 
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -168,10 +168,13 @@ void my_sigalarm(int sig) {
 /* *************************************** */
 
 void printHelp(void) {
-  printf("pfcount_multichannel\n(C) 2005-22 ntop.org\n\n");
+  printf("pfcount_multichannel\n(C) 2005-23 ntop\n\n");
   printf("-h              Print this help\n");
   printf("-i <device>     Device name (No device@channel)\n");
   printf("-l <len>        Packet length\n");
+  printf("-b <num>        Reforge source IP with <num> different IPs (balanced traffic)\n");
+  printf("-S <ip>         Use <ip> as base source IP for -b (default: 10.0.0.1)\n");
+  printf("-D <ip>         Use <ip> as destination IP (default: 192.168.0.1)\n");
   printf("-g <id:id...>   Specifies the thread affinity mask. Each <id> represents\n"
 	 "                the core id where the i-th will bind. Example: -g 7:6:5:4\n"
 	 "                binds thread <device>@0 on coreId 7, <device>@1 on coreId 6\n"
@@ -302,10 +305,15 @@ int main(int argc, char* argv[]) {
   startTime.tv_sec = 0;
   numCPU = sysconf( _SC_NPROCESSORS_ONLN );
 
-  while((c = getopt(argc,argv,"hi:l:vb:g:")) != -1) {
+  srcaddr.s_addr = 0x0100000A /* 10.0.0.1 */;
+  dstaddr.s_addr = 0x0100A8C0 /* 192.168.0.1 */;
+
+  while((c = getopt(argc,argv,"hi:l:vb:g:D:S:")) != -1) {
     switch(c) {
     case 'b':
-      num_uniq_pkts = atoi(optarg);
+      num_ips = atoi(optarg);
+      if(num_ips == 0) num_ips = 1;
+      num_uniq_pkts = num_ips;
       break;
     case 'h':
       printHelp();
@@ -322,6 +330,12 @@ int main(int argc, char* argv[]) {
       break;
     case 'g':
       bind_mask = strdup(optarg);
+      break;
+    case 'D':
+      inet_aton(optarg, &dstaddr);
+      break;
+    case 'S':
+      inet_aton(optarg, &srcaddr);
       break;
     }
   }

@@ -2693,7 +2693,12 @@ static struct sk_buff *i40e_run_xdp(struct i40e_ring *rx_ring,
 			rx_ring->xdp_stats.xdp_redirect_fail++;
 		break;
 	default:
+#ifdef NEED_NO_NETDEV_PROG_XDP_WARN_ACTION
 		bpf_warn_invalid_xdp_action(act);
+#else
+		bpf_warn_invalid_xdp_action(rx_ring->netdev, xdp_prog, act);
+#endif
+
 		/* fallthrough -- abort and drop */
 	case XDP_ABORTED:
 		trace_xdp_exception(rx_ring->netdev, xdp_prog, act);
@@ -3950,8 +3955,13 @@ bool __i40e_chk_linearize(struct sk_buff *skb)
 		 * descriptor associated with the fragment.
 		 */
 		if (stale_size > I40E_MAX_DATA_PER_TXD) {
+#ifdef NEED_SKB_FRAG_OFF_ACCESSORS
+			int align_pad = -(_skb_frag_off(stale)) &
+					(I40E_MAX_READ_REQ_SIZE - 1);
+#else
 			int align_pad = -(skb_frag_off(stale)) &
 					(I40E_MAX_READ_REQ_SIZE - 1);
+#endif
 
 			sum -= align_pad;
 			stale_size -= align_pad;

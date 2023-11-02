@@ -1,5 +1,5 @@
 /*
- * (C) 2003-20 - ntop 
+ * (C) 2003-23 - ntop 
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -59,6 +59,8 @@
 #define DEFAULT_DEVICE     "eth0"
 #define NO_ZC_BUFFER_LEN     9000
 #define BURST_SIZE             32
+#define USE_PF_RING_LOOP_API
+//#define USE_PF_RING_POLL_API
 
 pfring  *pd;
 int verbose = 0, quiet = 0, num_threads = 1;
@@ -77,8 +79,6 @@ u_int32_t last_ip = 0;
 u_int16_t min_len = 0;
 int promisc = 1;
 u_int8_t rule_priority = 0;
-u_int32_t src_ip_rule = 0;
-u_int8_t src_ip_rule_set = 0;
 
 struct app_stats {
   u_int64_t numPkts[MAX_NUM_THREADS];
@@ -155,12 +155,15 @@ void print_stats() {
     thpt = ((double)8*nBytes)/(delta_last*1000);
 
     fprintf(stderr, "=========================\n"
-	    "Absolute Stats: [%s pkts total][%s pkts dropped][%.1f%% dropped]\n",
+	    "Absolute Stats: [%s pkts total][%s pkts dropped]",
 	    pfring_format_numbers((double)(nPkts + pfringStat.drop), buf2, sizeof(buf2), 0),
-	    pfring_format_numbers((double)(pfringStat.drop), buf3, sizeof(buf3), 0),
-	    pfringStat.drop == 0 ? 0 :
-	    (double)(pfringStat.drop*100)/(double)(nPkts + pfringStat.drop));
-    fprintf(stderr, "[%s %s rcvd][%s bytes rcvd]",
+	    pfring_format_numbers((double)(pfringStat.drop), buf3, sizeof(buf3), 0));
+
+    if (chunk_mode != 1) /* Compute drop rate in packet mode only (do not compute drop rate using pkts vs chunks) */
+      fprintf(stderr, "[%.1f%% dropped]",
+	    pfringStat.drop == 0 ? 0 : (double)(pfringStat.drop*100)/(double)(nPkts + pfringStat.drop));
+
+    fprintf(stderr, "\n[%s %s rcvd][%s bytes rcvd]",
 	    pfring_format_numbers((double)nPkts, buf1, sizeof(buf1), 0),
             chunk_mode == 1 ? "chunks" : "pkts",
 	    pfring_format_numbers((double)nBytes, buf2, sizeof(buf2), 0));
@@ -307,72 +310,14 @@ void sample_filtering_rules(){
     pfring_toggle_filtering_policy(pd, 0); /* Default to drop */
   }
 
-  if (0) { /* Accolade (Filtering) */
-    /* Default: drop
-     * Pass TCP 10.62.4.239:80 - 10.62.7.8:54830 */
-    hw_filtering_rule r = { 0 };
+  if (0) { /* Mellanox (Drop Src IP) */
 
-    r.rule_family_type = accolade_default;
-    r.rule_family.accolade_rule.action = accolade_drop;
+    /* Use promisc to guess what is the default the user wants */
+    generic_default_action_type default_action = promisc ? default_pass : default_drop;
 
-    pfring_add_hw_rule(pd, &r);
+    /* Drop (or Pass if default is drop) UDP Src IP */
 
-    memset(&r, 0, sizeof(r));
-
-    r.rule_id = 0;
-    r.rule_family_type = accolade_rule;
-    r.rule_family.accolade_rule.action = accolade_pass;
-    r.rule_family.accolade_rule.ip_version = 4;
-    r.rule_family.accolade_rule.protocol = 6;
-    r.rule_family.accolade_rule.src_addr.v4 = ntohl(inet_addr("10.62.4.239"));
-    r.rule_family.accolade_rule.src_addr_bits = 32;
-    r.rule_family.accolade_rule.src_port_low = 80;
-    r.rule_family.accolade_rule.dst_addr.v4 = ntohl(inet_addr("10.62.7.8"));
-    r.rule_family.accolade_rule.dst_addr_bits = 32;
-    r.rule_family.accolade_rule.dst_port_low = 54830;
-
-    if ((rc = pfring_add_hw_rule(pd, &r)) < 0)
-      fprintf(stderr, "pfring_add_hw_rule(id=%d) failed: rc=%d\n", r.rule_id, rc);
-    else
-      printf("Rule %d added successfully...\n", r.rule_id );
-  }
-
-  if (0) { /* Accolade (Steering) */
-    /* Default: pass
-     * Steer TCP 10.62.4.239:80 - 10.62.7.8:54830 to ring 1 */
-    hw_filtering_rule r = { 0 };
-    u_int8_t ring_id = 1; /* destination ring */
-
-    r.rule_family_type = accolade_default;
-    r.rule_family.accolade_rule.action = accolade_pass;
-
-    pfring_add_hw_rule(pd, &r);
-
-    memset(&r, 0, sizeof(r));
-
-    r.rule_id = 0;
-    r.rule_family_type = accolade_rule;
-    r.rule_family.accolade_rule.action = accolade_pass;
-    r.rule_family.accolade_rule.ip_version = 4;
-    r.rule_family.accolade_rule.protocol = 6;
-    r.rule_family.accolade_rule.src_addr.v4 = ntohl(inet_addr("10.62.4.239"));
-    r.rule_family.accolade_rule.src_addr_bits = 32;
-    r.rule_family.accolade_rule.src_port_low = 80;
-    r.rule_family.accolade_rule.dst_addr.v4 = ntohl(inet_addr("10.62.7.8"));
-    r.rule_family.accolade_rule.dst_addr_bits = 32;
-    r.rule_family.accolade_rule.dst_port_low = 54830;
-
-    r.rule_family.accolade_rule.steer_to_ring = 1;
-    r.rule_family.accolade_rule.ring_id = ring_id;
-
-    if ((rc = pfring_add_hw_rule(pd, &r)) < 0)
-      fprintf(stderr, "pfring_add_hw_rule(id=%d) failed: rc=%d\n", r.rule_id, rc);
-    else
-      printf("Rule %d added successfully...\n", r.rule_id );
-  }
-
-  if (src_ip_rule_set) { /* Mellanox (Drop Src IP) */
-    /* Drop (or Pass if promisc is not set) UDP Src IP */
+    pfring_set_default_hw_action(pd, default_action);
 
     hw_filtering_rule r = { 0 };
 
@@ -380,13 +325,13 @@ void sample_filtering_rules(){
     r.rule_id = FILTERING_RULE_AUTO_RULE_ID; /* auto generate rule ID */
     r.rule_family_type = generic_flow_tuple_rule;
 
-    if (promisc)
+    if (default_action == default_pass)
       r.rule_family.flow_tuple_rule.action = flow_drop_rule;
     else
       r.rule_family.flow_tuple_rule.action = flow_pass_rule;
 
     r.rule_family.flow_tuple_rule.ip_version = 4;
-    r.rule_family.flow_tuple_rule.src_ip.v4 = src_ip_rule;
+    r.rule_family.flow_tuple_rule.src_ip.v4 = ntohl(inet_addr("10.0.0.1"));
 
     r.rule_family.flow_tuple_rule.protocol = IPPROTO_UDP;
     //r.rule_family.flow_tuple_rule.dst_port = 3000;
@@ -754,44 +699,69 @@ void dummyProcessPacket(const struct pfring_pkthdr *h,
 
 /* *************************************** */
 
-void printDevs() {
+void printDevs(u_int8_t json) {
   pfring_if_t *dev;
   int i = 0;
 
   dev = pfring_findalldevs();
 
-  if (verbose)
-    printf("Name\tSystemName\tModule\tMAC\tBusID\tNumaNode\tStatus\tLicense\tExpiration\n");
+  if (json)
+    printf("{\"interfaces\":[");
+  else if (verbose)
+    printf("Name\tSystemName\tModule\tMAC\tBusID\tNumaNode\tStatus\tLicense\tExpiration\nModuleVersion\n");
   else
     printf("Available devices (-i):\n");
 
   while (dev != NULL) {
-    if (verbose) {
-      printf("%s\t%s\t%s\t", 
-        dev->name, dev->system_name ? dev->system_name : "unknown", dev->module);
+    char mac[20];
 
-      if (dev->sn)
-        printf("%s", dev->sn);
-      else
-        printf("%02X:%02X:%02X:%02X:%02X:%02X", 
+    if (!dev->sn)
+      sprintf(mac, "%02X:%02X:%02X:%02X:%02X:%02X", 
           dev->mac[0] & 0xFF, dev->mac[1] & 0xFF, dev->mac[2] & 0xFF, 
           dev->mac[3] & 0xFF, dev->mac[4] & 0xFF, dev->mac[5] & 0xFF);
 
-      printf("\t%04X:%02X:%02X.%X\t%d\t%s\t%s\t%ld\n",
+    if (json) {
+      printf("{");
+      printf("\"name\":\"%s\",", dev->name);
+      printf("\"system_name\":\"%s\",", dev->system_name ? dev->system_name : "unknown");
+      printf("\"module\":\"%s\",", dev->module);
+      printf("\"sn\":\"%s\",", dev->sn ? dev->sn : mac);
+      printf("\"bus_id\":\"%04X:%02X:%02X.%X\",", dev->bus_id.slot, dev->bus_id.bus, dev->bus_id.device, dev->bus_id.function);
+      printf("\"numa_node\":\"%d\",", busid2node(dev->bus_id.slot, dev->bus_id.bus, dev->bus_id.device, dev->bus_id.function));
+      printf("\"status\":\"%s\",", dev->status > 0 ? "Up" : (dev->status == 0 ? "Down" : "Unknown"));
+      printf("\"license\":\"%s\",", dev->license ? "Valid" : (dev->license_expiration ? "Expired" : "NotFound"));
+      printf("\"expiration\":\"%ld\",", dev->license_expiration);
+      printf("\"mod_version\":\"%s\"", dev->module_version ? dev->module_version : "");
+      printf("}");
+      if (dev->next)
+        printf(",");
+
+    } else if (verbose) {
+      printf("%s\t%s\t%s\t%s\t%04X:%02X:%02X.%X\t%d\t%s\t%s\t%ld\t%s\n",
+        dev->name, dev->system_name ? dev->system_name : "unknown", dev->module,
+        dev->sn ? dev->sn : mac,
         dev->bus_id.slot, dev->bus_id.bus, dev->bus_id.device, dev->bus_id.function,
         busid2node(dev->bus_id.slot, dev->bus_id.bus, dev->bus_id.device, dev->bus_id.function),
-        dev->status ? "Up" : "Down", dev->license ? "Valid" : "NotFound", dev->license_expiration);
+        dev->status > 0 ? "Up" : (dev->status == 0 ? "Down" : "Unknown"), 
+        dev->license ? "Valid" : (dev->license_expiration ? "Expired" : "NotFound"), 
+        dev->license_expiration,
+        dev->module_version ? dev->module_version : "");
+
     } else {
       printf(" %d. %s\n", i++, dev->name);
     }
+
     dev = dev->next;
   }
+
+  if (json)
+    printf("]}");
 }
 
 /* *************************************** */
 
 void printHelp(void) {
-  printf("pfcount - (C) 2005-22 ntop.org\n\n");
+  printf("pfcount - (C) 2005-23 ntop\n\n");
   printf("-h              Print this help\n");
   printf("-i <device>     Device name. Use:\n"
 	 "                - ethX@Y for channels\n"
@@ -854,7 +824,6 @@ void printHelp(void) {
   printf("-J              Do not enable promiscuous mode\n");
   printf("-R              Do not reprogram RSS indirection table (Intel ZC only)\n");
   printf("-0              Send all traffic to RSS queue 0 (this also enabled -R)\n");
-  printf("-I <ip>         Set UDP Src-IP hw filter on Mellanox\n");
   printf("-P <prio>       Set hw filter priority (0..2)\n");
   printf("-v <mode>       Verbose [1: verbose, 2: very verbose (print packet payload)]\n");
   printf("-K <len>        Print only packets with length > <len> with -v\n");
@@ -863,6 +832,7 @@ void printHelp(void) {
          "                metawatch\tTimestamped packets by Arista 7130 MetaWatch series devices\n"
          "                arista\tTimestamped packets by Arista 7150 series devices\n");
   printf("-L              List all interfaces and exit (use -v for more info)\n");
+  printf("-I              Output system information (interfaces) in JSON format\n");
 }
 
 /* *************************************** */
@@ -872,11 +842,8 @@ void* packet_consumer_thread(void* _id) {
   u_int numCPU = sysconf( _SC_NPROCESSORS_ONLN );
   u_char buffer[NO_ZC_BUFFER_LEN];
   u_char *buffer_p = buffer;
-
   u_long core_id = thread_id % numCPU;
   struct pfring_pkthdr hdr;
-
-  /* printf("packet_consumer_thread(%lu)\n", thread_id); */
 
   if((num_threads > 1) && (numCPU > 1)) {
     if(bind2core(core_id) == 0)
@@ -886,41 +853,26 @@ void* packet_consumer_thread(void* _id) {
 
   memset(&hdr, 0, sizeof(hdr));
 
-  while(1) {
-    int rc;
-    u_int len;
+  while(!stats->do_shutdown) {
 
-    if(stats->do_shutdown) break;
-
-    if((rc = pfring_recv(pd, &buffer_p, NO_ZC_BUFFER_LEN, &hdr, wait_for_packet)) > 0) {
-      if(stats->do_shutdown) break;
-      dummyProcessPacket(&hdr, buffer, (u_char*)thread_id);
-#ifdef TEST_SEND
-      buffer[0] = 0x99;
-      buffer[1] = 0x98;
-      buffer[2] = 0x97;
-      pfring_send(pd, buffer, hdr.caplen);
+#ifdef USE_PF_RING_POLL_API
+    if(pfring_recv(pd, &buffer_p, NO_ZC_BUFFER_LEN, &hdr, 0) > 0) {
+#else
+    if(pfring_recv(pd, &buffer_p, NO_ZC_BUFFER_LEN, &hdr, wait_for_packet) > 0) {
 #endif
+
+      dummyProcessPacket(&hdr, buffer, (u_char*)thread_id);
+
     } else {
-      if(wait_for_packet == 0) sched_yield();
-    }
+      if (stats->do_shutdown)
+        break;
 
-    if(0) {
-      struct simple_stats {
-	u_int64_t num_pkts, num_bytes;
-      };
-      struct simple_stats stats;
-
-      len = sizeof(stats);
-      rc = pfring_get_filtering_rule_stats(pd, 5, (char*)&stats, &len);
-      if(rc < 0)
-	fprintf(stderr, "pfring_get_filtering_rule_stats() failed [rc=%d]\n", rc);
-      else {
-        if (!quiet)
-	  printf("[Pkts=%u][Bytes=%u]\n",
-	         (unsigned int)stats.num_pkts,
-	         (unsigned int)stats.num_bytes);
-      }
+      if(wait_for_packet == 0)
+        sched_yield();
+#ifdef USE_PF_RING_POLL_API
+      else
+        pfring_poll(pd, 1 /* msec */);
+#endif
     }
   }
 
@@ -980,11 +932,8 @@ void* chunk_consumer_thread(void* _id) {
   u_int numCPU = sysconf( _SC_NPROCESSORS_ONLN );
   void *chunk_p = NULL;
   pfring_chunk_info chunk_info;
-
   u_long core_id = thread_id % numCPU;
   struct pfring_pkthdr hdr;
-
-  /* printf("packet_consumer_thread(%lu)\n", thread_id); */
 
   if((num_threads > 1) && (numCPU > 1)) {
     if(bind2core(core_id) == 0)
@@ -1131,7 +1080,7 @@ int main(int argc, char* argv[]) {
   int snaplen = DEFAULT_SNAPLEN, rc;
   u_int clusterId = 0;
   u_int8_t enable_ixia_timestamp = 0, enable_arista_timestamp = 0, enable_metawatch_timestamp = 0;
-  u_int8_t list_interfaces = 0;
+  u_int8_t list_interfaces = 0, json_info = 0;
   u_int32_t flags = 0;
   int bind_core = -1;
   packet_direction direction = rx_and_tx_direction;
@@ -1143,7 +1092,7 @@ int main(int argc, char* argv[]) {
   startTime.tv_sec = 0;
   thiszone = gmt_to_local(0);
 
-  while((c = getopt(argc,argv,"Bhi:c:C:Fd:H:I:Jl:Lv:ae:n:w:o:p:P:qb:rg:u:mtsSx:f:z:N:MRTUK:0")) != '?') {
+  while((c = getopt(argc,argv,"Bhi:Ic:C:Fd:H:Jl:Lv:ae:n:w:o:p:P:qb:rg:u:mtsSx:f:z:N:MRTUK:0")) != '?') {
     if((c == 255) || (c == -1)) break;
 
     switch(c) {
@@ -1202,8 +1151,7 @@ int main(int argc, char* argv[]) {
       if(strcmp(device, "sysdig:") == 0) is_sysdig = 1;
       break;
     case 'I':
-      src_ip_rule = ntohl(inet_addr(optarg));
-      src_ip_rule_set = 1;
+      json_info = 1;
       break;
     case 'J':
       promisc = 0;
@@ -1311,8 +1259,8 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  if (list_interfaces) {
-    printDevs();
+  if (list_interfaces || json_info) {
+    printDevs(json_info);
     exit(0);
   }
 
@@ -1479,7 +1427,11 @@ int main(int argc, char* argv[]) {
     } else if (burst_mode && pd->recv_burst) {
       burst_consumer_thread(0);
     } else {
+#ifdef USE_PF_RING_LOOP_API 
       pfring_loop(pd, dummyProcessPacket, (u_char*)NULL, wait_for_packet);
+#else
+      packet_consumer_thread(0);
+#endif
     }
   } else {
     pthread_t my_thread;

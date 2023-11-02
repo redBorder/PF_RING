@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2016-22 ntop.org
+ *  Copyright (C) 2016-23 ntop
  *
  *      http://www.ntop.org/
  *
@@ -10,7 +10,7 @@
  *
  */
 
-#ifdef linux
+#ifdef __linux__
 
 #include <stdio.h>
 #include <string.h>

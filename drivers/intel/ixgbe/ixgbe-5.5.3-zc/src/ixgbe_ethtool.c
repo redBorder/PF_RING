@@ -1383,8 +1383,16 @@ static void ixgbe_get_drvinfo(struct net_device *netdev,
 #endif
 }
 
+#ifdef HAVE_ETHTOOL_EXTENDED_RINGPARAMS
+static void ixgbe_get_ringparam(struct net_device *netdev,
+		  struct ethtool_ringparam *ring,
+		  struct kernel_ethtool_ringparam __always_unused *kernel_rp,
+		  struct netlink_ext_ack __always_unused *extack)
+#else /* HAVE_ETHTOOL_EXTENDED_RINGPARAMS */
+
 static void ixgbe_get_ringparam(struct net_device *netdev,
 				struct ethtool_ringparam *ring)
+#endif /* HAVE_ETHTOOL_EXTENDED_RINGPARAMS */
 {
 	struct ixgbe_adapter *adapter = netdev_priv(netdev);
 
@@ -1398,8 +1406,15 @@ static void ixgbe_get_ringparam(struct net_device *netdev,
 	ring->rx_jumbo_pending = 0;
 }
 
+#ifdef HAVE_ETHTOOL_EXTENDED_RINGPARAMS
+static int ixgbe_set_ringparam(struct net_device *netdev,
+		  struct ethtool_ringparam *ring,
+		  struct kernel_ethtool_ringparam __always_unused *kernel_rp,
+		  struct netlink_ext_ack __always_unused *extack)
+#else /* HAVE_ETHTOOL_EXTENDED_RINGPARAMS */
 static int ixgbe_set_ringparam(struct net_device *netdev,
 			       struct ethtool_ringparam *ring)
+#endif /* HAVE_ETHTOOL_EXTENDED_RINGPARAMS */
 {
 	struct ixgbe_adapter *adapter = netdev_priv(netdev);
 	struct ixgbe_ring *temp_ring;
@@ -2798,8 +2813,14 @@ static int ixgbe_phys_id(struct net_device *netdev, u32 data)
 }
 #endif /* HAVE_ETHTOOL_SET_PHYS_ID */
 
+#ifdef HAVE_ETHTOOL_COALESCE_EXTACK
+static int ixgbe_get_coalesce(struct net_device *netdev, struct ethtool_coalesce *ec,
+			      struct kernel_ethtool_coalesce __maybe_unused *kec,
+			      struct netlink_ext_ack __maybe_unused *extack)
+#else
 static int ixgbe_get_coalesce(struct net_device *netdev,
 			      struct ethtool_coalesce *ec)
+#endif /* HAVE_ETHTOOL_COALESCE_EXTACK */
 {
 	struct ixgbe_adapter *adapter = netdev_priv(netdev);
 
@@ -2854,8 +2875,14 @@ static bool ixgbe_update_rsc(struct ixgbe_adapter *adapter)
 	return false;
 }
 
+#ifdef HAVE_ETHTOOL_COALESCE_EXTACK
+static int ixgbe_set_coalesce(struct net_device *netdev, struct ethtool_coalesce *ec,
+			      struct kernel_ethtool_coalesce __maybe_unused *kec,
+			      struct netlink_ext_ack __maybe_unused *extack)
+#else
 static int ixgbe_set_coalesce(struct net_device *netdev,
 			      struct ethtool_coalesce *ec)
+#endif /* HAVE_ETHTOOL_COALESCE_EXTACK */
 {
 	struct ixgbe_adapter *adapter = netdev_priv(netdev);
 	int i;
