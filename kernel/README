@@ -19,6 +19,9 @@ XXXXXX ALL=NOPASSWD: /usr/bin/make
 - As standard user (no sudo) do 
 # configure
 
+- add the path to the external symbols of bpctl_ng if you use the REDBORDER_PATCH
+  eg: KBUILD_EXTRA_SYMBOLS=/root/projects/bpctl_ng/kernel/Module.symvers
+
 - Ubuntu
 # sudo make -f Makefile.dkms deb
 

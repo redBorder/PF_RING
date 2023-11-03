@@ -1,0 +1,7 @@
+PACKAGE_NAME="ice_zc"
+PACKAGE_VERSION="1.9.11"
+MAKE[0]="make BUILD_KERNEL=${kernelver}"
+CLEAN="make clean"
+BUILT_MODULE_NAME[0]="ice_zc"
+DEST_MODULE_LOCATION[0]="/updates"
+AUTOINSTALL="yes"

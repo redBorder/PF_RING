@@ -1,0 +1,27 @@
+Summary: PF_RING ZC dkms kernel drivers
+Name: pfring-drivers-zc-dkms
+Version: 8.6.0
+Release: 6281
+License: GPL
+Group: Networking/Utilities
+URL: http://www.ntop.org/products/pf_ring/
+Packager: Luca Deri <deri@ntop.org>
+BuildArch: noarch
+# Temporary location where the RPM will be built
+Requires: e1000e-zc, igb-zc, ixgbe-zc, i40e-zc, ice-zc
+# 
+
+
+%description
+Virtual package for ZC drivers in DKMS format (http://www.ntop.org/pf_ring/).
+
+%files
+%defattr(-, root, root)
+
+%post
+ 
+%changelog
+* Mon Sep 15 2014  <deri@ntop.org> - 1.0.0
+- Original upstream version
+
+

@@ -1,0 +1,7 @@
+PACKAGE_NAME="ixgbe_zc"
+PACKAGE_VERSION="5.5.3"
+MAKE[0]="make BUILD_KERNEL=${kernelver}"
+CLEAN="make clean"
+BUILT_MODULE_NAME[0]="ixgbe_zc"
+DEST_MODULE_LOCATION[0]="/updates"
+AUTOINSTALL="yes"

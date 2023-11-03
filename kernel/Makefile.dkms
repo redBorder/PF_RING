@@ -1,0 +1,52 @@
+GIT_REV:=unknown
+ifneq (, $(shell which git))
+ ifeq (, $(shell echo ${SUBDIRS}))
+  GIT_BRANCH=$(shell git branch --no-color|cut -d ' ' -f 2)
+  GIT_HASH=$(shell git rev-parse HEAD)
+  ifneq ($(strip $(GIT_BRANCH)),)
+   GIT_REV:=${GIT_BRANCH}:${GIT_HASH}
+  endif
+ endif
+endif
+
+KERNEL_FULL_VERSION := $(shell uname -r)
+KERNEL_VERSION := $(word 1, $(subst ., , $(KERNEL_FULL_VERSION)))
+PACKAGER:=David Vanhoucke <dvanhoucke@redborder.com>
+LICENSE:=ASL 2.0
+
+all: install
+
+add: remove
+	\/bin/rm -rf /usr/src/$(PACKAGE_NAME)-$(VERSION)
+	mkdir /usr/src/$(PACKAGE_NAME)-$(VERSION)
+	sed -i "s|PACKAGE_NAME=.*$$|PACKAGE_NAME=$${PACKAGE_NAME}|" dkms.conf
+	sed -i "s|PACKAGE_VERSION=.*$$|PACKAGE_VERSION=$${VERSION}|" dkms.conf
+	cp -r Makefile dkms.conf linux/ *.c /usr/src/$(PACKAGE_NAME)-$(VERSION)
+	cat Makefile | sed -e "s/GIT_REV:=$$/GIT_REV:=${GIT_REV}/" > /usr/src/$(PACKAGE_NAME)-$(VERSION)/Makefile
+	dkms add -m $(PACKAGE_NAME) -v $(VERSION)
+
+build: add
+	dkms build -m $(PACKAGE_NAME) -v $(VERSION)
+
+install: build
+	dkms install --force -m $(PACKAGE_NAME) -v $(VERSION)
+
+rpm: add add_rpm install
+	rm -rf /var/lib/dkms/$(PACKAGE_NAME)/$(VERSION)/rpm/$(PACKAGE_NAME)-dkms-*.rpm
+	rpmbuild -ba --define 'module_name $(PACKAGE_NAME)' --define 'version $(VERSION)' --define 'kernel_versions $(KERNEL_VERSION)' --define 'packager $(PACKAGER)' --define 'license $(LICENSE)' --define 'release $(RELEASE)' $(PACKAGE_NAME)-dkms-mkrpm.spec
+	mkdir -p /var/lib/dkms/$(PACKAGE_NAME)/$(VERSION)/rpm/
+	cp -rf /root/rpmbuild/RPMS/noarch/$(PACKAGE_NAME)-dkms-$(VERSION)-$(RELEASE).*.rpm /var/lib/dkms/$(PACKAGE_NAME)/$(VERSION)/rpm/
+	cp -rf /root/rpmbuild/SRPMS/$(PACKAGE_NAME)-dkms-$(VERSION)-$(RELEASE).*.rpm /var/lib/dkms/$(PACKAGE_NAME)/$(VERSION)/rpm/
+	@mkdir -p $(@D)/packaging/rpm/pkgs/
+	rm -rf $(@D)/packaging/rpm/*.rpm
+	cp -rf /root/rpmbuild/RPMS/noarch/$(PACKAGE_NAME)-dkms-$(VERSION)-$(RELEASE).*.rpm $(@D)/packaging/rpm/pkgs/
+	cp -rf /root/rpmbuild/SRPMS/$(PACKAGE_NAME)-dkms-$(VERSION)-$(RELEASE).*.rpm $(@D)/packaging/rpm/pkgs/
+
+add_rpm:
+	cp -r $(PACKAGE_NAME)-dkms-*.spec /usr/src/$(PACKAGE_NAME)-$(VERSION)/
+
+remove:
+	-dkms remove -m $(PACKAGE_NAME) -v $(VERSION) --all
+
+veryclean: remove
+	\/bin/rm -fr /usr/src/$(PACKAGE_NAME)-$(VERSION)

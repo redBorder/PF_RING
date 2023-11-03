@@ -1,7 +1,7 @@
-#
-# (C) 2009-23 - ntop.org
-#
-
+PACKAGE_NAME?= pfring
+VERSION?= $(shell git describe --abbrev=6 --tags HEAD --always | sed 's/-/_/g')
+RELEASE?= 1
+KBUILD_EXTRA_SYMBOLS?= Module.symvers
 obj-m := pf_ring.o
 
 # assigned by Makefile.dkms
@@ -64,19 +64,17 @@ all: Makefile pf_ring.c linux/pf_ring.h
 #		echo "*"; \
 #		echo "*********************************************"; \
 #	fi
-	echo -e "0xfca76689\tbpctl_kernel_ioctl\tupdates/drivers/net/ethernet/intel/bpctl_mod\tEXPORT_SYMBOL" >> Module.symvers
-	
 	$(MAKE) -C $(KERNEL_SRC) M=${HERE} EXTRA_CFLAGS='${EXTRA_CFLAGS}' modules
 
 dkms-deb:
 	sudo $(MAKE) -f Makefile.dkms deb
 
 dkms-rpm:
-	sudo $(MAKE) -f Makefile.dkms rpm
+	sudo $(MAKE) KBUILD_EXTRA_SYMBOLS=$(KBUILD_EXTRA_SYMBOLS) PACKAGE_NAME=$(PACKAGE_NAME) VERSION=$(VERSION) RELEASE=$(RELEASE) -f Makefile.dkms rpm
 
 clean:
-	$(MAKE) -C $(KERNEL_SRC) SUBDIRS=$(HERE) clean || true
-	\rm -f *~ Module.symvers Module.markers modules.order *#
+	$(MAKE) -C $(KERNEL_SRC) M=$(HERE) clean || true
+	\rm -f *~ Module.symvers Module.markers modules.order *.o *.ko*#
 
 install:
 	mkdir -p $(INSTDIR)
