@@ -1,40 +1,40 @@
 all: install
 
 add: remove
-	\/bin/rm -rf /usr/src/igb-zc-5.10.2.6281
-	mkdir /usr/src/igb-zc-5.10.2.6281
-	cd igb/igb-5.10.2-zc/src ; make clean; cp -r * /usr/src/igb-zc-5.10.2.6281
-	cp ../../kernel/linux/pf_ring.h /usr/src/igb-zc-5.10.2.6281
-	sed -i -e 's/igb\.o/igb_zc.o/' -e 's/igb-/igb_zc-/' /usr/src/igb-zc-5.10.2.6281/Kbuild
-	mv /usr/src/igb-zc-5.10.2.6281/Kbuild /usr/src/igb-zc-5.10.2.6281/Makefile
-	sed -i '1iPF_RING_PATH=\/usr\/src\/pfring-8.6.0.6281' /usr/src/igb-zc-5.10.2.6281/Makefile
-	cp dkms.conf.igb /usr/src/igb-zc-5.10.2.6281/dkms.conf
-	dkms add -m igb-zc -v 5.10.2.6281
+	\/bin/rm -rf /usr/src/igb-zc-5.10.2.6282
+	mkdir /usr/src/igb-zc-5.10.2.6282
+	cd igb/igb-5.10.2-zc/src ; make clean; cp -r * /usr/src/igb-zc-5.10.2.6282
+	cp ../../kernel/linux/pf_ring.h /usr/src/igb-zc-5.10.2.6282
+	sed -i -e 's/igb\.o/igb_zc.o/' -e 's/igb-/igb_zc-/' /usr/src/igb-zc-5.10.2.6282/Kbuild
+	mv /usr/src/igb-zc-5.10.2.6282/Kbuild /usr/src/igb-zc-5.10.2.6282/Makefile
+	sed -i '1iPF_RING_PATH=\/usr\/src\/pfring-8.6.0.6282' /usr/src/igb-zc-5.10.2.6282/Makefile
+	cp dkms.conf.igb /usr/src/igb-zc-5.10.2.6282/dkms.conf
+	dkms add -m igb-zc -v 5.10.2.6282
 
 build: add
-	dkms build -m igb-zc -v 5.10.2.6281
+	dkms build -m igb-zc -v 5.10.2.6282
 
 install: build
-	dkms install --force -m igb-zc -v 5.10.2.6281
+	dkms install --force -m igb-zc -v 5.10.2.6282
 
 deb: add add_deb install
-	dkms mkdeb -m igb-zc -v 5.10.2.6281 --source-only
+	dkms mkdeb -m igb-zc -v 5.10.2.6282 --source-only
 
 rpm: add add_rpm install
-	dkms mkrpm -m igb-zc -v 5.10.2.6281 --source-only
+	dkms mkrpm -m igb-zc -v 5.10.2.6282 --source-only
 
 add_rpm:
-	cp -f zc.spec /usr/src/igb-zc-5.10.2.6281/igb-zc-dkms-mkrpm.spec
+	cp -f zc.spec /usr/src/igb-zc-5.10.2.6282/igb-zc-dkms-mkrpm.spec
 
 add_deb:
-	cp -r zc-dkms-mkdeb /usr/src/igb-zc-5.10.2.6281/igb-zc-dkms-mkdeb
+	cp -r zc-dkms-mkdeb /usr/src/igb-zc-5.10.2.6282/igb-zc-dkms-mkdeb
 
 remove:
-	-dkms remove -m igb-zc -v 5.10.2.6281 --all
+	-dkms remove -m igb-zc -v 5.10.2.6282 --all
 	\/bin/rm -f /lib/modules/*/weak-updates/igb*ko
 	\/bin/rm -f /lib/modules/*/extra/igb*ko
 	\/bin/rm -rf /var/lib/dkms/igb-zc
 
 veryclean: remove
-	\/bin/rm -fr /usr/src/igb-zc-5.10.2.6281
+	\/bin/rm -fr /usr/src/igb-zc-5.10.2.6282
 	

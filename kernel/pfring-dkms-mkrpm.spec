@@ -14,7 +14,7 @@ License:	%license
 Release:	%{release}
 BuildArch:	noarch
 Group:		System/Kernel
-Requires: 	dkms >= 1.958, pfring = 8.6.0-6279
+Requires: 	dkms >= 1.958, pfring = 8.6.0-6281
 AutoReqProv: 	no
 BuildRequires: 	dkms, kernel-devel
 Requires:       kernel-headers kernel-devel, make
