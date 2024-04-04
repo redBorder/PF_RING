@@ -34,6 +34,7 @@
 #include <linux/types.h>
 #include <linux/udp.h>
 #include <linux/vmalloc.h>
+#include <linux/u64_stats_sync.h>
 
 #ifndef GCC_VERSION
 #define GCC_VERSION (__GNUC__ * 10000		\

@@ -51,7 +51,9 @@ cmd_initrd := $(shell \
 DRIVER_UPPERCASE := $(shell echo ${DRIVER} | tr "[:lower:]" "[:upper:]")
 
 ifeq (,${BUILD_KERNEL})
-BUILD_KERNEL=$(shell uname -r)
+KERNEL_DEVEL_PACKAGE= $(shell rpm -qa | grep kernel-devel)
+BUILD_KERNEL= $(shell rpm -q --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}' $(KERNEL_DEVEL_PACKAGE))
+#BUILD_KERNEL=$(shell uname -r)
 endif
 
 # Kernel Search Path
@@ -269,7 +271,7 @@ endif
 endif
 endif
 
-EXTRA_CFLAGS += ${CFLAGS_EXTRA}
+EXTRA_CFLAGS += ${CFLAGS_EXTRA} -Wno-implicit-fallthrough
 
 # get the kernel version - we use this to find the correct install path
 KVER := $(shell ${CC} ${EXTRA_CFLAGS} -E -dM ${VERSION_FILE} | grep UTS_RELEASE | \

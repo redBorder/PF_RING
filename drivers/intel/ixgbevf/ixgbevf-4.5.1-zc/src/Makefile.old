@@ -30,7 +30,9 @@ CFILES = ixgbevf_main.c ixgbe_mbx.c ixgbe_vf.c ixgbevf_ethtool.c kcompat.c
 
 HFILES = ixgbevf.h ixgbe_common.h ixgbevf_osdep.h kcompat.h ixgbe_mbx.h
 ifeq (,$(BUILD_KERNEL))
-BUILD_KERNEL=$(shell uname -r)
+KERNEL_DEVEL_PACKAGE= $(shell rpm -qa | grep kernel-devel)
+BUILD_KERNEL= $(shell rpm -q --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}' $(KERNEL_DEVEL_PACKAGE))
+#BUILD_KERNEL=$(shell uname -r)
 endif
 
 DRIVER_NAME=ixgbevf

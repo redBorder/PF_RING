@@ -229,5 +229,5 @@ esac
 fi
 
 %changelog
-* Wed Dec  5 2012  <deri@centos.ntop.org> - 8.6.0-%{buildrev}
+* Wed Dec  5 2012  <deri@centos.ntop.org> - 8.6.0-%{version}
 -

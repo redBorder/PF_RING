@@ -10396,7 +10396,11 @@ static void ixgbe_atr(struct ixgbe_ring *ring,
 		struct ixgbe_adapter *adapter = q_vector->adapter;
 
 		if (unlikely(skb_tail_pointer(skb) < hdr.network +
-			     VXLAN_HEADROOM))
+#ifdef VXLAN_HEADROOM
+                             VXLAN_HEADROOM))
+#else
+                            vxlan_headroom(0)))
+#endif
 			return;
 
 		/* verify the port is recognized as VXLAN or GENEVE*/
