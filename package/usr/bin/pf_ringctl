@@ -144,7 +144,7 @@ check_hugepages() {
 	HUGEPAGES_TOTAL=0
 	if [ -f ${HUGEPAGES_CONFIG} ]; then
 		while IFS=" " read HUGEPAGES_NODE HUGEPAGES_NUMBER HUGEPAGES_GID; do
-			HUGEPAGES_TOTAL=$(( HUGEPAGES_TOTAL + ${HUGEPAGES_NUMBER/hugepagenumber=/} ))
+			[ -z "${HUGEPAGES_NUMBER}" ] || HUGEPAGES_TOTAL=$(( HUGEPAGES_TOTAL + ${HUGEPAGES_NUMBER/hugepagenumber=/} ))
 		done < ${HUGEPAGES_CONFIG}
 	else
 		HUGEPAGES_TOTAL=$(( MEM_AVAIL / HUGEPAGES_SIZE ))
@@ -274,9 +274,10 @@ configure_rss() {
 	# Setting configured number of RSS queues (or default)
 	INTERFACES=$(cat /proc/net/dev|grep ':'|grep -v 'lo'|grep -v 'sit'|awk -F":" '{print $1}'|tr -d ' ')
 	for IF in $INTERFACES ; do
-		D_MATCH=$(ethtool -i $IF|grep "$D\$"|wc -l)
+		D_MATCH=$(ethtool -i $IF|grep "${D}\$"|wc -l)
+		D_ZC_MATCH=$(ethtool -i $IF|grep "${D}_zc\$"|wc -l)
 
-		if [ "$D_MATCH" -eq 1 ]; then
+		if [ "$D_MATCH" -eq 1 ] || [ "$D_ZC_MATCH" -eq 1 ]; then
 			RSS=$(cat ${PF_RING_CONFIG_DIR}/${F}/${C}/${C}.conf 2>/dev/null | grep RSS | cut -d'=' -f2 | cut -d',' -f1)
 			if [ -z "${RSS}" ]; then
 				RSS=$DEF_RSS
@@ -365,6 +366,7 @@ load_zc() {
 	/sbin/modprobe vxlan > /dev/null 2>&1
 	/sbin/modprobe dca > /dev/null 2>&1
 	/sbin/modprobe configfs > /dev/null 2>&1
+	/sbin/modprobe gnss > /dev/null 2>&1
 
 	# load dkms drivers
 	# search for file under /etc/pf_ring/zc/{e1000e,igb,ixgbe,ixgbevf,i40e,iavf,ice}/{e1000e,igb,ixgbe,ixgbevf,i40e,iavf,ice}.conf
