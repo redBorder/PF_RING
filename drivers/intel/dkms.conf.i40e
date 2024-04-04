@@ -1,7 +1,0 @@
-PACKAGE_NAME="i40e_zc"
-PACKAGE_VERSION="2.17.4"
-MAKE[0]="make BUILD_KERNEL=${kernelver}"
-CLEAN="make clean"
-BUILT_MODULE_NAME[0]="i40e_zc"
-DEST_MODULE_LOCATION[0]="/updates"
-AUTOINSTALL="yes"
