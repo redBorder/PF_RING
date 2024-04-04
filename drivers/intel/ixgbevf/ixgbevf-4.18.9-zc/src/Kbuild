@@ -16,7 +16,9 @@ CFLAGS_ixgbevf_main.o := -I$(src)
 EXTRA_CFLAGS += -DHAVE_PF_RING -DIXGBE_NO_HW_RSC -DDISABLE_PACKET_SPLIT
 KBUILD_EXTRA_SYMBOLS=${PF_RING_PATH}/Module.symvers
 
-KVER=$(shell uname -r)
+KERNEL_DEVEL_PACKAGE= $(shell rpm -qa | grep kernel-devel)
+KVER= $(shell rpm -q --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}' $(KERNEL_DEVEL_PACKAGE))
+#KVER=$(shell uname -r)
 
 all:
 	cd ${PF_RING_PATH}/; make

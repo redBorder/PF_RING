@@ -1,12 +1,12 @@
-all: libpfring pcap build_examples build_examples_zc build_examples_ft build_extcap 
-# build_tcpdump build_c++
+all: libpfring pcap build_examples build_examples_zc build_examples_ft build_extcap build_tcpdump 
+# build_c++
 
 ###################
 
-lib/Makefile:
+lib\/Makefile:
 	./configure
 
-config: lib/Makefile
+config: lib\/Makefile
 
 libpfring: config
 	cd lib; make
@@ -14,10 +14,10 @@ libpfring: config
 build_nbpf: config
 	cd nbpf; make
 
-libpcap/Makefile:
+libpcap\/Makefile:
 	cd libpcap; ./configure --enable-ipv6 --enable-dbus=no --without-libnl --with-snf=no --disable-bluetooth --with-dag=no
 
-pcap: libpfring libpcap/Makefile
+pcap: libpfring libpcap\/Makefile
 	cd libpcap; make
 
 build_examples: config
@@ -32,10 +32,10 @@ build_examples_ft: config
 build_c++: libpfring
 	cd c++; make
 
-tcpdump/Makefile:
+tcpdump\/Makefile:
 	cd tcpdump; ./configure
 
-build_tcpdump: libpfring pcap tcpdump/Makefile
+build_tcpdump: libpfring pcap tcpdump\/Makefile
 	cd tcpdump; make
 
 build_extcap: libpfring pcap

@@ -44,7 +44,9 @@ cmd_depmod = /sbin/depmod $(if ${SYSTEM_MAP_FILE},-e -F ${SYSTEM_MAP_FILE}) \
 DRIVER_UPPERCASE := $(shell echo ${DRIVER} | tr "[:lower:]" "[:upper:]")
 
 ifeq (,${BUILD_KERNEL})
-BUILD_KERNEL=$(shell uname -r)
+KERNEL_DEVEL_PACKAGE= $(shell rpm -qa | grep kernel-devel)
+BUILD_KERNEL= $(shell rpm -q --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}' $(KERNEL_DEVEL_PACKAGE))
+#BUILD_KERNEL=$(shell uname -r)
 endif
 
 # Kernel Search Path

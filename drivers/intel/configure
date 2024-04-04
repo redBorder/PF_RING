@@ -1709,8 +1709,8 @@ I40E_VERSION=2.24.6
 IAVF_VERSION=4.9.5
 ICE_VERSION=1.12.7
 
-PF_RING_VERSION=`../../package/version.sh --release`
-REVISION=`../../package/version.sh --revision`
+PF_RING_VERSION=`../../packaging/rpm/version.sh --release`
+REVISION=`../../packaging/rpm/version.sh --revision`
 
 HAS_AUX_BUS=`./ice/ice-$ICE_VERSION-zc/scripts/check_aux_bus && echo 1 || echo 0`
 

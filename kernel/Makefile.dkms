@@ -9,7 +9,9 @@ ifneq (, $(shell which git))
  endif
 endif
 
-KERNEL_FULL_VERSION := $(shell uname -r)
+KERNEL_DEVEL_PACKAGE= $(shell rpm -qa | grep kernel-devel)
+KERNEL_FULL_VERSION= $(shell rpm -q --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}' $(KERNEL_DEVEL_PACKAGE))
+#KERNEL_FULL_VERSION := $(shell uname -r)
 KERNEL_VERSION := $(word 1, $(subst ., , $(KERNEL_FULL_VERSION)))
 PACKAGER:=David Vanhoucke <dvanhoucke@redborder.com>
 LICENSE:=ASL 2.0

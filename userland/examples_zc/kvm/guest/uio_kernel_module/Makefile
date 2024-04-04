@@ -7,7 +7,9 @@ obj-m := uio_ivshmem.o
 # KDIR is the location of the kernel source.  The current standard is
 # to link to the associated source tree from the directory containing
 # the compiled modules.
-KDIR  := /lib/modules/$(shell uname -r)/build
+KERNEL_DEVEL_PACKAGE= $(shell rpm -qa | grep kernel-devel)
+BUILD_KERNEL= $(shell rpm -q --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}' $(KERNEL_DEVEL_PACKAGE))
+KDIR  := /lib/modules/$(BUILD_KERNEL)/build
 
 # PWD is the current working directory and the location of our module
 # source files.
@@ -20,7 +22,7 @@ default:
 	$(MAKE) -C $(KDIR) M=$(PWD) modules
 
 install:
-	cp uio_ivshmem.ko /lib/modules/$(shell uname -r)/kernel/drivers/uio/
+	cp uio_ivshmem.ko /lib/modules/$(BUILD_KERNEL)/kernel/drivers/uio/
 
 clean:
 	rm -f *.ko *.o uio_ivshmem.mod.c Module.symvers
