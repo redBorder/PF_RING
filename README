@@ -1,0 +1,12 @@
+this package provides pfring and pfring-dkms rpm version 8.6.1.
+
+To make the rpm packages :
+
+* pfring : use mock environment setup running make rpm
+* pfring-dkms : need to be run in a clean machine having following packages installed :
+    * yum group install 'Development Tools'
+    * yum install dkms
+
+    * run make dkms-rpm to make the pfinrg-dkms rpm
+
+results can be found in packages/rpm/pkgs
