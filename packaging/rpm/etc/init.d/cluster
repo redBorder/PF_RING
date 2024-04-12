@@ -1,0 +1,61 @@
+#! /bin/bash
+#
+# cluster          Pfring clustering script
+#
+# chkconfig: 2345 40 60
+# (C) 2003-13 - ntop.org
+#
+### BEGIN INIT INFO
+# Provides:          cluster
+# Required-Start:    $local_fs $remote_fs $network $syslog pf_ring
+# Required-Stop:     
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Start/stop cluster web
+### END INIT INFO
+
+if hash systemctl 2>/dev/null; then
+    echo "This host is systemd based."
+    echo "Please used systemctl <command> instead of init.d scripts"
+    exit 0
+fi
+
+#Needed to skip systemctl redirect in ubuntu 16
+_SYSTEMCTL_SKIP_REDIRECT=yes
+
+ACTION="status"
+PARAM_CLUSTER_ID=$2
+
+case "$1" in
+  start)
+	ACTION="start-if-enabled"
+	;;
+
+  stop)
+	ACTION="stop"
+	;;
+
+  restart)
+	ACTION="restart-if-enabled"
+	;;
+
+  force-start | forcestart)
+	ACTION="start"
+	;;
+
+  force-restart | forcerestart)
+	ACTION="restart"
+	;;
+
+  status)
+	ACTION="status"
+	;;
+
+  *)
+	echo "Usage: /etc/init.d/cluster {start|stop|restart|force-start|force-restart|status} [cluster id(s)]"
+	exit 1
+esac
+
+/usr/bin/clusterctl ${ACTION} ${PARAM_CLUSTER_ID}
+
+exit 0

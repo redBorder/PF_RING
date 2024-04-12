@@ -1,0 +1,444 @@
+#!/bin/bash
+#
+# Configure the PF_RING kernel module and drivers
+#
+
+SCRIPTPATH="$(cd "$(dirname "$0")"; pwd -P)"
+
+PF_RING_CONFIG_DIR="/etc/pf_ring"
+ZC_DRIVERS=('e1000e' 'igb' 'ixgbe' 'ixgbevf' 'i40e' 'iavf' 'ice')
+OTHER_SUPPORTED=('mlx5_core')
+
+CONF_DRIVER_NAME=""
+CONF_RSS_QUEUES=1
+CONF_HUGEPAGES=1024
+CONF_KERNEL_BUFFER_SLOTS=65536
+
+QUIET=true
+FORCE=false
+
+DISTRO="unknown"
+if [ -f /lib/lsb/init-functions ]; then
+	DISTRO="debian"
+	. /lib/lsb/init-functions
+fi
+if [ -f /etc/init.d/functions ]; then
+	DISTRO="centos"
+	. /etc/init.d/functions
+fi
+
+if [[ $EUID -ne 0 ]]; then
+   echo "This script must be run as root" 1>&2
+   exit 1
+fi
+
+pfring_installed() {
+	if [ ${DISTRO} == "debian" ]; then
+		if [ `dpkg -l | grep pfring-dkms | wc -l` -gt 0 ]; then
+			return 0
+		fi
+	elif [ ${DISTRO} == "centos" ]; then
+		if [ `rpm -qa | grep pfring-dkms | wc -l` -gt 0 ]; then
+			return 0
+		fi
+	fi
+	return 1
+}
+
+zc_driver_installed() {
+	MODEL=$1
+	if [ ${DISTRO} == "debian" ]; then
+		if [ `dpkg -l | grep ${MODEL}-zc-dkms | wc -l` -gt 0 ]; then
+			return 0
+		fi
+	elif [ ${DISTRO} == "centos" ]; then
+		if [ `rpm -qa | grep ${MODEL}-zc | wc -l` -gt 0 ]; then
+			return 0
+		fi
+	fi
+	return 1
+}
+
+install_pfring() {
+	if [ ${DISTRO} == "debian" ]; then
+		apt-get clean all
+		apt-get update
+		apt-get install pfring-dkms
+	elif [ ${DISTRO} == "centos" ]; then
+		yum clean all
+		yum update
+		yum install pfring-dkms
+	fi
+	return 1
+}
+
+install_zc_driver() {
+	MODEL=$1
+	if [ ${DISTRO} == "debian" ]; then
+		apt-get clean all
+		apt-get update
+		apt-get install pfring-dkms ${MODEL}-zc-dkms
+	elif [ ${DISTRO} == "centos" ]; then
+		yum clean all
+		yum update
+		yum install pfring-dkms ${MODEL}-zc
+	fi
+	return 1
+}
+
+install_mlx_driver() {
+	if hash ibv_devinfo 2>/dev/null; then
+		echo "[>] Mellanox OFED/EN already installed"
+	else
+		echo "[!] Please download Mellanox OFED/EN from:"
+		echo "[!] https://www.mellanox.com/products/infiniband-drivers/linux/mlnx_ofed"
+		echo "[!] Extract the tarball content and run:"
+		echo "[!] ./mlnxofedinstall --upstream-libs --dpdk"
+		exit 1
+	fi
+	return 1
+}
+
+number_of_nodes() {
+	NODES=$(cat /proc/cpuinfo | grep "physical id" | sort -u | wc -l)
+	return $NODES
+}
+
+restart_pfring() {
+	if hash systemctl 2>/dev/null; then
+		/bin/systemctl restart pf_ring
+	else
+		/etc/init.d/pf_ring restart
+	fi
+}
+
+print_usage() {
+	echo "Usage: ${1} [options]"
+	echo ""
+	echo "Options:"
+	echo " --list-interfaces"
+	echo " --list-zc-drivers"
+	echo " --configure [--buffer-size <number of packets>]"
+	echo " --configure-driver <driver name> [--rss-queues <number of queues>] [--force]"
+	exit 1
+}
+
+is_supported_by_zc() {
+	local IN=1
+	DRIVER=$1
+
+	for D in ${ZC_DRIVERS[@]} ; do
+		if [[ "${D}" == "${DRIVER}" || "${D}_zc" == "${DRIVER}" ]]; then
+			IN=0
+			break
+		fi
+	done
+
+	return $IN
+}
+
+is_supported_by_other() {
+	local IN=1
+	DRIVER=$1
+
+	for D in ${OTHER_SUPPORTED[@]} ; do
+		if [[ "${D}" == "${DRIVER}" ]]; then
+			IN=0
+			break
+		fi
+	done
+
+	return $IN
+}
+
+
+get_interface_driver() {
+	IF=$1
+	DRIVER=$(ethtool -i "${IF}" 2>/dev/null | grep "driver:" | cut -d' ' -f 2)
+}
+
+is_interface_running_zc() {
+	IF=$1
+
+	if [ `cat /proc/net/pf_ring/dev/${IF}/info 2>/dev/null | grep ZC | wc -l` -gt 0 ]; then
+		return 0
+	fi
+
+	return 1
+}
+
+get_actual_rss_queues() {
+	IF=$1
+	ACTUAL_RSS_QUEUES="Unknown"
+
+	if [ `cat /proc/net/pf_ring/dev/${IF}/info 2>/dev/null | grep "RX Queues" | wc -l` -gt 0 ]; then
+		ACTUAL_RSS_QUEUES=`cat /proc/net/pf_ring/dev/${IF}/info 2>/dev/null | grep "RX Queues" | cut -d':' -f 2`
+	fi
+}
+
+print_drivers() {
+	for D in ${ZC_DRIVERS[@]} ; do
+		echo "${D}"
+	done
+
+	for D in ${OTHER_SUPPORTED[@]} ; do
+		echo "${D}"
+	done
+}
+
+print_interfaces() {
+	INTERFACES=($(cat /proc/net/dev | grep ':' | cut -d ':' -f 1|grep -v 'lo' | tr '\n' ' '| sed 's/  / /g'))
+	for IF in ${INTERFACES[@]} ; do
+
+		# Check if this is a VLAN interface
+		if [ -f /proc/net/vlan/config ]; then
+			PIF=`cat /proc/net/vlan/config | awk '/^${IF} / {print $5}'`
+			if [ ! -z $PIF ]; then
+				continue
+			fi
+		fi
+
+		get_interface_driver ${IF}
+		get_actual_rss_queues ${IF}
+
+		INFO=""
+		if is_interface_running_zc ${IF}; then
+			INFO="[Running ZC]"
+		elif is_supported_by_zc ${DRIVER}; then
+			INFO="[Supported by ZC]"
+		elif is_supported_by_other ${DRIVER}; then
+			INFO="[Running ZC]"
+		else
+			INFO="[Linux Driver]"
+		fi
+
+		printf "Name: %-20s Driver: %-10s RSS: %-8s %-15s" "${IF}" "${DRIVER}" "${ACTUAL_RSS_QUEUES}" "${INFO}"
+		echo ""
+	done
+}
+
+count_by_driver() {
+	MATCH_DRIVER=$1
+	INTERFACES=($(cat /proc/net/dev | grep ':' | cut -d ':' -f 1|grep -v 'lo' | tr '\n' ' '| sed 's/  / /g'))
+	INTERFACE_COUNT=0
+	for IF in ${INTERFACES[@]} ; do
+
+		# Check if this is a VLAN interface
+		if [ -f /proc/net/vlan/config ]; then
+			PIF=`cat /proc/net/vlan/config | awk '/^${IF} / {print $5}'`
+			if [ ! -z $PIF ]; then
+				continue
+			fi
+		fi
+
+		get_interface_driver ${IF}
+
+		if [[ "${MATCH_DRIVER}" == "${DRIVER}" || "${MATCH_DRIVER}_zc" == "${DRIVER}" ]]; then
+			INTERFACE_COUNT=$[$INTERFACE_COUNT +1]
+			echo "${IF}"
+		fi
+	done
+	return $INTERFACE_COUNT
+}
+
+configure_kernel_module() {
+
+	if ! pfring_installed; then
+		echo "[>] Installing PF_RING.ko"
+
+		install_pfring
+	fi
+
+	echo "[>] Configuring PF_RING"
+
+	mkdir -p ${PF_RING_CONFIG_DIR}
+	echo "min_num_slots=${CONF_KERNEL_BUFFER_SLOTS}" > ${PF_RING_CONFIG_DIR}/pf_ring.conf
+
+	echo "[>] Restarting PF_RING"
+
+	restart_pfring
+
+	echo "[>] Configuration completed"
+}
+
+configure_driver() {
+	NQ=$CONF_RSS_QUEUES
+
+	# rename shortcut for mlx
+	if [ ${CONF_DRIVER_NAME} == "mlx" ]; then
+		CONF_DRIVER_NAME="mlx5_core"
+	fi
+
+	# set driver family name
+	DRIVER_FAMILY_NAME=${CONF_DRIVER_NAME}
+	if [ ${CONF_DRIVER_NAME} == "mlx5_core" ]; then
+		DRIVER_FAMILY_NAME="mlx"
+	fi
+
+	if is_supported_by_zc ${CONF_DRIVER_NAME}; then
+		# supported
+		:
+	elif is_supported_by_other ${CONF_DRIVER_NAME}; then
+		# supported
+		:
+	else
+		# not supported
+		echo "Please provide a supported driver with --configure-driver <name> (please check --list-zc-drivers)"
+		exit 1
+	fi
+
+	if ! pfring_installed; then
+		echo "[>] Installing PF_RING.ko"
+
+		install_pfring
+	fi
+
+	if is_supported_by_zc ${CONF_DRIVER_NAME}; then
+		if ! zc_driver_installed ${CONF_DRIVER_NAME}; then
+			echo "[>] Installing ${CONF_DRIVER_NAME} Zero-Copy driver"
+
+			read -p "Continue (y/n)?" choice
+			case "$choice" in
+			  y|Y ) ;;
+			  * ) echo "Aborting"; exit 1;;
+			esac
+
+			install_zc_driver ${CONF_DRIVER_NAME}
+		fi
+	elif is_supported_by_other ${CONF_DRIVER_NAME}; then
+		if [ ${CONF_DRIVER_NAME} == "mlx5_core" ]; then
+			install_mlx_driver
+		fi
+	fi
+
+	echo "[>] Configuring PF_RING"
+
+	mkdir -p ${PF_RING_CONFIG_DIR}
+	echo "min_num_slots=${CONF_KERNEL_BUFFER_SLOTS}" > ${PF_RING_CONFIG_DIR}/pf_ring.conf
+
+	if [ "$FORCE" = true ] ; then
+		touch ${PF_RING_CONFIG_DIR}/forcestart
+	else
+		rm ${PF_RING_CONFIG_DIR}/forcestart 2>/dev/null
+	fi
+
+	echo "[>] Configuring hugepages"
+
+	number_of_nodes
+	NUM_NODES=$?
+
+	INDEX=0
+	rm ${PF_RING_CONFIG_DIR}/hugepages.conf 2>/dev/null
+	while [ "$INDEX" -ne "$NUM_NODES" ]; do
+		echo "node=${INDEX} hugepagenumber=${CONF_HUGEPAGES}" >> ${PF_RING_CONFIG_DIR}/hugepages.conf
+		let INDEX=INDEX+1
+	done
+
+	echo "[>] Detecting interfaces using $CONF_DRIVER_NAME"
+
+	count_by_driver $CONF_DRIVER_NAME
+	NUM_INTERFACES=$?
+
+	if [ "$NUM_INTERFACES" -lt "1" ]; then
+		echo "No $CONF_DRIVER_NAME interface found"
+		exit 1
+	fi
+
+	mkdir -p ${PF_RING_CONFIG_DIR}/zc/${DRIVER_FAMILY_NAME}
+
+	if [ ${DRIVER_FAMILY_NAME} == "e1000e" ]; then
+		echo "[>] Configuring $DRIVER_FAMILY_NAME driver with $CONF_RSS_QUEUES RSS queues"
+
+		echo "" > ${PF_RING_CONFIG_DIR}/zc/${DRIVER_FAMILY_NAME}/${DRIVER_FAMILY_NAME}.conf
+	else
+		echo "[>] Configuring $DRIVER_FAMILY_NAME driver with $CONF_RSS_QUEUES RSS queues"
+
+		INDEX=1
+		RSS_LIST="${NQ}"
+		while [ "$INDEX" -ne "$NUM_INTERFACES" ]; do
+			RSS_LIST="${RSS_LIST},${NQ}"
+			let INDEX=INDEX+1
+		done
+
+		echo "RSS=${RSS_LIST}" > ${PF_RING_CONFIG_DIR}/zc/${DRIVER_FAMILY_NAME}/${DRIVER_FAMILY_NAME}.conf
+	fi
+
+	touch ${PF_RING_CONFIG_DIR}/zc/${DRIVER_FAMILY_NAME}/${DRIVER_FAMILY_NAME}.start
+
+	echo "[>] Restarting PF_RING"
+
+	restart_pfring
+
+	echo "[>] Configuration completed"
+}
+
+ACTION=""
+POSITIONAL=()
+while [[ $# -gt 0 ]]
+do
+KEY="$1"
+
+case $KEY in
+--list-zc-drivers)
+	ACTION="list-zc-drivers"
+	shift
+	;;
+--list-interfaces)
+	ACTION="list-interfaces"
+	shift
+	;;
+--configure)
+	ACTION="configure"
+	shift
+	;;
+--configure-driver)
+	ACTION="configure-driver"
+	CONF_DRIVER_NAME="$2"
+	shift
+	shift
+	;;
+--buffer-size)
+	CONF_KERNEL_BUFFER_SLOTS="$2"
+	shift
+	shift
+	;;
+--rss-queues)
+	CONF_RSS_QUEUES="$2"
+	shift
+	shift
+	;;
+--force)
+	FORCE=true
+	shift
+	;;
+-v|--verbose)
+	QUIET=false
+	shift
+	;;
+*)
+	POSITIONAL+=("$1")
+	shift
+	;;
+esac
+done
+set -- "${POSITIONAL[@]}" # restore positional parameters
+
+case "$ACTION" in
+list-zc-drivers)
+	print_drivers;
+	;;
+list-interfaces)
+	print_interfaces;
+	;;
+configure)
+	configure_kernel_module;
+	;;
+configure-driver)
+	configure_driver;
+	;;
+*)
+	print_usage ${0};
+	;;
+esac
+
+exit 0
