@@ -36,4 +36,4 @@ rpmtest:
 	$(MAKE) LATEST=`git stash create` -C packaging/rpm
 
 dkms-rpm:
-	KBUILD_EXTRA_SYMBOLS=Module.symvers $(MAKE) -C kernel dkms-rpm
+	cd kernel; $(MAKE) dkms-rpm
