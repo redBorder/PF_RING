@@ -9,7 +9,7 @@ Source0: %{name}-%{version}.tar.gz
 Packager: David Vanhoucke <dvanhoucke@redborder.com>
 # Temporary location where the RPM will be built
 BuildRoot:  %{_tmppath}/%{name}-%{version}-root
-BuildRequires: git, kernel, kernel-headers, kernel-devel
+BuildRequires: git, kernel, kernel-headers, kernel-devel autoconf automake libtool daq-devel
 Requires: pciutils, net-tools, hiredis, ethtool 
 
 # Disable shared libs dependency check (needed by FPGA libs)
@@ -30,9 +30,11 @@ PF_RING kernel module and drivers for high-speed RX/TX package processing
 
 %prep
 %setup -q -n %{name}-%{version}
+ln -s $PWD $HOME/PF_RING
 
 %build
 make local
+make snort
 
 %install
 PATH=/usr/bin:/bin:/usr/sbin:/sbin
@@ -91,12 +93,12 @@ cp packaging/rpm/usr/bin/pf_ringctl $RPM_BUILD_ROOT/usr/bin
 cp packaging/rpm/usr/bin/pf_ringcfg $RPM_BUILD_ROOT/usr/bin
 cp packaging/rpm/usr/bin/clusterctl $RPM_BUILD_ROOT/usr/bin
 # DAQ
-#mkdir -p $RPM_BUILD_ROOT/usr/local/lib/daq
-#cp userland/snort/pfring-daq-module/daq_pfring.la $RPM_BUILD_ROOT/usr/local/lib/daq
-#cp userland/snort/pfring-daq-module/.libs/daq_pfring.so $RPM_BUILD_ROOT/usr/local/lib/daq
-#cp userland/snort/pfring-daq-module-zc/daq_pfring_zc.la $RPM_BUILD_ROOT/usr/local/lib/daq
-#cp userland/snort/pfring-daq-module-zc/.libs/daq_pfring_zc.so $RPM_BUILD_ROOT/usr/local/lib/daq
-#cp -a $HOME/daq-2.?.?/sfbpf/.libs/libsfbpf.so.0 $HOME/daq-2.?.?/sfbpf/.libs/libsfbpf.so.0.0.1 $RPM_BUILD_ROOT/usr/local/lib
+mkdir -p $RPM_BUILD_ROOT/usr/local/lib/daq
+cp userland/snort/pfring-daq-module/daq_pfring.la $RPM_BUILD_ROOT/usr/local/lib/daq
+cp userland/snort/pfring-daq-module/.libs/daq_pfring.so $RPM_BUILD_ROOT/usr/local/lib/daq
+cp userland/snort/pfring-daq-module-zc/daq_pfring_zc.la $RPM_BUILD_ROOT/usr/local/lib/daq
+cp userland/snort/pfring-daq-module-zc/.libs/daq_pfring_zc.so $RPM_BUILD_ROOT/usr/local/lib/daq
+#cp sfbpf/.libs/libsfbpf.so.0 sfbpf/.libs/libsfbpf.so.0.0.1 $RPM_BUILD_ROOT/usr/local/lib
 %if %nozc == 0
 cp userland/examples_zc/zbalance_ipc $RPM_BUILD_ROOT/usr/bin
 cp userland/examples_zc/zsend $RPM_BUILD_ROOT/usr/bin
@@ -123,10 +125,10 @@ rm -fr $RPM_BUILD_ROOT
 /usr/include/pfring_ft.h
 /usr/include/nbpf.h
 # DAQ
-#/usr/local/lib/daq/daq_pfring.la
-#/usr/local/lib/daq/daq_pfring.so
-#/usr/local/lib/daq/daq_pfring_zc.la
-#/usr/local/lib/daq/daq_pfring_zc.so
+/usr/local/lib/daq/daq_pfring.la
+/usr/local/lib/daq/daq_pfring.so
+/usr/local/lib/daq/daq_pfring_zc.la
+/usr/local/lib/daq/daq_pfring_zc.so
 #/usr/local/lib/libsfbpf.so.0
 #/usr/local/lib/libsfbpf.so.0.0.1
 /usr/lib64/wireshark/extcap
