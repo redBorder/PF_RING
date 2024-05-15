@@ -437,7 +437,7 @@ static int pfring_daq_initialize(const DAQ_Config_t *config,
 	       "%s: variable needs value(%s)\n", __FUNCTION__, entry->key);
       return DAQ_ERROR;
     } else if(!strcmp(entry->key, "clusterid")) {
-      char *clusters = strdup(entry->value);
+      clusters = strdup(entry->value);
     } else if(!strcmp(entry->key, "no-kernel-filters")) {
       context->use_kernel_filters = 0;
     } else if(!strcmp(entry->key, "kernel-filters-idle-timeout")) {

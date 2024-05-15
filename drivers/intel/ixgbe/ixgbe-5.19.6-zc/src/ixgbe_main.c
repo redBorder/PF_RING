@@ -186,6 +186,12 @@ static const struct pci_device_id ixgbe_pci_tbl[] = {
 };
 MODULE_DEVICE_TABLE(pci, ixgbe_pci_tbl);
 
+static inline int pci_enable_pcie_error_reporting(struct pci_dev __always_unused *dev)
+{
+        return 0;
+}
+#define pci_disable_pcie_error_reporting(dev) do {} while (0)
+
 #if IS_ENABLED(CONFIG_DCA)
 static int ixgbe_notify_dca(struct notifier_block *, unsigned long event,
 			    void *p);

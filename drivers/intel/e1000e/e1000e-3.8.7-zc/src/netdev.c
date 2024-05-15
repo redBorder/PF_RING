@@ -124,6 +124,12 @@ static const struct e1000_reg_info e1000_reg_info_tbl[] = {
 	{0, NULL}
 };
 
+static inline int pci_enable_pcie_error_reporting(struct pci_dev __always_unused *dev)
+{
+        return 0;
+}
+#define pci_disable_pcie_error_reporting(dev) do {} while (0)
+
 /**
  * __ew32_prepare - prepare to write to MAC CSR register on certain parts
  * @hw: pointer to the HW structure

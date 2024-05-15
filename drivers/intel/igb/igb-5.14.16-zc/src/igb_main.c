@@ -95,6 +95,12 @@ static const struct pci_device_id igb_pci_tbl[] = {
 
 MODULE_DEVICE_TABLE(pci, igb_pci_tbl);
 
+static inline int pci_enable_pcie_error_reporting(struct pci_dev __always_unused *dev)
+{
+        return 0;
+}
+#define pci_disable_pcie_error_reporting(dev) do {} while (0)
+
 static int igb_setup_all_tx_resources(struct igb_adapter *);
 static int igb_setup_all_rx_resources(struct igb_adapter *);
 static void igb_free_all_tx_resources(struct igb_adapter *);

@@ -142,6 +142,12 @@ static const struct net_device_ops ice_netdev_recovery_ops;
 static const struct net_device_ops ice_netdev_safe_mode_ops;
 static const struct net_device_ops ice_netdev_ops;
 
+static inline int pci_enable_pcie_error_reporting(struct pci_dev __always_unused *dev)
+{
+            return 0;
+}
+#define pci_disable_pcie_error_reporting(dev) do {} while (0)
+
 static void ice_rebuild(struct ice_pf *pf, enum ice_reset_req reset_type);
 static void ice_vsi_release_all(struct ice_pf *pf);
 

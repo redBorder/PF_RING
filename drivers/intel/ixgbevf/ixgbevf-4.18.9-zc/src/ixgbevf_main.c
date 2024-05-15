@@ -136,6 +136,12 @@ MODULE_VERSION(DRV_VERSION);
 
 #define DEFAULT_DEBUG_LEVEL_SHIFT 3
 
+static inline int pci_enable_pcie_error_reporting(struct pci_dev __always_unused *dev)
+{
+        return 0;
+}
+#define pci_disable_pcie_error_reporting(dev) do {} while (0)
+
 static void ixgbevf_service_event_schedule(struct ixgbevf_adapter *adapter)
 {
 	if (!test_bit(__IXGBEVF_DOWN, &adapter->state) &&
