@@ -5,6 +5,7 @@
 #define _ICE_ARFS_H_
 
 #include "ice_fdir.h"
+#include <net/rps.h>
 
 enum ice_arfs_fltr_state {
 	ICE_ARFS_INACTIVE,

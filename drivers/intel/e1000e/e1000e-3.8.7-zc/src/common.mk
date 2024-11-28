@@ -54,7 +54,7 @@ cmd_initrd := $(shell \
 DRIVER_UPPERCASE := $(shell echo ${DRIVER} | tr "[:lower:]" "[:upper:]")
 
 ifeq (,${BUILD_KERNEL})
-KERNEL_DEVEL_PACKAGE= $(shell rpm -qa | grep kernel-devel)
+KERNEL_DEVEL_PACKAGE= $(shell rpm -qa | grep kernel-devel | grep -v matched | tail -n 1)
 BUILD_KERNEL= $(shell rpm -q --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}' $(KERNEL_DEVEL_PACKAGE))
 #BUILD_KERNEL=$(shell uname -r)
 endif
@@ -214,7 +214,7 @@ endif
 ifneq (${LINUX_VERSION_CODE},)
   $(warning Forcing target kernel to build with LINUX_VERSION_CODE of ${LINUX_VERSION_CODE}$(if ${LINUX_VERSION}, from LINUX_VERSION=${LINUX_VERSION}). Do this at your own risk.)
   KVER_CODE := ${LINUX_VERSION_CODE}
-  EXTRA_CFLAGS += -DLINUX_VERSION_CODE=${LINUX_VERSION_CODE}
+  EXTRA_CFLAGS += -DLINUX_VERSION_CODE=${LINUX_VERSION_CODE} 
 endif
 
 # Determine SLE_LOCALVERSION_CODE for SuSE SLE >= 11 (needed by kcompat)
@@ -239,7 +239,7 @@ ifneq (10,$(call get_config_value,CONFIG_SLE_VERSION))
 endif
 endif
 
-EXTRA_CFLAGS += ${CFLAGS_EXTRA}
+EXTRA_CFLAGS += ${CFLAGS_EXTRA} -Wno-error=incompatible-pointer-types
 
 # get the kernel version - we use this to find the correct install path
 KVER := $(shell ${CC} ${EXTRA_CFLAGS} -E -dM ${VERSION_FILE} | grep UTS_RELEASE | \
@@ -347,6 +347,7 @@ export INSTALL_MOD_DIR ?= updates/drivers/net/ethernet/intel/${DRIVER}
 # W -- if set, enables the W= kernel warnings options
 # C -- if set, enables the C= kernel sparse build options
 #
+
 kernelbuild = $(call warn_signed_modules) \
               ${MAKE} $(if ${GCC_I_SYS},CC="${GCC_I_SYS}") \
                       ${CCFLAGS_VAR}="${EXTRA_CFLAGS}" \

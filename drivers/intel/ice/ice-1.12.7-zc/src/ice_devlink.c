@@ -2670,7 +2670,7 @@ ice_mdd_reporter_dump(struct devlink_health_reporter *reporter,
 	struct ice_mdd_event *mdd_event;
 	int err;
 
-	err = devlink_fmsg_u32_pair_put(fmsg, "count",
+	devlink_fmsg_u32_pair_put(fmsg, "count",
 					mdd_reporter->count);
 	if (err)
 		return err;
@@ -2678,37 +2678,37 @@ ice_mdd_reporter_dump(struct devlink_health_reporter *reporter,
 	list_for_each_entry(mdd_event, &mdd_reporter->event_list, list) {
 		char *src;
 
-		err = devlink_fmsg_obj_nest_start(fmsg);
+		devlink_fmsg_obj_nest_start(fmsg);
 		if (err)
 			return err;
 
 		src = ICE_MDD_SRC_TO_STR(mdd_event->src);
 
-		err = devlink_fmsg_string_pair_put(fmsg, "src", src);
+		devlink_fmsg_string_pair_put(fmsg, "src", src);
 		if (err)
 			return err;
 
-		err = devlink_fmsg_u8_pair_put(fmsg, "pf_num",
+		devlink_fmsg_u8_pair_put(fmsg, "pf_num",
 					       mdd_event->pf_num);
 		if (err)
 			return err;
 
-		err = devlink_fmsg_u32_pair_put(fmsg, "mdd_vf_num",
+		devlink_fmsg_u32_pair_put(fmsg, "mdd_vf_num",
 						mdd_event->vf_num);
 		if (err)
 			return err;
 
-		err = devlink_fmsg_u8_pair_put(fmsg, "mdd_event",
+		devlink_fmsg_u8_pair_put(fmsg, "mdd_event",
 					       mdd_event->event);
 		if (err)
 			return err;
 
-		err = devlink_fmsg_u32_pair_put(fmsg, "mdd_queue",
+		devlink_fmsg_u32_pair_put(fmsg, "mdd_queue",
 						mdd_event->queue);
 		if (err)
 			return err;
 
-		err = devlink_fmsg_obj_nest_end(fmsg);
+		devlink_fmsg_obj_nest_end(fmsg);
 		if (err)
 			return err;
 	}
