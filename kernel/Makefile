@@ -1,7 +1,7 @@
 PACKAGE_NAME?= pfring
 VERSION?= $(shell git describe --abbrev=6 --tags HEAD --always | sed 's/-/_/g')
 RELEASE?= 1
-KERNEL_DEVEL_PACKAGE?= $(shell rpm -qa | grep kernel-devel)
+KERNEL_DEVEL_PACKAGE?= $(shell rpm -qa | grep kernel-devel | tail -n 1)
 BUILD_KERNEL?= $(shell rpm -q --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}' $(KERNEL_DEVEL_PACKAGE))
 
 KBUILD_EXTRA_SYMBOLS?=$(PWD)/Module.symvers
@@ -69,7 +69,9 @@ all: Makefile pf_ring.c linux/pf_ring.h
 #		echo "*"; \
 #		echo "*********************************************"; \
 #	fi
-	echo -e "0xfca76689\tbpctl_kernel_ioctl\tupdates/drivers/net/ethernet/intel/bpctl_mod\tEXPORT_SYMBOL\t" >> Module.symvers
+	if ! grep -q bpctl_kernel_ioctl Module.symvers; then \
+		echo -e "0xfca76689\tbpctl_kernel_ioctl\tupdates/drivers/net/ethernet/intel/bpctl_mod\tEXPORT_SYMBOL\t" >> Module.symvers; \
+	fi
 	KBUILD_EXTRA_SYMBOLS=$(KBUILD_EXTRA_SYMBOLS) $(MAKE) -C $(KERNEL_SRC) M=${HERE} EXTRA_CFLAGS='${EXTRA_CFLAGS}' modules
 
 dkms-deb:

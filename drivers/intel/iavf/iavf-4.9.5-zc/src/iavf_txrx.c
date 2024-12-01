@@ -1736,9 +1736,9 @@ static struct sk_buff *iavf_construct_skb(struct iavf_ring *rx_ring,
 #endif
 
 	/* allocate a skb to store the frags */
-	skb = __napi_alloc_skb(&rx_ring->q_vector->napi,
-			       IAVF_RX_HDR_SIZE,
-			       GFP_ATOMIC | __GFP_NOWARN);
+	/* https://github.com/amzn/amzn-drivers/pull/314/commits/ef7744ee48d625c6324ed5080171e710edb99104*/
+	/* patch */
+	skb = napi_alloc_skb(&rx_ring->q_vector->napi, IAVF_RX_HDR_SIZE);
 	if (unlikely(!skb))
 		return NULL;
 
