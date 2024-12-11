@@ -46,17 +46,22 @@ esac
 
 %install
 if [ "$RPM_BUILD_ROOT" != "/" ]; then
+        echo "Deleting build root directory: $RPM_BUILD_ROOT"
         rm -rf $RPM_BUILD_ROOT
 fi
-mkdir -p $RPM_BUILD_ROOT/%{_srcdir}
-mkdir -p $RPM_BUILD_ROOT/%{_datarootdir}/%{module_name}
+echo "Creating directory: $RPM_BUILD_ROOT%{_srcdir}"
+mkdir -p $RPM_BUILD_ROOT%{_srcdir}
+echo "Creating directory: $RPM_BUILD_ROOT%{_datarootdir}/%{module_name}"
+mkdir -p $RPM_BUILD_ROOT%{_datarootdir}/%{module_name}
 
 if [ -d %{_sourcedir}/%{module_name}-%{version} ]; then
-        cp -Lpr %{_sourcedir}/%{module_name}-%{version} $RPM_BUILD_ROOT/%{_srcdir}
+        echo "Copying %{_sourcedir}/%{module_name}-%{version} -> $RPM_BUILD_ROOT%{_srcdir}"
+        cp -Lpr %{_sourcedir}/%{module_name}-%{version} $RPM_BUILD_ROOT%{_srcdir}
 fi
 
 if [ -f %{module_name}-%{version}.dkms.tar.gz ]; then
-        install -m 644 %{module_name}-%{version}.dkms.tar.gz $RPM_BUILD_ROOT/%{_datarootdir}/%{module_name}
+        echo "Installing %{module_name}-%{version}.dkms.tar.gz -> $RPM_BUILD_ROOT%{_datarootdir}/%{module_name}"
+        install -m 644 %{module_name}-%{version}.dkms.tar.gz $RPM_BUILD_ROOT%{_datarootdir}/%{module_name}
 fi
 
 %post
@@ -64,24 +69,50 @@ case "$1" in
 	1)
 	# install
 	;;
+
 	2)
 	# upgrade
 	;;
 esac
 
-if ! dkms add -m %{module_name} -v %{version}; then
-    echo "ERROR: Failed to add DKMS module %{module_name} version %{version}"
-    exit 1
-fi
+echo "Checking if file %{_datarootdir}/%{module_name}/%{module_name}-%{version}.dkms.tar.gz exists.."
+if [ -f "%{_datarootdir}/%{module_name}/%{module_name}-%{version}.dkms.tar.gz" ]; then
+    if ! dkms ldtarball --archive "%{_datarootdir}/%{module_name}/%{module_name}-%{version}.dkms.tar.gz"; then
+        echo ""
+        echo ""
+        echo "Unable to load DKMS tarball %{_datarootdir}/%{module_name}/%{module_name}-%{version}.dkms.tar.gz."
+        echo "Common causes include: "
+        echo " - You must be using DKMS 2.1.0.0 or later to support binaries only"
+        echo "   distribution specific archives."
+        echo " - Corrupt distribution specific archive"
+        echo ""
+        echo ""
+        exit 2
+    fi
+    # TODO: check dkms status before install
+    if ! dkms install -m %{module_name} -v %{version}; then
+      echo "ERROR: Failed to install DKMS module %{module_name} version %{version}"
+      exit 1
+    fi
+elif [ -d "%{_sourcedir}/%{module_name}-%{version}" ]; then
+    echo "Loading new %{module_name}-%{version} DKMS files..."
+    if ! dkms add -m %{module_name} -v %{version}; then
+      echo "ERROR: Failed to add DKMS module %{module_name} version %{version}"
+      exit 1
+    fi
 
-if ! dkms build -m %{module_name} -v %{version}; then
-    echo "ERROR: Failed to build DKMS module %{module_name} version %{version}"
-    exit 1
-fi
+    echo "Executing dkms build.."
+    if ! dkms build -m %{module_name} -v %{version}; then
+      echo "ERROR: Failed to build DKMS module %{module_name} version %{version}"
+      exit 1
+    fi
 
-if ! dkms install -m %{module_name} -v %{version}; then
-    echo "ERROR: Failed to install DKMS module %{module_name} version %{version}"
-    exit 1
+    # TODO: check dkms status before install
+    echo "Executing dkms install.."
+    if ! dkms install -m %{module_name} -v %{version}; then
+        echo "ERROR: Failed to install DKMS module %{module_name} version %{version}"
+        exit 1
+    fi
 fi
 
 %preun
