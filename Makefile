@@ -1,4 +1,6 @@
-all:
+all: rpm
+
+local:
 	cd kernel; make
 	cd userland; ./configure; make
 	cd drivers; make
@@ -26,3 +28,12 @@ documentation:
 	cd doc/doxygen; doxygen Doxyfile
 	cd doc; make html
 
+# rpm mock
+rpm:
+	$(MAKE) -C packaging/rpm
+
+rpmtest:
+	$(MAKE) LATEST=`git stash create` -C packaging/rpm
+
+dkms-rpm:
+	cd kernel; $(MAKE) dkms-rpm

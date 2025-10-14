@@ -1,7 +1,10 @@
-#
-# (C) 2009-23 - ntop.org
-#
+PACKAGE_NAME?= pfring
+VERSION?= $(shell git describe --abbrev=6 --tags HEAD --always | sed 's/-/_/g')
+RELEASE?= 1
+KERNEL_DEVEL_PACKAGE?= $(shell rpm -qa | grep kernel-devel)
+BUILD_KERNEL?= $(shell rpm -q --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}' $(KERNEL_DEVEL_PACKAGE))
 
+KBUILD_EXTRA_SYMBOLS?=$(PWD)/Module.symvers
 obj-m := pf_ring.o
 
 # assigned by Makefile.dkms
@@ -29,7 +32,9 @@ ifeq (,$(BUILD_KERNEL))
  ifneq (,$(KERNELRELEASE))
   BUILD_KERNEL=$(KERNELRELEASE)
  else
-  BUILD_KERNEL=$(shell uname -r)
+  KERNEL_DEVEL_PACKAGE= $(shell rpm -qa | grep kernel-devel)
+  BUILD_KERNEL= $(shell rpm -q --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}' $(KERNEL_DEVEL_PACKAGE))
+  #BUILD_KERNEL=$(shell uname -r)
  endif
 endif
 
@@ -64,17 +69,21 @@ all: Makefile pf_ring.c linux/pf_ring.h
 #		echo "*"; \
 #		echo "*********************************************"; \
 #	fi
-	$(MAKE) -C $(KERNEL_SRC) M=${HERE} EXTRA_CFLAGS='${EXTRA_CFLAGS}' modules
+#	echo -e "0xfca76689\tbpctl_kernel_ioctl\tupdates/drivers/net/ethernet/intel/bpctl_mod\tEXPORT_SYMBOL\t" >> Module.symvers
+	@if ! grep -q -w "bpctl_kernel_ioctl" Module.symvers 2>/dev/null; then \
+		echo -e "0xfca76689\tbpctl_kernel_ioctl\tupdates/drivers/net/ethernet/intel/bpctl_mod\tEXPORT_SYMBOL\t" >> Module.symvers; \
+	fi
+	KBUILD_EXTRA_SYMBOLS=$(KBUILD_EXTRA_SYMBOLS) $(MAKE) -C $(KERNEL_SRC) M=${HERE} EXTRA_CFLAGS='${EXTRA_CFLAGS}' modules
 
 dkms-deb:
 	sudo $(MAKE) -f Makefile.dkms deb
 
 dkms-rpm:
-	sudo $(MAKE) -f Makefile.dkms rpm
+	sudo $(MAKE) KBUILD_EXTRA_SYMBOLS=$(KBUILD_EXTRA_SYMBOLS) PACKAGE_NAME=$(PACKAGE_NAME) VERSION=$(VERSION) RELEASE=$(RELEASE) -f Makefile.dkms rpm
 
 clean:
 	$(MAKE) -C $(KERNEL_SRC) M=$(HERE) clean || true
-	\rm -f *~ Module.symvers Module.markers modules.order
+	\rm -f *~ Module.symvers Module.markers modules.order *.o *.ko*#
 
 install:
 	mkdir -p $(INSTDIR)
