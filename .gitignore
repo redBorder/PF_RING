@@ -1,5 +1,7 @@
 ##### Packages
 *.tgz
+SOURCES
+pkgs
 
 ##### Compiled source
 #*.a FIXX not all .a should be ignored
