@@ -11,19 +11,18 @@ Summary:	%{module_name} %{version} dkms package
 Name:		%{module_name}-dkms
 Version:	%{version}
 License:	%license
-Release:	dkms
+Release:	%{release}
 BuildArch:	noarch
 Group:		System/Kernel
-#Requires: 	dkms >= 1.95, pfring = @VERS@-@REVISION@
-Requires: 	dkms >= 1.95, pfring = 9.0.0
+Requires: 	dkms >= 1.958, pfring = 9.0.0
 AutoReqProv: 	no
 BuildRequires: 	dkms, kernel-devel
-Requires:       kernel-devel, make
+Requires:       kernel-headers kernel-devel, make
 BuildRoot: 	%{_tmppath}/%{name}-%{version}-%{release}-root/
 
 %description
 Kernel modules for %{module_name} %{version} in a DKMS wrapper.
-GIT info: @GIT_BRANCH@:@GIT_HASH@
+GIT info: rhel9:d820a49e104ceb74dd9bae2bcb54aa28d2b9beae
 
 %prep
 if [ "%mktarball_line" != "none" ]; then
