@@ -1,7 +1,7 @@
 PACKAGE_NAME?= pfring
 VERSION?= $(shell git describe --abbrev=6 --tags HEAD --always | sed 's/-/_/g')
 RELEASE?= 1
-KERNEL_DEVEL_PACKAGE?= $(shell rpm -qa | grep kernel-devel)
+KERNEL_DEVEL_PACKAGE?= $(shell rpm -qa | grep kernel-devel | grep -v matched | tail -n 1)
 BUILD_KERNEL?= $(shell rpm -q --queryformat '%{VERSION}-%{RELEASE}.%{ARCH}' $(KERNEL_DEVEL_PACKAGE))
 
 KBUILD_EXTRA_SYMBOLS?=$(PWD)/Module.symvers
